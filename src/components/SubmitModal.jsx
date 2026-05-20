@@ -481,16 +481,13 @@ export default function SubmitModal({ type, onClose }) {
   const handleSubmit = async (payload) => {
     setStatus("submitting");
     try {
-      const res = await fetch(SCRIPT_URL, {
+      await fetch(SCRIPT_URL, {
         method: "POST",
+        mode: "no-cors",
         body: JSON.stringify(payload),
       });
-      const json = await res.json();
-      if (json.status === "success") {
-        setStatus("success");
-      } else {
-        throw new Error(json.message || "unknown error");
-      }
+      // no-cors는 응답을 읽을 수 없으므로 요청 완료 시 성공으로 처리
+      setStatus("success");
     } catch (err) {
       console.error(err);
       setStatus("error");
