@@ -21,7 +21,7 @@ export default function Header() {
         <button onClick={() => navigate("/")} className="flex items-center gap-2 text-left">
           <SchoolEmblem />
           <div>
-            <p className="text-sm font-extrabold text-[#1A3B8B] md:text-base">세화여고 온라인 보건실</p>
+            <p className="text-sm font-extrabold text-[#1A3B8B] md:text-base">세화여자고등학교 온라인 보건실</p>
             <p className="hidden text-xs text-slate-500 md:block">교직원 공유용 보건업무 포털</p>
           </div>
         </button>

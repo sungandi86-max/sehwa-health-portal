@@ -1,5 +1,5 @@
 export const appConfig = {
-  appName: "세화여고 온라인 보건실",
+  appName: "세화여자고등학교 온라인 보건실",
   subtitle: "보건 안내 확인부터 자료 제출까지 한 곳에서 간편하게.",
   description:
     "보건 관련 안내와 제출 링크를 모바일에서도 쉽게 확인할 수 있도록 만든 교직원용 포털입니다.",
