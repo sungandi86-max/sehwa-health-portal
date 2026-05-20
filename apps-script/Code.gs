@@ -23,13 +23,13 @@
 // ─── 시트 헤더 정의 ───────────────────────────────────────────────
 const SHEET_HEADERS = {
   "응답_심폐소생술이수증": [
-    "제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"
+    "제출일시", "성명", "소속/부서", "이수일자", "파일명", "파일링크"
   ],
   "응답_결핵검진확인증": [
-    "제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"
+    "제출일시", "성명", "소속/부서", "검진일자", "파일명", "파일링크"
   ],
   "응답_채용검진확인요청": [
-    "제출일시", "성명", "소속/부서", "교직원구분", "행정실제출여부", "제출시기", "비고"
+    "제출일시", "성명", "소속/부서", "행정실제출여부", "제출시기", "비고"
   ],
   "응답_기타보건자료": [
     "제출일시", "성명", "소속/부서", "교직원구분", "비고", "파일명", "파일링크"
@@ -121,9 +121,7 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
         now,
         fields.name || "",
         fields.dept || "",
-        fields.staffType || "",
         fields.completionDate || "",
-        fields.institution || "",
         fileName,
         fileLink,
       ]);
@@ -134,9 +132,7 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
         now,
         fields.name || "",
         fields.dept || "",
-        fields.staffType || "",
         fields.checkupDate || "",
-        fields.docType || "",
         fileName,
         fileLink,
       ]);
@@ -147,7 +143,6 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
         now,
         fields.name || "",
         fields.dept || "",
-        fields.staffType || "",
         fields.adminSubmitted || "",
         fields.submitPeriod || "",
         fields.note || "",

@@ -103,7 +103,7 @@ function todayStr() {
 // ───────── 심폐소생술 이수증 폼 ─────────
 function CprForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({
-    name: "", dept: "", staffType: "", completionDate: "", institution: ""
+    name: "", dept: "", completionDate: ""
   });
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
@@ -114,9 +114,7 @@ function CprForm({ onSubmit, submitting }) {
     const e = {};
     if (!form.name.trim()) e.name = "성명을 입력해주세요.";
     if (!form.dept.trim()) e.dept = "소속/부서를 입력해주세요.";
-    if (!form.staffType) e.staffType = "교직원 구분을 선택해주세요.";
     if (!form.completionDate) e.completionDate = "이수일자를 선택해주세요.";
-    if (!form.institution.trim()) e.institution = "이수기관을 입력해주세요.";
     if (!file) e.file = "파일을 첨부해주세요.";
     else if (file.size > 10 * 1024 * 1024) e.file = "파일 크기가 10MB를 초과합니다.";
     return e;
@@ -155,20 +153,9 @@ function CprForm({ onSubmit, submitting }) {
         </select>
         {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
       </Field>
-      <Field label="교직원 구분" required>
-        <select className={selectCls} value={form.staffType} onChange={set("staffType")}>
-          <option value="">선택해주세요</option>
-          {STAFF_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        {errors.staffType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.staffType}</p>}
-      </Field>
       <Field label="이수일자" required>
         <input type="date" className={inputCls} value={form.completionDate} onChange={set("completionDate")} />
         {errors.completionDate && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.completionDate}</p>}
-      </Field>
-      <Field label="이수기관" required>
-        <input className={inputCls} placeholder="예) 대한적십자사, 지역 소방서" value={form.institution} onChange={set("institution")} />
-        {errors.institution && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.institution}</p>}
       </Field>
       <Field label="이수증 파일 업로드" required>
         <FileUploadArea file={file} onChange={setFile} error={errors.file} />
@@ -182,7 +169,7 @@ function CprForm({ onSubmit, submitting }) {
 // ───────── 결핵검진 확인증 폼 ─────────
 function TbForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({
-    name: "", dept: "", staffType: "", checkupDate: "", docType: ""
+    name: "", dept: "", checkupDate: ""
   });
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
@@ -193,9 +180,7 @@ function TbForm({ onSubmit, submitting }) {
     const e = {};
     if (!form.name.trim()) e.name = "성명을 입력해주세요.";
     if (!form.dept.trim()) e.dept = "소속/부서를 입력해주세요.";
-    if (!form.staffType) e.staffType = "교직원 구분을 선택해주세요.";
     if (!form.checkupDate) e.checkupDate = "검진일자를 선택해주세요.";
-    if (!form.docType) e.docType = "제출자료 유형을 선택해주세요.";
     if (!file) e.file = "파일을 첨부해주세요.";
     else if (file.size > 10 * 1024 * 1024) e.file = "파일 크기가 10MB를 초과합니다.";
     return e;
@@ -234,29 +219,16 @@ function TbForm({ onSubmit, submitting }) {
         </select>
         {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
       </Field>
-      <Field label="교직원 구분" required>
-        <select className={selectCls} value={form.staffType} onChange={set("staffType")}>
-          <option value="">선택해주세요</option>
-          {STAFF_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        {errors.staffType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.staffType}</p>}
-      </Field>
       <Field label="검진일자" required>
         <input type="date" className={inputCls} value={form.checkupDate} onChange={set("checkupDate")} />
         {errors.checkupDate && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.checkupDate}</p>}
       </Field>
-      <Field label="제출자료 유형" required>
-        <select className={selectCls} value={form.docType} onChange={set("docType")}>
-          <option value="">선택해주세요</option>
-          {TB_DOC_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        {errors.docType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.docType}</p>}
-      </Field>
       <Field label="확인증 파일 업로드" required>
+        <div className="mb-3 rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+          <p>결핵검진 확인증 또는 흉부 X-ray 검진 확인 자료를 업로드해주세요.</p>
+          <p className="mt-1 font-semibold">확인 필요 항목: 성명, 검진일자, 검진 항목</p>
+        </div>
         <FileUploadArea file={file} onChange={setFile} error={errors.file} />
-        <p className="mt-1.5 text-xs text-slate-400">
-          권장 파일명: 성명_결핵검진확인증 · 확인 항목: 성명, 검진일자, 검진 항목
-        </p>
       </Field>
       <SubmitButton onClick={handleSubmit} submitting={submitting} />
     </div>
@@ -266,7 +238,7 @@ function TbForm({ onSubmit, submitting }) {
 // ───────── 채용검진 대체 인정 확인 요청 폼 ─────────
 function RecruitForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({
-    name: "", dept: "", staffType: "", adminSubmitted: "", submitPeriod: "", note: ""
+    name: "", dept: "", adminSubmitted: "", submitPeriod: "", note: ""
   });
   const [errors, setErrors] = useState({});
 
@@ -276,7 +248,6 @@ function RecruitForm({ onSubmit, submitting }) {
     const e = {};
     if (!form.name.trim()) e.name = "성명을 입력해주세요.";
     if (!form.dept.trim()) e.dept = "소속/부서를 입력해주세요.";
-    if (!form.staffType) e.staffType = "교직원 구분을 선택해주세요.";
     if (!form.adminSubmitted) e.adminSubmitted = "행정실 제출 여부를 선택해주세요.";
     if (!form.submitPeriod.trim()) e.submitPeriod = "제출 시기를 입력해주세요.";
     return e;
@@ -317,13 +288,6 @@ function RecruitForm({ onSubmit, submitting }) {
           {DEPT_TYPES.map((t) => <option key={t}>{t}</option>)}
         </select>
         {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
-      </Field>
-      <Field label="교직원 구분" required>
-        <select className={selectCls} value={form.staffType} onChange={set("staffType")}>
-          <option value="">선택해주세요</option>
-          {STAFF_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        {errors.staffType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.staffType}</p>}
       </Field>
       <Field label="행정실 제출 여부" required>
         <select className={selectCls} value={form.adminSubmitted} onChange={set("adminSubmitted")}>
