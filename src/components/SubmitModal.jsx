@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
+const SCRIPT_URL = "/api/submit";
 
 const FOLDER_IDS = {
   cpr: "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM",
@@ -494,13 +493,17 @@ export default function SubmitModal({ type, onClose }) {
   const handleSubmit = async (payload) => {
     setStatus("submitting");
     try {
-      await fetch(SCRIPT_URL, {
+      const res = await fetch(SCRIPT_URL, {
         method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      setStatus("success");
+      const json = await res.json();
+      if (json.status === "success") {
+        setStatus("success");
+      } else {
+        throw new Error(json.message || "unknown error");
+      }
     } catch (err) {
       setStatus("error");
     }
