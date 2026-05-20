@@ -48,14 +48,52 @@ function corsHeaders() {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ─── doGet: 기존 portal 데이터 제공 (기존 코드 유지) ─────────────
+// ─── 앱 설정값 읽기 헬퍼 ─────────────────────────────────────────
+function getAppConfig_(key) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("앱_설정");
+  if (!sheet) return "";
+  const data = sheet.getDataRange().getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][0]) === key) return data[i][1] || "";
+  }
+  return "";
+}
+
+// ─── doGet: 설정값 반환 + 기존 portal 데이터 제공 ─────────────────
 function doGet(e) {
+  const action = e?.parameter?.action || "";
+
+  if (action === "getConfig") {
+    const key = e.parameter.key;
+    const value = getAppConfig_(key);
+    return ContentService.createTextOutput(
+      JSON.stringify({ result: "success", key, value: String(value) })
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "getTbConfig") {
+    const config = {
+      enabled: String(getAppConfig_("결핵검진유형선택_사용")),
+      startDate: String(getAppConfig_("결핵검진유형선택_접수시작")),
+      endDate: String(getAppConfig_("결핵검진유형선택_접수마감")),
+      closedButton: String(getAppConfig_("결핵검진유형선택_마감후버튼")),
+      closedMessage: String(getAppConfig_("결핵검진유형선택_마감안내")),
+    };
+    return ContentService.createTextOutput(
+      JSON.stringify({ result: "success", config })
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // 기존 portal 데이터 제공 유지
   const mode = e?.parameter?.mode || "";
   if (mode === "portal") {
     return getPortalData();
   }
-  return ContentService.createTextOutput(JSON.stringify({ status: "ok", mode }))
-    .setMimeType(ContentService.MimeType.JSON);
+
+  return ContentService.createTextOutput(
+    JSON.stringify({ result: "error", message: "unknown action" })
+  ).setMimeType(ContentService.MimeType.JSON);
 }
 
 // ─── doPost: 제출 처리 ───────────────────────────────────────────
@@ -84,9 +122,10 @@ function doPost(e) {
       fileLink = driveFile.getUrl();
     }
 
-    // 시트에 행 추가
+    // 시트에 행 추가 (early response 반환 시 그대로 전달)
     const now = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
-    appendRow(sheet, sheetName, fields, now, fileName || "", fileLink);
+    const earlyResponse = appendRow(sheet, sheetName, fields, now, fileName || "", fileLink);
+    if (earlyResponse) return earlyResponse;
 
     return ContentService.createTextOutput(
       JSON.stringify({ status: "success", message: "제출 완료" })
@@ -119,7 +158,7 @@ function getOrCreateSheet(ss, sheetName) {
   return sheet;
 }
 
-// ─── 시트 종류별 행 추가 ─────────────────────────────────────────
+// ─── 시트 종류별 행 추가 (early response 반환 시 doPost가 그대로 전달) ──
 function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
   switch (sheetName) {
     case "응답_심폐소생술이수증":
@@ -177,15 +216,25 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
       break;
 
     case "응답_교직원결핵검진유형선택": {
-      const deadline = fields.deadline || "";
+      const enabled = getAppConfig_("결핵검진유형선택_사용");
+      const endDateRaw = getAppConfig_("결핵검진유형선택_접수마감");
+      const closedMsg = getAppConfig_("결핵검진유형선택_마감안내") || "접수 기한이 마감되었습니다.";
+
+      if (String(enabled) !== "TRUE") {
+        return ContentService.createTextOutput(
+          JSON.stringify({ result: "error", message: closedMsg })
+        ).setMimeType(ContentService.MimeType.JSON);
+      }
+
       const nowDate = new Date();
       const nowStr = Utilities.formatDate(nowDate, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
 
-      if (deadline) {
-        const deadlineDate = new Date(deadline);
-        deadlineDate.setHours(23, 59, 59);
-        if (nowDate > deadlineDate) {
-          throw new Error("접수 기한이 마감되었습니다.");
+      if (endDateRaw) {
+        const endDate = new Date(endDateRaw);
+        if (nowDate > endDate) {
+          return ContentService.createTextOutput(
+            JSON.stringify({ result: "error", message: closedMsg })
+          ).setMimeType(ContentService.MimeType.JSON);
         }
       }
 
@@ -194,7 +243,7 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
         fields.name || "",
         fields.dept || "",
         fields.registrationType || "",
-        deadline,
+        "",
         "",
       ]);
 

@@ -10,8 +10,6 @@ const INTERNAL_BUTTONS = {
 
 const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
 
-// 접수 기한: "" = 마감 없음 / "YYYY-MM-DD" 형식으로 기입
-const TB_REGISTRATION_DEADLINE = "";
 
 export default function CheckupSection({ items }) {
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
@@ -70,11 +68,7 @@ export default function CheckupSection({ items }) {
       </div>
 
       {tbRegistrationOpen && (
-        <SubmitModal
-          type="tb_registration"
-          onClose={() => setTbRegistrationOpen(false)}
-          deadline={TB_REGISTRATION_DEADLINE}
-        />
+        <SubmitModal type="tb_registration" onClose={() => setTbRegistrationOpen(false)} />
       )}
     </section>
   );
