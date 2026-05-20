@@ -69,29 +69,41 @@ export default function App() {
   return (
     <BrowserRouter>
       <main className="min-h-screen bg-[#F7F9FC] font-sans text-[#263238]">
-        {isLoading && (
-          <div className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-full bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-lg">
-            온라인 보건실 자료를 불러오는 중입니다.
+        <Header />
+
+        {isLoading ? (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <svg className="h-8 w-8 animate-spin text-[#1A3B8B]" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              <p className="text-sm font-bold text-[#1A3B8B]">자료를 불러오는 중입니다...</p>
+            </div>
           </div>
-        )}
-        {loadError && (
-          <div className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-2xl bg-[#D94F70] px-5 py-3 text-sm font-bold text-white shadow-lg">
-            시트 데이터를 불러오지 못해 미리보기 데이터를 표시합니다.
-          </div>
+        ) : (
+          <>
+            {loadError && (
+              <div className="mx-auto mb-2 max-w-6xl px-4">
+                <div className="rounded-2xl bg-[#FFF5F8] px-5 py-3 text-sm font-bold text-[#D94F70]">
+                  시트 데이터를 불러오지 못해 미리보기 데이터를 표시합니다.
+                </div>
+              </div>
+            )}
+            <Routes>
+              <Route path="/" element={<HomePage config={liveAppConfig} />} />
+              <Route path="/today" element={<TodayPage items={liveNotices} />} />
+              <Route path="/upload" element={<UploadPage items={liveUploads} />} />
+              <Route path="/checkup" element={<CheckupPage items={liveCheckups} />} />
+              <Route path="/education" element={<EducationPage items={liveEducations} />} />
+              <Route path="/homeroom" element={<HomeroomPage />} />
+              <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
+              <Route path="/resources" element={<ResourcesPage items={liveResources} />} />
+              <Route path="/faq" element={<FAQPage items={liveFaqs} />} />
+            </Routes>
+          </>
         )}
 
-        <Header />
-        <Routes>
-          <Route path="/" element={<HomePage config={liveAppConfig} />} />
-          <Route path="/today" element={<TodayPage items={liveNotices} />} />
-          <Route path="/upload" element={<UploadPage items={liveUploads} />} />
-          <Route path="/checkup" element={<CheckupPage items={liveCheckups} />} />
-          <Route path="/education" element={<EducationPage items={liveEducations} />} />
-          <Route path="/homeroom" element={<HomeroomPage />} />
-          <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
-          <Route path="/resources" element={<ResourcesPage items={liveResources} />} />
-          <Route path="/faq" element={<FAQPage items={liveFaqs} />} />
-        </Routes>
         <Footer />
       </main>
     </BrowserRouter>
