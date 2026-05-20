@@ -34,6 +34,9 @@ const SHEET_HEADERS = {
   "응답_기타보건자료": [
     "제출일시", "성명", "소속/부서", "교직원구분", "비고", "파일명", "파일링크"
   ],
+  "응답_교직원결핵검진신청": [
+    "제출일시", "성명", "소속/부서", "신청유형"
+  ],
 };
 
 // ─── CORS 헤더 ────────────────────────────────────────────────────
@@ -158,6 +161,15 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
         fields.note || "",
         fileName,
         fileLink,
+      ]);
+      break;
+
+    case "응답_교직원결핵검진신청":
+      sheet.appendRow([
+        now,
+        fields.name || "",
+        fields.dept || "",
+        fields.registrationType || "",
       ]);
       break;
 
