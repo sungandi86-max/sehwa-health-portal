@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppCard, Badge, PrimaryButton, SectionTitle } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
+
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
 
 // "자료실 열기" 버튼은 내부 resources 섹션으로 이동
 const INTERNAL_BUTTONS = {
@@ -13,6 +15,23 @@ const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text
 
 export default function CheckupSection({ items }) {
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
+  const [tbConfig, setTbConfig] = useState(null); // null = 로딩 중
+
+  useEffect(() => {
+    fetch(`${GAS_URL}?action=getTbConfig`)
+      .then((r) => r.json())
+      .then(({ result, config }) => {
+        if (result === "success") setTbConfig(config);
+        else setTbConfig({ enabled: "FALSE" });
+      })
+      .catch(() => setTbConfig({ enabled: "FALSE" }));
+  }, []);
+
+  const tbBadge = tbConfig
+    ? (tbConfig.endDate && new Date() > new Date(tbConfig.endDate)
+        ? { type: "gray", label: "접수 마감" }
+        : { type: "pink", label: "신청 접수 중" })
+    : null;
 
   return (
     <section id="checkup" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
@@ -49,22 +68,24 @@ export default function CheckupSection({ items }) {
           );
         })}
 
-        {/* 교직원 결핵검진 유형 선택 카드 */}
-        <AppCard>
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-extrabold text-[#263238]">교직원 결핵검진 유형 선택</h3>
-            <Badge type="pink">신청 접수 중</Badge>
-          </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
-          </p>
-          <button
-            onClick={() => setTbRegistrationOpen(true)}
-            className={btnCls}
-          >
-            유형 선택하기
-          </button>
-        </AppCard>
+        {/* 교직원 결핵검진 유형 선택 카드 — config.enabled === "TRUE" 일 때만 표시 */}
+        {tbConfig?.enabled === "TRUE" && (
+          <AppCard>
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-lg font-extrabold text-[#263238]">교직원 결핵검진 유형 선택</h3>
+              <Badge type={tbBadge.type}>{tbBadge.label}</Badge>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
+            </p>
+            <button
+              onClick={() => setTbRegistrationOpen(true)}
+              className={btnCls}
+            >
+              유형 선택하기
+            </button>
+          </AppCard>
+        )}
       </div>
 
       {tbRegistrationOpen && (
