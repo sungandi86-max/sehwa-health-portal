@@ -55,7 +55,7 @@ function doGet(e) {
 // ─── doPost: 제출 처리 ───────────────────────────────────────────
 function doPost(e) {
   try {
-    const payload = JSON.parse(e.postData.contents);
+    const payload = JSON.parse(e.parameter.payload);
     const { type, sheetName, folderId, fields, fileName, fileBase64, fileMimeType } = payload;
 
     // 시트 준비
