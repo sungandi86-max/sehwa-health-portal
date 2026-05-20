@@ -29,8 +29,7 @@ export default function StudentCareSection({ items }) {
               <p className="mt-3 rounded-2xl bg-[#F7F9FC] p-3 text-sm text-slate-600">
                 {item.privacyNotice}
               </p>
-              {/* 버튼명과 url 모두 있을 때만 표시 */}
-              {item.buttonText && item.url && (
+              {item.buttonText && (
                 <PrimaryButton url={item.url}>{item.buttonText}</PrimaryButton>
               )}
             </AppCard>

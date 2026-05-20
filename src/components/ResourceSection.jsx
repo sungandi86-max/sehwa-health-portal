@@ -37,8 +37,7 @@ export default function ResourceSection({ items }) {
             <Badge type="blue">{item.category}</Badge>
             <h3 className="mt-3 text-lg font-extrabold text-[#263238]">{item.title}</h3>
             <p className="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>
-            {/* 버튼명과 url 모두 있을 때만 표시 */}
-            {item.buttonText && item.url && (
+            {item.buttonText && (
               <PrimaryButton url={item.url}>{item.buttonText}</PrimaryButton>
             )}
           </AppCard>

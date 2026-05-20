@@ -42,29 +42,75 @@ export function SafeText({ children, className = "" }) {
   );
 }
 
-// PrimaryButton: opens url in new tab if provided, otherwise renders as disabled-style button
-export function PrimaryButton({ children, url }) {
+// URL이 실제 링크인지 판별
+export function isValidUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  // 임시 텍스트 목록
+  const PLACEHOLDER = [
+    "링크", "안내문 링크", "유튜브 링크", "url", "http", "준비 중", "추후 안내",
+    "#", "/"
+  ];
+  if (PLACEHOLDER.some(p => trimmed.toLowerCase() === p.toLowerCase())) return false;
+  return trimmed.startsWith("https://") || trimmed.startsWith("http://");
+}
+
+// 내부 섹션 이동 목적인지 판별 (버튼 텍스트 기반)
+const SECTION_BUTTON_MAP = {
+  "자료실 열기": "resources",
+  "자료실로 이동": "resources",
+  "제출·업로드 센터": "upload",
+  "업로드 센터": "upload",
+  "제출하기": "upload",
+};
+
+// PrimaryButton: url 유효 → 새 창 / 내부이동 텍스트 → 스크롤 / 그 외 → 숨김
+export function PrimaryButton({ children, url, scrollTarget }) {
   if (!children || children === "") return null;
-  if (!url || url === "") {
+
+  const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
+
+  // 1) 명시적 scrollTarget이 있으면 내부 스크롤
+  if (scrollTarget) {
     return (
       <button
-        disabled
-        className="mt-4 w-full cursor-not-allowed rounded-2xl bg-slate-200 px-5 py-3 text-sm font-bold text-slate-400 shadow-sm md:w-auto"
+        onClick={() => scrollToSection(scrollTarget)}
+        className={btnCls}
       >
         {children}
       </button>
     );
   }
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto"
-    >
-      {children}
-    </a>
-  );
+
+  // 2) 버튼 텍스트가 내부 이동 목적인지 확인
+  const inferredSection = SECTION_BUTTON_MAP[String(children).trim()];
+  if (inferredSection) {
+    return (
+      <button
+        onClick={() => scrollToSection(inferredSection)}
+        className={btnCls}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  // 3) 유효한 외부 URL이면 새 창
+  if (isValidUrl(url)) {
+    return (
+      <a
+        href={url.trim()}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={btnCls}
+      >
+        {children}
+      </a>
+    );
+  }
+
+  // 4) URL 없음/임시값 → 버튼 숨김
+  return null;
 }
 
 // SchoolEmblem SVG

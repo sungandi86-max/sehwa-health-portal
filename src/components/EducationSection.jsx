@@ -43,8 +43,8 @@ export default function EducationSection({ items }) {
               </div>
             )}
 
-            {/* buttonText 있고 url도 있을 때만 링크 버튼 */}
-            {item.buttonText && item.url && (
+            {/* buttonText 있을 때 → PrimaryButton이 url 유효성 판단 */}
+            {item.buttonText && (
               <PrimaryButton url={item.url}>{item.buttonText}</PrimaryButton>
             )}
           </AppCard>
