@@ -40,6 +40,9 @@ const SHEET_HEADERS = {
   "응답_교직원결핵검진유형선택": [
     "제출일시", "성명", "소속/부서", "검진유형", "접수기한", "비고"
   ],
+  "응답_인바디측정신청": [
+    "제출일시", "성명", "소속/부서", "희망날짜", "희망시간대"
+  ],
 };
 
 // ─── 제출 시트 헤더 (SUBMIT_SHEET_HEADERS) ───────────────────────
@@ -50,6 +53,7 @@ const SUBMIT_SHEET_HEADERS = {
   "응답_기타보건자료":            ["제출일시", "성명", "소속/부서", "교직원구분", "비고", "파일명", "파일링크"],
   "응답_교직원결핵검진신청":      ["제출일시", "성명", "소속/부서", "신청유형"],
   "응답_교직원결핵검진유형선택":  ["제출일시", "성명", "소속/부서", "검진유형", "비고"],
+  "응답_인바디측정신청":          ["제출일시", "성명", "소속/부서", "희망날짜", "희망시간대"],
 };
 
 // ─── CORS 헤더 ────────────────────────────────────────────────────
@@ -275,6 +279,16 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
       break;
     }
 
+    case "응답_인바디측정신청":
+      sheet.appendRow([
+        now,
+        fields.name || "",
+        fields.dept || "",
+        fields.preferredDate || "",
+        fields.preferredTime || "",
+      ]);
+      break;
+
     default:
       // 알 수 없는 시트: 그냥 JSON 덤프
       sheet.appendRow([now, JSON.stringify(fields), fileName, fileLink]);
@@ -333,6 +347,8 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
       }
     }
     sheet.appendRow([now, fields.name || "", fields.dept || "", fields.registrationType || "", ""]);
+  } else if (sheetName === "응답_인바디측정신청") {
+    sheet.appendRow([now, fields.name || "", fields.dept || "", fields.preferredDate || "", fields.preferredTime || ""]);
   } else {
     sheet.appendRow([now, JSON.stringify(fields), fileName, fileLink]);
   }
