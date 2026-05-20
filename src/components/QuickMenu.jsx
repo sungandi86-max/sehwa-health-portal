@@ -1,14 +1,27 @@
+import { useNavigate } from "react-router-dom";
 import { quickMenuItems } from "../data/fallbackData.js";
-import { Badge, scrollToSection } from "./ui.jsx";
+import { Badge } from "./ui.jsx";
+
+const ROUTE_MAP = {
+  today: "/today",
+  upload: "/upload",
+  checkup: "/checkup",
+  education: "/education",
+  homeroom: "/homeroom",
+  studentCare: "/student-care",
+  resources: "/resources",
+  faq: "/faq",
+};
 
 export default function QuickMenu() {
+  const navigate = useNavigate();
   return (
     <section className="mx-auto max-w-6xl px-4 pb-10">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {quickMenuItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => scrollToSection(item.id)}
+            onClick={() => navigate(ROUTE_MAP[item.id] || "/")}
             className={`rounded-[24px] border p-5 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md ${
               item.featured ? "border-[#D94F70]/30 bg-[#FFF5F8]" : "border-slate-100 bg-white"
             }`}

@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
-import CheckupSection from "./components/CheckupSection.jsx";
-import EducationSection from "./components/EducationSection.jsx";
-import FAQSection from "./components/FAQSection.jsx";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Footer from "./components/Footer.jsx";
 import Header from "./components/Header.jsx";
-import HeroSection from "./components/HeroSection.jsx";
-import HomeroomRequestSection from "./components/HomeroomRequestSection.jsx";
-import QuickMenu from "./components/QuickMenu.jsx";
-import ResourceSection from "./components/ResourceSection.jsx";
-import StudentCareSection from "./components/StudentCareSection.jsx";
-import TodaySection from "./components/TodaySection.jsx";
-import UploadCenter from "./components/UploadCenter.jsx";
+import CheckupPage from "./pages/CheckupPage.jsx";
+import EducationPage from "./pages/EducationPage.jsx";
+import FAQPage from "./pages/FAQPage.jsx";
+import HomePage from "./pages/HomePage.jsx";
+import HomeroomPage from "./pages/HomeroomPage.jsx";
+import ResourcesPage from "./pages/ResourcesPage.jsx";
+import StudentCarePage from "./pages/StudentCarePage.jsx";
+import TodayPage from "./pages/TodayPage.jsx";
+import UploadPage from "./pages/UploadPage.jsx";
 import {
   appConfig as fallbackAppConfig,
   checkupItems,
@@ -54,7 +54,6 @@ export default function App() {
     };
   }, []);
 
-  // API 데이터가 있으면 사용, 없으면 fallback 데이터 사용
   const liveAppConfig = portalData?.appConfig
     ? { ...fallbackAppConfig, ...portalData.appConfig }
     : fallbackAppConfig;
@@ -68,33 +67,33 @@ export default function App() {
   const liveFaqs = portalData?.faqs?.length ? portalData.faqs : faqItems;
 
   return (
-    <main className="min-h-screen bg-[#F7F9FC] font-sans text-[#263238]">
-      {/* 로딩 중 토스트 */}
-      {isLoading && (
-        <div className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-full bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-lg">
-          온라인 보건실 자료를 불러오는 중입니다.
-        </div>
-      )}
+    <BrowserRouter>
+      <main className="min-h-screen bg-[#F7F9FC] font-sans text-[#263238]">
+        {isLoading && (
+          <div className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-full bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-lg">
+            온라인 보건실 자료를 불러오는 중입니다.
+          </div>
+        )}
+        {loadError && (
+          <div className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-2xl bg-[#D94F70] px-5 py-3 text-sm font-bold text-white shadow-lg">
+            시트 데이터를 불러오지 못해 미리보기 데이터를 표시합니다.
+          </div>
+        )}
 
-      {/* fetch 실패 시 토스트 (샘플 데이터 안내) */}
-      {loadError && (
-        <div className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-2xl bg-[#D94F70] px-5 py-3 text-sm font-bold text-white shadow-lg">
-          시트 데이터를 불러오지 못해 미리보기 데이터를 표시합니다.
-        </div>
-      )}
-
-      <Header />
-      <HeroSection config={liveAppConfig} />
-      <QuickMenu />
-      <TodaySection items={liveNotices} />
-      <UploadCenter items={liveUploads} />
-      <CheckupSection items={liveCheckups} />
-      <EducationSection items={liveEducations} />
-      <HomeroomRequestSection />
-      <StudentCareSection items={liveStudentCare} />
-      <ResourceSection items={liveResources} />
-      <FAQSection items={liveFaqs} />
-      <Footer />
-    </main>
+        <Header />
+        <Routes>
+          <Route path="/" element={<HomePage config={liveAppConfig} />} />
+          <Route path="/today" element={<TodayPage items={liveNotices} />} />
+          <Route path="/upload" element={<UploadPage items={liveUploads} />} />
+          <Route path="/checkup" element={<CheckupPage items={liveCheckups} />} />
+          <Route path="/education" element={<EducationPage items={liveEducations} />} />
+          <Route path="/homeroom" element={<HomeroomPage />} />
+          <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
+          <Route path="/resources" element={<ResourcesPage items={liveResources} />} />
+          <Route path="/faq" element={<FAQPage items={liveFaqs} />} />
+        </Routes>
+        <Footer />
+      </main>
+    </BrowserRouter>
   );
 }

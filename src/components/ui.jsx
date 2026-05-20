@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router-dom";
+
 // Badge component
 export function Badge({ children, type = "blue" }) {
   const styles = {
@@ -55,41 +57,50 @@ export function isValidUrl(url) {
   return trimmed.startsWith("https://") || trimmed.startsWith("http://");
 }
 
-// 내부 섹션 이동 목적인지 판별 (버튼 텍스트 기반)
+// 버튼 텍스트 → 이동 경로 매핑
 const SECTION_BUTTON_MAP = {
-  "자료실 열기": "resources",
-  "자료실로 이동": "resources",
-  "제출·업로드 센터": "upload",
-  "업로드 센터": "upload",
-  "제출하기": "upload",
+  "자료실 열기": "/resources",
+  "자료실로 이동": "/resources",
+  "제출·업로드 센터": "/upload",
+  "업로드 센터": "/upload",
+  "제출하기": "/upload",
 };
 
-// PrimaryButton: url 유효 → 새 창 / 내부이동 텍스트 → 스크롤 / 그 외 → 숨김
+// 섹션 ID → 경로 매핑 (scrollTarget용)
+const SECTION_ID_TO_ROUTE = {
+  today: "/today",
+  upload: "/upload",
+  checkup: "/checkup",
+  education: "/education",
+  homeroom: "/homeroom",
+  studentCare: "/student-care",
+  resources: "/resources",
+  faq: "/faq",
+};
+
+// PrimaryButton: url 유효 → 새 창 / 내부이동 텍스트 → 페이지 이동 / 그 외 → 숨김
 export function PrimaryButton({ children, url, scrollTarget }) {
+  const navigate = useNavigate();
+
   if (!children || children === "") return null;
 
   const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
 
-  // 1) 명시적 scrollTarget이 있으면 내부 스크롤
+  // 1) 명시적 scrollTarget → 해당 페이지로 이동
   if (scrollTarget) {
+    const route = SECTION_ID_TO_ROUTE[scrollTarget] || "/";
     return (
-      <button
-        onClick={() => scrollToSection(scrollTarget)}
-        className={btnCls}
-      >
+      <button onClick={() => navigate(route)} className={btnCls}>
         {children}
       </button>
     );
   }
 
   // 2) 버튼 텍스트가 내부 이동 목적인지 확인
-  const inferredSection = SECTION_BUTTON_MAP[String(children).trim()];
-  if (inferredSection) {
+  const inferredRoute = SECTION_BUTTON_MAP[String(children).trim()];
+  if (inferredRoute) {
     return (
-      <button
-        onClick={() => scrollToSection(inferredSection)}
-        className={btnCls}
-      >
+      <button onClick={() => navigate(inferredRoute)} className={btnCls}>
         {children}
       </button>
     );
