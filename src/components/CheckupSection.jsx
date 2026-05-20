@@ -1,8 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AppCard, Badge, PrimaryButton, SectionTitle } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
-
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
 
 // "자료실 열기" 버튼은 내부 resources 섹션으로 이동
 const INTERNAL_BUTTONS = {
@@ -12,20 +10,8 @@ const INTERNAL_BUTTONS = {
 
 const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
 
-
-export default function CheckupSection({ items }) {
+export default function CheckupSection({ items, tbConfig }) {
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
-  const [tbConfig, setTbConfig] = useState(null); // null = 로딩 중
-
-  useEffect(() => {
-    fetch(`${GAS_URL}?action=getTbConfig`)
-      .then((r) => r.json())
-      .then(({ result, config }) => {
-        if (result === "success") setTbConfig(config);
-        else setTbConfig({ enabled: "FALSE" });
-      })
-      .catch(() => setTbConfig({ enabled: "FALSE" }));
-  }, []);
 
   const tbBadge = tbConfig
     ? (tbConfig.endDate && new Date() > new Date(tbConfig.endDate)
@@ -57,10 +43,7 @@ export default function CheckupSection({ items }) {
                 ))}
               </ul>
               {item.buttonText && (
-                <PrimaryButton
-                  url={item.url}
-                  scrollTarget={internalTarget}
-                >
+                <PrimaryButton url={item.url} scrollTarget={internalTarget}>
                   {item.buttonText}
                 </PrimaryButton>
               )}
@@ -78,10 +61,7 @@ export default function CheckupSection({ items }) {
             <p className="mt-3 text-sm leading-6 text-slate-600">
               학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
             </p>
-            <button
-              onClick={() => setTbRegistrationOpen(true)}
-              className={btnCls}
-            >
+            <button onClick={() => setTbRegistrationOpen(true)} className={btnCls}>
               유형 선택하기
             </button>
           </AppCard>

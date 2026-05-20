@@ -22,35 +22,71 @@ import {
   uploadItems,
 } from "./data/fallbackData.js";
 
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec?mode=portal";
+const GAS_BASE =
+  "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
+
+// ── 스켈레톤 UI ──────────────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <div className="animate-pulse rounded-[24px] border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="mb-3 h-4 w-16 rounded-full bg-slate-200" />
+      <div className="h-5 w-3/4 rounded-lg bg-slate-200" />
+      <div className="mt-3 space-y-2">
+        <div className="h-3 w-full rounded bg-slate-100" />
+        <div className="h-3 w-5/6 rounded bg-slate-100" />
+        <div className="h-3 w-4/6 rounded bg-slate-100" />
+      </div>
+      <div className="mt-4 h-10 w-32 rounded-2xl bg-slate-200" />
+    </div>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-10">
+      <div className="mb-5 animate-pulse">
+        <div className="mb-2 h-3 w-20 rounded bg-slate-200" />
+        <div className="h-7 w-48 rounded-lg bg-slate-200" />
+        <div className="mt-2 h-4 w-96 max-w-full rounded bg-slate-100" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [portalData, setPortalData] = useState(null);
+  const [tbConfig, setTbConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    fetch(API_URL)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
-        if (!isMounted) return;
-        setPortalData(data);
+    Promise.all([
+      fetch(`${GAS_BASE}?mode=portal`, { signal: controller.signal })
+        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch(`${GAS_BASE}?action=getTbConfig`, { signal: controller.signal })
+        .then((r) => r.json()),
+    ])
+      .then(([portal, tbCfg]) => {
+        clearTimeout(timeoutId);
+        setPortalData(portal);
+        setTbConfig(tbCfg?.result === "success" ? tbCfg.config : { enabled: "FALSE" });
         setIsLoading(false);
       })
-      .catch((error) => {
-        if (!isMounted) return;
-        setLoadError(String(error));
+      .catch((err) => {
+        clearTimeout(timeoutId);
+        setLoadError(String(err));
         setIsLoading(false);
       });
 
     return () => {
-      isMounted = false;
+      clearTimeout(timeoutId);
+      controller.abort();
     };
   }, []);
 
@@ -58,13 +94,13 @@ export default function App() {
     ? { ...fallbackAppConfig, ...portalData.appConfig }
     : fallbackAppConfig;
 
-  const liveNotices = portalData?.notices?.length ? portalData.notices : noticeItems;
-  const liveUploads = portalData?.uploads?.length ? portalData.uploads : uploadItems;
-  const liveCheckups = portalData?.checkups?.length ? portalData.checkups : checkupItems;
-  const liveEducations = portalData?.educations?.length ? portalData.educations : educationItems;
+  const liveNotices    = portalData?.notices?.length     ? portalData.notices     : noticeItems;
+  const liveUploads    = portalData?.uploads?.length     ? portalData.uploads     : uploadItems;
+  const liveCheckups   = portalData?.checkups?.length    ? portalData.checkups    : checkupItems;
+  const liveEducations = portalData?.educations?.length  ? portalData.educations  : educationItems;
   const liveStudentCare = portalData?.studentCare?.length ? portalData.studentCare : studentCareItems;
-  const liveResources = portalData?.resources?.length ? portalData.resources : resourceItems;
-  const liveFaqs = portalData?.faqs?.length ? portalData.faqs : faqItems;
+  const liveResources  = portalData?.resources?.length   ? portalData.resources   : resourceItems;
+  const liveFaqs       = portalData?.faqs?.length        ? portalData.faqs        : faqItems;
 
   return (
     <BrowserRouter>
@@ -72,15 +108,7 @@ export default function App() {
         <Header />
 
         {isLoading ? (
-          <div className="flex min-h-[60vh] items-center justify-center">
-            <div className="flex flex-col items-center gap-3">
-              <svg className="h-8 w-8 animate-spin text-[#1A3B8B]" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-              <p className="text-sm font-bold text-[#1A3B8B]">자료를 불러오는 중입니다...</p>
-            </div>
-          </div>
+          <LoadingSkeleton />
         ) : (
           <>
             {loadError && (
@@ -91,15 +119,15 @@ export default function App() {
               </div>
             )}
             <Routes>
-              <Route path="/" element={<HomePage config={liveAppConfig} />} />
-              <Route path="/today" element={<TodayPage items={liveNotices} />} />
-              <Route path="/upload" element={<UploadPage items={liveUploads} />} />
-              <Route path="/checkup" element={<CheckupPage items={liveCheckups} />} />
-              <Route path="/education" element={<EducationPage items={liveEducations} />} />
-              <Route path="/homeroom" element={<HomeroomPage />} />
+              <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
+              <Route path="/today"       element={<TodayPage       items={liveNotices} />} />
+              <Route path="/upload"      element={<UploadPage      items={liveUploads} />} />
+              <Route path="/checkup"     element={<CheckupPage     items={liveCheckups} tbConfig={tbConfig} />} />
+              <Route path="/education"   element={<EducationPage   items={liveEducations} />} />
+              <Route path="/homeroom"    element={<HomeroomPage />} />
               <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
-              <Route path="/resources" element={<ResourcesPage items={liveResources} />} />
-              <Route path="/faq" element={<FAQPage items={liveFaqs} />} />
+              <Route path="/resources"   element={<ResourcesPage   items={liveResources} />} />
+              <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
             </Routes>
           </>
         )}

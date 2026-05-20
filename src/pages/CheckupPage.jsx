@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import CheckupSection from "../components/CheckupSection.jsx";
 
-export default function CheckupPage({ items }) {
+export default function CheckupPage({ items, tbConfig }) {
   const navigate = useNavigate();
   return (
     <>
@@ -13,7 +13,7 @@ export default function CheckupPage({ items }) {
           ← 메인으로
         </button>
       </div>
-      <CheckupSection items={items} />
+      <CheckupSection items={items} tbConfig={tbConfig} />
     </>
   );
 }
