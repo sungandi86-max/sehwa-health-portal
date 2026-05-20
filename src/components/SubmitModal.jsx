@@ -9,7 +9,8 @@ const FOLDER_IDS = {
   other: "1T2yMxeKmab1SDqdVCRgdxpHMx3Fu2EO6",
 };
 
-const STAFF_TYPES = ["교사", "행정직원", "기간제교사", "강사", "기타"];
+const STAFF_TYPES = ["교사", "강사", "행정직원"];
+const DEPT_TYPES = ["교무교육과정부", "진로진학홍보부", "연구정보부", "창의인성부", "생활안전부", "1학년부", "2학년부", "3학년부", "행정실", "관리자"];
 const TB_DOC_TYPES = ["결핵검진 확인증", "흉부 X-ray 확인 자료", "기타 동등 자료"];
 
 // ───────── 공통 입력 필드 스타일 ─────────
@@ -149,7 +150,10 @@ function CprForm({ onSubmit, submitting }) {
         {errors.name && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.name}</p>}
       </Field>
       <Field label="소속/부서" required>
-        <input className={inputCls} placeholder="예) 1학년부, 교무부" value={form.dept} onChange={set("dept")} />
+        <select className={selectCls} value={form.dept} onChange={set("dept")}>
+          <option value="">선택해주세요</option>
+          {DEPT_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
         {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
       </Field>
       <Field label="교직원 구분" required>
@@ -225,7 +229,10 @@ function TbForm({ onSubmit, submitting }) {
         {errors.name && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.name}</p>}
       </Field>
       <Field label="소속/부서" required>
-        <input className={inputCls} placeholder="예) 1학년부, 교무부" value={form.dept} onChange={set("dept")} />
+        <select className={selectCls} value={form.dept} onChange={set("dept")}>
+          <option value="">선택해주세요</option>
+          {DEPT_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
         {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
       </Field>
       <Field label="교직원 구분" required>
@@ -306,7 +313,10 @@ function RecruitForm({ onSubmit, submitting }) {
         {errors.name && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.name}</p>}
       </Field>
       <Field label="소속/부서" required>
-        <input className={inputCls} placeholder="예) 1학년부, 교무부" value={form.dept} onChange={set("dept")} />
+        <select className={selectCls} value={form.dept} onChange={set("dept")}>
+          <option value="">선택해주세요</option>
+          {DEPT_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
         {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
       </Field>
       <Field label="교직원 구분" required>
@@ -396,7 +406,10 @@ function OtherForm({ onSubmit, submitting }) {
         {errors.name && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.name}</p>}
       </Field>
       <Field label="소속/부서" required>
-        <input className={inputCls} placeholder="예) 1학년부, 교무부" value={form.dept} onChange={set("dept")} />
+        <select className={selectCls} value={form.dept} onChange={set("dept")}>
+          <option value="">선택해주세요</option>
+          {DEPT_TYPES.map((t) => <option key={t}>{t}</option>)}
+        </select>
         {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
       </Field>
       <Field label="교직원 구분" required>
