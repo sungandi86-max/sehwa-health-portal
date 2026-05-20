@@ -42,58 +42,64 @@ const SHEET_HEADERS = {
   ],
 };
 
+// ─── 제출 시트 헤더 (SUBMIT_SHEET_HEADERS) ───────────────────────
+const SUBMIT_SHEET_HEADERS = {
+  "응답_심폐소생술이수증":        ["제출일시", "성명", "소속/부서", "이수일자", "파일명", "파일링크"],
+  "응답_결핵검진확인증":          ["제출일시", "성명", "소속/부서", "검진일자", "파일명", "파일링크"],
+  "응답_채용검진확인요청":        ["제출일시", "성명", "소속/부서", "행정실제출여부", "제출시기", "비고"],
+  "응답_기타보건자료":            ["제출일시", "성명", "소속/부서", "교직원구분", "비고", "파일명", "파일링크"],
+  "응답_교직원결핵검진신청":      ["제출일시", "성명", "소속/부서", "신청유형"],
+  "응답_교직원결핵검진유형선택":  ["제출일시", "성명", "소속/부서", "검진유형", "비고"],
+};
+
 // ─── CORS 헤더 ────────────────────────────────────────────────────
 function corsHeaders() {
   return ContentService.createTextOutput(JSON.stringify({ status: "ok" }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// ─── 공통 헬퍼 ───────────────────────────────────────────────────
+function jsonOutput_(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getSpreadsheet_() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
 // ─── 앱 설정값 읽기 헬퍼 ─────────────────────────────────────────
 function getAppConfig_(key) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet_();
   const sheet = ss.getSheetByName("앱_설정");
   if (!sheet) return "";
   const data = sheet.getDataRange().getValues();
   for (let i = 0; i < data.length; i++) {
-    if (String(data[i][0]) === key) return data[i][1] || "";
+    if (String(data[i][0]) === key) return String(data[i][1] || "");
   }
   return "";
 }
 
-// ─── doGet: 설정값 반환 + 기존 portal 데이터 제공 ─────────────────
+// ─── doGet: 설정값 반환 + portal 데이터 제공 ──────────────────────
 function doGet(e) {
-  const action = e?.parameter?.action || "";
-
-  if (action === "getConfig") {
-    const key = e.parameter.key;
-    const value = getAppConfig_(key);
-    return ContentService.createTextOutput(
-      JSON.stringify({ result: "success", key, value: String(value) })
-    ).setMimeType(ContentService.MimeType.JSON);
+  const mode   = e && e.parameter ? String(e.parameter.mode   || "").trim() : "";
+  const action = e && e.parameter ? String(e.parameter.action || "").trim() : "";
+  try {
+    if (action === "getTbConfig") {
+      const config = {
+        enabled:       getAppConfig_("결핵검진유형선택_사용"),
+        startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
+        endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
+        closedButton:  getAppConfig_("결핵검진유형선택_마감후버튼"),
+        closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
+      };
+      return jsonOutput_({ result: "success", config });
+    }
+    if (mode === "portal") return jsonOutput_(getPortalData_());
+    return jsonOutput_(getVisitSummaryData_());
+  } catch (error) {
+    return jsonOutput_({ error: true, message: String(error) });
   }
-
-  if (action === "getTbConfig") {
-    const config = {
-      enabled: String(getAppConfig_("결핵검진유형선택_사용")),
-      startDate: String(getAppConfig_("결핵검진유형선택_접수시작")),
-      endDate: String(getAppConfig_("결핵검진유형선택_접수마감")),
-      closedButton: String(getAppConfig_("결핵검진유형선택_마감후버튼")),
-      closedMessage: String(getAppConfig_("결핵검진유형선택_마감안내")),
-    };
-    return ContentService.createTextOutput(
-      JSON.stringify({ result: "success", config })
-    ).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  // 기존 portal 데이터 제공 유지
-  const mode = e?.parameter?.mode || "";
-  if (mode === "portal") {
-    return getPortalData();
-  }
-
-  return ContentService.createTextOutput(
-    JSON.stringify({ result: "error", message: "unknown action" })
-  ).setMimeType(ContentService.MimeType.JSON);
 }
 
 // ─── doPost: 제출 처리 ───────────────────────────────────────────
@@ -275,13 +281,66 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
   }
 }
 
-// ─── 기존 getPortalData 함수 (원본 유지) ─────────────────────────
-// 아래 함수는 기존 Apps Script에 이미 있다면 교체하지 않아도 됩니다.
-// 없는 경우에만 이 샘플을 참고하세요.
-function getPortalData() {
-  // 기존 구현이 있는 경우 그대로 사용
-  // 없는 경우 빈 데이터 반환
-  const data = {
+// ─── 시트 종류별 행 추가 (if-else 버전 / doPost에서 호출) ─────────
+function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
+  if (sheetName === "응답_심폐소생술이수증") {
+    sheet.appendRow([now, fields.name || "", fields.dept || "", fields.completionDate || "", fileName, fileLink]);
+  } else if (sheetName === "응답_결핵검진확인증") {
+    sheet.appendRow([now, fields.name || "", fields.dept || "", fields.checkupDate || "", fileName, fileLink]);
+  } else if (sheetName === "응답_채용검진확인요청") {
+    sheet.appendRow([now, fields.name || "", fields.dept || "", fields.adminSubmitted || "", fields.submitPeriod || "", fields.note || ""]);
+  } else if (sheetName === "응답_기타보건자료") {
+    sheet.appendRow([now, fields.name || "", fields.dept || "", fields.staffType || "", fields.note || "", fileName, fileLink]);
+  } else if (sheetName === "응답_교직원결핵검진신청") {
+    sheet.appendRow([now, fields.name || "", fields.dept || "", fields.registrationType || ""]);
+  } else if (sheetName === "응답_교직원결핵검진유형선택") {
+    const enabled    = getAppConfig_("결핵검진유형선택_사용");
+    const endDateRaw = getAppConfig_("결핵검진유형선택_접수마감");
+    const closedMsg  = getAppConfig_("결핵검진유형선택_마감안내") || "접수 기한이 마감되었습니다.";
+    const nowDate    = new Date();
+
+    if (enabled !== "TRUE") {
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: "error", message: closedMsg })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+    if (endDateRaw) {
+      const endDate = new Date(endDateRaw);
+      if (nowDate > endDate) {
+        return ContentService.createTextOutput(
+          JSON.stringify({ status: "error", message: closedMsg })
+        ).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    const ss2 = getSpreadsheet_();
+    const masterSheet = ss2.getSheetByName("교직원 결핵검진현황");
+    if (masterSheet) {
+      const data = masterSheet.getDataRange().getValues();
+      let found = false;
+      for (let i = 5; i < data.length; i++) {
+        if (data[i][2] === fields.name) {
+          masterSheet.getRange(i + 1, 4).setValue(fields.registrationType);
+          masterSheet.getRange(i + 1, 5).setValue("응답완료");
+          masterSheet.getRange(i + 1, 8).setValue(now);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const lastRow = sheet.getLastRow();
+        sheet.getRange(lastRow, 6).setValue("명단 확인 필요");
+      }
+    }
+    sheet.appendRow([now, fields.name || "", fields.dept || "", fields.registrationType || "", ""]);
+  } else {
+    sheet.appendRow([now, JSON.stringify(fields), fileName, fileLink]);
+  }
+}
+
+// ─── Portal 데이터 (raw 객체 반환 / doGet에서 jsonOutput_로 래핑) ─
+function getPortalData_() {
+  return {
     appConfig: null,
     notices: [],
     uploads: [],
@@ -292,6 +351,14 @@ function getPortalData() {
     messages: [],
     faqs: [],
   };
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// doGet 이외 경로에서 직접 ContentService 응답이 필요할 때 사용
+function getPortalData() {
+  return jsonOutput_(getPortalData_());
+}
+
+// 기본 응답 (portal / action 없이 호출된 경우)
+function getVisitSummaryData_() {
+  return { result: "ok" };
 }
