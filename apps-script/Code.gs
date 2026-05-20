@@ -56,6 +56,11 @@ const SUBMIT_SHEET_HEADERS = {
   "응답_인바디측정신청":          ["제출일시", "성명", "소속/부서", "희망날짜", "희망시간대"],
 };
 
+// ─── 시트명 상수 ──────────────────────────────────────────────────
+const SHEET_NAMES = {
+  portalResources: "앱_건강정보/이벤트",
+};
+
 // ─── CORS 헤더 ────────────────────────────────────────────────────
 function corsHeaders() {
   return ContentService.createTextOutput(JSON.stringify({ status: "ok" }))
@@ -354,6 +359,31 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
   }
 }
 
+// ─── 앱_건강정보/이벤트 시트 읽기 ────────────────────────────────
+// 헤더 행: 제목 | 카테고리 | 설명 | 버튼텍스트 | URL
+function readResourceItems_() {
+  const ss = getSpreadsheet_();
+  const sheet = ss.getSheetByName(SHEET_NAMES.portalResources);
+  if (!sheet) return [];
+
+  const rows = sheet.getDataRange().getValues();
+  const items = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const [title, category, description, buttonText, url] = rows[i];
+    if (!title) continue;
+    items.push({
+      title:       String(title       || ""),
+      category:    String(category    || ""),
+      description: String(description || ""),
+      buttonText:  String(buttonText  || ""),
+      url:         String(url         || ""),
+    });
+  }
+
+  return items;
+}
+
 // ─── Portal 데이터 (raw 객체 반환 / doGet에서 jsonOutput_로 래핑) ─
 function getPortalData_() {
   return {
@@ -363,7 +393,7 @@ function getPortalData_() {
     checkups: [],
     educations: [],
     studentCare: [],
-    resources: [],
+    resources: readResourceItems_(),
     messages: [],
     faqs: [],
   };
