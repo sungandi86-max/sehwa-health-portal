@@ -427,17 +427,25 @@ function SubmitButton({ onClick, submitting }) {
   );
 }
 
-// ───────── 교직원 결핵검진 신청 폼 ─────────
+// ───────── 교직원 결핵검진 유형 선택 폼 ─────────
 const TB_REGISTRATION_TYPES = [
-  "학교 단체검진 신청",
-  "개별검진 예정",
-  "공단 검진 예정",
+  "학교 단체검진 희망",
+  "개별 결핵검진 예정",
+  "건강검진/공단검진으로 대체 예정",
   "채용검진 대체 확인 요청",
 ];
 
-function TbRegistrationForm({ onSubmit, submitting }) {
+function TbRegistrationForm({ onSubmit, submitting, deadline }) {
   const [form, setForm] = useState({ name: "", dept: "", registrationType: "" });
   const [errors, setErrors] = useState({});
+
+  // 접수 기한 마감 여부 (프론트엔드 1차 체크)
+  const isDeadlinePassed = (() => {
+    if (!deadline) return false;
+    const d = new Date(deadline);
+    d.setHours(23, 59, 59, 999);
+    return new Date() > d;
+  })();
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
@@ -445,7 +453,7 @@ function TbRegistrationForm({ onSubmit, submitting }) {
     const e = {};
     if (!form.name.trim()) e.name = "성명을 입력해주세요.";
     if (!form.dept) e.dept = "소속/부서를 선택해주세요.";
-    if (!form.registrationType) e.registrationType = "신청 유형을 선택해주세요.";
+    if (!form.registrationType) e.registrationType = "검진 유형을 선택해주세요.";
     return e;
   };
 
@@ -455,19 +463,27 @@ function TbRegistrationForm({ onSubmit, submitting }) {
     if (Object.keys(e).length > 0) return;
 
     await onSubmit({
-      sheetName: "응답_교직원결핵검진신청",
+      sheetName: "응답_교직원결핵검진유형선택",
       folderId: null,
-      fields: { name: form.name, dept: form.dept, registrationType: form.registrationType },
+      fields: { name: form.name, dept: form.dept, registrationType: form.registrationType, deadline },
       fileName: null,
       fileBase64: null,
       fileMimeType: null,
     });
   };
 
+  if (isDeadlinePassed) {
+    return (
+      <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        📋 접수 기한({deadline})이 마감되었습니다.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
-        건강정보나 검진 결과지는 제출하지 않습니다. 신청 유형만 접수합니다.
+        건강정보나 검진 결과지는 제출하지 않습니다. 교직원 결핵검진 진행 유형만 선택해 제출해주세요.
       </div>
       <Field label="성명" required>
         <input className={inputCls} placeholder="홍길동" value={form.name} onChange={set("name")} />
@@ -480,7 +496,7 @@ function TbRegistrationForm({ onSubmit, submitting }) {
         </select>
         {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
       </Field>
-      <Field label="신청 유형" required>
+      <Field label="검진 유형" required>
         <div className="space-y-2">
           {TB_REGISTRATION_TYPES.map((rt) => (
             <label key={rt} className="flex cursor-pointer items-center gap-3">
@@ -509,11 +525,11 @@ const MODAL_META = {
   tb: { title: "결핵검진 확인증 제출", icon: "🩺", color: "text-[#1A3B8B]" },
   recruit: { title: "채용검진 대체 인정 확인 요청", icon: "📋", color: "text-[#1A3B8B]" },
   other: { title: "기타 보건 관련 자료 제출", icon: "📂", color: "text-slate-600" },
-  tb_registration: { title: "교직원 결핵검진 신청", icon: "🫁", color: "text-[#1A3B8B]" },
+  tb_registration: { title: "교직원 결핵검진 유형 선택", icon: "🫁", color: "text-[#1A3B8B]" },
 };
 
 // ───────── 메인 모달 컴포넌트 ─────────
-export default function SubmitModal({ type, onClose }) {
+export default function SubmitModal({ type, onClose, deadline = "" }) {
   const [status, setStatus] = useState("idle"); // idle | submitting | success | error
   const overlayRef = useRef(null);
   const meta = MODAL_META[type] || {};
@@ -584,7 +600,7 @@ export default function SubmitModal({ type, onClose }) {
               {type === "tb" && <TbForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "recruit" && <RecruitForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "other" && <OtherForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
-              {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
+              {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} deadline={deadline} />}
             </>
           )}
         </div>

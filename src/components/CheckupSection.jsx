@@ -10,6 +10,9 @@ const INTERNAL_BUTTONS = {
 
 const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
 
+// 접수 기한: "" = 마감 없음 / "YYYY-MM-DD" 형식으로 기입
+const TB_REGISTRATION_DEADLINE = "";
+
 export default function CheckupSection({ items }) {
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
 
@@ -48,26 +51,30 @@ export default function CheckupSection({ items }) {
           );
         })}
 
-        {/* 교직원 결핵검진 단체검진 신청 카드 */}
+        {/* 교직원 결핵검진 유형 선택 카드 */}
         <AppCard>
           <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-extrabold text-[#263238]">교직원 결핵검진 단체검진 신청</h3>
+            <h3 className="text-lg font-extrabold text-[#263238]">교직원 결핵검진 유형 선택</h3>
             <Badge type="pink">신청 접수 중</Badge>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            학교 단체검진, 개별검진, 공단 검진, 채용검진 대체 확인 중 해당하는 유형을 선택해 신청해주세요.
+            학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
           </p>
           <button
             onClick={() => setTbRegistrationOpen(true)}
             className={btnCls}
           >
-            신청하기
+            유형 선택하기
           </button>
         </AppCard>
       </div>
 
       {tbRegistrationOpen && (
-        <SubmitModal type="tb_registration" onClose={() => setTbRegistrationOpen(false)} />
+        <SubmitModal
+          type="tb_registration"
+          onClose={() => setTbRegistrationOpen(false)}
+          deadline={TB_REGISTRATION_DEADLINE}
+        />
       )}
     </section>
   );
