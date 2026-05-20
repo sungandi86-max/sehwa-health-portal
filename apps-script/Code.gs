@@ -216,7 +216,6 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
           const lastRow = sheet.getLastRow();
           sheet.getRange(lastRow, 6).setValue("명단 확인 필요");
         }
-        updateTbStats_();
       }
       break;
     }
@@ -225,47 +224,6 @@ function appendRow(sheet, sheetName, fields, now, fileName, fileLink) {
       // 알 수 없는 시트: 그냥 JSON 덤프
       sheet.appendRow([now, JSON.stringify(fields), fileName, fileLink]);
   }
-}
-
-// ─── 결핵검진 통계 집계 ───────────────────────────────────────────
-function updateTbStats_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("교직원 결핵검진현황");
-  if (!sheet) return;
-
-  const data = sheet.getDataRange().getValues();
-  let total = 0, answered = 0, inspDone = 0;
-  let school = 0, individual = 0, publicHealth = 0, hire = 0;
-
-  for (let i = 5; i < data.length; i++) {
-    const name = data[i][2];
-    const inspType = data[i][3];   // D열: 검진유형
-    const respStatus = data[i][4]; // E열: 응답상태
-    const inspStatus = data[i][5]; // F열: 검진상태
-    if (!name) continue;
-
-    total++;
-    if (respStatus === "응답완료") answered++;
-    if (inspStatus === "검진완료") inspDone++;
-
-    if (inspType === "학교 단체검진 희망") school++;
-    else if (inspType === "개별 결핵검진 예정") individual++;
-    else if (inspType === "건강검진/공단검진으로 대체 예정") publicHealth++;
-    else if (inspType === "채용검진 대체 확인 요청") hire++;
-  }
-
-  const stats = [
-    ["총 대상자", total],
-    ["응답완료", answered],
-    ["미응답", total - answered],
-    ["검진완료", inspDone],
-    ["미검진", total - inspDone],
-    ["학교 단체검진 희망", school],
-    ["개별 결핵검진 예정", individual],
-    ["건강검진/공단검진 대체 예정", publicHealth],
-    ["채용검진 대체 확인 요청", hire],
-  ];
-  sheet.getRange(3, 10, stats.length, 2).setValues(stats);
 }
 
 // ─── 기존 getPortalData 함수 (원본 유지) ─────────────────────────
