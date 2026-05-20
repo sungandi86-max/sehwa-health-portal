@@ -497,13 +497,11 @@ export default function SubmitModal({ type, onClose }) {
       await fetch(SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
-        headers: { "Content-Type": "text/plain" },
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(payload),
       });
-      // no-cors는 응답을 읽을 수 없으므로 요청 완료 시 성공으로 처리
       setStatus("success");
     } catch (err) {
-      console.error(err);
       setStatus("error");
     }
   };
