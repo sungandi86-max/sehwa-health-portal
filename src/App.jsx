@@ -6,7 +6,6 @@ import Footer from "./components/Footer.jsx";
 import Header from "./components/Header.jsx";
 import HeroSection from "./components/HeroSection.jsx";
 import HomeroomRequestSection from "./components/HomeroomRequestSection.jsx";
-import MessageTemplateSection from "./components/MessageTemplateSection.jsx";
 import QuickMenu from "./components/QuickMenu.jsx";
 import ResourceSection from "./components/ResourceSection.jsx";
 import StudentCareSection from "./components/StudentCareSection.jsx";
@@ -17,7 +16,6 @@ import {
   checkupItems,
   educationItems,
   faqItems,
-  messageTemplates,
   noticeItems,
   resourceItems,
   studentCareItems,
@@ -67,7 +65,6 @@ export default function App() {
   const liveEducations = portalData?.educations?.length ? portalData.educations : educationItems;
   const liveStudentCare = portalData?.studentCare?.length ? portalData.studentCare : studentCareItems;
   const liveResources = portalData?.resources?.length ? portalData.resources : resourceItems;
-  const liveMessages = portalData?.messages?.length ? portalData.messages : messageTemplates;
   const liveFaqs = portalData?.faqs?.length ? portalData.faqs : faqItems;
 
   return (
@@ -96,7 +93,6 @@ export default function App() {
       <HomeroomRequestSection />
       <StudentCareSection items={liveStudentCare} />
       <ResourceSection items={liveResources} />
-      <MessageTemplateSection items={liveMessages} />
       <FAQSection items={liveFaqs} />
       <Footer />
     </main>

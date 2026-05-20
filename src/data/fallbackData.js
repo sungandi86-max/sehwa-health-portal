@@ -15,7 +15,6 @@ export const quickMenuItems = [
   { id: "homeroom", title: "담임 협조 요청", description: "회수, 확인, 전달이 필요한 항목", icon: "✅" },
   { id: "studentCare", title: "학생 건강관리 안내", description: "요보호학생 관련 권한 링크 안내", icon: "🔐" },
   { id: "resources", title: "자료실", description: "보건 관련 안내문과 자료 링크", icon: "📁" },
-  { id: "messages", title: "메신저 문구 복사", description: "자주 쓰는 안내 문구 바로 복사", icon: "💬" },
   { id: "faq", title: "FAQ", description: "자주 묻는 질문 확인", icon: "❔" }
 ];
 

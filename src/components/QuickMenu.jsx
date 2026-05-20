@@ -4,7 +4,7 @@ import { Badge, scrollToSection } from "./ui.jsx";
 export default function QuickMenu() {
   return (
     <section className="mx-auto max-w-6xl px-4 pb-10">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {quickMenuItems.map((item) => (
           <button
             key={item.id}
