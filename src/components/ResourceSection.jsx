@@ -42,22 +42,12 @@ export default function ResourceSection({ items }) {
             <h3 className="mt-3 text-lg font-extrabold text-[#263238]">{item.title}</h3>
             <p className="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>
             {item.buttonText && (
-              <PrimaryButton url={item.url}>{item.buttonText}</PrimaryButton>
+              item.url === "inbody"
+                ? <button onClick={() => setInbodyOpen(true)} className={btnCls}>{item.buttonText}</button>
+                : <PrimaryButton url={item.url}>{item.buttonText}</PrimaryButton>
             )}
           </AppCard>
         ))}
-
-        {/* 인바디 체성분 측정 신청 카드 */}
-        <AppCard>
-          <Badge type="pink">이벤트</Badge>
-          <h3 className="mt-3 text-lg font-extrabold text-[#263238]">인바디 체성분 측정 신청</h3>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            매월 보건실에서 운영하는 체성분 측정 이벤트입니다. 희망 날짜와 시간대를 선택해 신청해주세요.
-          </p>
-          <button onClick={() => setInbodyOpen(true)} className={btnCls}>
-            신청하기
-          </button>
-        </AppCard>
       </div>
 
       {inbodyOpen && (
