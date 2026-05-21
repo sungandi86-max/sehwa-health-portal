@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { GAS_BASE_URL } from "../config.js";
-
 const SCRIPT_URL = "/api/submit";
-const GAS_URL = GAS_BASE_URL;
 
 const FOLDER_IDS = {
   cpr: "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM",
@@ -437,49 +434,9 @@ const TB_REGISTRATION_TYPES = [
   "채용검진 대체 확인 요청",
 ];
 
-function TbRegistrationForm({ onSubmit, submitting }) {
-  const [configState, setConfigState] = useState("loading"); // loading | open | not-started | closed
-  const [closedMessage, setClosedMessage] = useState("");
+function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
   const [form, setForm] = useState({ name: "", dept: "", registrationType: "" });
   const [errors, setErrors] = useState({});
-
-  useEffect(() => {
-    fetch(`${GAS_URL}?action=getTbConfig`)
-      .then((r) => r.json())
-      .then(({ result, config }) => {
-        if (result !== "success") {
-          setClosedMessage("설정을 불러오지 못했습니다.");
-          setConfigState("closed");
-          return;
-        }
-        if (config.enabled === "FALSE") {
-          setClosedMessage(config.closedMessage || "접수가 마감되었습니다.");
-          setConfigState("closed");
-          return;
-        }
-        const now = new Date();
-        if (config.endDate) {
-          const end = new Date(config.endDate);
-          if (now > end) {
-            setClosedMessage(config.closedMessage || "접수 기한이 지났습니다.");
-            setConfigState("closed");
-            return;
-          }
-        }
-        if (config.startDate) {
-          const start = new Date(config.startDate);
-          if (now < start) {
-            setConfigState("not-started");
-            return;
-          }
-        }
-        setConfigState("open");
-      })
-      .catch(() => {
-        setClosedMessage("설정을 불러오지 못했습니다.");
-        setConfigState("closed");
-      });
-  }, []);
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
@@ -506,7 +463,8 @@ function TbRegistrationForm({ onSubmit, submitting }) {
     });
   };
 
-  if (configState === "loading") {
+  // tbConfig prop으로 상태 동기 계산 (fetch 불필요)
+  if (!tbConfig) {
     return (
       <div className="flex items-center justify-center py-10">
         <svg className="h-6 w-6 animate-spin text-[#1A3B8B]" viewBox="0 0 24 24" fill="none">
@@ -517,18 +475,26 @@ function TbRegistrationForm({ onSubmit, submitting }) {
     );
   }
 
-  if (configState === "not-started") {
+  if (tbConfig.enabled !== "TRUE") {
+    return (
+      <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        {tbConfig.closedMessage || "접수가 마감되었습니다."}
+      </div>
+    );
+  }
+
+  const now = new Date();
+  if (tbConfig.startDate && now < new Date(tbConfig.startDate)) {
     return (
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
         아직 접수 기간이 아닙니다.
       </div>
     );
   }
-
-  if (configState === "closed") {
+  if (tbConfig.endDate && now > new Date(tbConfig.endDate)) {
     return (
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
-        {closedMessage}
+        {tbConfig.closedMessage || "접수 기한이 지났습니다."}
       </div>
     );
   }
@@ -664,7 +630,7 @@ const MODAL_META = {
 };
 
 // ───────── 메인 모달 컴포넌트 ─────────
-export default function SubmitModal({ type, onClose }) {
+export default function SubmitModal({ type, onClose, tbConfig }) {
   const [status, setStatus] = useState("idle"); // idle | submitting | success | error
   const overlayRef = useRef(null);
   const meta = MODAL_META[type] || {};
@@ -735,7 +701,7 @@ export default function SubmitModal({ type, onClose }) {
               {type === "tb" && <TbForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "recruit" && <RecruitForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "other" && <OtherForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
-              {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
+              {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} tbConfig={tbConfig} />}
               {type === "inbody" && <InbodyRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
             </>
           )}

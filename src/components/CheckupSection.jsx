@@ -69,7 +69,7 @@ export default function CheckupSection({ items, tbConfig }) {
       </div>
 
       {tbRegistrationOpen && (
-        <SubmitModal type="tb_registration" onClose={() => setTbRegistrationOpen(false)} />
+        <SubmitModal type="tb_registration" onClose={() => setTbRegistrationOpen(false)} tbConfig={tbConfig} />
       )}
     </section>
   );
