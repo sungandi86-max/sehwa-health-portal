@@ -104,6 +104,24 @@ function doGet(e) {
       };
       return jsonOutput_({ result: "success", config });
     }
+    if (action === "verifyPrivate") {
+      const password  = e.parameter.password || "";
+      const correctPw = getAppConfig_("요보호학생_비밀번호");
+      if (!correctPw) {
+        return jsonOutput_({ result: "error", message: "비밀번호가 설정되어 있지 않습니다. 관리자에게 문의해주세요." });
+      }
+      if (password === correctPw) {
+        const ss    = getSpreadsheet_();
+        const sheet = ss.getSheetByName("앱_학생건강관리");
+        if (!sheet) return jsonOutput_({ result: "error", message: "자료 시트를 찾을 수 없습니다." });
+        const data = sheet.getDataRange().getDisplayValues();
+        const url  = data[1] && data[1][5] ? data[1][5] : "";
+        if (!url) return jsonOutput_({ result: "error", message: "링크가 설정되어 있지 않습니다." });
+        return jsonOutput_({ result: "success", url });
+      } else {
+        return jsonOutput_({ result: "error", message: "비밀번호가 올바르지 않습니다." });
+      }
+    }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
   } catch (error) {
