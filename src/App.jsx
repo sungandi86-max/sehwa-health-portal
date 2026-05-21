@@ -60,11 +60,10 @@ export default function App() {
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     fetch(`${GAS_BASE}?mode=portal`, { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -74,9 +73,8 @@ export default function App() {
         setTbConfig(portal?.tbConfig || { enabled: "FALSE" });
         setIsLoading(false);
       })
-      .catch((err) => {
+      .catch(() => {
         clearTimeout(timeoutId);
-        setLoadError(String(err));
         setIsLoading(false);
       });
 
@@ -107,13 +105,6 @@ export default function App() {
           <LoadingSkeleton />
         ) : (
           <>
-            {loadError && (
-              <div className="mx-auto mb-2 max-w-6xl px-4">
-                <div className="rounded-2xl bg-[#FFF5F8] px-5 py-3 text-sm font-bold text-[#D94F70]">
-                  시트 데이터를 불러오지 못해 미리보기 데이터를 표시합니다.
-                </div>
-              </div>
-            )}
             <Routes>
               <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
               <Route path="/today"       element={<TodayPage       items={liveNotices} />} />
