@@ -64,18 +64,14 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    Promise.all([
-      fetch(`${GAS_BASE}?mode=portal`, { signal: controller.signal })
-        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
-      fetch(`${GAS_BASE}?action=getTbConfig`, { signal: controller.signal })
-        .then((r) => r.json()),
-    ])
-      .then(([portal, tbCfg]) => {
+    fetch(`${GAS_BASE}?mode=portal`, { signal: controller.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((portal) => {
         clearTimeout(timeoutId);
         setPortalData(portal);
-        setTbConfig(tbCfg?.result === "success" ? tbCfg.config : { enabled: "FALSE" });
+        setTbConfig(portal?.tbConfig || { enabled: "FALSE" });
         setIsLoading(false);
       })
       .catch((err) => {

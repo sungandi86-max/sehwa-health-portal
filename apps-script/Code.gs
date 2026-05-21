@@ -422,6 +422,13 @@ function getPortalData_() {
     resources: readResourceItems_(),
     messages: [],
     faqs: [],
+    tbConfig: {
+      enabled:       getAppConfig_("결핵검진유형선택_사용"),
+      startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
+      endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
+      closedButton:  getAppConfig_("결핵검진유형선택_마감후버튼"),
+      closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
+    },
   };
 }
 
