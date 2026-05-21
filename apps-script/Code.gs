@@ -362,26 +362,34 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
 // ─── 앱_건강정보/이벤트 시트 읽기 ────────────────────────────────
 // 헤더 행: 제목 | 카테고리 | 설명 | 버튼텍스트 | URL
 function readResourceItems_() {
-  const ss = getSpreadsheet_();
-  const sheet = ss.getSheetByName(SHEET_NAMES.portalResources);
-  if (!sheet) return [];
+  try {
+    const ss = getSpreadsheet_();
+    const sheet = ss.getSheetByName(SHEET_NAMES.portalResources);
+    if (!sheet) {
+      Logger.log("readResourceItems_: sheet not found → " + SHEET_NAMES.portalResources);
+      return [];
+    }
 
-  const rows = sheet.getDataRange().getValues();
-  const items = [];
+    const rows = sheet.getDataRange().getValues();
+    const items = [];
 
-  for (let i = 1; i < rows.length; i++) {
-    const [title, category, description, buttonText, url] = rows[i];
-    if (!title) continue;
-    items.push({
-      title:       String(title       || ""),
-      category:    String(category    || ""),
-      description: String(description || ""),
-      buttonText:  String(buttonText  || ""),
-      url:         String(url         || ""),
-    });
+    for (let i = 1; i < rows.length; i++) {
+      const [title, category, description, buttonText, url] = rows[i];
+      if (!title) continue;
+      items.push({
+        title:       String(title       || ""),
+        category:    String(category    || ""),
+        description: String(description || ""),
+        buttonText:  String(buttonText  || ""),
+        url:         String(url         || ""),
+      });
+    }
+
+    return items;
+  } catch (e) {
+    Logger.log("readResourceItems_ error: " + e.toString());
+    return [];
   }
-
-  return items;
 }
 
 // ─── Portal 데이터 (raw 객체 반환 / doGet에서 jsonOutput_로 래핑) ─

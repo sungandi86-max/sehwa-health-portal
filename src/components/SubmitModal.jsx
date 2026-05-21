@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { GAS_BASE_URL } from "../config.js";
 
 const SCRIPT_URL = "/api/submit";
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
+const GAS_URL = GAS_BASE_URL;
 
 const FOLDER_IDS = {
   cpr: "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM",

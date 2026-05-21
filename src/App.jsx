@@ -21,9 +21,9 @@ import {
   studentCareItems,
   uploadItems,
 } from "./data/fallbackData.js";
+import { GAS_BASE_URL } from "./config.js";
 
-const GAS_BASE =
-  "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
+const GAS_BASE = GAS_BASE_URL;
 
 // ── 스켈레톤 UI ──────────────────────────────────────────────────
 function SkeletonCard() {

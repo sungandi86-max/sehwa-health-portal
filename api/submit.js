@@ -1,6 +1,8 @@
 import fetch from "node-fetch";
 
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
+const SCRIPT_URL =
+  process.env.GAS_URL ||
+  "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
 
 export const config = {
   api: { bodyParser: false }
