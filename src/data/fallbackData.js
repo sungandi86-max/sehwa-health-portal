@@ -318,7 +318,7 @@ export const studentCareItems = [
   {
     title: "학생 건강관리 자료 확인",
     description: "건강상 배려가 필요한 학생 관련 자료는 별도 권한이 부여된 링크에서 확인해주세요.",
-    privacyNotice: "권한이 부여된 교직원만 열람 가능합니다.",
+    privacyNotice: "비밀번호가 설정되어 있습니다. 비밀번호는 보건실로 문의해주세요.",
     buttonText: "요보호학생 확인 링크 열기",
     url: "",
     status: "권한 필요"
