@@ -331,14 +331,6 @@ export const studentCareItems = [
     url: "https://docs.google.com/spreadsheets/d/1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs/edit?gid=415753895#gid=415753895",
     status: "권한 필요"
   },
-  {
-    title: "현장체험학습 건강관리 참고",
-    description: "현장체험학습 전 건강상 배려가 필요한 학생 확인이 필요한 경우 참고하는 링크입니다.",
-    privacyNotice: "학생 개인정보 및 민감정보는 권한이 부여된 자료에서만 확인해주세요.",
-    buttonText: "참고자료 열기",
-    url: "",
-    status: "권한 필요"
-  }
 ];
 
 export const resourceItems = [
