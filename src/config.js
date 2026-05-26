@@ -1,2 +1,2 @@
 export const GAS_BASE_URL =
-  "https://script.google.com/macros/s/AKfycbxuO7QSiuGGBH5IngMlpMqpZvDhs-mpQhcrYa1SD40gB5gewx-Gs5EUHfuZX0eRDr68/exec";
+  "https://script.google.com/macros/s/AKfycbw85hs1ARcXvoynC63n8Rl48A7_tmnPh1PYHARfoHmtKZBCgvQJDzdz1_lcYG0fIz3q/exec";
