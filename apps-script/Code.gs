@@ -122,6 +122,27 @@ function doGet(e) {
         return jsonOutput_({ result: "error", message: "비밀번호가 올바르지 않습니다." });
       }
     }
+    if (action === "verifyHealthRoom") {
+      const password  = e.parameter.password || "";
+      const correctPw = getAppConfig_("입실현황_비밀번호");
+      if (!correctPw) {
+        return jsonOutput_({ result: "error", message: "비밀번호가 설정되어 있지 않습니다. 관리자에게 문의해주세요." });
+      }
+      if (password === correctPw) {
+        const ss    = getSpreadsheet_();
+        const sheet = ss.getSheetByName("앱_학생건강관리");
+        if (!sheet) return jsonOutput_({ result: "error", message: "자료 시트를 찾을 수 없습니다." });
+        const data = sheet.getDataRange().getDisplayValues();
+        let url = "";
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][4] === "보건실 입실현황 열기") { url = data[i][5]; break; }
+        }
+        if (!url) return jsonOutput_({ result: "error", message: "링크가 설정되어 있지 않습니다." });
+        return jsonOutput_({ result: "success", url });
+      } else {
+        return jsonOutput_({ result: "error", message: "비밀번호가 올바르지 않습니다." });
+      }
+    }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
   } catch (error) {

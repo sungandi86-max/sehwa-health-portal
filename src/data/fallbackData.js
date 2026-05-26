@@ -324,6 +324,14 @@ export const studentCareItems = [
     status: "권한 필요"
   },
   {
+    title: "보건실 입실 현황 확인",
+    description: "보건실 입실 중인 학생 현황은 별도 권한이 부여된 링크에서 확인해주세요.",
+    privacyNotice: "권한이 부여된 교직원만 열람 가능합니다.",
+    buttonText: "보건실 입실현황 열기",
+    url: "https://docs.google.com/spreadsheets/d/1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs/edit?gid=415753895#gid=415753895",
+    status: "권한 필요"
+  },
+  {
     title: "현장체험학습 건강관리 참고",
     description: "현장체험학습 전 건강상 배려가 필요한 학생 확인이 필요한 경우 참고하는 링크입니다.",
     privacyNotice: "학생 개인정보 및 민감정보는 권한이 부여된 자료에서만 확인해주세요.",

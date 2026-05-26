@@ -7,7 +7,7 @@ import { AppCard, Badge, PrimaryButton, SectionTitle } from "./ui.jsx";
 const inputCls =
   "w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10 placeholder:text-slate-400";
 
-function PrivateLinkModal({ onClose }) {
+function PrivateLinkModal({ onClose, action = "verifyPrivate", title = "🔐 요보호학생 확인 링크" }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ function PrivateLinkModal({ onClose }) {
     setError("");
     try {
       const res = await fetch(
-        `${GAS_BASE_URL}?action=verifyPrivate&password=${encodeURIComponent(password)}`
+        `${GAS_BASE_URL}?action=${action}&password=${encodeURIComponent(password)}`
       );
       const json = await res.json();
       if (json.result === "success" && json.url) {
@@ -58,7 +58,7 @@ function PrivateLinkModal({ onClose }) {
       <div className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[32px] bg-white shadow-2xl sm:rounded-[32px]">
         {/* 헤더 */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-5">
-          <p className="text-xl font-black text-[#1A3B8B]">🔐 요보호학생 확인 링크</p>
+          <p className="text-xl font-black text-[#1A3B8B]">{title}</p>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
@@ -119,9 +119,10 @@ function PrivateLinkModal({ onClose }) {
 
 // ── 메인 섹션 ────────────────────────────────────────────────────
 const PRIVATE_BUTTON = "요보호학생 확인 링크 열기";
+const HEALTH_ROOM_BUTTON = "보건실 입실현황 열기";
 
 export default function StudentCareSection({ items }) {
-  const [pwModalOpen, setPwModalOpen] = useState(false);
+  const [activeModal, setActiveModal] = useState(null);
 
   return (
     <section id="studentCare" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
@@ -152,7 +153,14 @@ export default function StudentCareSection({ items }) {
               </p>
               {item.buttonText === PRIVATE_BUTTON ? (
                 <button
-                  onClick={() => setPwModalOpen(true)}
+                  onClick={() => setActiveModal({ action: "verifyPrivate", title: "🔐 요보호학생 확인 링크" })}
+                  className="mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto"
+                >
+                  {item.buttonText}
+                </button>
+              ) : item.buttonText === HEALTH_ROOM_BUTTON ? (
+                <button
+                  onClick={() => setActiveModal({ action: "verifyHealthRoom", title: "🔐 보건실 입실현황 열기" })}
                   className="mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto"
                 >
                   {item.buttonText}
@@ -165,7 +173,13 @@ export default function StudentCareSection({ items }) {
         </div>
       </div>
 
-      {pwModalOpen && <PrivateLinkModal onClose={() => setPwModalOpen(false)} />}
+      {activeModal && (
+        <PrivateLinkModal
+          onClose={() => setActiveModal(null)}
+          action={activeModal.action}
+          title={activeModal.title}
+        />
+      )}
     </section>
   );
 }
