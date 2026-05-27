@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import ResourceSection from "../components/ResourceSection.jsx";
 
-export default function ResourcesPage({ items }) {
+export default function ResourcesPage({ items, loadFailed }) {
   const navigate = useNavigate();
   return (
     <>
@@ -13,7 +13,7 @@ export default function ResourcesPage({ items }) {
           ← 메인으로
         </button>
       </div>
-      <ResourceSection items={items} />
+      <ResourceSection items={items} loadFailed={loadFailed} />
     </>
   );
 }

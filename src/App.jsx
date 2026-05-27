@@ -17,7 +17,6 @@ import {
   educationItems,
   faqItems,
   noticeItems,
-  resourceItems,
   studentCareItems,
   uploadItems,
 } from "./data/fallbackData.js";
@@ -93,8 +92,9 @@ export default function App() {
   const liveCheckups   = portalData?.checkups?.length    ? portalData.checkups    : checkupItems;
   const liveEducations = portalData?.educations?.length  ? portalData.educations  : educationItems;
   const liveStudentCare = portalData?.studentCare?.length ? portalData.studentCare : studentCareItems;
-  const liveResources  = portalData?.resources?.length   ? portalData.resources   : resourceItems;
+  const liveResources  = Array.isArray(portalData?.resources) ? portalData.resources : [];
   const liveFaqs       = portalData?.faqs?.length        ? portalData.faqs        : faqItems;
+  const resourcesLoadFailed = !portalData;
 
   return (
     <BrowserRouter>
@@ -113,7 +113,7 @@ export default function App() {
               <Route path="/education"   element={<EducationPage   items={liveEducations} />} />
               <Route path="/homeroom"    element={<HomeroomPage />} />
               <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
-              <Route path="/resources"   element={<ResourcesPage   items={liveResources} />} />
+              <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
               <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
             </Routes>
           </>
