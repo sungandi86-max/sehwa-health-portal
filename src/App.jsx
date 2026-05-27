@@ -20,9 +20,8 @@ import {
   studentCareItems,
   uploadItems,
 } from "./data/fallbackData.js";
-import { GAS_BASE_URL } from "./config.js";
 
-const GAS_BASE = GAS_BASE_URL;
+const PORTAL_API_URL = "/api/portal";
 
 // ── 스켈레톤 UI ──────────────────────────────────────────────────
 function SkeletonCard() {
@@ -64,15 +63,19 @@ export default function App() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    fetch(`${GAS_BASE}?mode=portal`, { signal: controller.signal })
+    fetch(PORTAL_API_URL, { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((portal) => {
         clearTimeout(timeoutId);
+        if (portal?.success === false || portal?.result === "error") {
+          throw new Error(portal.message || "Portal API error");
+        }
         setPortalData(portal);
         setTbConfig(portal?.tbConfig || { enabled: "FALSE" });
         setIsLoading(false);
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error("[portal] load failed", error);
         clearTimeout(timeoutId);
         setIsLoading(false);
       });
