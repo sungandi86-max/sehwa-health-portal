@@ -202,18 +202,24 @@ function doGet(e) {
       }
     }
     if (action === "getHealthRoomLocation") {
-      return jsonOutput_(getHealthRoomLocation_(e.parameter || {}));
+      return jsonOutput_(normalizeHealthRoomApiResponse_(getHealthRoomLocation_(e.parameter || {}), action));
     }
     if (action === "confirmHealthRoomHomeroom") {
-      return jsonOutput_(confirmHealthRoomHomeroom_(e.parameter || {}));
+      return jsonOutput_(normalizeHealthRoomApiResponse_(confirmHealthRoomHomeroom_(e.parameter || {}), action));
     }
     if (action === "verifyHealthRoom") {
-      return jsonOutput_({ result: "error", message: "보건실 소재 확인은 앱 내부 조회 화면을 이용해 주세요." });
+      return jsonOutput_(healthRoomApiError_("보건실 소재 확인은 앱 내부 조회 화면을 이용해 주세요.", "legacy verifyHealthRoom action"));
     }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
   } catch (error) {
-    return jsonOutput_({ error: true, message: String(error) });
+    return jsonOutput_({
+      success: false,
+      result: "error",
+      error: true,
+      message: "Apps Script 처리 중 오류가 발생했습니다.",
+      debug: String(error && error.stack ? error.stack : error),
+    });
   }
 }
 
@@ -337,6 +343,31 @@ function ensureHealthRoomStatusSheets() {
   ensureHomeroomAuthDefaults_(authSheet);
 
   getOrCreateHealthRoomSheet_(SHEET_NAMES.healthRoomAccessLog, ["접속일시", "접근유형", "학년", "반", "성공여부", "메시지"]);
+}
+
+function normalizeHealthRoomApiResponse_(response, debugLabel) {
+  const data = response || {};
+  const success = data.success === true || data.result === "success";
+  if (success) {
+    data.success = true;
+    data.result = "success";
+    if (data.message === undefined) data.message = "";
+  } else {
+    data.success = false;
+    data.result = "error";
+    if (!data.message) data.message = "요청을 처리할 수 없습니다.";
+  }
+  if (data.debug === undefined) data.debug = debugLabel || "";
+  return data;
+}
+
+function healthRoomApiError_(message, debug) {
+  return {
+    success: false,
+    result: "error",
+    message: message || "요청을 처리할 수 없습니다.",
+    debug: debug || "",
+  };
 }
 
 function getHealthRoomLocation_(params) {

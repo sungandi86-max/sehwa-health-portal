@@ -20,6 +20,75 @@ const ACCESS_TABS = [
   { value: "admin", label: "보건교사용" },
 ];
 
+function buildGasUrl(params) {
+  return `${GAS_BASE_URL}?${params.toString()}`;
+}
+
+function getGasErrorMessage(error, fallback) {
+  if (error?.userMessage) return error.userMessage;
+  if (error?.name === "SyntaxError") {
+    return "Apps Script 응답을 JSON으로 읽을 수 없습니다. 배포 URL이나 접근 권한을 확인해 주세요.";
+  }
+  return fallback;
+}
+
+async function requestGasJson(url, debugLabel) {
+  console.log(`[${debugLabel}] request`, {
+    url,
+    baseUrl: GAS_BASE_URL,
+    endsWithExec: GAS_BASE_URL.endsWith("/exec"),
+  });
+
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    console.error(`[${debugLabel}] fetch failed`, error);
+    const wrapped = new Error("fetch failed");
+    wrapped.userMessage = "Apps Script 요청에 실패했습니다. 네트워크, CORS, 배포 URL을 확인해 주세요.";
+    wrapped.cause = error;
+    throw wrapped;
+  }
+
+  const body = await response.text();
+  console.log(`[${debugLabel}] response`, {
+    status: response.status,
+    ok: response.ok,
+    contentType: response.headers.get("content-type"),
+    body,
+  });
+
+  if (!response.ok) {
+    const error = new Error(`HTTP ${response.status}`);
+    error.userMessage = `Apps Script 응답 상태가 ${response.status}입니다. 웹앱 배포 권한을 확인해 주세요.`;
+    error.responseBody = body;
+    console.error(`[${debugLabel}] bad status`, error);
+    throw error;
+  }
+
+  const trimmed = body.trim();
+  if (trimmed.startsWith("<") || /<html|<!doctype/i.test(trimmed)) {
+    const error = new Error("HTML response from Apps Script");
+    error.userMessage = "Apps Script가 JSON이 아니라 HTML 페이지를 반환했습니다. 로그인 페이지, 권한 오류, 또는 잘못된 배포 URL일 수 있습니다.";
+    error.responseBody = body;
+    console.error(`[${debugLabel}] non-json html response`, error);
+    throw error;
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    error.userMessage = "Apps Script 응답을 JSON으로 파싱할 수 없습니다. 응답 body를 콘솔에서 확인해 주세요.";
+    error.responseBody = body;
+    console.error(`[${debugLabel}] json parse failed`, error);
+    throw error;
+  }
+}
+
+function isGasSuccess(json) {
+  return json?.success === true || json?.result === "success";
+}
+
 function PrivateLinkModal({ onClose, action = "verifyPrivate", title = "요보호학생 확인 링크" }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -36,18 +105,20 @@ function PrivateLinkModal({ onClose, action = "verifyPrivate", title = "요보�
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(
-        `${GAS_BASE_URL}?action=${action}&password=${encodeURIComponent(password)}`
-      );
-      const json = await res.json();
-      if (json.result === "success" && json.url) {
+      const params = new URLSearchParams({
+        action,
+        password: password.trim(),
+      });
+      const json = await requestGasJson(buildGasUrl(params), `StudentCare:${action}`);
+      if (isGasSuccess(json) && json.url) {
         window.open(json.url, "_blank", "noopener,noreferrer");
         onClose();
       } else {
         setError(json.message || "비밀번호가 올바르지 않습니다.");
       }
-    } catch {
-      setError("확인 중 오류가 발생했습니다. 다시 시도해 주세요.");
+    } catch (error) {
+      console.error(`[StudentCare:${action}] error`, error);
+      setError(getGasErrorMessage(error, "확인 중 오류가 발생했습니다. 다시 시도해 주세요."));
     } finally {
       setLoading(false);
     }
@@ -123,16 +194,17 @@ function HealthRoomLocationModal({ onClose }) {
         params.set("grade", grade.trim());
         params.set("classNo", classNo.trim());
       }
-      const res = await fetch(`${GAS_BASE_URL}?${params.toString()}`);
-      const json = await res.json();
-      if (json.result === "success") {
+      const url = buildGasUrl(params);
+      const json = await requestGasJson(url, "HealthRoom:getHealthRoomLocation");
+      if (isGasSuccess(json)) {
         setRows(Array.isArray(json.items) ? json.items : []);
-        setMessage(json.message || "");
+        setMessage(json.message || (Array.isArray(json.items) && json.items.length ? "" : "조회된 보건실 소재 기록이 없습니다."));
       } else {
-        setError(json.message || "조회할 수 없습니다.");
+        setError(json.message || json.debug || "조회할 수 없습니다.");
       }
-    } catch {
-      setError("조회 중 오류가 발생했습니다. 다시 시도해 주세요.");
+    } catch (error) {
+      console.error("[HealthRoom:getHealthRoomLocation] error", error);
+      setError(getGasErrorMessage(error, "조회 중 오류가 발생했습니다. 다시 시도해 주세요."));
     } finally {
       setLoading(false);
     }
@@ -149,19 +221,20 @@ function HealthRoomLocationModal({ onClose }) {
         classNo: classNo.trim(),
         password: password.trim(),
       });
-      const res = await fetch(`${GAS_BASE_URL}?${params.toString()}`);
-      const json = await res.json();
-      if (json.result === "success") {
+      const url = buildGasUrl(params);
+      const json = await requestGasJson(url, "HealthRoom:confirmHealthRoomHomeroom");
+      if (isGasSuccess(json)) {
         setRows((prev) =>
           prev.map((item) =>
             item.rowId === row.rowId ? { ...item, homeroomConfirmed: true } : item
           )
         );
       } else {
-        setError(json.message || "담임 확인을 기록할 수 없습니다.");
+        setError(json.message || json.debug || "담임 확인을 기록할 수 없습니다.");
       }
-    } catch {
-      setError("담임 확인 기록 중 오류가 발생했습니다.");
+    } catch (error) {
+      console.error("[HealthRoom:confirmHealthRoomHomeroom] error", error);
+      setError(getGasErrorMessage(error, "담임 확인 기록 중 오류가 발생했습니다."));
     } finally {
       setCheckingId("");
     }
