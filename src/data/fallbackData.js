@@ -13,7 +13,7 @@ export const quickMenuItems = [
   { id: "checkup", title: "검진·검사 안내", description: "1학년 건강검진, 2·3학년 결핵검진·소변검사", icon: "🩺" },
   { id: "education", title: "교육 자료실", description: "응급처치·예방교육·인식개선 자료", icon: "🎬" },
   { id: "homeroom", title: "담임 협조 요청", description: "회수, 확인, 전달이 필요한 항목", icon: "✅" },
-  { id: "studentCare", title: "학생 건강관리 안내", description: "요보호학생 관련 권한 링크 안내", icon: "🔐" },
+  { id: "studentCare", title: "학생 건강관리 확인", description: "권한이 필요한 학생 건강관리 자료와 보건실 소재를 확인하는 메뉴입니다.", icon: "🔐🩺" },
   { id: "resources", title: "건강정보/이벤트", description: "보건 안내문, 참고 자료, 보건실 이벤트", icon: "📋" },
   { id: "faq", title: "FAQ", description: "자주 묻는 질문 확인", icon: "❔" }
 ];
