@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { studentCareIntro } from "../data/fallbackData.js";
-import { AppCard, Badge, PrimaryButton, SectionTitle } from "./ui.jsx";
+import { AppCard, Badge, SectionTitle } from "./ui.jsx";
 
 const inputCls =
   "w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10 placeholder:text-slate-400";
@@ -8,11 +8,27 @@ const inputCls =
 const btnCls =
   "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
 
-const PRIVATE_BUTTON = "요보호학생 확인 링크 열기";
-const PRIVATE_BUTTON_LEGACY = "?붾낫?명븰???뺤씤 留곹겕 ?닿린";
 const HEALTH_ROOM_BUTTON = "보건실 소재 확인하기";
 const HEALTH_ROOM_BUTTON_LEGACY = "蹂닿굔???낆떎?꾪솴 ?닿린";
 const HEALTH_ROOM_STATUS_API = "/api/health-room-status";
+
+const MONTHLY_VISIT_CARD = {
+  title: "담임용 월별 보건실 입실 확인",
+  description: "월말 출결 처리를 위해 우리 반 학생의 보건실 입실 기록을 월별로 확인합니다.",
+  privacyNotice: "증상 및 처치 내용은 표시하지 않고, 입실·복귀 시각과 결과 처리 여부만 확인할 수 있습니다.",
+  buttonText: "월별 입실 기록 조회하기",
+  status: "권한 필요",
+};
+
+const DEFAULT_HEALTH_ROOM_CARD = {
+  title: "보건실 소재 확인",
+  description:
+    "수업 중 보건실을 이용 중인 학생의 소재와 복귀 여부를 확인할 수 있습니다. 학생 건강정보, 증상, 처치내용은 표시하지 않습니다.",
+  privacyNotice: "권한 있는 교직원에게만 최소정보를 제한적으로 표시합니다.",
+  buttonText: HEALTH_ROOM_BUTTON,
+  status: "권한 필요",
+  url: "",
+};
 
 const ACCESS_TABS = [
   { value: "subject", label: "교과교사용" },
@@ -94,61 +110,6 @@ async function requestGasJson(params, debugLabel) {
 
 function isGasSuccess(json) {
   return json?.success === true || json?.result === "success";
-}
-
-function PrivateLinkModal({ onClose, action = "verifyPrivate", title = "요보호학생 확인 링크" }) {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const overlayRef = useRef(null);
-
-  useModalLifecycle(onClose);
-
-  const handleSubmit = async () => {
-    if (!password.trim()) {
-      setError("비밀번호를 입력해 주세요.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      const params = new URLSearchParams({
-        action,
-        password: password.trim(),
-      });
-      const json = await requestGasJson(params, `StudentCare:${action}`);
-      if (isGasSuccess(json) && json.url) {
-        window.open(json.url, "_blank", "noopener,noreferrer");
-        onClose();
-      } else {
-        setError(json.message || "비밀번호가 올바르지 않습니다.");
-      }
-    } catch (error) {
-      console.error(`[StudentCare:${action}] error`, error);
-      setError(getGasErrorMessage(error, "확인 중 오류가 발생했습니다. 다시 시도해 주세요."));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <ModalShell overlayRef={overlayRef} onClose={onClose} title={title}>
-      <div className="space-y-4">
-        <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
-          교직원 전용 자료입니다. 비밀번호를 입력해 주세요.
-        </div>
-        <PasswordField
-          value={password}
-          onChange={setPassword}
-          onEnter={handleSubmit}
-          error={error}
-        />
-        <SubmitButton loading={loading} onClick={handleSubmit}>
-          확인
-        </SubmitButton>
-      </div>
-    </ModalShell>
-  );
 }
 
 function HealthRoomLocationModal({ onClose }) {
@@ -325,6 +286,148 @@ function HealthRoomLocationModal({ onClose }) {
   );
 }
 
+function MonthlyVisitModal({ onClose }) {
+  const [grade, setGrade] = useState("");
+  const [classNo, setClassNo] = useState("");
+  const [password, setPassword] = useState("");
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [records, setRecords] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const overlayRef = useRef(null);
+
+  useModalLifecycle(onClose);
+
+  const fetchRecords = async () => {
+    if (!grade.trim() || !classNo.trim() || !password.trim() || !month.trim()) {
+      setError("학년, 반, 비밀번호, 조회 월을 모두 입력해 주세요.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+    setRecords([]);
+    setSummary(null);
+
+    try {
+      const params = new URLSearchParams({
+        mode: "monthlyVisit",
+        grade: grade.trim(),
+        classNo: classNo.trim(),
+        month: month.trim(),
+        password: password.trim(),
+      });
+      const json = await requestGasJson(params, "HealthRoom:monthlyVisit");
+      if (isGasSuccess(json)) {
+        const nextRecords = Array.isArray(json.records) ? json.records : [];
+        setRecords(nextRecords);
+        setSummary({
+          grade: json.grade || grade.trim(),
+          classNo: json.classNo || classNo.trim(),
+          month: json.month || month.trim(),
+          total: json.summary?.total || 0,
+          resultCount: json.summary?.resultCount || 0,
+          unchecked: json.summary?.unchecked || 0,
+        });
+        setMessage(nextRecords.length ? "" : "조회된 월별 보건실 입실 기록이 없습니다.");
+      } else {
+        setError(json.message || json.debug || "월별 입실 기록을 조회할 수 없습니다.");
+      }
+    } catch (error) {
+      console.error("[HealthRoom:monthlyVisit] error", error);
+      setError(getGasErrorMessage(error, "월별 입실 기록 조회 중 오류가 발생했습니다."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <ModalShell overlayRef={overlayRef} onClose={onClose} title="담임용 월별 보건실 입실 확인">
+      <div className="space-y-5">
+        <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+          이 화면은 담임교사의 월별 출결 확인을 위한 조회 화면입니다.
+          증상 및 처치 내용은 표시하지 않으며, 입실·복귀 시각과 결과 처리 여부만 확인할 수 있습니다.
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-bold text-[#263238]">학년</label>
+            <input className={inputCls} inputMode="numeric" value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="예: 1" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-bold text-[#263238]">반</label>
+            <input className={inputCls} inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder="예: 3" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-bold text-[#263238]">조회 월</label>
+            <input className={inputCls} type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          </div>
+          <PasswordField value={password} onChange={setPassword} onEnter={fetchRecords} error={error} />
+        </div>
+
+        <SubmitButton loading={loading} onClick={fetchRecords}>
+          월별 입실 기록 조회하기
+        </SubmitButton>
+
+        {summary && (
+          <div className="rounded-2xl bg-[#F7F9FC] p-4 text-sm font-bold text-slate-700">
+            {formatMonthlySummaryTitle(summary.month, summary.grade, summary.classNo)}
+            <div className="mt-1 text-[#1A3B8B]">
+              총 {summary.total}건 / 결과 처리 {summary.resultCount}건 / 미확인 {summary.unchecked}건
+            </div>
+          </div>
+        )}
+        {message && <p className="rounded-2xl bg-[#F7F9FC] p-3 text-sm font-bold text-slate-600">{message}</p>}
+
+        <MonthlyVisitList records={records} />
+      </div>
+    </ModalShell>
+  );
+}
+
+function formatMonthlySummaryTitle(month, grade, classNo) {
+  const [year, monthNo] = String(month || "").split("-");
+  if (year && monthNo) return `${year}년 ${Number(monthNo)}월 ${grade}학년 ${classNo}반 보건실 입실 기록`;
+  return `${grade}학년 ${classNo}반 보건실 입실 기록`;
+}
+
+function MonthlyVisitList({ records }) {
+  if (!records.length) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-center text-sm text-slate-500">
+        조회 결과가 여기에 표시됩니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {records.map((record, index) => (
+        <div key={`${record.date}-${record.number}-${record.inTime}-${index}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-base font-black text-[#263238]">
+                {record.number}번 · {record.name}
+              </p>
+              <p className="mt-1 text-xs font-bold text-slate-400">{record.date}</p>
+            </div>
+            <Badge type={record.teacherChecked === "확인" ? "green" : "blue"}>{record.teacherChecked}</Badge>
+          </div>
+          <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+            <Info label="입실 시각" value={record.inTime || "-"} />
+            <Info label="복귀 시각" value={record.outTime || "-"} />
+            <Info label="체류시간" value={record.stay || "-"} />
+            <Info label="결과 처리" value={record.result || "-"} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function HealthRoomList({ accessType, rows, checkingId, onConfirm }) {
   if (!rows.length) {
     return (
@@ -465,10 +568,6 @@ function useModalLifecycle(onClose) {
   }, [onClose]);
 }
 
-function isPrivateCard(item) {
-  return item.buttonText === PRIVATE_BUTTON || item.buttonText === PRIVATE_BUTTON_LEGACY;
-}
-
 function isHealthRoomCard(item) {
   return (
     item.buttonText === HEALTH_ROOM_BUTTON ||
@@ -480,6 +579,20 @@ function isHealthRoomCard(item) {
 
 export default function StudentCareSection({ items }) {
   const [activeModal, setActiveModal] = useState(null);
+  const healthRoomSource = items.find(isHealthRoomCard);
+  const healthRoomCard = {
+    ...DEFAULT_HEALTH_ROOM_CARD,
+    ...(healthRoomSource || {}),
+    title: DEFAULT_HEALTH_ROOM_CARD.title,
+    description: DEFAULT_HEALTH_ROOM_CARD.description,
+    privacyNotice: DEFAULT_HEALTH_ROOM_CARD.privacyNotice,
+    buttonText: DEFAULT_HEALTH_ROOM_CARD.buttonText,
+    url: "",
+  };
+  const visibleCards = [
+    { ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit" },
+    { ...healthRoomCard, modalType: "healthRoom" },
+  ];
 
   return (
     <section id="studentCare" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
@@ -498,60 +611,29 @@ export default function StudentCareSection({ items }) {
           </div>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
-          {items.map((item) => {
-            const isHealthRoom = isHealthRoomCard(item);
-            const card = isHealthRoom
-              ? {
-                  ...item,
-                  title: "보건실 소재 확인",
-                  description:
-                    "수업 중 보건실을 이용 중인 학생의 소재와 복귀 여부를 확인할 수 있습니다. 학생 건강정보, 증상, 처치내용은 표시하지 않습니다.",
-                  privacyNotice:
-                    "권한 있는 교직원에게만 최소정보를 제한적으로 표시합니다.",
-                  buttonText: HEALTH_ROOM_BUTTON,
-                  url: "",
-                }
-              : item;
-
-            return (
-              <AppCard key={card.title}>
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-lg font-extrabold text-[#263238]">{card.title}</h3>
-                  <Badge type="blue">{card.status}</Badge>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{card.description}</p>
-                <p className="mt-3 rounded-2xl bg-[#F7F9FC] p-3 text-sm text-slate-600">
-                  {card.privacyNotice}
-                </p>
-                {isPrivateCard(card) ? (
-                  <button
-                    onClick={() => setActiveModal({ type: "private" })}
-                    className={btnCls}
-                  >
-                    {card.buttonText}
-                  </button>
-                ) : isHealthRoom ? (
-                  <button
-                    onClick={() => setActiveModal({ type: "healthRoom" })}
-                    className={btnCls}
-                  >
-                    {card.buttonText}
-                  </button>
-                ) : (
-                  card.buttonText && <PrimaryButton url={card.url}>{card.buttonText}</PrimaryButton>
-                )}
-              </AppCard>
-            );
-          })}
+          {visibleCards.map((card) => (
+            <AppCard key={card.title}>
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-lg font-extrabold text-[#263238]">{card.title}</h3>
+                <Badge type="blue">{card.status}</Badge>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{card.description}</p>
+              <p className="mt-3 rounded-2xl bg-[#F7F9FC] p-3 text-sm text-slate-600">
+                {card.privacyNotice}
+              </p>
+              <button
+                onClick={() => setActiveModal({ type: card.modalType })}
+                className={btnCls}
+              >
+                {card.buttonText}
+              </button>
+            </AppCard>
+          ))}
         </div>
       </div>
 
-      {activeModal?.type === "private" && (
-        <PrivateLinkModal
-          onClose={() => setActiveModal(null)}
-          action="verifyPrivate"
-          title="요보호학생 확인 링크"
-        />
+      {activeModal?.type === "monthlyVisit" && (
+        <MonthlyVisitModal onClose={() => setActiveModal(null)} />
       )}
       {activeModal?.type === "healthRoom" && (
         <HealthRoomLocationModal onClose={() => setActiveModal(null)} />

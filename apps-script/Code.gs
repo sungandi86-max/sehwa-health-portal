@@ -210,6 +210,9 @@ function doGet(e) {
     if (action === "verifyHealthRoom") {
       return jsonOutput_(healthRoomApiError_("보건실 소재 확인은 앱 내부 조회 화면을 이용해 주세요.", "legacy verifyHealthRoom action"));
     }
+    if (mode === "monthlyVisit") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(getMonthlyVisitRecords_(e.parameter || {}), mode));
+    }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
   } catch (error) {
@@ -488,6 +491,96 @@ function confirmHealthRoomHomeroom_(params) {
   sheet.getRange(rowId, 11).setValue(true);
   logHealthRoomAccess_("homeroom-confirm", grade, classNo, true);
   return { result: "success" };
+}
+
+function getMonthlyVisitRecords_(params) {
+  ensureHealthRoomStatusSheets();
+  const grade = String(params.grade || "").trim();
+  const classNo = String(params.classNo || "").trim();
+  const month = String(params.month || "").trim();
+  const password = String(params.password || "");
+
+  if (!grade || !classNo || !month || !password) {
+    logHealthRoomAccess_("monthly-visit", grade, classNo, false, "missing parameter");
+    return { result: "error", message: "학년, 반, 비밀번호, 조회 월을 모두 입력해 주세요." };
+  }
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    logHealthRoomAccess_("monthly-visit", grade, classNo, false, "invalid month");
+    return { result: "error", message: "조회 월 형식이 올바르지 않습니다." };
+  }
+
+  const homeroomPassword = getHomeroomPassword_(grade, classNo);
+  if (!homeroomPassword) {
+    logHealthRoomAccess_("monthly-visit", grade, classNo, false, "password not configured");
+    return { result: "error", message: "보건실 소재 확인 기능의 비밀번호가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요." };
+  }
+  if (password !== homeroomPassword) {
+    logHealthRoomAccess_("monthly-visit", grade, classNo, false, "wrong password");
+    return { result: "error", message: "학급 비밀번호가 올바르지 않습니다." };
+  }
+
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet) {
+    logHealthRoomAccess_("monthly-visit", grade, classNo, false, "visit sheet missing");
+    return { result: "error", message: SHEET_NAMES.visit + " 탭을 찾을 수 없습니다." };
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const records = [];
+  let resultCount = 0;
+  let unchecked = 0;
+
+  for (let i = 3; i < values.length; i++) {
+    const row = values[i];
+    const rowDate = normalizeDateText_(row[0]);
+    const rowGrade = String(row[2] || "").trim();
+    const rowClass = String(row[3] || "").trim();
+    if (!rowDate || rowDate.slice(0, 7) !== month) continue;
+    if (rowGrade !== grade || rowClass !== classNo) continue;
+
+    const result = String(row[12] || "").trim();
+    const teacherChecked = isTruthy_(row[10]) ? "확인" : "미확인";
+    if (result) resultCount++;
+    if (teacherChecked !== "확인") unchecked++;
+
+    records.push({
+      date: formatMonthlyVisitDate_(rowDate, row[0]),
+      number: String(row[4] || "").trim(),
+      name: maskStudentName_(row[5]),
+      inTime: String(row[6] || "").trim(),
+      outTime: String(row[7] || "").trim(),
+      stay: String(row[11] || "").trim(),
+      result: result,
+      teacherChecked: teacherChecked
+    });
+  }
+
+  records.sort(function(a, b) {
+    const dateCompare = String(a.date || "").localeCompare(String(b.date || ""));
+    if (dateCompare !== 0) return dateCompare;
+    return Number(a.number || 0) - Number(b.number || 0);
+  });
+
+  logHealthRoomAccess_("monthly-visit", grade, classNo, true);
+  return {
+    result: "success",
+    grade: grade,
+    classNo: classNo,
+    month: month,
+    summary: {
+      total: records.length,
+      resultCount: resultCount,
+      unchecked: unchecked
+    },
+    records: records
+  };
+}
+
+function formatMonthlyVisitDate_(rowDate, fallback) {
+  const text = String(rowDate || "").trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return match[1] + "." + match[2] + "." + match[3];
+  return String(fallback || "").trim();
 }
 
 function readHealthRoomRows_(options) {
