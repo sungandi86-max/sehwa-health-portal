@@ -328,9 +328,10 @@ function MonthlyVisitModal({ onClose }) {
           grade: json.grade || grade.trim(),
           classNo: json.classNo || classNo.trim(),
           month: json.month || month.trim(),
-          total: json.summary?.total || 0,
-          resultCount: json.summary?.resultCount || 0,
-          unchecked: json.summary?.unchecked || 0,
+          total: json.summary?.total || nextRecords.length,
+          diseaseCount: nextRecords.filter(r => r.result?.includes("질병")).length,
+          periodCount:  nextRecords.filter(r => r.result?.includes("생리")).length,
+          noResultCount: nextRecords.filter(r => !r.result || r.result === "-").length,
         });
         setMessage(nextRecords.length ? "" : "조회된 월별 보건실 입실 기록이 없습니다.");
       } else {
@@ -376,7 +377,7 @@ function MonthlyVisitModal({ onClose }) {
           <div className="rounded-2xl bg-[#F7F9FC] p-4 text-sm font-bold text-slate-700">
             {formatMonthlySummaryTitle(summary.month, summary.grade, summary.classNo)}
             <div className="mt-1 text-[#1A3B8B]">
-              총 {summary.total}건 / 결과 처리 {summary.resultCount}건 / 미확인 {summary.unchecked}건
+              총 {summary.total}건 / 질병결과 {summary.diseaseCount}건 / 생리결과 {summary.periodCount}건 / 결과처리없음 {summary.noResultCount}건
             </div>
           </div>
         )}
@@ -392,6 +393,13 @@ function formatMonthlySummaryTitle(month, grade, classNo) {
   const [year, monthNo] = String(month || "").split("-");
   if (year && monthNo) return `${year}년 ${Number(monthNo)}월 ${grade}학년 ${classNo}반 보건실 입실 기록`;
   return `${grade}학년 ${classNo}반 보건실 입실 기록`;
+}
+
+function ResultBadge({ result }) {
+  if (!result || result === "-" || result === "") return <Badge type="gray">없음</Badge>;
+  if (result.includes("질병")) return <Badge type="blue">{result}</Badge>;
+  if (result.includes("생리")) return <Badge type="pink">{result}</Badge>;
+  return <Badge type="gray">{result}</Badge>;
 }
 
 function MonthlyVisitList({ records }) {
@@ -420,7 +428,10 @@ function MonthlyVisitList({ records }) {
             <Info label="입실 시각" value={record.inTime || "-"} />
             <Info label="복귀 시각" value={record.outTime || "-"} />
             <Info label="체류시간" value={record.stay || "-"} />
-            <Info label="결과 처리" value={record.result || "-"} />
+            <div className="rounded-xl bg-[#F7F9FC] px-3 py-2 flex items-center gap-2">
+              <span className="text-xs font-black text-[#1A3B8B]">결과 처리</span>
+              <ResultBadge result={record.result} />
+            </div>
           </div>
         </div>
       ))}

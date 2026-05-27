@@ -90,13 +90,13 @@ export default function App() {
     ? { ...fallbackAppConfig, ...portalData.appConfig }
     : fallbackAppConfig;
 
-  const liveNotices    = portalData?.notices?.length     ? portalData.notices     : noticeItems;
-  const liveUploads    = portalData?.uploads?.length     ? portalData.uploads     : uploadItems;
-  const liveCheckups   = portalData?.checkups?.length    ? portalData.checkups    : checkupItems;
-  const liveEducations = portalData?.educations?.length  ? portalData.educations  : educationItems;
-  const liveStudentCare = portalData?.studentCare?.length ? portalData.studentCare : studentCareItems;
-  const liveResources  = Array.isArray(portalData?.resources) ? portalData.resources : [];
-  const liveFaqs       = portalData?.faqs?.length        ? portalData.faqs        : faqItems;
+  const liveNotices     = portalData?.notices?.length     ? portalData.notices     : noticeItems;
+  const liveUploads     = portalData ? (portalData.uploads    || []) : uploadItems;
+  const liveCheckups    = portalData ? (portalData.checkups   || []) : checkupItems;
+  const liveEducations  = portalData ? (portalData.educations || []) : educationItems;
+  const liveStudentCare = portalData ? (portalData.studentCare|| []) : studentCareItems;
+  const liveResources   = portalData ? (portalData.resources  || []) : [];
+  const liveFaqs        = portalData ? (portalData.faqs       || []) : faqItems;
   const resourcesLoadFailed = !portalData;
 
   return (
