@@ -324,7 +324,23 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
 // 보건실 소재 확인 API
 // ════════════════════════════════════════════════════════════════
 
+function setupHealthRoomStatusFeature() {
+  ensureHealthRoomStatusSheets();
+  Logger.log("보건실 소재 확인 설정 시트 초기화 완료");
+}
+
+function ensureHealthRoomStatusSheets() {
+  const configSheet = getOrCreateHealthRoomSheet_(SHEET_NAMES.healthRoomShareConfig, ["항목", "값"]);
+  ensureHealthRoomDefaultConfig_(configSheet);
+
+  const authSheet = getOrCreateHealthRoomSheet_(SHEET_NAMES.healthRoomHomeroomAuth, ["학년", "반", "비밀번호"]);
+  ensureHomeroomAuthDefaults_(authSheet);
+
+  getOrCreateHealthRoomSheet_(SHEET_NAMES.healthRoomAccessLog, ["접속일시", "접근유형", "학년", "반", "성공여부", "메시지"]);
+}
+
 function getHealthRoomLocation_(params) {
+  ensureHealthRoomStatusSheets();
   const accessType = String(params.accessType || "").trim();
   const grade = String(params.grade || "").trim();
   const classNo = String(params.classNo || "").trim();
@@ -406,6 +422,7 @@ function getHealthRoomLocation_(params) {
 }
 
 function confirmHealthRoomHomeroom_(params) {
+  ensureHealthRoomStatusSheets();
   const rowId = Number(params.rowId || 0);
   const grade = String(params.grade || "").trim();
   const classNo = String(params.classNo || "").trim();
@@ -460,8 +477,8 @@ function readHealthRoomRows_(options) {
     const returnedAt = String(row[7] || "").trim();
     const currentStatus = normalizeHealthRoomStatus_(String(row[1] || "").trim(), returnedAt, resultDetail);
 
-    if (options.accessType === "subject" && rowDate !== todayDash && String(row[0]).trim() !== todayDot) continue;
-    if (options.accessType !== "admin" && String(options.scope || "today").toLowerCase() !== "all" && rowDate !== todayDash && String(row[0]).trim() !== todayDot) continue;
+    if (options.accessType === "subject" && !isWithinHealthRoomScope_(options.scope, rowDate, row[0], todayDash, todayDot)) continue;
+    if (options.accessType !== "admin" && !isWithinHealthRoomScope_(options.scope, rowDate, row[0], todayDash, todayDot)) continue;
     if (options.accessType === "homeroom" && (rowGrade !== options.grade || rowClass !== options.classNo)) continue;
 
     const base = {
@@ -514,18 +531,18 @@ function getHealthRoomShareConfig_() {
 }
 
 function ensureHealthRoomDefaultConfig_(sheet) {
-  if (sheet.getLastRow() > 1) return;
-  sheet.getRange(2, 1, 9, 2).setValues([
+  const defaults = [
     ["기능사용", "TRUE"],
     ["교직원비밀번호", "health2026"],
     ["관리자비밀번호", "admin2026"],
     ["이름표시방식", "마스킹"],
-    ["교과교사표시범위", "today"],
-    ["담임표시범위", "today"],
+    ["교과교사표시범위", "오늘"],
+    ["담임표시범위", "오늘+최근7일"],
     ["증상표시여부", "FALSE"],
     ["처치표시여부", "FALSE"],
     ["결과세부표시여부", "FALSE"],
-  ]);
+  ];
+  upsertKeyValueDefaults_(sheet, defaults);
 }
 
 function verifyHomeroomPassword_(grade, classNo, password) {
@@ -551,23 +568,24 @@ function getHomeroomPassword_(grade, classNo) {
 }
 
 function ensureHomeroomAuthDefaults_(sheet) {
-  if (sheet.getLastRow() > 1) return;
-  sheet.getRange(2, 1, 4, 3).setValues([
+  const defaults = [
     ["1", "1", "101-health"],
     ["1", "2", "102-health"],
     ["2", "1", "201-health"],
     ["3", "1", "301-health"],
-  ]);
+  ];
+  appendMissingHomeroomDefaults_(sheet, defaults);
 }
 
-function logHealthRoomAccess_(accessType, grade, classNo, success) {
-  const sheet = getOrCreateHealthRoomSheet_(SHEET_NAMES.healthRoomAccessLog, ["접속일시", "접근유형", "학년", "반", "성공여부"]);
+function logHealthRoomAccess_(accessType, grade, classNo, success, message) {
+  const sheet = getOrCreateHealthRoomSheet_(SHEET_NAMES.healthRoomAccessLog, ["접속일시", "접근유형", "학년", "반", "성공여부", "메시지"]);
   sheet.appendRow([
     Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
     accessType || "",
     grade || "",
     classNo || "",
     success ? "TRUE" : "FALSE",
+    message || "",
   ]);
 }
 
@@ -582,8 +600,65 @@ function getOrCreateHealthRoomSheet_(sheetName, headers) {
       .setFontColor("#FFFFFF")
       .setFontWeight("bold");
     sheet.setFrozenRows(1);
+  } else {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground("#1A3B8B")
+      .setFontColor("#FFFFFF")
+      .setFontWeight("bold");
+    sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+function upsertKeyValueDefaults_(sheet, defaults) {
+  const values = sheet.getDataRange().getDisplayValues();
+  const keyRows = {};
+  for (let i = 1; i < values.length; i++) {
+    const key = String(values[i][0] || "").trim();
+    if (key) keyRows[key] = i + 1;
+  }
+
+  defaults.forEach(function(row) {
+    const key = row[0];
+    const defaultValue = row[1];
+    const rowIndex = keyRows[key];
+    if (rowIndex) {
+      const current = sheet.getRange(rowIndex, 2).getDisplayValue();
+      if (String(current || "").trim() === "") {
+        sheet.getRange(rowIndex, 2).setValue(defaultValue);
+      }
+    } else {
+      sheet.appendRow([key, defaultValue]);
+    }
+  });
+}
+
+function appendMissingHomeroomDefaults_(sheet, defaults) {
+  const values = sheet.getDataRange().getDisplayValues();
+  const existing = {};
+  for (let i = 1; i < values.length; i++) {
+    existing[String(values[i][0]).trim() + "-" + String(values[i][1]).trim()] = true;
+  }
+  defaults.forEach(function(row) {
+    const key = String(row[0]).trim() + "-" + String(row[1]).trim();
+    if (!existing[key]) sheet.appendRow(row);
+  });
+}
+
+function isWithinHealthRoomScope_(scope, rowDate, rowRawDate, todayDash, todayDot) {
+  const scopeText = String(scope || "오늘").trim().toLowerCase();
+  const rawText = String(rowRawDate || "").trim();
+  if (scopeText === "all" || scopeText === "전체") return true;
+  if (rowDate === todayDash || rawText === todayDot) return true;
+  if (scopeText === "오늘+최근7일" || scopeText === "recent7") {
+    const today = new Date(todayDash + "T00:00:00");
+    const target = new Date(rowDate + "T00:00:00");
+    if (isNaN(target.getTime())) return false;
+    const diffDays = Math.floor((today.getTime() - target.getTime()) / (24 * 60 * 60 * 1000));
+    return diffDays >= 0 && diffDays <= 7;
+  }
+  return false;
 }
 
 function normalizeDateText_(value) {
