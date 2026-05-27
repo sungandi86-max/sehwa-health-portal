@@ -213,6 +213,9 @@ function doGet(e) {
     if (mode === "monthlyVisit") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getMonthlyVisitRecords_(e.parameter || {}), mode));
     }
+    if (mode === "adminVisitStats") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(getAdminVisitStats_(e.parameter || {}), mode));
+    }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
   } catch (error) {
@@ -581,6 +584,114 @@ function formatMonthlyVisitDate_(rowDate, fallback) {
   const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) return match[1] + "." + match[2] + "." + match[3];
   return String(fallback || "").trim();
+}
+
+function getAdminVisitStats_(params) {
+  const month = String(params.month || "").trim();
+  const password = String(params.password || "");
+  const correctPassword = getAppConfig_("관리자조회_비밀번호");
+
+  if (!month || !password) {
+    logHealthRoomAccess_("admin-stats", "", "", false, "missing parameter");
+    return { result: "error", message: "관리자 비밀번호와 조회 월을 입력해 주세요." };
+  }
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    logHealthRoomAccess_("admin-stats", "", "", false, "invalid month");
+    return { result: "error", message: "조회 월 형식이 올바르지 않습니다." };
+  }
+  if (!correctPassword) {
+    logHealthRoomAccess_("admin-stats", "", "", false, "password not configured");
+    return { result: "error", message: "관리자 조회 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트의 관리자조회_비밀번호 값을 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    logHealthRoomAccess_("admin-stats", "", "", false, "wrong password");
+    return { result: "error", message: "관리자 비밀번호가 일치하지 않습니다." };
+  }
+
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet) {
+    logHealthRoomAccess_("admin-stats", "", "", false, "visit sheet missing");
+    return { result: "error", message: SHEET_NAMES.visit + " 탭을 찾을 수 없습니다." };
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const summary = {
+    total: 0,
+    diseaseCount: 0,
+    periodCount: 0,
+    noResultCount: 0,
+    uncheckedCount: 0
+  };
+  const gradeMap = {};
+  const classMap = {};
+
+  for (let i = 3; i < values.length; i++) {
+    const row = values[i];
+    const rowDate = normalizeDateText_(row[0]);
+    if (!rowDate || rowDate.slice(0, 7) !== month) continue;
+
+    const grade = String(row[2] || "").trim();
+    const classNo = String(row[3] || "").trim();
+    const result = String(row[12] || "").trim();
+    const isChecked = isTruthy_(row[10]);
+    if (!grade || !classNo) continue;
+
+    summary.total++;
+    if (result.indexOf("질병결과") >= 0) summary.diseaseCount++;
+    else if (result.indexOf("생리결과") >= 0) summary.periodCount++;
+    else summary.noResultCount++;
+    if (!isChecked) summary.uncheckedCount++;
+
+    if (!gradeMap[grade]) gradeMap[grade] = { grade: grade, total: 0 };
+    gradeMap[grade].total++;
+
+    const classKey = grade + "-" + classNo;
+    if (!classMap[classKey]) {
+      classMap[classKey] = {
+        grade: grade,
+        classNo: classNo,
+        total: 0,
+        diseaseCount: 0,
+        periodCount: 0,
+        noResultCount: 0,
+        uncheckedCount: 0
+      };
+    }
+    classMap[classKey].total++;
+    if (result.indexOf("질병결과") >= 0) classMap[classKey].diseaseCount++;
+    else if (result.indexOf("생리결과") >= 0) classMap[classKey].periodCount++;
+    else classMap[classKey].noResultCount++;
+    if (!isChecked) classMap[classKey].uncheckedCount++;
+  }
+
+  const gradeStats = Object.keys(gradeMap)
+    .sort(compareNumericText_)
+    .map(function(key) { return gradeMap[key]; });
+  const classStats = Object.keys(classMap)
+    .sort(function(a, b) {
+      const partsA = a.split("-");
+      const partsB = b.split("-");
+      const gradeCompare = compareNumericText_(partsA[0], partsB[0]);
+      if (gradeCompare !== 0) return gradeCompare;
+      return compareNumericText_(partsA[1], partsB[1]);
+    })
+    .map(function(key) { return classMap[key]; });
+
+  logHealthRoomAccess_("admin-stats", "", "", true);
+  return {
+    result: "success",
+    month: month,
+    summary: summary,
+    gradeStats: gradeStats,
+    classStats: classStats
+  };
+}
+
+function compareNumericText_(a, b) {
+  const numA = Number(a);
+  const numB = Number(b);
+  if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
+  return String(a || "").localeCompare(String(b || ""));
 }
 
 function readHealthRoomRows_(options) {

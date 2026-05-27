@@ -20,6 +20,14 @@ const MONTHLY_VISIT_CARD = {
   status: "권한 필요",
 };
 
+const ADMIN_STATS_CARD = {
+  title: "관리자용 보건실 입실 통계",
+  description: "학교 전체 보건실 입실 현황을 월별 통계로 확인합니다.",
+  privacyNotice: "학생별 증상 및 처치 내용은 표시하지 않고, 월별 통계만 확인할 수 있습니다.",
+  buttonText: "통계 조회하기",
+  status: "권한 필요",
+};
+
 const DEFAULT_HEALTH_ROOM_CARD = {
   title: "보건실 소재 확인",
   description:
@@ -439,6 +447,131 @@ function MonthlyVisitList({ records }) {
   );
 }
 
+function AdminVisitStatsModal({ onClose }) {
+  const [password, setPassword] = useState("");
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [stats, setStats] = useState(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const overlayRef = useRef(null);
+
+  useModalLifecycle(onClose);
+
+  const fetchStats = async () => {
+    if (!password.trim() || !month.trim()) {
+      setError("관리자 비밀번호와 조회 월을 입력해 주세요.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+    setStats(null);
+
+    try {
+      const params = new URLSearchParams({
+        mode: "adminVisitStats",
+        month: month.trim(),
+        password: password.trim(),
+      });
+      const json = await requestGasJson(params, "HealthRoom:adminVisitStats");
+      if (isGasSuccess(json)) {
+        setStats({
+          month: json.month || month.trim(),
+          summary: json.summary || {},
+          gradeStats: Array.isArray(json.gradeStats) ? json.gradeStats : [],
+          classStats: Array.isArray(json.classStats) ? json.classStats : [],
+        });
+        setMessage(json.summary?.total ? "" : "조회된 보건실 입실 통계가 없습니다.");
+      } else {
+        setError(json.message || json.debug || "관리자 통계를 조회할 수 없습니다.");
+      }
+    } catch (error) {
+      console.error("[HealthRoom:adminVisitStats] error", error);
+      setError(getGasErrorMessage(error, "관리자 통계 조회 중 오류가 발생했습니다."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <ModalShell overlayRef={overlayRef} onClose={onClose} title="관리자용 보건실 입실 통계">
+      <div className="space-y-5">
+        <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+          이 화면은 학교 전체 보건실 이용 현황을 통계로 확인하는 관리자용 화면입니다.
+          학생별 증상 및 처치 내용은 표시하지 않습니다.
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-bold text-[#263238]">조회 월</label>
+            <input className={inputCls} type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+          </div>
+          <PasswordField label="관리자 비밀번호" value={password} onChange={setPassword} onEnter={fetchStats} error={error} />
+        </div>
+
+        <SubmitButton loading={loading} onClick={fetchStats}>
+          통계 조회하기
+        </SubmitButton>
+
+        {message && <p className="rounded-2xl bg-[#F7F9FC] p-3 text-sm font-bold text-slate-600">{message}</p>}
+        {stats && <AdminVisitStatsResult stats={stats} />}
+      </div>
+    </ModalShell>
+  );
+}
+
+function AdminVisitStatsResult({ stats }) {
+  const summary = stats.summary || {};
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-[#F7F9FC] p-4 text-sm font-bold text-slate-700">
+        {formatAdminStatsTitle(stats.month)}
+        <div className="mt-1 text-[#1A3B8B]">
+          전체 {summary.total || 0}건 / 질병결과 {summary.diseaseCount || 0}건 / 생리결과 {summary.periodCount || 0}건 / 결과처리 없음 {summary.noResultCount || 0}건 / 담임 미확인 {summary.uncheckedCount || 0}건
+        </div>
+      </div>
+
+      <div>
+        <h4 className="mb-2 text-sm font-black text-[#263238]">학년별 통계</h4>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {stats.gradeStats.map((item) => (
+            <div key={item.grade} className="rounded-2xl bg-white p-4 text-sm font-bold text-slate-700 shadow-sm">
+              <span className="text-[#1A3B8B]">{item.grade}학년</span>
+              <div className="mt-1 text-lg font-black text-[#263238]">{item.total || 0}건</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h4 className="mb-2 text-sm font-black text-[#263238]">반별 통계</h4>
+        <div className="space-y-2">
+          {stats.classStats.map((item) => (
+            <div key={`${item.grade}-${item.classNo}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+              <div className="font-black text-[#263238]">{item.grade}학년 {item.classNo}반</div>
+              <div className="mt-2 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                <Info label="총 입실" value={`${item.total || 0}건`} />
+                <Info label="질병결과" value={`${item.diseaseCount || 0}건`} />
+                <Info label="생리결과" value={`${item.periodCount || 0}건`} />
+                <Info label="결과처리 없음" value={`${item.noResultCount || 0}건`} />
+                <Info label="담임 미확인" value={`${item.uncheckedCount || 0}건`} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatAdminStatsTitle(month) {
+  const [year, monthNo] = String(month || "").split("-");
+  if (year && monthNo) return `${year}년 ${Number(monthNo)}월 보건실 입실 통계`;
+  return "보건실 입실 통계";
+}
+
 function HealthRoomList({ accessType, rows, checkingId, onConfirm }) {
   if (!rows.length) {
     return (
@@ -602,6 +735,7 @@ export default function StudentCareSection({ items }) {
   };
   const visibleCards = [
     { ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit" },
+    { ...ADMIN_STATS_CARD, modalType: "adminStats" },
     { ...healthRoomCard, modalType: "healthRoom" },
   ];
 
@@ -621,7 +755,7 @@ export default function StudentCareSection({ items }) {
             {studentCareIntro.guide}
           </div>
         </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
           {visibleCards.map((card) => (
             <AppCard key={card.title}>
               <div className="flex items-start justify-between gap-3">
@@ -645,6 +779,9 @@ export default function StudentCareSection({ items }) {
 
       {activeModal?.type === "monthlyVisit" && (
         <MonthlyVisitModal onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal?.type === "adminStats" && (
+        <AdminVisitStatsModal onClose={() => setActiveModal(null)} />
       )}
       {activeModal?.type === "healthRoom" && (
         <HealthRoomLocationModal onClose={() => setActiveModal(null)} />
