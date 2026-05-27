@@ -122,26 +122,14 @@ function doGet(e) {
         return jsonOutput_({ result: "error", message: "비밀번호가 올바르지 않습니다." });
       }
     }
+    if (action === "getHealthRoomLocation") {
+      return jsonOutput_(getHealthRoomLocation_(e.parameter || {}));
+    }
+    if (action === "confirmHealthRoomHomeroom") {
+      return jsonOutput_(confirmHealthRoomHomeroom_(e.parameter || {}));
+    }
     if (action === "verifyHealthRoom") {
-      const password  = e.parameter.password || "";
-      const correctPw = getAppConfig_("입실현황_비밀번호");
-      if (!correctPw) {
-        return jsonOutput_({ result: "error", message: "비밀번호가 설정되어 있지 않습니다. 관리자에게 문의해주세요." });
-      }
-      if (password === correctPw) {
-        const ss    = getSpreadsheet_();
-        const sheet = ss.getSheetByName("앱_학생건강관리");
-        if (!sheet) return jsonOutput_({ result: "error", message: "자료 시트를 찾을 수 없습니다." });
-        const data = sheet.getDataRange().getDisplayValues();
-        let url = "";
-        for (let i = 1; i < data.length; i++) {
-          if (data[i][4] === "보건실 입실현황 열기") { url = data[i][5]; break; }
-        }
-        if (!url) return jsonOutput_({ result: "error", message: "링크가 설정되어 있지 않습니다." });
-        return jsonOutput_({ result: "success", url });
-      } else {
-        return jsonOutput_({ result: "error", message: "비밀번호가 올바르지 않습니다." });
-      }
+      return jsonOutput_({ result: "error", message: "보건실 소재 확인은 앱 내부 조회 화면을 이용해 주세요." });
     }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
@@ -399,7 +387,7 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
 }
 
 // ─── 앱_건강정보/이벤트 시트 읽기 ────────────────────────────────
-// 헤더 행: 제목 | 카테고리 | 설명 | 버튼텍스트 | URL
+// 헤더 행: 사용여부 | 제목 | 카테고리 | 설명 | 버튼명 | 링크 | 정렬순서
 function readResourceItems_() {
   try {
     const ss = getSpreadsheet_();
@@ -413,17 +401,19 @@ function readResourceItems_() {
     const items = [];
 
     for (let i = 1; i < rows.length; i++) {
-      const [title, category, description, buttonText, url] = rows[i];
-      if (!title) continue;
+      const [enabled, title, category, description, buttonText, url, sortOrder] = rows[i];
+      if (!enabled || !title) continue;
       items.push({
         title:       String(title       || ""),
         category:    String(category    || ""),
         description: String(description || ""),
         buttonText:  String(buttonText  || ""),
         url:         String(url         || ""),
+        sortOrder:   Number(sortOrder   || 0),
       });
     }
 
+    items.sort((a, b) => a.sortOrder - b.sortOrder);
     return items;
   } catch (e) {
     Logger.log("readResourceItems_ error: " + e.toString());
@@ -456,6 +446,269 @@ function getPortalData_() {
 // doGet 이외 경로에서 직접 ContentService 응답이 필요할 때 사용
 function getPortalData() {
   return jsonOutput_(getPortalData_());
+}
+
+const HEALTH_ROOM_SHEET_NAME = "학생 보건실 입실현황";
+const HEALTH_ROOM_SETTING_SHEET_NAME = "앱_입실현황공유설정";
+const HEALTH_ROOM_HOMEROOM_AUTH_SHEET_NAME = "앱_담임권한";
+const HEALTH_ROOM_ACCESS_LOG_SHEET_NAME = "앱_입실현황접속로그";
+
+function getHealthRoomLocation_(params) {
+  const accessType = String(params.accessType || "").trim();
+  const grade = String(params.grade || "").trim();
+  const classNo = String(params.classNo || "").trim();
+  const password = String(params.password || "");
+  let success = false;
+
+  try {
+    const config = getHealthRoomShareConfig_();
+    if (String(config["기능사용"] || "TRUE").toUpperCase() === "FALSE") {
+      logHealthRoomAccess_(accessType, grade, classNo, false);
+      return { result: "error", message: "현재 보건실 소재 확인 기능을 사용할 수 없습니다." };
+    }
+
+    if (accessType === "subject") {
+      if (!config["교직원비밀번호"] || password !== String(config["교직원비밀번호"])) {
+        logHealthRoomAccess_(accessType, grade, classNo, false);
+        return { result: "error", message: "비밀번호가 올바르지 않습니다." };
+      }
+      success = true;
+      return {
+        result: "success",
+        accessType,
+        items: readHealthRoomRows_({ accessType, scope: config["교과교사표시범위"] || "today" }),
+      };
+    }
+
+    if (accessType === "homeroom") {
+      if (!grade || !classNo) {
+        logHealthRoomAccess_(accessType, grade, classNo, false);
+        return { result: "error", message: "학년과 반을 입력해 주세요." };
+      }
+      if (!verifyHomeroomPassword_(grade, classNo, password)) {
+        logHealthRoomAccess_(accessType, grade, classNo, false);
+        return { result: "error", message: "학급 비밀번호가 올바르지 않습니다." };
+      }
+      success = true;
+      return {
+        result: "success",
+        accessType,
+        items: readHealthRoomRows_({
+          accessType,
+          grade,
+          classNo,
+          scope: config["담임표시범위"] || "today",
+        }),
+      };
+    }
+
+    if (accessType === "admin") {
+      if (!config["관리자비밀번호"] || password !== String(config["관리자비밀번호"])) {
+        logHealthRoomAccess_(accessType, grade, classNo, false);
+        return { result: "error", message: "관리자 비밀번호가 올바르지 않습니다." };
+      }
+      success = true;
+      return {
+        result: "success",
+        accessType,
+        items: readHealthRoomRows_({ accessType, scope: "all" }),
+      };
+    }
+
+    return { result: "error", message: "접근 유형을 확인할 수 없습니다." };
+  } finally {
+    if (success) logHealthRoomAccess_(accessType, grade, classNo, true);
+  }
+}
+
+function confirmHealthRoomHomeroom_(params) {
+  const rowId = Number(params.rowId || 0);
+  const grade = String(params.grade || "").trim();
+  const classNo = String(params.classNo || "").trim();
+  const password = String(params.password || "");
+
+  if (!rowId || rowId < 2) {
+    logHealthRoomAccess_("homeroom-confirm", grade, classNo, false);
+    return { result: "error", message: "확인할 기록을 찾을 수 없습니다." };
+  }
+  if (!verifyHomeroomPassword_(grade, classNo, password)) {
+    logHealthRoomAccess_("homeroom-confirm", grade, classNo, false);
+    return { result: "error", message: "학급 비밀번호가 올바르지 않습니다." };
+  }
+
+  const sheet = getSpreadsheet_().getSheetByName(HEALTH_ROOM_SHEET_NAME);
+  if (!sheet || rowId > sheet.getLastRow()) {
+    logHealthRoomAccess_("homeroom-confirm", grade, classNo, false);
+    return { result: "error", message: "원본 기록을 찾을 수 없습니다." };
+  }
+
+  const row = sheet.getRange(rowId, 1, 1, 13).getDisplayValues()[0];
+  if (String(row[2]).trim() !== grade || String(row[3]).trim() !== classNo) {
+    logHealthRoomAccess_("homeroom-confirm", grade, classNo, false);
+    return { result: "error", message: "해당 학급 기록만 확인할 수 있습니다." };
+  }
+
+  sheet.getRange(rowId, 11).setValue(true);
+  logHealthRoomAccess_("homeroom-confirm", grade, classNo, true);
+  return { result: "success" };
+}
+
+function readHealthRoomRows_(options) {
+  const sheet = getSpreadsheet_().getSheetByName(HEALTH_ROOM_SHEET_NAME);
+  if (!sheet) return [];
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
+  const items = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const rowDate = normalizeDateText_(row[0]);
+    const rowGrade = String(row[2] || "").trim();
+    const rowClass = String(row[3] || "").trim();
+    const resultDetail = String(row[12] || "").trim();
+    const returnedAt = String(row[7] || "").trim();
+    const currentStatus = normalizeHealthRoomStatus_(String(row[1] || "").trim(), returnedAt, resultDetail);
+
+    if (options.accessType === "subject" && rowDate !== today) continue;
+    if (options.accessType !== "admin" && String(options.scope || "today").toLowerCase() !== "all" && rowDate !== today) continue;
+    if (options.accessType === "homeroom" && (rowGrade !== options.grade || rowClass !== options.classNo)) continue;
+
+    const base = {
+      rowId: String(i + 1),
+      studentNo: [rowGrade, rowClass, String(row[4] || "").trim()].filter(Boolean).join("-"),
+      maskedName: maskStudentName_(row[5]),
+      enteredAt: String(row[6] || "").trim(),
+      returnedAt,
+      status: currentStatus,
+    };
+
+    if (options.accessType === "homeroom") {
+      base.date = rowDate;
+      base.duration = String(row[11] || "").trim();
+      base.attendanceNote = mapAttendanceNote_(resultDetail);
+      base.homeroomConfirmed = isTruthy_(row[10]);
+    }
+
+    if (options.accessType === "admin") {
+      base.date = rowDate;
+      base.duration = String(row[11] || "").trim();
+      base.homeroomConfirmed = isTruthy_(row[10]);
+      base.symptom = String(row[8] || "").trim();
+      base.treatment = String(row[9] || "").trim();
+      base.resultDetail = resultDetail;
+    }
+
+    items.push(base);
+  }
+
+  items.sort(function(a, b) {
+    const aCurrent = a.status === "현재 이용중" ? 0 : 1;
+    const bCurrent = b.status === "현재 이용중" ? 0 : 1;
+    if (aCurrent !== bCurrent) return aCurrent - bCurrent;
+    return String(b.enteredAt || "").localeCompare(String(a.enteredAt || ""));
+  });
+  return items;
+}
+
+function getHealthRoomShareConfig_() {
+  const sheet = getOrCreateHealthRoomSheet_(HEALTH_ROOM_SETTING_SHEET_NAME, [
+    "항목", "값"
+  ]);
+  const rows = sheet.getDataRange().getDisplayValues();
+  const config = {};
+  for (let i = 1; i < rows.length; i++) {
+    const key = String(rows[i][0] || "").trim();
+    if (key) config[key] = String(rows[i][1] || "").trim();
+  }
+  return config;
+}
+
+function verifyHomeroomPassword_(grade, classNo, password) {
+  const sheet = getOrCreateHealthRoomSheet_(HEALTH_ROOM_HOMEROOM_AUTH_SHEET_NAME, [
+    "학년", "반", "비밀번호"
+  ]);
+  const rows = sheet.getDataRange().getDisplayValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (
+      String(rows[i][0]).trim() === String(grade).trim() &&
+      String(rows[i][1]).trim() === String(classNo).trim() &&
+      String(rows[i][2]) === String(password)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function logHealthRoomAccess_(accessType, grade, classNo, success) {
+  const sheet = getOrCreateHealthRoomSheet_(HEALTH_ROOM_ACCESS_LOG_SHEET_NAME, [
+    "접속일시", "접근유형", "학년", "반", "성공여부"
+  ]);
+  sheet.appendRow([
+    Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"),
+    accessType || "",
+    grade || "",
+    classNo || "",
+    success ? "TRUE" : "FALSE",
+  ]);
+}
+
+function getOrCreateHealthRoomSheet_(sheetName, headers) {
+  const ss = getSpreadsheet_();
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground("#1A3B8B")
+      .setFontColor("#FFFFFF")
+      .setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function normalizeDateText_(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!isNaN(date.getTime())) {
+    return Utilities.formatDate(date, "Asia/Seoul", "yyyy-MM-dd");
+  }
+  const text = String(value).trim();
+  const match = text.match(/^(\d{4})[.\-\/년\s]+(\d{1,2})[.\-\/월\s]+(\d{1,2})/);
+  if (!match) return text;
+  return match[1] + "-" + ("0" + match[2]).slice(-2) + "-" + ("0" + match[3]).slice(-2);
+}
+
+function maskStudentName_(name) {
+  const text = String(name || "").trim();
+  if (!text) return "";
+  if (text.length === 1) return "*";
+  if (text.length === 2) return text.charAt(0) + "*";
+  return text.charAt(0) + "*".repeat(text.length - 2) + text.charAt(text.length - 1);
+}
+
+function normalizeHealthRoomStatus_(status, returnedAt, resultDetail) {
+  const statusText = String(status || "").trim();
+  const resultText = String(resultDetail || "").trim();
+  if (statusText.indexOf("이용") >= 0 || statusText.indexOf("입실") >= 0) return "현재 이용중";
+  if (!returnedAt && resultText.indexOf("복귀") < 0) return "현재 이용중";
+  if (resultText.indexOf("조퇴") >= 0 || resultText.indexOf("귀가") >= 0 || resultText.indexOf("병원") >= 0) return "추가 조치";
+  return "복귀 완료";
+}
+
+function mapAttendanceNote_(resultDetail) {
+  const text = String(resultDetail || "").trim();
+  if (text.indexOf("질병결과") >= 0 || text.indexOf("생리결과") >= 0) return "출결 참고 필요";
+  if (text.indexOf("복귀") >= 0) return "복귀 완료";
+  if (text.indexOf("조퇴") >= 0 || text.indexOf("귀가") >= 0 || text.indexOf("병원") >= 0) return "추가 조치";
+  return text ? "확인 필요" : "";
+}
+
+function isTruthy_(value) {
+  const text = String(value || "").trim().toUpperCase();
+  return text === "TRUE" || text === "Y" || text === "YES" || text === "1" || text === "✓" || text === "✔";
 }
 
 // 기본 응답 (portal / action 없이 호출된 경우)

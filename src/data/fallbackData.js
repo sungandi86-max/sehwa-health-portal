@@ -324,11 +324,11 @@ export const studentCareItems = [
     status: "권한 필요"
   },
   {
-    title: "보건실 입실 현황 확인",
-    description: "보건실 입실 중인 학생 현황은 별도 권한이 부여된 링크에서 확인해주세요.",
-    privacyNotice: "권한이 부여된 교직원만 열람 가능합니다.",
-    buttonText: "보건실 입실현황 열기",
-    url: "https://docs.google.com/spreadsheets/d/1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs/edit?gid=415753895#gid=415753895",
+    title: "보건실 소재 확인",
+    description: "수업 중 보건실을 이용 중인 학생의 소재와 복귀 여부를 확인할 수 있습니다. 학생 건강정보, 증상, 처치내용은 표시하지 않습니다.",
+    privacyNotice: "권한 있는 교직원에게만 최소정보를 제한적으로 표시합니다.",
+    buttonText: "보건실 소재 확인하기",
+    url: "",
     status: "권한 필요"
   },
 ];
