@@ -339,7 +339,11 @@ function getHealthRoomLocation_(params) {
     }
 
     if (accessType === "subject") {
-      if (!config["교직원비밀번호"] || password !== String(config["교직원비밀번호"])) {
+      if (!config["교직원비밀번호"]) {
+        logHealthRoomAccess_(accessType, grade, classNo, false);
+        return { result: "error", message: "보건실 소재 확인 기능의 비밀번호가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요." };
+      }
+      if (password !== String(config["교직원비밀번호"])) {
         logHealthRoomAccess_(accessType, grade, classNo, false);
         return { result: "error", message: "비밀번호가 올바르지 않습니다." };
       }
@@ -356,7 +360,12 @@ function getHealthRoomLocation_(params) {
         logHealthRoomAccess_(accessType, grade, classNo, false);
         return { result: "error", message: "학년과 반을 입력해 주세요." };
       }
-      if (!verifyHomeroomPassword_(grade, classNo, password)) {
+      const homeroomPassword = getHomeroomPassword_(grade, classNo);
+      if (!homeroomPassword) {
+        logHealthRoomAccess_(accessType, grade, classNo, false);
+        return { result: "error", message: "보건실 소재 확인 기능의 비밀번호가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요." };
+      }
+      if (password !== homeroomPassword) {
         logHealthRoomAccess_(accessType, grade, classNo, false);
         return { result: "error", message: "학급 비밀번호가 올바르지 않습니다." };
       }
@@ -374,7 +383,11 @@ function getHealthRoomLocation_(params) {
     }
 
     if (accessType === "admin") {
-      if (!config["관리자비밀번호"] || password !== String(config["관리자비밀번호"])) {
+      if (!config["관리자비밀번호"]) {
+        logHealthRoomAccess_(accessType, grade, classNo, false);
+        return { result: "error", message: "보건실 소재 확인 기능의 비밀번호가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요." };
+      }
+      if (password !== String(config["관리자비밀번호"])) {
         logHealthRoomAccess_(accessType, grade, classNo, false);
         return { result: "error", message: "관리자 비밀번호가 올바르지 않습니다." };
       }
@@ -402,7 +415,12 @@ function confirmHealthRoomHomeroom_(params) {
     logHealthRoomAccess_("homeroom-confirm", grade, classNo, false);
     return { result: "error", message: "확인할 기록을 찾을 수 없습니다." };
   }
-  if (!verifyHomeroomPassword_(grade, classNo, password)) {
+  const homeroomPassword = getHomeroomPassword_(grade, classNo);
+  if (!homeroomPassword) {
+    logHealthRoomAccess_("homeroom-confirm", grade, classNo, false);
+    return { result: "error", message: "보건실 소재 확인 기능의 비밀번호가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요." };
+  }
+  if (password !== homeroomPassword) {
     logHealthRoomAccess_("homeroom-confirm", grade, classNo, false);
     return { result: "error", message: "학급 비밀번호가 올바르지 않습니다." };
   }
@@ -499,8 +517,8 @@ function ensureHealthRoomDefaultConfig_(sheet) {
   if (sheet.getLastRow() > 1) return;
   sheet.getRange(2, 1, 9, 2).setValues([
     ["기능사용", "TRUE"],
-    ["교직원비밀번호", ""],
-    ["관리자비밀번호", ""],
+    ["교직원비밀번호", "health2026"],
+    ["관리자비밀번호", "admin2026"],
     ["이름표시방식", "마스킹"],
     ["교과교사표시범위", "today"],
     ["담임표시범위", "today"],
@@ -511,18 +529,35 @@ function ensureHealthRoomDefaultConfig_(sheet) {
 }
 
 function verifyHomeroomPassword_(grade, classNo, password) {
+  return getHomeroomPassword_(grade, classNo) === String(password);
+}
+
+function getHomeroomPassword_(grade, classNo) {
   const sheet = getOrCreateHealthRoomSheet_(SHEET_NAMES.healthRoomHomeroomAuth, ["학년", "반", "비밀번호"]);
+  ensureHomeroomAuthDefaults_(sheet);
   const rows = sheet.getDataRange().getDisplayValues();
+  if (rows.length < 2) {
+    return "";
+  }
   for (let i = 1; i < rows.length; i++) {
     if (
       String(rows[i][0]).trim() === String(grade).trim() &&
-      String(rows[i][1]).trim() === String(classNo).trim() &&
-      String(rows[i][2]) === String(password)
+      String(rows[i][1]).trim() === String(classNo).trim()
     ) {
-      return true;
+      return String(rows[i][2] || "");
     }
   }
-  return false;
+  return "";
+}
+
+function ensureHomeroomAuthDefaults_(sheet) {
+  if (sheet.getLastRow() > 1) return;
+  sheet.getRange(2, 1, 4, 3).setValues([
+    ["1", "1", "101-health"],
+    ["1", "2", "102-health"],
+    ["2", "1", "201-health"],
+    ["3", "1", "301-health"],
+  ]);
 }
 
 function logHealthRoomAccess_(accessType, grade, classNo, success) {
