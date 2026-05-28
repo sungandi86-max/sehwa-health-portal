@@ -629,9 +629,27 @@ const MODAL_META = {
   inbody: { title: "인바디 측정 신청", icon: "⚖️", color: "text-[#1A3B8B]" },
 };
 
+function formatSubmittedAt(date = new Date()) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-") + " " + [
+    String(date.getHours()).padStart(2, "0"),
+    String(date.getMinutes()).padStart(2, "0"),
+    String(date.getSeconds()).padStart(2, "0"),
+  ].join(":");
+}
+
+function isSubmitSuccess(json) {
+  return json?.status === "success" || json?.success === true || json?.ok === true;
+}
+
 // ───────── 메인 모달 컴포넌트 ─────────
 export default function SubmitModal({ type, onClose, tbConfig }) {
-  const [status, setStatus] = useState("idle"); // idle | submitting | success | error
+  const [status, setStatus] = useState("idle"); // idle | submitting | success
+  const [submitError, setSubmitError] = useState("");
+  const [successInfo, setSuccessInfo] = useState(null);
   const overlayRef = useRef(null);
   const meta = MODAL_META[type] || {};
 
@@ -650,6 +668,7 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
 
   const handleSubmit = async (payload) => {
     setStatus("submitting");
+    setSubmitError("");
     try {
       const res = await fetch(SCRIPT_URL, {
         method: "POST",
@@ -657,14 +676,28 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (json.status === "success") {
+      if (isSubmitSuccess(json)) {
+        setSuccessInfo({
+          type: payload.type || type,
+          submitterName: payload.fields?.name || "",
+          itemTitle: meta.title || "제출 자료",
+          submittedAt: json.submittedAt || json.timestamp || formatSubmittedAt(),
+        });
         setStatus("success");
       } else {
         throw new Error(json.message || "unknown error");
       }
     } catch (err) {
-      setStatus("error");
+      console.error("[SubmitModal] submit failed", err);
+      setSubmitError("제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주시거나 보건실로 문의해주세요.");
+      setStatus("idle");
     }
+  };
+
+  const resetForAnother = () => {
+    setStatus("idle");
+    setSubmitError("");
+    setSuccessInfo(null);
   };
 
   return (
@@ -692,11 +725,14 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
         {/* 바디 */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {status === "success" ? (
-            <SuccessView onClose={onClose} />
-          ) : status === "error" ? (
-            <ErrorView onRetry={() => setStatus("idle")} onClose={onClose} />
+            <SuccessView info={successInfo} onClose={onClose} onAnother={resetForAnother} />
           ) : (
             <>
+              {submitError && (
+                <div className="mb-4 rounded-2xl bg-[#FDEAF0] p-4 text-sm font-bold leading-6 text-[#D94F70]">
+                  {submitError}
+                </div>
+              )}
               {type === "cpr" && <CprForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "tb" && <TbForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "recruit" && <RecruitForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
@@ -711,52 +747,51 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
   );
 }
 
-function SuccessView({ onClose }) {
+function SuccessView({ info, onClose, onAnother }) {
+  const isRecruit = info?.type === "recruit";
+  const title = isRecruit ? "확인 요청이 접수되었습니다." : "제출이 완료되었습니다.";
+  const body = isRecruit
+    ? `${info?.submitterName || "제출자"} 선생님의 채용검진 대체 인정 확인 요청이 정상 접수되었습니다.`
+    : `${info?.submitterName || "제출자"} 선생님의 자료가 정상 제출되었습니다.`;
+
   return (
     <div className="flex flex-col items-center gap-5 py-8 text-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#DFF4EC]">
         <span className="text-4xl">✅</span>
       </div>
-      <div>
-        <p className="text-xl font-black text-[#263238]">제출 완료</p>
-        <p className="mt-2 text-sm leading-7 text-slate-600">
-          제출이 완료되었습니다.<br />보건실 확인까지 시간이 소요될 수 있습니다.
-        </p>
-      </div>
-      <button
-        onClick={onClose}
-        className="w-full max-w-xs rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-sm"
-      >
-        닫기
-      </button>
-    </div>
-  );
-}
-
-function ErrorView({ onRetry, onClose }) {
-  return (
-    <div className="flex flex-col items-center gap-5 py-8 text-center">
-      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#FDEAF0]">
-        <span className="text-4xl">⚠️</span>
-      </div>
-      <div>
-        <p className="text-xl font-black text-[#D94F70]">제출 오류</p>
-        <p className="mt-2 text-sm leading-7 text-slate-600">
-          제출 중 오류가 발생했습니다.<br />파일 용량 또는 네트워크 상태를 확인해주세요.
+      <div className="space-y-4">
+        <div>
+          <p className="text-xl font-black text-[#263238]">✅ {title}</p>
+          <p className="mt-2 text-sm leading-7 text-slate-600">{body}</p>
+        </div>
+        <div className="rounded-2xl bg-[#F7F9FC] p-4 text-left text-sm leading-7 text-slate-700">
+          <p><span className="font-black text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>
+          <p><span className="font-black text-[#1A3B8B]">제출 항목:</span> {info?.itemTitle || "-"}</p>
+          <p><span className="font-black text-[#1A3B8B]">제출시간:</span> {info?.submittedAt || "-"}</p>
+        </div>
+        <p className="text-sm leading-7 text-slate-600">
+          {isRecruit ? (
+            <>
+              보건실에서는 흉부 X-ray 검진일자 확인만 진행합니다.<br />
+              채용검진 결과지 전체는 받지 않습니다.
+            </>
+          ) : (
+            "제출 자료는 보건실에서 확인 후 처리하겠습니다."
+          )}
         </p>
       </div>
       <div className="flex w-full max-w-xs flex-col gap-2">
         <button
-          onClick={onRetry}
+          onClick={onClose}
           className="w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-sm"
         >
-          다시 시도
+          닫기
         </button>
         <button
-          onClick={onClose}
+          onClick={onAnother}
           className="w-full rounded-2xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-600"
         >
-          닫기
+          다른 자료 제출하기
         </button>
       </div>
     </div>
