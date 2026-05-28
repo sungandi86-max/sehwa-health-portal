@@ -749,10 +749,17 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
 
 function SuccessView({ info, onClose, onAnother }) {
   const isRecruit = info?.type === "recruit";
-  const title = isRecruit ? "확인 요청이 접수되었습니다." : "제출이 완료되었습니다.";
+  const isInbody = info?.type === "inbody";
+  const title = isRecruit
+    ? "확인 요청이 접수되었습니다."
+    : isInbody
+      ? "신청 완료"
+      : "제출이 완료되었습니다.";
   const body = isRecruit
     ? `${info?.submitterName || "제출자"} 선생님의 채용검진 대체 인정 확인 요청이 정상 접수되었습니다.`
-    : `${info?.submitterName || "제출자"} 선생님의 자료가 정상 제출되었습니다.`;
+    : isInbody
+      ? "인바디 측정 신청이 완료되었습니다."
+      : `${info?.submitterName || "제출자"} 선생님의 자료가 정상 제출되었습니다.`;
 
   return (
     <div className="flex flex-col items-center gap-5 py-8 text-center">
@@ -775,6 +782,8 @@ function SuccessView({ info, onClose, onAnother }) {
               보건실에서는 흉부 X-ray 검진일자 확인만 진행합니다.<br />
               채용검진 결과지 전체는 받지 않습니다.
             </>
+          ) : isInbody ? (
+            "신청 내용은 보건실에서 확인 후 안내드리겠습니다."
           ) : (
             "제출 자료는 보건실에서 확인 후 처리하겠습니다."
           )}
