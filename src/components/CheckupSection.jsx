@@ -82,7 +82,6 @@ export default function CheckupSection({ items, tbConfig }) {
   const navigate = useNavigate();
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
-  const [copiedTitle, setCopiedTitle] = useState("");
 
   const tbBadge = tbConfig
     ? (tbConfig.endDate && new Date() > new Date(tbConfig.endDate)
@@ -91,7 +90,10 @@ export default function CheckupSection({ items, tbConfig }) {
     : null;
 
   const openPrimaryAction = (item) => {
-    const displayMode = String(item.displayMode || "link").trim().toLowerCase();
+    const configuredMode = String(item.displayMode || "link").trim().toLowerCase();
+    const displayMode = item.title === "2·3학년 결핵검진 안내"
+      ? (isValidUrl(item.imageUrl) ? "image" : "pending")
+      : configuredMode;
 
     if (displayMode === "pending") {
       setActiveModal({
@@ -122,23 +124,8 @@ export default function CheckupSection({ items, tbConfig }) {
     }
   };
 
-  const runSecondaryAction = async (item) => {
+  const runSecondaryAction = (item) => {
     const action = String(item.secondaryAction || "").trim().toLowerCase();
-
-    if (action === "copy" && item.copyText) {
-      try {
-        await navigator.clipboard.writeText(item.copyText);
-        setCopiedTitle(item.title);
-        window.setTimeout(() => setCopiedTitle(""), 2000);
-      } catch {
-        setActiveModal({
-          type: "notice",
-          title: item.secondaryText || item.title,
-          message: "복사하지 못했습니다. 브라우저 권한을 확인해 주세요.",
-        });
-      }
-      return;
-    }
 
     if (action === "notice") {
       setActiveModal({
@@ -160,9 +147,17 @@ export default function CheckupSection({ items, tbConfig }) {
         {items.map((item) => {
           const internalTarget = INTERNAL_BUTTONS[item.buttonText];
           const displayMode = String(item.displayMode || "link").trim().toLowerCase();
+          const secondaryAction = String(item.secondaryAction || "").trim().toLowerCase();
+          const isStudentTbSchedule = item.title === "2·3학년 결핵검진 안내";
+          const effectiveDisplayMode = isStudentTbSchedule
+            ? (isValidUrl(item.imageUrl) ? "image" : "pending")
+            : displayMode;
+          const primaryButtonText = isStudentTbSchedule
+            ? (isValidUrl(item.imageUrl) ? "운영표 보기" : "운영표 업데이트 예정")
+            : item.buttonText;
           const hasPrimaryModalAction =
-            displayMode === "pending" ||
-            (displayMode === "image" && isValidUrl(item.imageUrl));
+            effectiveDisplayMode === "pending" ||
+            (effectiveDisplayMode === "image" && isValidUrl(item.imageUrl));
           return (
             <AppCard key={item.title}>
               <div className="flex items-start justify-between gap-3">
@@ -177,19 +172,19 @@ export default function CheckupSection({ items, tbConfig }) {
                 ))}
               </ul>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                {item.buttonText && displayMode === "link" && (internalTarget || isValidUrl(item.url)) && (
+                {primaryButtonText && effectiveDisplayMode === "link" && (internalTarget || isValidUrl(item.url)) && (
                   <button type="button" onClick={() => openLinkAction(item, internalTarget)} className={btnCls}>
-                    {item.buttonText}
+                    {primaryButtonText}
                   </button>
                 )}
-                {item.buttonText && hasPrimaryModalAction && (
+                {primaryButtonText && hasPrimaryModalAction && (
                   <button type="button" onClick={() => openPrimaryAction(item)} className={btnCls}>
-                    {item.buttonText}
+                    {primaryButtonText}
                   </button>
                 )}
-                {item.secondaryText && (
+                {item.secondaryText && secondaryAction === "notice" && (
                   <button type="button" onClick={() => runSecondaryAction(item)} className={secondaryBtnCls}>
-                    {copiedTitle === item.title ? "복사됨" : item.secondaryText}
+                    {item.secondaryText}
                   </button>
                 )}
               </div>
