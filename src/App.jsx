@@ -101,7 +101,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <main className="min-h-screen bg-[#F7F9FC] font-sans text-[#263238]">
+      <main className="min-h-screen w-full overflow-x-hidden bg-[#F7F9FC] font-sans text-[#263238]">
         <Header />
 
         {isLoading ? (

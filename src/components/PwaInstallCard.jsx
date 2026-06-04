@@ -51,20 +51,28 @@ export default function PwaInstallCard() {
   };
 
   return (
-    <section className="mx-auto max-w-6xl px-4 pb-6">
-      <div className="rounded-[24px] border border-[#C9DFFF] bg-white p-5 shadow-sm md:flex md:items-center md:justify-between md:gap-6">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-xl font-extrabold text-[#1A3B8B] md:text-2xl">
-            모바일에서 앱처럼 사용하기
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600 md:text-base" style={{ wordBreak: "keep-all" }}>
-            온라인 보건실을 자주 확인하시는 선생님은 휴대폰 홈 화면에 추가해 두시면 더 편하게 이용할 수 있습니다.
-          </p>
-          <div className="mt-4 grid divide-y divide-slate-200 border-y border-slate-200 text-sm leading-6 text-slate-600 md:grid-cols-3 md:divide-x md:divide-y-0">
+    <section className="mx-auto max-w-6xl px-3 pb-6 sm:px-4">
+      <details className="group overflow-hidden rounded-2xl border border-[#C9DFFF] bg-white shadow-sm md:rounded-[24px]">
+        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none sm:px-5">
+          <div className="min-w-0">
+            <h2 className="text-base font-extrabold text-[#1A3B8B] sm:text-lg">
+              모바일에서 앱처럼 사용하기
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm" style={{ wordBreak: "keep-all" }}>
+              온라인 보건실을 자주 확인하시면 홈 화면에 추가해 더 빠르게 열 수 있습니다.
+            </p>
+          </div>
+          <span className="shrink-0 text-xs font-bold text-[#1A3B8B] group-open:hidden">자세히 보기</span>
+          <span className="hidden shrink-0 text-xs font-bold text-[#1A3B8B] group-open:inline">접기</span>
+        </summary>
+        <div className="border-t border-slate-200 px-4 pb-4 sm:px-5 sm:pb-5">
+          <div className="grid divide-y divide-slate-200 text-sm leading-6 text-slate-600 md:grid-cols-3 md:divide-x md:divide-y-0">
             <div className="py-4 md:pr-4">
               <p className="font-extrabold text-[#1A3B8B]">안드로이드 Chrome</p>
               <p className="mt-1" style={{ wordBreak: "keep-all" }}>
-                화면에 ‘앱 설치’ 또는 ‘홈 화면에 추가’ 안내가 보이면 선택해 주세요. 안내가 보이지 않으면 Chrome 오른쪽 위 메뉴에서 ‘홈 화면에 추가’를 선택해 주세요.
+                화면에 ‘앱 설치’ 또는 ‘홈 화면에 추가’ 안내가 보이면 선택해 주세요.
+                <br />
+                안내가 보이지 않으면 Chrome 오른쪽 위 메뉴에서 ‘홈 화면에 추가’를 선택해 주세요.
               </p>
             </div>
             <div className="py-4 md:px-4">
@@ -83,19 +91,17 @@ export default function PwaInstallCard() {
           <p className="mt-4 rounded-2xl bg-[#FFF5F8] p-4 text-sm font-bold leading-6 text-[#A93859]" style={{ wordBreak: "keep-all" }}>
             이 화면은 교직원용 보건업무 안내 허브이며, 학생 개인정보나 건강정보를 확인하는 공간이 아닙니다.
           </p>
-        </div>
-        {canUseInstallPrompt && installPrompt && !isInstalled && (
-          <div className="mt-4 shrink-0 md:mt-0">
+          {canUseInstallPrompt && installPrompt && !isInstalled && (
             <button
               type="button"
               onClick={handleInstallClick}
-              className="w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto"
+              className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md sm:w-auto"
             >
               앱 설치
             </button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </details>
     </section>
   );
 }

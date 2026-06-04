@@ -17,11 +17,11 @@ export default function Header() {
   const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-        <button onClick={() => navigate("/")} className="flex items-center gap-2 text-left">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
+        <button onClick={() => navigate("/")} className="flex min-w-0 items-center gap-2 text-left">
           <SchoolEmblem />
-          <div>
-            <p className="text-sm font-extrabold text-[#1A3B8B] md:text-base">세화여자고등학교 온라인 보건실</p>
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold leading-5 text-[#1A3B8B] sm:text-sm md:text-base">세화여자고등학교 온라인 보건실</p>
             <p className="hidden text-xs text-slate-500 md:block">교직원 공유용 보건업무 포털</p>
           </div>
         </button>
@@ -38,7 +38,7 @@ export default function Header() {
         </nav>
         <button
           onClick={() => navigate("/upload")}
-          className="rounded-full bg-[#D94F70] px-4 py-2 text-xs font-bold text-white shadow-sm"
+          className="min-h-11 shrink-0 rounded-full bg-[#D94F70] px-3 py-2 text-xs font-bold text-white shadow-sm sm:px-4"
         >
           제출하기
         </button>
