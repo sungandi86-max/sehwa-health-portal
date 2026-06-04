@@ -1112,13 +1112,21 @@ function getUploads_(ss) {
 
 function getCheckups_(ss) {
   return getRows_(ss, SHEET_NAMES.portalCheckups).map(r => ({
-    title:       getValue_(r, ["제목"]),
-    description: getValue_(r, ["설명"]),
-    target:      getValue_(r, ["대상"]),
-    details:     splitLines_(getValue_(r, ["세부항목"])),
-    buttonText:  getValue_(r, ["버튼명"]),
-    url:         getValue_(r, ["링크"]),
-    status:      getValue_(r, ["상태"], "안내 중")
+    title:          getValue_(r, ["제목"]),
+    description:    getValue_(r, ["설명"]),
+    target:         getValue_(r, ["대상"]),
+    details:        splitLines_(getValue_(r, ["세부항목"])),
+    buttonText:     getValue_(r, ["버튼명"]),
+    url:            getValue_(r, ["링크"]),
+    status:         getValue_(r, ["상태"], "안내 중"),
+    displayMode:    getValue_(r, ["표시방식"], "link").toLowerCase(),
+    operatingStatus:getValue_(r, ["운영표상태"]),
+    imageUrl:       getValue_(r, ["이미지URL"]),
+    downloadUrl:    getValue_(r, ["다운로드URL"]),
+    secondaryText:  getValue_(r, ["보조버튼명"]),
+    secondaryAction:getValue_(r, ["보조동작"]).toLowerCase(),
+    copyText:       getValue_(r, ["복사문구"]),
+    updateNotice:   getValue_(r, ["업데이트안내"])
   }));
 }
 
