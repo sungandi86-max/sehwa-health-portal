@@ -37,4 +37,11 @@ body {
   body {
     min-width: 0;
   }
+
+  .student-care-card-description {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
 }

@@ -6,7 +6,7 @@ const inputCls =
   "w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10 placeholder:text-slate-400";
 
 const btnCls =
-  "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
+  "mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:mt-4 md:w-auto";
 
 const HEALTH_ROOM_BUTTON = "보건실 소재 확인하기";
 const HEALTH_ROOM_BUTTON_LEGACY = "蹂닿굔???낆떎?꾪솴 ?닿린";
@@ -740,14 +740,17 @@ export default function StudentCareSection({ items }) {
   ];
 
   return (
-    <section id="studentCare" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
-      <div className="rounded-[32px] bg-[#EAF3FF] p-6 md:p-8">
+    <section id="studentCare" className="mx-auto max-w-6xl scroll-mt-24 px-3 py-5 sm:px-4 md:py-10">
+      <div className="overflow-hidden rounded-3xl bg-[#EAF3FF] p-4 md:rounded-[32px] md:p-8">
         <SectionTitle
           eyebrow="PRIVATE LINK"
           title={studentCareIntro.title}
           description={studentCareIntro.description}
         />
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="mb-3 rounded-xl bg-white/80 px-3 py-2.5 text-xs font-semibold leading-5 text-[#1A3B8B] md:hidden" style={{ wordBreak: "keep-all" }}>
+          🔐 학생 개인정보와 건강정보는 권한 있는 교직원에게만 최소한으로 표시합니다.
+        </div>
+        <div className="hidden gap-4 md:grid md:grid-cols-2">
           <div className="rounded-2xl bg-white p-5 text-sm leading-7 text-[#1A3B8B] shadow-sm">
             🔐 {studentCareIntro.privacyNotice}
           </div>
@@ -755,15 +758,20 @@ export default function StudentCareSection({ items }) {
             {studentCareIntro.guide}
           </div>
         </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 md:mt-5 md:grid-cols-3 md:gap-4">
           {visibleCards.map((card) => (
-            <AppCard key={card.title}>
+            <AppCard key={card.title} className="student-care-card p-4 md:p-5">
               <div className="flex items-start justify-between gap-3">
-                <h3 className="text-lg font-extrabold text-[#263238]">{card.title}</h3>
-                <Badge type="blue">{card.status}</Badge>
+                <h3 className="text-base font-extrabold leading-6 text-[#263238] md:text-lg">{card.title}</h3>
+                <span className="inline-flex shrink-0 whitespace-nowrap rounded-full border border-[#C9DFFF] bg-[#EAF3FF] px-2 py-0.5 text-[10px] font-bold text-[#1A3B8B] md:hidden">
+                  {card.status}
+                </span>
+                <span className="hidden md:inline-flex">
+                  <Badge type="blue">{card.status}</Badge>
+                </span>
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{card.description}</p>
-              <p className="mt-3 rounded-2xl bg-[#F7F9FC] p-3 text-sm text-slate-600">
+              <p className="student-care-card-description mt-2 text-sm leading-5 text-slate-600 md:mt-3 md:leading-6">{card.description}</p>
+              <p className="mt-3 hidden rounded-2xl bg-[#F7F9FC] p-3 text-sm text-slate-600 md:block">
                 {card.privacyNotice}
               </p>
               <button
