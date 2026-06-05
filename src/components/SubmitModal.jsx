@@ -434,10 +434,57 @@ const TB_REGISTRATION_TYPES = [
   "채용검진 대체 확인 요청",
 ];
 
+function parseTbRegistrationDate(value, boundary) {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/\s+/g, " ");
+  const match = normalized.match(
+    /^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/
+  );
+
+  if (!match) {
+    const fallback = new Date(raw);
+    if (Number.isNaN(fallback.getTime())) return null;
+    if (
+      boundary === "end" &&
+      fallback.getHours() === 0 &&
+      fallback.getMinutes() === 0 &&
+      fallback.getSeconds() === 0 &&
+      fallback.getMilliseconds() === 0
+    ) {
+      fallback.setHours(23, 59, 59, 999);
+    }
+    return fallback;
+  }
+
+  const [, year, month, day, hour, minute, second] = match;
+  const hasTime = hour !== undefined;
+
+  if (hasTime) {
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second || 0),
+      0
+    );
+  }
+
+  if (boundary === "end") {
+    return new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999);
+  }
+
+  return new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
+}
+
 function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
   const [form, setForm] = useState({ name: "", dept: "", registrationType: "" });
   const [errors, setErrors] = useState({});
-
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
   const validate = () => {
@@ -484,14 +531,16 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
   }
 
   const now = new Date();
-  if (tbConfig.startDate && now < new Date(tbConfig.startDate)) {
+  const startDate = parseTbRegistrationDate(tbConfig.startDate, "start");
+  if (startDate && now < startDate) {
     return (
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
-        아직 접수 기간이 아닙니다.
+        접수 시작 전입니다. 접수 기간에 다시 이용해주세요.
       </div>
     );
   }
-  if (tbConfig.endDate && now > new Date(tbConfig.endDate)) {
+  const endDate = parseTbRegistrationDate(tbConfig.endDate, "end");
+  if (endDate && now > endDate) {
     return (
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
         {tbConfig.closedMessage || "접수 기한이 지났습니다."}
