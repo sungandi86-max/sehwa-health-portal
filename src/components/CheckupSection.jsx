@@ -25,7 +25,11 @@ function parseDateBoundary(value, boundary) {
   }
 
   const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return boundary === "end"
+    ? new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999)
+    : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
 }
 
 function isTbRegistrationPeriodOpen(tbConfig) {
