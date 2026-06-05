@@ -12,6 +12,34 @@ const INTERNAL_BUTTONS = {
 const btnCls = "inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
 const secondaryBtnCls = "inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-[#C9DFFF] bg-white px-5 py-3 text-center text-sm font-bold text-[#1A3B8B] shadow-sm transition hover:-translate-y-[1px] hover:bg-[#EAF3FF] md:w-auto";
 
+function parseDateBoundary(value, boundary) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+
+  const dateMatch = text.match(/^(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (dateMatch) {
+    const [, year, month, day] = dateMatch;
+    return boundary === "end"
+      ? new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999)
+      : new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isTbRegistrationPeriodOpen(tbConfig) {
+  if (String(tbConfig?.enabled || "").trim().toUpperCase() !== "TRUE") return false;
+
+  const now = new Date();
+  const startDate = parseDateBoundary(tbConfig?.startDate, "start");
+  const endDate = parseDateBoundary(tbConfig?.endDate, "end");
+
+  if (startDate && now < startDate) return false;
+  if (endDate && now > endDate) return false;
+  return true;
+}
+
 function CheckupModal({ modal, onClose }) {
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -82,12 +110,7 @@ export default function CheckupSection({ items, tbConfig }) {
   const navigate = useNavigate();
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
-
-  const tbBadge = tbConfig
-    ? (tbConfig.endDate && new Date() > new Date(tbConfig.endDate)
-        ? { type: "gray", label: "접수 마감" }
-        : { type: "pink", label: "신청 접수 중" })
-    : null;
+  const shouldShowTbRegistrationCard = isTbRegistrationPeriodOpen(tbConfig);
 
   const openPrimaryAction = (item) => {
     const configuredMode = String(item.displayMode || "link").trim().toLowerCase();
@@ -192,12 +215,12 @@ export default function CheckupSection({ items, tbConfig }) {
           );
         })}
 
-        {/* 교직원 결핵검진 유형 선택 카드 — config.enabled === "TRUE" 일 때만 표시 */}
-        {tbConfig?.enabled === "TRUE" && (
+        {/* 교직원 결핵검진 유형 선택 카드 — 사용 TRUE이고 접수기간 안일 때만 표시 */}
+        {shouldShowTbRegistrationCard && (
           <AppCard>
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-lg font-extrabold text-[#263238]">교직원 결핵검진 유형 선택</h3>
-              <Badge type={tbBadge.type}>{tbBadge.label}</Badge>
+              <Badge type="pink">신청 접수 중</Badge>
             </div>
             <p className="mt-3 text-sm leading-6 text-slate-600">
               학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.

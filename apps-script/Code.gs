@@ -181,7 +181,7 @@ function doGet(e) {
         enabled:       getAppConfig_("결핵검진유형선택_사용"),
         startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
         endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
-        closedButton:  getAppConfig_("결핵검진유형선택_마감후버튼"),
+        closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
         closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
       };
       return jsonOutput_({ result: "success", config });
@@ -1012,7 +1012,7 @@ function getPortalData_() {
       enabled:       getAppConfig_("결핵검진유형선택_사용"),
       startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
       endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
-      closedButton:  getAppConfig_("결핵검진유형선택_마감후버튼"),
+      closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
       closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
     },
     notices:     getNotices_(ss),
@@ -1270,7 +1270,7 @@ function testTbConfig() {
     enabled:       getAppConfig_("결핵검진유형선택_사용"),
     startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
     endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
-    closedButton:  getAppConfig_("결핵검진유형선택_마감후버튼"),
+    closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
     closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
   }, null, 2));
 }
