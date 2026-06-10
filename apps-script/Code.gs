@@ -11,6 +11,7 @@ const SHEET_NAMES = {
   portalResources: "앱_건강정보/이벤트",
   portalMessages: "앱_메신저문구",
   portalFaqs: "앱_FAQ",
+  portalRoadmap: "앱_업무로드맵",
   healthRoomShareConfig: "앱_입실현황공유설정",
   healthRoomHomeroomAuth: "앱_담임권한",
   healthRoomAccessLog: "앱_입실현황접속로그"
@@ -296,14 +297,24 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
       fields.note || "", fileName, fileLink]);
 
   } else if (sheetName === "응답_교직원결핵검진유형선택") {
-    const enabled    = getAppConfig_("결핵검진유형선택_사용");
-    const endDateRaw = getAppConfig_("결핵검진유형선택_접수마감");
-    const closedMsg  = getAppConfig_("결핵검진유형선택_마감안내") || "접수 기한이 마감되었습니다.";
+    const enabled       = getAppConfig_("결핵검진유형선택_사용");
+    const startDateRaw  = getAppConfig_("결핵검진유형선택_접수시작");
+    const endDateRaw    = getAppConfig_("결핵검진유형선택_접수마감");
+    const closedMsg     = getAppConfig_("결핵검진유형선택_마감안내") || "접수 기한이 마감되었습니다.";
+    const notStartedMsg = "접수 시작 전입니다. 접수 기간에 다시 이용해주세요.";
 
-    if (enabled !== "TRUE") throw new Error(closedMsg);
+    if (String(enabled) !== "TRUE") throw new Error(closedMsg);
+
+    const nowDate = new Date();
+
+    if (startDateRaw) {
+      const startDate = parseTbRegistrationDate_(startDateRaw, "start");
+      if (startDate && nowDate < startDate) throw new Error(notStartedMsg);
+    }
+
     if (endDateRaw) {
-      const endDate = new Date(endDateRaw);
-      if (new Date() > endDate) throw new Error(closedMsg);
+      const endDate = parseTbRegistrationDate_(endDateRaw, "end");
+      if (endDate && nowDate > endDate) throw new Error(closedMsg);
     }
 
     const masterSheet = getSpreadsheet_().getSheetByName("교직원 결핵검진현황");
@@ -952,6 +963,69 @@ function getAppConfig_(key) {
   }
   return "";
 }
+function parseTbRegistrationDate_(value, boundary) {
+  if (!value) return null;
+
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    const date = new Date(value.getTime());
+    if (
+      date.getHours() === 0 &&
+      date.getMinutes() === 0 &&
+      date.getSeconds() === 0 &&
+      date.getMilliseconds() === 0
+    ) {
+      if (boundary === "end") date.setHours(23, 59, 59, 999);
+      else date.setHours(0, 0, 0, 0);
+    }
+    return date;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/\s+/g, " ");
+  const match = normalized.match(
+    /^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/
+  );
+
+  if (!match) {
+    const fallback = new Date(raw);
+    if (isNaN(fallback.getTime())) return null;
+
+    if (
+      boundary === "end" &&
+      fallback.getHours() === 0 &&
+      fallback.getMinutes() === 0 &&
+      fallback.getSeconds() === 0 &&
+      fallback.getMilliseconds() === 0
+    ) {
+      fallback.setHours(23, 59, 59, 999);
+    }
+
+    return fallback;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hasTime = match[4] !== undefined;
+
+  if (hasTime) {
+    return new Date(
+      year,
+      month - 1,
+      day,
+      Number(match[4]),
+      Number(match[5]),
+      Number(match[6] || 0),
+      0
+    );
+  }
+
+  if (boundary === "end") return new Date(year, month - 1, day, 23, 59, 59, 999);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
 
 // ════════════════════════════════════════════════════════════════
 // 방문 요약 데이터
@@ -1022,7 +1096,8 @@ function getPortalData_() {
     studentCare: getStudentCare_(ss),
     resources:   getResources_(ss),
     messages:    getMessages_(ss),
-    faqs:        getFaqs_(ss)
+    faqs:        getFaqs_(ss),
+    roadmap:     getRoadmap_(ss)
   };
 }
 
@@ -1199,6 +1274,29 @@ function getFaqs_(ss) {
     question: getValue_(r, ["질문"]),
     answer:   getValue_(r, ["답변"])
   }));
+}
+
+function getRoadmap_(ss) {
+  const enabled = isTrue_(getAppConfig_("업무로드맵_사용"));
+  const adminOnly = isTrue_(getAppConfig_("업무로드맵_관리자전용"));
+  const items = enabled
+    ? getRows_(ss, SHEET_NAMES.portalRoadmap).map(r => ({
+        category:      getValue_(r, ["업무분류"]),
+        taskName:      getValue_(r, ["업무명"]),
+        step:          getValue_(r, ["단계"]),
+        todo:          getValue_(r, ["지금할일"]),
+        openMenus:     getValue_(r, ["온라인보건실_열메뉴"]),
+        hideMenus:     getValue_(r, ["온라인보건실_숨김메뉴"]),
+        audience:      getValue_(r, ["안내대상"]),
+        messageTitle:  getValue_(r, ["메신저제목"]),
+        messageBody:   getValue_(r, ["메신저문구"]),
+        privacyNote:   getValue_(r, ["개인정보주의"]),
+        relatedSheet:  getValue_(r, ["관련시트"]),
+        relatedMenuId: getValue_(r, ["관련메뉴ID"]),
+        sortOrder:     Number(getValue_(r, ["정렬순서"], "999") || 999)
+      }))
+    : [];
+  return { enabled, adminOnly, items };
 }
 
 // ════════════════════════════════════════════════════════════════

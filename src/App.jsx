@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Footer from "./components/Footer.jsx";
 import Header from "./components/Header.jsx";
+import AdminPage from "./pages/AdminPage.jsx";
+import AdminRoadmapPage from "./pages/AdminRoadmapPage.jsx";
 import CheckupPage from "./pages/CheckupPage.jsx";
 import EducationPage from "./pages/EducationPage.jsx";
 import FAQPage from "./pages/FAQPage.jsx";
@@ -97,6 +99,7 @@ export default function App() {
   const liveStudentCare = portalData ? (portalData.studentCare|| []) : studentCareItems;
   const liveResources   = portalData ? (portalData.resources  || []) : [];
   const liveFaqs        = portalData ? (portalData.faqs       || []) : faqItems;
+  const liveRoadmap     = portalData?.roadmap || { enabled: false, adminOnly: true, items: [] };
   const resourcesLoadFailed = !portalData;
 
   return (
@@ -118,6 +121,8 @@ export default function App() {
               <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
               <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
               <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
+              <Route path="/admin"       element={<AdminPage roadmap={liveRoadmap} />} />
+              <Route path="/admin/roadmap" element={<AdminRoadmapPage roadmap={liveRoadmap} />} />
             </Routes>
           </>
         )}
