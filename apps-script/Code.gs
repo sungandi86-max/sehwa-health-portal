@@ -12,6 +12,7 @@ const SHEET_NAMES = {
   portalMessages: "앱_메신저문구",
   portalFaqs: "앱_FAQ",
   portalRoadmap: "앱_업무로드맵",
+  infectionManagement: "학생 감염병 관리 현황",
   healthRoomShareConfig: "앱_입실현황공유설정",
   healthRoomHomeroomAuth: "앱_담임권한",
   healthRoomAccessLog: "앱_입실현황접속로그"
@@ -242,6 +243,12 @@ function doPost(e) {
   lock.tryLock(10000);
   try {
     const payload = JSON.parse(e.postData.contents);
+    if (payload.action === "infectionReport") {
+      const result = appendInfectionReport_(payload);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     const { sheetName, folderId, fields, fileName, fileBase64, fileMimeType } = payload;
     if (!sheetName) throw new Error("sheetName 누락");
     const ss    = getSpreadsheet_();
@@ -263,6 +270,96 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function appendInfectionReport_(payload) {
+  const grade = String(payload.grade || "").trim();
+  const classNumber = String(payload.classNumber || "").trim();
+  const studentNumber = String(payload.studentNumber || "").trim();
+  const studentName = String(payload.studentName || "").trim();
+  const diseaseType = String(payload.diseaseType || "").trim();
+  const diseaseEtc = String(payload.diseaseEtc || "").trim();
+  const diagnosisDate = String(payload.diagnosisDate || "").trim();
+  const exclusionStartDate = String(payload.exclusionStartDate || "").trim();
+  const exclusionEndDate = String(payload.exclusionEndDate || "").trim();
+  const memo = String(payload.memo || "").trim();
+
+  if (!grade || !classNumber || !studentNumber || !studentName || !diseaseType || !diagnosisDate) {
+    return { success: false, result: "error", message: "학년, 반, 번호, 학생 이름, 감염병 종류, 진단일은 필수입니다." };
+  }
+  if (diseaseType === "기타" && !diseaseEtc) {
+    return { success: false, result: "error", message: "기타 감염병명을 입력해 주세요." };
+  }
+
+  const diseaseName = diseaseType === "기타" ? diseaseEtc : diseaseType;
+  const ss = getSpreadsheet_();
+  const sheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
+  if (!sheet) {
+    return { success: false, result: "error", message: SHEET_NAMES.infectionManagement + " 탭을 찾을 수 없습니다." };
+  }
+
+  const diagnosisKey = dateKey_(diagnosisDate);
+  const rows = sheet.getDataRange().getDisplayValues();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (
+      normalizeKey_(row[2]) === normalizeKey_(grade) &&
+      normalizeKey_(row[3]) === normalizeKey_(classNumber) &&
+      normalizeKey_(row[4]) === normalizeKey_(studentNumber) &&
+      normalizeKey_(row[5]) === normalizeKey_(studentName) &&
+      normalizeKey_(row[6]) === normalizeKey_(diseaseName) &&
+      dateKey_(row[7]) === diagnosisKey
+    ) {
+      return { success: false, result: "error", message: "이미 같은 내용의 감염병 발생 보고가 접수되어 있습니다." };
+    }
+  }
+
+  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const nextRow = lastRow + 1;
+  if (lastRow >= 2) {
+    sheet.getRange(lastRow, 1, 1, 13).copyTo(sheet.getRange(nextRow, 1, 1, 13), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    const serialFormula = sheet.getRange(lastRow, 1).getFormulaR1C1();
+    const monthFormula = sheet.getRange(lastRow, 13).getFormulaR1C1();
+    if (serialFormula) sheet.getRange(nextRow, 1).setFormulaR1C1(serialFormula);
+    if (monthFormula) sheet.getRange(nextRow, 13).setFormulaR1C1(monthFormula);
+  }
+
+  sheet.getRange(nextRow, 2, 1, 11).setValues([[
+    new Date(),
+    grade,
+    classNumber,
+    studentNumber,
+    studentName,
+    diseaseName,
+    parseDateValue_(diagnosisDate),
+    parseDateValue_(exclusionStartDate),
+    parseDateValue_(exclusionEndDate),
+    false,
+    memo
+  ]]);
+  sheet.getRange(nextRow, 2).setNumberFormat("yyyy-MM-dd HH:mm:ss");
+  sheet.getRange(nextRow, 8, 1, 3).setNumberFormat("yyyy-MM-dd");
+
+  return { success: true, result: "success", message: "감염병 발생 보고가 제출되었습니다." };
+}
+
+function normalizeKey_(value) {
+  return String(value || "").trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function dateKey_(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (!match) return text;
+  return match[1] + "-" + String(Number(match[2])).padStart(2, "0") + "-" + String(Number(match[3])).padStart(2, "0");
+}
+
+function parseDateValue_(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!match) return text;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
 function getOrCreateSubmitSheet_(ss, sheetName) {

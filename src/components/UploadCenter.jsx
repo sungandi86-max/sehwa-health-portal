@@ -8,8 +8,23 @@ const TYPE_MAP = {
   cpr: "cpr",
   tb: "tb",
   recruit: "recruit",
+  infection: "infection",
   other: "other",
   file: "other", // fallback
+};
+
+const INFECTION_REPORT_CARD = {
+  title: "감염병 발생 보고",
+  titleLines: ["감염병 발생", "보고"],
+  description: "학생이 감염병 진단을 받은 경우, 담임 선생님께서 학년·반·번호·학생명·감염병 종류·진단일을 입력해 주세요. 제출된 내용은 보건실 감염병 관리 현황 시트에 자동 기록됩니다.",
+  target: "담임교사",
+  documentType: "감염병 발생 정보",
+  deadline: "수시",
+  fileGuide: "학생 건강정보가 포함되므로 필요한 업무 범위 안에서만 입력해 주세요.",
+  buttonText: "감염병 발생 보고하기",
+  status: "접수 중",
+  uploadType: "infection",
+  highlight: true,
 };
 
 // uploadType → 모달 type 결정 (API 데이터 대응)
@@ -20,15 +35,20 @@ function resolveModalType(item) {
   if (t === "cpr") return "cpr";
   if (t === "tb") return "tb";
   if (t === "recruit") return "recruit";
+  if (t === "infection") return "infection";
   // title 기반 추론
   if (item.title?.includes("심폐소생술")) return "cpr";
   if (item.title?.includes("결핵")) return "tb";
   if (item.title?.includes("채용")) return "recruit";
+  if (item.title?.includes("감염병")) return "infection";
   return "other";
 }
 
 export default function UploadCenter({ items }) {
   const [modalType, setModalType] = useState(null); // null | 'cpr' | 'tb' | 'recruit' | 'other'
+  const uploadItems = items.some((item) => resolveModalType(item) === "infection")
+    ? items
+    : [...items, INFECTION_REPORT_CARD];
 
   return (
     <>
@@ -51,7 +71,7 @@ export default function UploadCenter({ items }) {
 
         {/* 카드 목록 */}
         <div className="mt-5 grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
-          {items.map((item) => {
+          {uploadItems.map((item) => {
             const mType = resolveModalType(item);
             return (
               <AppCard

@@ -10,6 +10,7 @@ const FOLDER_IDS = {
 const STAFF_TYPES = ["교사", "강사", "행정직원"];
 const DEPT_TYPES = ["교무교육과정부", "진로진학홍보부", "연구정보부", "창의인성부", "생활안전부", "1학년부", "2학년부", "3학년부", "행정실", "관리자"];
 const TB_DOC_TYPES = ["결핵검진 확인증", "흉부 X-ray 확인 자료", "기타 동등 자료"];
+const INFECTION_TYPES = ["코로나19", "인플루엔자", "수두", "장염", "기타"];
 
 // ───────── 공통 입력 필드 스타일 ─────────
 const inputCls =
@@ -668,6 +669,144 @@ function InbodyRegistrationForm({ onSubmit, submitting }) {
   );
 }
 
+function InfectionReportForm({ onSubmit, submitting }) {
+  const [form, setForm] = useState({
+    grade: "",
+    classNumber: "",
+    studentNumber: "",
+    studentName: "",
+    diseaseType: "",
+    diseaseEtc: "",
+    diagnosisDate: "",
+    exclusionStartDate: "",
+    exclusionEndDate: "",
+    memo: "",
+  });
+  const [errors, setErrors] = useState({});
+
+  const set = (key) => (event) => {
+    const value = event.target.value;
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key === "diseaseType" && value !== "기타" ? { diseaseEtc: "" } : {}),
+    }));
+  };
+
+  const validate = () => {
+    const nextErrors = {};
+    if (!form.grade) nextErrors.grade = "학년을 선택해주세요.";
+    if (!form.classNumber) nextErrors.classNumber = "반을 선택해주세요.";
+    if (!form.studentNumber.trim()) nextErrors.studentNumber = "번호를 입력해주세요.";
+    if (!form.studentName.trim()) nextErrors.studentName = "학생 이름을 입력해주세요.";
+    if (!form.diseaseType) nextErrors.diseaseType = "감염병 종류를 선택해주세요.";
+    if (form.diseaseType === "기타" && !form.diseaseEtc.trim()) nextErrors.diseaseEtc = "기타 감염병명을 입력해주세요.";
+    if (!form.diagnosisDate) nextErrors.diagnosisDate = "진단일을 선택해주세요.";
+    return nextErrors;
+  };
+
+  const handleSubmit = async () => {
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    await onSubmit({
+      type: "infection",
+      action: "infectionReport",
+      grade: form.grade,
+      classNumber: form.classNumber,
+      studentNumber: form.studentNumber.trim(),
+      studentName: form.studentName.trim(),
+      diseaseType: form.diseaseType,
+      diseaseEtc: form.diseaseEtc.trim(),
+      diagnosisDate: form.diagnosisDate,
+      exclusionStartDate: form.exclusionStartDate,
+      exclusionEndDate: form.exclusionEndDate,
+      memo: form.memo.trim(),
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        ※ 본 화면은 교직원 내부 업무용입니다.<br />
+        학생 이름과 감염병명이 포함되므로 외부 공유, 화면 캡처, 불필요한 열람을 삼가 주세요.
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="학년" required>
+          <select className={selectCls} value={form.grade} onChange={set("grade")}>
+            <option value="">선택</option>
+            {["1", "2", "3"].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          {errors.grade && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.grade}</p>}
+        </Field>
+        <Field label="반" required>
+          <select className={selectCls} value={form.classNumber} onChange={set("classNumber")}>
+            <option value="">선택</option>
+            {Array.from({ length: 12 }, (_, index) => String(index + 1)).map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+          {errors.classNumber && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.classNumber}</p>}
+        </Field>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="번호" required>
+          <input className={inputCls} type="number" inputMode="numeric" min="1" value={form.studentNumber} onChange={set("studentNumber")} />
+          {errors.studentNumber && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.studentNumber}</p>}
+        </Field>
+        <Field label="학생 이름" required>
+          <input className={inputCls} value={form.studentName} onChange={set("studentName")} placeholder="학생 이름" />
+          {errors.studentName && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.studentName}</p>}
+        </Field>
+      </div>
+
+      <Field label="감염병 종류" required>
+        <select className={selectCls} value={form.diseaseType} onChange={set("diseaseType")}>
+          <option value="">선택해주세요</option>
+          {INFECTION_TYPES.map((value) => <option key={value} value={value}>{value}</option>)}
+        </select>
+        {errors.diseaseType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.diseaseType}</p>}
+      </Field>
+
+      {form.diseaseType === "기타" && (
+        <Field label="기타 감염병명" required>
+          <input className={inputCls} value={form.diseaseEtc} onChange={set("diseaseEtc")} placeholder="감염병명 입력" />
+          {errors.diseaseEtc && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.diseaseEtc}</p>}
+        </Field>
+      )}
+
+      <Field label="진단일" required>
+        <input className={inputCls} type="date" value={form.diagnosisDate} onChange={set("diagnosisDate")} />
+        {errors.diagnosisDate && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.diagnosisDate}</p>}
+      </Field>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="등교중지 시작일">
+          <input className={inputCls} type="date" value={form.exclusionStartDate} onChange={set("exclusionStartDate")} />
+        </Field>
+        <Field label="등교중지 종료일">
+          <input className={inputCls} type="date" value={form.exclusionEndDate} onChange={set("exclusionEndDate")} />
+        </Field>
+      </div>
+
+      <Field label="비고">
+        <textarea
+          className={inputCls + " resize-none"}
+          rows={3}
+          value={form.memo}
+          onChange={set("memo")}
+          placeholder="추가로 전달할 내용이 있으면 입력해주세요."
+        />
+      </Field>
+
+      <SubmitButton onClick={handleSubmit} submitting={submitting} />
+    </div>
+  );
+}
+
 // ───────── 모달 타입 → 제목 ─────────
 const MODAL_META = {
   cpr: { title: "심폐소생술 이수증 제출", icon: "💚", color: "text-[#2E7D32]" },
@@ -676,6 +815,7 @@ const MODAL_META = {
   other: { title: "기타 보건 관련 자료 제출", icon: "📂", color: "text-slate-600" },
   tb_registration: { title: "교직원 결핵검진 유형 선택", icon: "🫁", color: "text-[#1A3B8B]" },
   inbody: { title: "인바디 측정 신청", icon: "⚖️", color: "text-[#1A3B8B]" },
+  infection: { title: "감염병 발생 보고", icon: "📝", color: "text-[#1A3B8B]" },
 };
 
 function formatSubmittedAt(date = new Date()) {
@@ -738,7 +878,9 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
       }
     } catch (err) {
       console.error("[SubmitModal] submit failed", err);
-      setSubmitError("제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주시거나 보건실로 문의해주세요.");
+      setSubmitError(err.message && err.message !== "unknown error"
+        ? err.message
+        : "제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주시거나 보건실로 문의해주세요.");
       setStatus("idle");
     }
   };
@@ -788,6 +930,7 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
               {type === "other" && <OtherForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} tbConfig={tbConfig} />}
               {type === "inbody" && <InbodyRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
+              {type === "infection" && <InfectionReportForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
             </>
           )}
         </div>
@@ -799,15 +942,20 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
 function SuccessView({ info, onClose, onAnother }) {
   const isRecruit = info?.type === "recruit";
   const isInbody = info?.type === "inbody";
+  const isInfection = info?.type === "infection";
   const title = isRecruit
     ? "확인 요청이 접수되었습니다."
     : isInbody
       ? "신청 완료"
-      : "제출이 완료되었습니다.";
+      : isInfection
+        ? "감염병 발생 보고가 제출되었습니다."
+        : "제출이 완료되었습니다.";
   const body = isRecruit
     ? `${info?.submitterName || "제출자"} 선생님의 채용검진 대체 인정 확인 요청이 정상 접수되었습니다.`
     : isInbody
       ? "인바디 측정 신청이 완료되었습니다."
+      : isInfection
+        ? "보건실에서 확인 후 필요한 경우 추가 안내드리겠습니다."
       : `${info?.submitterName || "제출자"} 선생님의 자료가 정상 제출되었습니다.`;
 
   return (
