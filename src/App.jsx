@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import AdminAuthGate from "./components/AdminAuthGate.jsx";
 import Footer from "./components/Footer.jsx";
 import Header from "./components/Header.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
@@ -139,8 +140,8 @@ export default function App() {
               <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
               <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
               <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
-              <Route path="/admin"       element={<AdminPage roadmap={liveRoadmap} />} />
-              <Route path="/admin/roadmap" element={<AdminRoadmapPage roadmap={liveRoadmap} />} />
+              <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
+              <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
             </Routes>
           </>
         )}

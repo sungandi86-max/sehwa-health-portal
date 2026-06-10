@@ -202,6 +202,9 @@ function doGet(e) {
         return jsonOutput_({ result: "error", message: "비밀번호가 올바르지 않습니다." });
       }
     }
+    if (action === "verifyAdminMaster") {
+      return jsonOutput_(verifyAdminMaster_(e.parameter || {}));
+    }
     if (action === "getHealthRoomLocation") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getHealthRoomLocation_(e.parameter || {}), action));
     }
@@ -962,6 +965,23 @@ function getAppConfig_(key) {
     if (String(data[i][0]) === key) return String(data[i][1] || "");
   }
   return "";
+}
+
+function verifyAdminMaster_(params) {
+  const password = String(params.password || "");
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
+  }
+  if (!correctPassword) {
+    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
+  }
+
+  return { success: true, result: "success" };
 }
 function parseTbRegistrationDate_(value, boundary) {
   if (!value) return null;
