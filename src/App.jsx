@@ -24,6 +24,25 @@ import {
 } from "./data/fallbackData.js";
 
 const PORTAL_API_URL = "/api/portal";
+const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
+
+async function fetchPortalData(signal) {
+  const response = await fetch(PORTAL_API_URL, { signal });
+  const contentType = response.headers.get("content-type") || "";
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  if (import.meta.env.DEV) {
+    const fallbackResponse = await fetch(`${DEV_PORTAL_API_FALLBACK}?preview=local`, { signal });
+    if (!fallbackResponse.ok) throw new Error(`fallback HTTP ${fallbackResponse.status}`);
+    return fallbackResponse.json();
+  }
+
+  throw new Error("Portal API did not return JSON");
+}
 
 // ── 스켈레톤 UI ──────────────────────────────────────────────────
 function SkeletonCard() {
@@ -65,8 +84,7 @@ export default function App() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    fetch(PORTAL_API_URL, { signal: controller.signal })
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    fetchPortalData(controller.signal)
       .then((portal) => {
         clearTimeout(timeoutId);
         if (portal?.success === false || portal?.result === "error") {
