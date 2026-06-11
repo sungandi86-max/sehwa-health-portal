@@ -212,6 +212,9 @@ function doGet(e) {
     if (action === "getAdminInfectionReports") {
       return jsonOutput_(getAdminInfectionReports_(e.parameter || {}));
     }
+    if (action === "updateAdminInfectionReportStatus") {
+      return jsonOutput_(updateAdminInfectionReportStatus_(e.parameter || {}));
+    }
     if (action === "getHealthRoomLocation") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getHealthRoomLocation_(e.parameter || {}), action));
     }
@@ -1301,10 +1304,14 @@ function getAdminInfectionReports_(params) {
     };
   }
 
+  ensureInfectionStatusColumn_(sheet);
+  return buildAdminInfectionReportsResponse_(sheet);
+}
+
+function buildAdminInfectionReportsResponse_(sheet) {
   const values = sheet.getDataRange().getDisplayValues();
   const today = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
   const items = [];
-
   for (let i = 4; i < values.length; i++) {
     const row = values[i] || [];
     const name = String(row[5] || "").trim();
@@ -1365,6 +1372,9 @@ function getAdminInfectionReports_(params) {
 }
 
 function getInfectionReportState_(row, today) {
+  const savedStatus = String(row[13] || "").trim();
+  if (isValidInfectionStatus_(savedStatus)) return savedStatus;
+
   if (isTruthy_(row[10])) return "종결";
 
   const receivedDate = normalizeDateText_(row[1]);
@@ -1375,6 +1385,58 @@ function getInfectionReportState_(row, today) {
   if (startDate || endDate) return "관리 중";
   if (receivedDate === today) return "신규";
   return "확인 중";
+}
+
+function updateAdminInfectionReportStatus_(params) {
+  const password = String(params.password || "");
+  const rowId = Number(params.rowId || 0);
+  const status = String(params.status || "").trim();
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
+  }
+  if (!correctPassword) {
+    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
+  }
+  if (!rowId || rowId < 5) {
+    return { success: false, result: "error", message: "상태를 변경할 보고 행을 찾을 수 없습니다." };
+  }
+  if (!isValidInfectionStatus_(status)) {
+    return { success: false, result: "error", message: "변경할 수 없는 상태값입니다." };
+  }
+
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.infectionManagement);
+  if (!sheet || rowId > sheet.getLastRow()) {
+    return { success: false, result: "error", message: "원본 감염병 보고 행을 찾을 수 없습니다." };
+  }
+
+  const row = sheet.getRange(rowId, 1, 1, 14).getDisplayValues()[0] || [];
+  const hasReport = String(row[5] || "").trim() || String(row[6] || "").trim() || String(row[7] || "").trim();
+  if (!hasReport) {
+    return { success: false, result: "error", message: "원본 감염병 보고 행이 비어 있습니다." };
+  }
+
+  ensureInfectionStatusColumn_(sheet);
+  sheet.getRange(rowId, 14).setValue(status);
+
+  return buildAdminInfectionReportsResponse_(sheet);
+}
+
+function ensureInfectionStatusColumn_(sheet) {
+  const headerRow = 4;
+  const statusColumn = 14;
+  const header = String(sheet.getRange(headerRow, statusColumn).getDisplayValue() || "").trim();
+  if (!header) {
+    sheet.getRange(headerRow, statusColumn).setValue("관리상태");
+  }
+}
+
+function isValidInfectionStatus_(status) {
+  return ["신규", "확인 중", "관리 중", "복귀 확인 필요", "종결"].indexOf(String(status || "").trim()) !== -1;
 }
 
 function parseTbRegistrationDate_(value, boundary) {

@@ -4,10 +4,10 @@ import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
 
 const ADMIN_API = "/api/health-room-status";
 const DEV_ADMIN_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/health-room-status";
-const FILTERS = ["전체", "신규", "확인 중", "관리 중", "복귀 확인 필요", "종결"];
+const STATUS_OPTIONS = ["신규", "확인 중", "관리 중", "복귀 확인 필요", "종결"];
+const FILTERS = ["전체", ...STATUS_OPTIONS];
 
-async function requestInfectionReports(password) {
-  const payload = { action: "getAdminInfectionReports", password };
+async function requestAdminInfection(payload) {
   const response = await fetch(ADMIN_API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -53,7 +53,16 @@ function SummaryCard({ label, value, type = "blue" }) {
   );
 }
 
-function ReportCard({ item }) {
+function Info({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 px-3 py-2">
+      <p className="text-[0.7rem] font-black text-slate-500">{label}</p>
+      <p className="mt-1 font-bold text-[#263238]">{value || "-"}</p>
+    </div>
+  );
+}
+
+function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, updating }) {
   return (
     <AppCard className="p-4">
       <div className="flex items-start justify-between gap-3">
@@ -80,26 +89,54 @@ function ReportCard({ item }) {
         <Info label="담임 안내 여부" value={item.homeroomNoticeStatus} />
         <Info label="관리 메모" value={item.memoStatus} />
       </div>
-    </AppCard>
-  );
-}
 
-function Info({ label, value }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 px-3 py-2">
-      <p className="text-[0.7rem] font-black text-slate-500">{label}</p>
-      <p className="mt-1 font-bold text-[#263238]">{value || "-"}</p>
-    </div>
+      <div className="mt-4 rounded-2xl border border-[#C9DFFF] bg-white p-3">
+        <label className="mb-1.5 block text-xs font-black text-[#1A3B8B]">상태 변경</label>
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <select
+            value={statusDraft || item.status || "확인 중"}
+            onChange={(event) => onStatusDraftChange(item.id, event.target.value)}
+            className="min-h-11 rounded-2xl border border-slate-200 bg-[#F7F9FC] px-3 py-2 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
+          >
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => onStatusUpdate(item)}
+            disabled={updating}
+            className={`min-h-11 rounded-2xl px-4 py-2 text-sm font-black text-white transition ${
+              updating ? "cursor-not-allowed bg-slate-300" : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md"
+            }`}
+          >
+            {updating ? "변경 중..." : "상태 저장"}
+          </button>
+        </div>
+      </div>
+    </AppCard>
   );
 }
 
 export default function AdminInfectionReportPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
+  const [statusPassword, setStatusPassword] = useState("");
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState("전체");
+  const [statusDrafts, setStatusDrafts] = useState({});
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [updatingId, setUpdatingId] = useState("");
+
+  const applyData = (json) => {
+    setData(json);
+    const drafts = {};
+    (json?.items || []).forEach((item) => {
+      drafts[item.id] = item.status || "확인 중";
+    });
+    setStatusDrafts(drafts);
+  };
 
   const fetchReports = async () => {
     if (!password.trim()) {
@@ -110,10 +147,10 @@ export default function AdminInfectionReportPage() {
     setLoading(true);
     setMessage("");
     try {
-      const json = await requestInfectionReports(password.trim());
+      const json = await requestAdminInfection({ action: "getAdminInfectionReports", password: password.trim() });
       setPassword("");
       if (json?.success === true || json?.result === "success") {
-        setData(json);
+        applyData(json);
         setFilter("전체");
       } else {
         setData(null);
@@ -126,6 +163,38 @@ export default function AdminInfectionReportPage() {
     } finally {
       setPassword("");
       setLoading(false);
+    }
+  };
+
+  const updateStatus = async (item) => {
+    const nextStatus = statusDrafts[item.id] || item.status || "확인 중";
+    if (!statusPassword.trim()) {
+      setMessage("상태 변경을 위해 마스터 비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    setUpdatingId(item.id);
+    setMessage("");
+    try {
+      const json = await requestAdminInfection({
+        action: "updateAdminInfectionReportStatus",
+        password: statusPassword.trim(),
+        rowId: item.id,
+        status: nextStatus,
+      });
+      setStatusPassword("");
+      if (json?.success === true || json?.result === "success") {
+        applyData(json);
+        setMessage("상태가 변경되었습니다.");
+      } else {
+        setMessage(json?.message || "상태를 변경할 수 없습니다.");
+      }
+    } catch (error) {
+      console.error("[admin-infection-reports] update failed", error);
+      setMessage("상태 변경 중 오류가 발생했습니다.");
+    } finally {
+      setStatusPassword("");
+      setUpdatingId("");
     }
   };
 
@@ -155,9 +224,7 @@ export default function AdminInfectionReportPage() {
         <AppCard className="mt-5 p-5">
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
             <div>
-              <label className="mb-1.5 block text-sm font-black text-[#263238]">
-                마스터 비밀번호 재확인
-              </label>
+              <label className="mb-1.5 block text-sm font-black text-[#263238]">마스터 비밀번호 재확인</label>
               <input
                 type="password"
                 value={password}
@@ -179,14 +246,31 @@ export default function AdminInfectionReportPage() {
             </button>
           </div>
           <p className="mt-3 text-xs font-bold leading-5 text-slate-500" style={{ wordBreak: "keep-all" }}>
-            비밀번호는 브라우저 저장소에 보관하지 않습니다. 필요한 상세 정보는 원본 내부 시트에서 확인해 주세요.
+            조회 비밀번호는 브라우저 저장소에 보관하지 않습니다. 필요한 상세 정보는 원본 내부 시트에서 확인해 주세요.
           </p>
-          {message && (
-            <p className="mt-3 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-sm font-black text-[#D94F70]">
-              {message}
-            </p>
-          )}
         </AppCard>
+
+        {data && (
+          <AppCard className="mt-4 p-5">
+            <label className="mb-1.5 block text-sm font-black text-[#263238]">상태 변경용 마스터 비밀번호</label>
+            <input
+              type="password"
+              value={statusPassword}
+              onChange={(event) => setStatusPassword(event.target.value)}
+              className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm font-bold text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
+              placeholder="상태 저장 요청에만 사용되며 저장하지 않습니다."
+            />
+            <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
+              상태 변경 시 이 비밀번호를 요청에만 함께 전송하고 즉시 비웁니다.
+            </p>
+          </AppCard>
+        )}
+
+        {message && (
+          <p className="mt-4 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-sm font-black text-[#D94F70]">
+            {message}
+          </p>
+        )}
 
         {data && (
           <>
@@ -221,7 +305,16 @@ export default function AdminInfectionReportPage() {
 
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
               {filteredItems.length ? (
-                filteredItems.map((item) => <ReportCard key={item.id} item={item} />)
+                filteredItems.map((item) => (
+                  <ReportCard
+                    key={item.id}
+                    item={item}
+                    statusDraft={statusDrafts[item.id]}
+                    onStatusDraftChange={(id, status) => setStatusDrafts((prev) => ({ ...prev, [id]: status }))}
+                    onStatusUpdate={updateStatus}
+                    updating={updatingId === item.id}
+                  />
+                ))
               ) : (
                 <AppCard className="p-6 text-center text-sm font-bold text-slate-600">
                   표시할 감염병 보고가 없습니다.
