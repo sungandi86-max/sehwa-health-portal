@@ -70,7 +70,7 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
               onClick={() => navigate("/admin/messages")}
               className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
             >
-              메신저 문구 찾기
+              메신저 문구 생성기 열기
             </button>
           </AppCard>
 

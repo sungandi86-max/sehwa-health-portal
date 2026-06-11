@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
 
 const emptyRoadmap = { enabled: false, adminOnly: true, items: [] };
+const MESSAGE_HELPER_LITE_URL = "https://script.google.com/macros/s/AKfycbxVONfUYNf63cvJhiehe8N9TAka14MuKAXxXDVQG79H_R1DeX4kwXfHtjo25hDGsYFU/exec";
 
 function safeText(value, fallback = "-") {
   const text = String(value || "").trim();
@@ -392,6 +393,14 @@ function RoadmapGuide({ item, nextItem, onCopy, copiedMessage, stepIndex, totalS
             <CopyButton value={item.messageTitle} onCopy={onCopy}>제목 복사</CopyButton>
             <CopyButton value={item.messageBody} onCopy={onCopy}>문구 복사</CopyButton>
             <CopyButton value={combinedMessage} onCopy={onCopy}>제목+문구 복사</CopyButton>
+            <a
+              href={MESSAGE_HELPER_LITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-[#C9DFFF] bg-white px-4 py-2 text-sm font-black text-[#1A3B8B] transition hover:-translate-y-[1px] hover:bg-[#EAF3FF] hover:shadow-md"
+            >
+              메신저 문구 생성기 Lite 열기
+            </a>
           </div>
           {copiedMessage && (
             <p className="rounded-2xl bg-[#E8F6EE] px-4 py-3 text-sm font-black text-[#2E7D32]">
