@@ -165,8 +165,34 @@ export default function AdminMessageHelperPage({ roadmap = emptyRoadmap }) {
         ) : (
           <div className="space-y-5">
             <AppCard className="p-5">
-              <p className="text-sm font-black text-[#1A3B8B]">업무 선택</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="grid gap-3 md:hidden">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-black text-[#1A3B8B]">업무 선택</span>
+                  <select
+                    value={selectedTaskName}
+                    onChange={(event) => selectTask(event.target.value)}
+                    className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-2.5 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
+                  >
+                    {taskNames.map((taskName) => <option key={taskName} value={taskName}>{taskName}</option>)}
+                  </select>
+                </label>
+                <p className="rounded-2xl bg-[#EAF3FF] px-3 py-2 text-xs font-black text-[#1A3B8B]">
+                  선택된 업무: {selectedTaskName}
+                </p>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">검색</span>
+                  <input
+                    type="search"
+                    value={searchText}
+                    onChange={(event) => setSearchText(event.target.value)}
+                    className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-2.5 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
+                    placeholder="업무명, 단계, 대상, 문구 검색"
+                  />
+                </label>
+              </div>
+
+              <p className="hidden text-sm font-black text-[#1A3B8B] md:block">업무 선택</p>
+              <div className="mt-3 hidden flex-wrap gap-2 md:flex">
                 {taskNames.map((taskName) => (
                   <button
                     key={taskName}
@@ -184,15 +210,15 @@ export default function AdminMessageHelperPage({ roadmap = emptyRoadmap }) {
               </div>
             </AppCard>
 
-            <AppCard className="p-5">
+            <AppCard className="p-4 md:p-5">
               <p className="text-sm font-black text-[#1A3B8B]">단계/대상 필터</p>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 md:gap-3 lg:grid-cols-3">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black text-slate-500">단계</span>
                   <select
                     value={selectedStep}
                     onChange={(event) => setSelectedStep(event.target.value)}
-                    className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
+                    className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-3 py-2.5 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10 md:px-4 md:py-3"
                   >
                     {steps.map((step) => <option key={step} value={step}>{step}</option>)}
                   </select>
@@ -202,12 +228,12 @@ export default function AdminMessageHelperPage({ roadmap = emptyRoadmap }) {
                   <select
                     value={selectedAudience}
                     onChange={(event) => setSelectedAudience(event.target.value)}
-                    className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
+                    className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-3 py-2.5 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10 md:px-4 md:py-3"
                   >
                     {audiences.map((audience) => <option key={audience} value={audience}>{audience}</option>)}
                   </select>
                 </label>
-                <label className="block">
+                <label className="hidden md:block">
                   <span className="mb-1.5 block text-xs font-black text-slate-500">검색</span>
                   <input
                     type="search"
