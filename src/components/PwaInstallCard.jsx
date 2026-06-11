@@ -51,7 +51,7 @@ export default function PwaInstallCard() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-[1280px] px-3 pb-4 sm:px-4 md:pb-5">
+    <section className="mx-auto w-full max-w-6xl px-3 pb-4 sm:px-4 md:pb-5 lg:max-w-[1280px]">
       <details className="group overflow-hidden rounded-2xl border border-[#C9DFFF] bg-white shadow-sm md:rounded-[24px]">
         <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 marker:content-none sm:px-5">
           <div className="min-w-0">

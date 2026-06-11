@@ -63,7 +63,7 @@ function SkeletonCard() {
 
 function LoadingSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-4 py-10">
+    <div className="mx-auto w-full max-w-6xl px-4 py-10 lg:max-w-[1280px]">
       <div className="mb-5 animate-pulse">
         <div className="mb-2 h-3 w-20 rounded bg-slate-200" />
         <div className="h-7 w-48 rounded-lg bg-slate-200" />
