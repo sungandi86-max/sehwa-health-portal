@@ -8,11 +8,11 @@ export default function HomePage({ config }) {
     <>
       <HeroSection config={config} />
       <div className="md:hidden">
-        <QuickMenu items={quickMenuItems.slice(0, 4)} className="pb-4" />
+        <QuickMenu items={quickMenuItems.slice(0, 4)} className="pb-3" />
       </div>
       <PwaInstallCard />
       <div className="hidden md:block">
-        <QuickMenu />
+        <QuickMenu className="md:pb-8" />
       </div>
       <div className="md:hidden">
         <QuickMenu items={quickMenuItems.slice(4)} />

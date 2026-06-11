@@ -51,14 +51,14 @@ export default function PwaInstallCard() {
   };
 
   return (
-    <section className="mx-auto max-w-6xl px-3 pb-6 sm:px-4">
+    <section className="mx-auto max-w-6xl px-3 pb-4 sm:px-4 md:pb-5">
       <details className="group overflow-hidden rounded-2xl border border-[#C9DFFF] bg-white shadow-sm md:rounded-[24px]">
-        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none sm:px-5">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 marker:content-none sm:px-5">
           <div className="min-w-0">
             <h2 className="text-base font-extrabold text-[#1A3B8B] sm:text-lg">
               모바일에서 앱처럼 사용하기
             </h2>
-            <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm" style={{ wordBreak: "keep-all" }}>
+            <p className="mt-0.5 text-xs leading-5 text-slate-600 sm:text-sm" style={{ wordBreak: "keep-all" }}>
               온라인 보건실을 자주 확인하시면 홈 화면에 추가해 더 빠르게 열 수 있습니다.
             </p>
           </div>
