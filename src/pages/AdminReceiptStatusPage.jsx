@@ -44,7 +44,7 @@ function ReceiptItemCard({ item }) {
           <h3 className="text-lg font-black text-[#1A3B8B]">{item.label}</h3>
           <p className="mt-1 text-xs font-bold text-slate-500">{item.sheetName}</p>
         </div>
-        <Badge type={item.available ? "blue" : "pink"}>{item.available ? "연결됨" : "시트 없음"}</Badge>
+        <Badge type={item.available ? "blue" : "pink"}>{item.available ? "시트 연결" : "요청형"}</Badge>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
@@ -73,7 +73,7 @@ function ReceiptItemCard({ item }) {
         onClick={() => setNotice("원본 허브 구글시트에서 해당 관련 시트를 확인해 주세요. 이 화면에는 개인정보를 표시하지 않습니다.")}
         className="mt-4 min-h-11 w-full rounded-2xl border border-[#C9DFFF] bg-white px-4 py-3 text-sm font-black text-[#1A3B8B] transition hover:bg-[#EAF3FF]"
       >
-        상세 보기 안내
+        확인 방법 보기
       </button>
       {notice && (
         <p className="mt-2 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-xs font-bold leading-5 text-[#D94F70]">
@@ -194,7 +194,8 @@ export default function AdminReceiptStatusPage() {
 
         {summary && (
           <>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <h2 className="mt-5 text-xl font-black text-[#263238]">오늘 신규 접수 요약</h2>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {sections.flatMap((section) => section.items || []).map((item) => (
                 <div key={`summary-${item.id}`} className="rounded-2xl bg-white p-4 shadow-sm">
                   <p className="text-xs font-black text-slate-500">{item.label}</p>
