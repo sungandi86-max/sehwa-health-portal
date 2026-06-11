@@ -54,10 +54,11 @@ function SummaryCard({ label, value, type = "blue" }) {
 }
 
 function Info({ label, value }) {
+  const displayValue = value === "시트 확인" ? "원본 시트 확인" : value;
   return (
     <div className="rounded-2xl bg-slate-50 px-3 py-2">
       <p className="text-[0.7rem] font-black text-slate-500">{label}</p>
-      <p className="mt-1 font-bold text-[#263238]">{value || "-"}</p>
+      <p className="mt-1 font-bold text-[#263238]">{displayValue || "-"}</p>
     </div>
   );
 }
@@ -263,7 +264,7 @@ export default function AdminInfectionReportPage() {
           <>
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryCard label="오늘 신규 보고" value={data.summary?.todayNewCount} />
-              <SummaryCard label="현재 관리 중" value={data.summary?.activeCount} type="green" />
+              <SummaryCard label="미종결 보고" value={data.summary?.activeCount} type="green" />
               <SummaryCard label="복귀 확인 필요" value={data.summary?.returnCheckCount} type="pink" />
               <SummaryCard label="종결" value={data.summary?.closedCount} />
             </div>

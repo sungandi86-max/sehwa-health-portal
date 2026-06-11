@@ -1618,6 +1618,84 @@ function isTrue_(value) {
   return text === "TRUE" || text === "사용" || text === "Y" || text === "YES" || text === "1";
 }
 
+function parseExposureDateBoundary_(value, boundary) {
+  if (!value) return null;
+
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    const date = new Date(value.getTime());
+    if (
+      date.getHours() === 0 &&
+      date.getMinutes() === 0 &&
+      date.getSeconds() === 0 &&
+      date.getMilliseconds() === 0
+    ) {
+      if (boundary === "end") date.setHours(23, 59, 59, 999);
+      else date.setHours(0, 0, 0, 0);
+    }
+    return date;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/\s+/g, " ");
+  const match = normalized.match(
+    /^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/
+  );
+
+  if (!match) {
+    const fallback = new Date(raw);
+    if (isNaN(fallback.getTime())) return null;
+    if (
+      boundary === "end" &&
+      fallback.getHours() === 0 &&
+      fallback.getMinutes() === 0 &&
+      fallback.getSeconds() === 0 &&
+      fallback.getMilliseconds() === 0
+    ) {
+      fallback.setHours(23, 59, 59, 999);
+    }
+    return fallback;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hasTime = match[4] !== undefined;
+
+  if (hasTime) {
+    return new Date(
+      year,
+      month - 1,
+      day,
+      Number(match[4]),
+      Number(match[5]),
+      Number(match[6] || 0),
+      0
+    );
+  }
+
+  if (boundary === "end") return new Date(year, month - 1, day, 23, 59, 59, 999);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function getExposureState_(row, now) {
+  const startRaw = getValue_(row, ["노출시작일"]);
+  const endRaw = getValue_(row, ["노출종료일"]);
+  if (!startRaw && !endRaw) return "visible";
+
+  const start = parseExposureDateBoundary_(startRaw, "start");
+  const end = parseExposureDateBoundary_(endRaw, "end");
+
+  if (start && now.getTime() < start.getTime()) return "before";
+  if (end && now.getTime() > end.getTime()) return "closed";
+  return "visible";
+}
+
+function isVisibleByExposure_(row, now) {
+  return getExposureState_(row, now || new Date()) === "visible";
+}
+
 function splitLines_(text) {
   if (!text) return [];
   return String(text).split(/\r?\n|<br\s*\/?>/i).map(v => v.trim()).filter(Boolean);
@@ -1632,7 +1710,8 @@ function getTitleLines_(row) {
 // ════════════════════════════════════════════════════════════════
 
 function getNotices_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalNotices).map(r => ({
+  const now = new Date();
+  return getRows_(ss, SHEET_NAMES.portalNotices).filter(r => isVisibleByExposure_(r, now)).map(r => ({
     title:       getValue_(r, ["제목"]),
     titleLines:  getTitleLines_(r),
     date:        getValue_(r, ["일시"]),
@@ -1645,7 +1724,8 @@ function getNotices_(ss) {
 }
 
 function getUploads_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalUploads).map(r => ({
+  const now = new Date();
+  return getRows_(ss, SHEET_NAMES.portalUploads).filter(r => isVisibleByExposure_(r, now)).map(r => ({
     title:        getValue_(r, ["제목"]),
     titleLines:   getTitleLines_(r),
     description:  getValue_(r, ["설명"]),
@@ -1662,7 +1742,8 @@ function getUploads_(ss) {
 }
 
 function getCheckups_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalCheckups).map(r => ({
+  const now = new Date();
+  return getRows_(ss, SHEET_NAMES.portalCheckups).filter(r => isVisibleByExposure_(r, now)).map(r => ({
     title:          getValue_(r, ["제목"]),
     description:    getValue_(r, ["설명"]),
     target:         getValue_(r, ["대상"]),
