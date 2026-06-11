@@ -2,7 +2,7 @@ import { Badge, SchoolEmblem } from "./ui.jsx";
 
 export default function HeroSection({ config }) {
   return (
-    <section id="home" className="mx-auto max-w-6xl px-3 pb-3 pt-3 sm:px-4 md:pb-6 md:pt-7">
+    <section id="home" className="mx-auto w-full max-w-[1280px] px-3 pb-3 pt-3 sm:px-4 md:pb-6 md:pt-7">
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#EAF3FF] via-white to-[#DFF4EC] p-4 shadow-sm sm:p-5 md:rounded-[28px] md:p-7">
         <div className="pointer-events-none absolute -right-14 -top-16 h-28 w-28 rounded-full bg-white/60 md:-right-10 md:-top-12 md:h-36 md:w-36" />
         <div className="absolute bottom-5 right-7 hidden xl:block">

@@ -17,7 +17,7 @@ export default function Header() {
   const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-1.5 px-3 py-2 sm:gap-2 sm:px-4 sm:py-2.5">
+      <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-1.5 px-3 py-2 sm:gap-2 sm:px-4 sm:py-2.5">
         <button onClick={() => navigate("/")} className="flex min-w-0 items-center gap-1.5 text-left sm:gap-2">
           <SchoolEmblem />
           <div className="min-w-0">

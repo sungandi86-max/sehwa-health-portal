@@ -9,7 +9,7 @@ export const appConfig = {
 
 export const quickMenuItems = [
   { id: "today", title: "오늘의 보건실", description: "오늘 또는 이번 주 확인할 보건 업무", icon: "📌" },
-  { id: "upload", title: "제출·업로드 센터", description: "이수증, 검진 확인증, 확인 요청 제출", icon: "📤", featured: true },
+  { id: "upload", title: "제출·업로드 센터", description: "이수증·검진 확인증·감염병 보고 자료 제출", icon: "📤", featured: true },
   { id: "checkup", title: "검진·검사 안내", description: "1학년 건강검진, 2·3학년 결핵검진·소변검사", icon: "🩺" },
   { id: "education", title: "교육 자료실", description: "응급처치·예방교육·인식개선 자료", icon: "🎬" },
   { id: "homeroom", title: "담임 협조 요청", description: "회수, 확인, 전달이 필요한 항목", icon: "✅" },

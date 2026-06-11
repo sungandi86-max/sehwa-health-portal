@@ -63,7 +63,7 @@ function SkeletonCard() {
 
 function LoadingSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
+    <div className="mx-auto w-full max-w-[1280px] px-4 py-10">
       <div className="mb-5 animate-pulse">
         <div className="mb-2 h-3 w-20 rounded bg-slate-200" />
         <div className="h-7 w-48 rounded-lg bg-slate-200" />
@@ -123,13 +123,13 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <main className="min-h-screen w-full overflow-x-hidden bg-[#F7F9FC] font-sans text-[#263238]">
+      <main className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#F7F9FC] font-sans text-[#263238]">
         <Header />
 
-        {isLoading ? (
-          <LoadingSkeleton />
-        ) : (
-          <>
+        <div className="flex-1">
+          {isLoading ? (
+            <LoadingSkeleton />
+          ) : (
             <Routes>
               <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
               <Route path="/today"       element={<TodayPage       items={liveNotices} />} />
@@ -143,8 +143,8 @@ export default function App() {
               <Route path="/admin"       element={<AdminPage roadmap={liveRoadmap} />} />
               <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
             </Routes>
-          </>
-        )}
+          )}
+        </div>
 
         <Footer />
       </main>
