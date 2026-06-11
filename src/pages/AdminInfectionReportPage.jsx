@@ -62,7 +62,7 @@ function Info({ label, value }) {
   );
 }
 
-function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, updating }) {
+function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, updating, canUpdate }) {
   return (
     <AppCard className="p-4">
       <div className="flex items-start justify-between gap-3">
@@ -96,7 +96,8 @@ function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, up
           <select
             value={statusDraft || item.status || "확인 중"}
             onChange={(event) => onStatusDraftChange(item.id, event.target.value)}
-            className="min-h-11 rounded-2xl border border-slate-200 bg-[#F7F9FC] px-3 py-2 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
+            disabled={!canUpdate || updating}
+            className="min-h-11 rounded-2xl border border-slate-200 bg-[#F7F9FC] px-3 py-2 text-sm font-bold text-[#263238] outline-none focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
           >
             {STATUS_OPTIONS.map((status) => (
               <option key={status} value={status}>{status}</option>
@@ -105,9 +106,9 @@ function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, up
           <button
             type="button"
             onClick={() => onStatusUpdate(item)}
-            disabled={updating}
+            disabled={!canUpdate || updating}
             className={`min-h-11 rounded-2xl px-4 py-2 text-sm font-black text-white transition ${
-              updating ? "cursor-not-allowed bg-slate-300" : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md"
+              !canUpdate || updating ? "cursor-not-allowed bg-slate-300" : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md"
             }`}
           >
             {updating ? "변경 중..." : "상태 저장"}
@@ -121,7 +122,7 @@ function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, up
 export default function AdminInfectionReportPage() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
-  const [statusPassword, setStatusPassword] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState("전체");
   const [statusDrafts, setStatusDrafts] = useState({});
@@ -139,7 +140,8 @@ export default function AdminInfectionReportPage() {
   };
 
   const fetchReports = async () => {
-    if (!password.trim()) {
+    const nextPassword = password.trim();
+    if (!nextPassword) {
       setMessage("마스터 비밀번호를 입력해 주세요.");
       return;
     }
@@ -147,17 +149,20 @@ export default function AdminInfectionReportPage() {
     setLoading(true);
     setMessage("");
     try {
-      const json = await requestAdminInfection({ action: "getAdminInfectionReports", password: password.trim() });
+      const json = await requestAdminInfection({ action: "getAdminInfectionReports", password: nextPassword });
       setPassword("");
       if (json?.success === true || json?.result === "success") {
+        setAuthPassword(nextPassword);
         applyData(json);
         setFilter("전체");
       } else {
+        setAuthPassword("");
         setData(null);
         setMessage(json?.message || "감염병 보고 목록을 불러올 수 없습니다.");
       }
     } catch (error) {
       console.error("[admin-infection-reports] fetch failed", error);
+      setAuthPassword("");
       setData(null);
       setMessage("감염병 보고 목록 조회 중 오류가 발생했습니다.");
     } finally {
@@ -168,8 +173,8 @@ export default function AdminInfectionReportPage() {
 
   const updateStatus = async (item) => {
     const nextStatus = statusDrafts[item.id] || item.status || "확인 중";
-    if (!statusPassword.trim()) {
-      setMessage("상태 변경을 위해 마스터 비밀번호를 입력해 주세요.");
+    if (!authPassword) {
+      setMessage("먼저 마스터 비밀번호로 감염병 보고를 조회해 주세요.");
       return;
     }
 
@@ -178,11 +183,10 @@ export default function AdminInfectionReportPage() {
     try {
       const json = await requestAdminInfection({
         action: "updateAdminInfectionReportStatus",
-        password: statusPassword.trim(),
+        password: authPassword,
         rowId: item.id,
         status: nextStatus,
       });
-      setStatusPassword("");
       if (json?.success === true || json?.result === "success") {
         applyData(json);
         setMessage("상태가 변경되었습니다.");
@@ -193,7 +197,6 @@ export default function AdminInfectionReportPage() {
       console.error("[admin-infection-reports] update failed", error);
       setMessage("상태 변경 중 오류가 발생했습니다.");
     } finally {
-      setStatusPassword("");
       setUpdatingId("");
     }
   };
@@ -231,7 +234,7 @@ export default function AdminInfectionReportPage() {
                 onChange={(event) => setPassword(event.target.value)}
                 onKeyDown={(event) => { if (event.key === "Enter") fetchReports(); }}
                 className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm font-bold text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
-                placeholder="조회할 때만 사용되며 저장하지 않습니다."
+                placeholder="조회 후 현재 화면에서만 임시 사용합니다."
               />
             </div>
             <button
@@ -246,25 +249,9 @@ export default function AdminInfectionReportPage() {
             </button>
           </div>
           <p className="mt-3 text-xs font-bold leading-5 text-slate-500" style={{ wordBreak: "keep-all" }}>
-            조회 비밀번호는 브라우저 저장소에 보관하지 않습니다. 필요한 상세 정보는 원본 내부 시트에서 확인해 주세요.
+            입력한 비밀번호는 브라우저 저장소에 보관하지 않습니다. 조회 성공 후 현재 화면에서만 상태 변경 요청에 임시 사용되며, 새로고침하거나 페이지를 벗어나면 사라집니다.
           </p>
         </AppCard>
-
-        {data && (
-          <AppCard className="mt-4 p-5">
-            <label className="mb-1.5 block text-sm font-black text-[#263238]">상태 변경용 마스터 비밀번호</label>
-            <input
-              type="password"
-              value={statusPassword}
-              onChange={(event) => setStatusPassword(event.target.value)}
-              className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm font-bold text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
-              placeholder="상태 저장 요청에만 사용되며 저장하지 않습니다."
-            />
-            <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
-              상태 변경 시 이 비밀번호를 요청에만 함께 전송하고 즉시 비웁니다.
-            </p>
-          </AppCard>
-        )}
 
         {message && (
           <p className="mt-4 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-sm font-black text-[#D94F70]">
@@ -313,6 +300,7 @@ export default function AdminInfectionReportPage() {
                     onStatusDraftChange={(id, status) => setStatusDrafts((prev) => ({ ...prev, [id]: status }))}
                     onStatusUpdate={updateStatus}
                     updating={updatingId === item.id}
+                    canUpdate={Boolean(authPassword)}
                   />
                 ))
               ) : (
