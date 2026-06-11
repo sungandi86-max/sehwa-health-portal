@@ -52,6 +52,31 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
           <AppCard className="p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
+                <p className="text-xs font-black text-[#2E7D32]">MESSAGE HELPER</p>
+                <h3 className="mt-1 text-lg font-extrabold leading-7 text-[#263238]">
+                  메신저 문구 도우미
+                </h3>
+              </div>
+              <Badge type="green">관리자 전용</Badge>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-600" style={{ wordBreak: "keep-all" }}>
+              업무 로드맵에 등록된 안내 문구를 업무명, 단계, 안내대상별로 찾아 바로 복사합니다.
+            </p>
+            <p className="mt-2 rounded-2xl bg-[#F2FBF7] px-4 py-3 text-xs font-bold leading-5 text-[#2E7D32]">
+              일반 안내용 문구만 표시하며, 학생 개별 건강정보는 포함하지 않습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/admin/messages")}
+              className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
+            >
+              메신저 문구 찾기
+            </button>
+          </AppCard>
+
+          <AppCard className="p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
                 <p className="text-xs font-black text-[#2E7D32]">ADMIN RECEIPTS</p>
                 <h3 className="mt-1 text-lg font-extrabold leading-7 text-[#263238]">
                   접수 현황
