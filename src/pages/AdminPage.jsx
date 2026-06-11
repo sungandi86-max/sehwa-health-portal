@@ -21,8 +21,8 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
           description="보건업무 운영을 돕기 위한 관리자용 메뉴입니다. 일반 교직원 공개 메뉴에는 표시되지 않습니다."
         />
 
-        {roadmap?.enabled ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {roadmap?.enabled && (
             <AppCard className="p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -47,12 +47,33 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
                 비밀번호 입력하고 열기
               </button>
             </AppCard>
-          </div>
-        ) : (
-          <AppCard className="p-6 text-center text-sm font-bold text-slate-600">
-            사용 가능한 관리자 메뉴가 없습니다.
+          )}
+
+          <AppCard className="p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black text-[#2E7D32]">ADMIN RECEIPTS</p>
+                <h3 className="mt-1 text-lg font-extrabold leading-7 text-[#263238]">
+                  접수 현황
+                </h3>
+              </div>
+              <Badge type="blue">관리자 전용</Badge>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-600" style={{ wordBreak: "keep-all" }}>
+              감염병 보고, 확인증 제출, 채용검진 확인 요청, 인바디 신청 현황을 건수 중심으로 확인합니다.
+            </p>
+            <p className="mt-2 rounded-2xl bg-[#F2FBF7] px-4 py-3 text-xs font-bold leading-5 text-[#2E7D32]">
+              학생명, 진단명, 파일 링크 등 상세정보는 표시하지 않습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/admin/receipts")}
+              className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
+            >
+              접수 현황 확인하기
+            </button>
           </AppCard>
-        )}
+        </div>
       </div>
     </section>
   );

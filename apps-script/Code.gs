@@ -206,6 +206,9 @@ function doGet(e) {
     if (action === "verifyAdminMaster") {
       return jsonOutput_(verifyAdminMaster_(e.parameter || {}));
     }
+    if (action === "getAdminReceiptSummary") {
+      return jsonOutput_(getAdminReceiptSummary_(e.parameter || {}));
+    }
     if (action === "getHealthRoomLocation") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getHealthRoomLocation_(e.parameter || {}), action));
     }
@@ -1124,8 +1127,153 @@ function verifyAdminMaster_(params) {
     return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
   }
 
-  return { success: true, result: "success" };
+  return {
+    success: true,
+    result: "success",
+    receiptAlert: buildAdminReceiptAlert_(buildAdminReceiptSections_(getSpreadsheet_()))
+  };
 }
+
+function getAdminReceiptSummary_(params) {
+  const password = String(params.password || "");
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
+  }
+  if (!correctPassword) {
+    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
+  }
+
+  const sections = buildAdminReceiptSections_(getSpreadsheet_());
+
+  return {
+    success: true,
+    result: "success",
+    updatedAt: Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
+    sections: sections,
+    alert: buildAdminReceiptAlert_(sections)
+  };
+}
+
+function buildAdminReceiptSections_(ss) {
+  const submitReports = [
+    summarizeAdminReceiptSheet_(ss, {
+      id: "infection",
+      label: "감염병 발생 보고",
+      sheetName: SHEET_NAMES.infectionManagement,
+      startRow: 5,
+      dateColumn: 2,
+      requiredColumns: [6, 7, 8]
+    }),
+    summarizeAdminReceiptSheet_(ss, {
+      id: "tb",
+      label: "결핵검진 확인증 제출",
+      sheetName: "응답_결핵검진확인증",
+      startRow: 2,
+      dateColumn: 1,
+      requiredColumns: [1]
+    }),
+    summarizeAdminReceiptSheet_(ss, {
+      id: "cpr",
+      label: "심폐소생술 이수증 제출",
+      sheetName: "응답_심폐소생술이수증",
+      startRow: 2,
+      dateColumn: 1,
+      requiredColumns: [1]
+    }),
+    summarizeAdminReceiptSheet_(ss, {
+      id: "recruit",
+      label: "채용검진 대체 확인 요청",
+      sheetName: "응답_채용검진확인요청",
+      startRow: 2,
+      dateColumn: 1,
+      requiredColumns: [1]
+    })
+  ];
+
+  const eventApplications = [
+    summarizeAdminReceiptSheet_(ss, {
+      id: "inbody",
+      label: "인바디 측정 신청",
+      sheetName: "응답_인바디측정신청",
+      startRow: 2,
+      dateColumn: 1,
+      requiredColumns: [1]
+    })
+  ];
+
+  return [
+    { id: "submitReports", title: "제출·보고 현황", items: submitReports },
+    { id: "eventApplications", title: "이벤트 신청 현황", items: eventApplications }
+  ];
+}
+
+function buildAdminReceiptAlert_(sections) {
+  const alertItems = [];
+  (sections || []).forEach(function(section) {
+    (section.items || []).forEach(function(item) {
+      if (["infection", "tb", "cpr", "inbody"].indexOf(item.id) === -1) return;
+      alertItems.push({
+        id: item.id,
+        label: item.label,
+        todayCount: Number(item.todayCount || 0),
+        group: section.title
+      });
+    });
+  });
+
+  const totalToday = alertItems.reduce(function(sum, item) {
+    return sum + Number(item.todayCount || 0);
+  }, 0);
+
+  return {
+    totalToday: totalToday,
+    items: alertItems
+  };
+}
+
+function summarizeAdminReceiptSheet_(ss, options) {
+  const sheet = ss.getSheetByName(options.sheetName);
+  const today = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const summary = {
+    id: options.id,
+    label: options.label,
+    sheetName: options.sheetName,
+    totalCount: 0,
+    todayCount: 0,
+    recentReceivedAt: "",
+    available: !!sheet
+  };
+
+  if (!sheet) return summary;
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const startIndex = Math.max(Number(options.startRow || 2) - 1, 0);
+  const dateIndex = Math.max(Number(options.dateColumn || 1) - 1, 0);
+  const requiredIndexes = (options.requiredColumns || [options.dateColumn || 1])
+    .map(function(column) { return Number(column) - 1; });
+
+  for (let i = startIndex; i < values.length; i++) {
+    const row = values[i] || [];
+    const hasData = requiredIndexes.some(function(index) {
+      return String(row[index] || "").trim() !== "";
+    });
+    if (!hasData) continue;
+
+    summary.totalCount += 1;
+    const receivedAt = String(row[dateIndex] || "").trim();
+    const receivedDate = normalizeDateText_(receivedAt);
+    if (receivedDate === today) summary.todayCount += 1;
+    if (receivedAt) summary.recentReceivedAt = receivedAt;
+  }
+
+  return summary;
+}
+
 function parseTbRegistrationDate_(value, boundary) {
   if (!value) return null;
 
