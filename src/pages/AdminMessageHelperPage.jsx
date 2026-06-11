@@ -42,12 +42,12 @@ export default function AdminMessageHelperPage() {
 
         <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
           <AppCard className="p-5 md:p-6">
-            <p className="text-sm font-black text-[#D94F70]">수쌤T 공기용 Lite 도구</p>
+            <p className="text-sm font-black text-[#D94F70]">보건실 업무용 Lite 도구</p>
             <h3 className="mt-2 text-2xl font-black leading-9 text-[#263238]">
               보건실 메신저 문구 생성기 Lite
             </h3>
             <p className="mt-3 text-sm font-semibold leading-7 text-slate-600" style={{ wordBreak: "keep-all" }}>
-              건강검진, 결핵검진, 소변검사, 감염병, 제출 독려 문구를 기존 Lite 도구에서 더 정교하게 생성합니다.
+              건강검진, 결핵검진, 소변검사, 감염병, 제출 독려 문구를 상황별로 빠르게 생성합니다.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -55,7 +55,7 @@ export default function AdminMessageHelperPage() {
                 "건강검진, 결핵검진, 소변검사, 감염병, 제출 독려 문구 생성 가능",
                 "입력한 내용은 화면에서만 사용",
                 "제목/본문/전체 문구 복사 가능",
-                "기존 Lite 도구에서 더 정교한 문구 생성",
+                "상황별 안내 문구를 빠르게 생성",
               ].map((text) => (
                 <div key={text} className="rounded-2xl border border-[#C9DFFF] bg-[#F7FDFC] p-4 text-sm font-bold leading-6 text-slate-700">
                   {text}
