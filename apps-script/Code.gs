@@ -244,9 +244,18 @@ function doPost(e) {
   try {
     const payload = JSON.parse(e.postData.contents);
     if (payload.action === "infectionReport") {
-      const result = appendInfectionReport_(payload);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      try {
+        const result = appendInfectionReport_(payload);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      } catch (error) {
+        Logger.log("infectionReport error: " + error);
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          result: "error",
+          message: "감염병 발생 보고 저장 중 오류가 발생했습니다."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
     }
 
     const { sheetName, folderId, fields, fileName, fileBase64, fileMimeType } = payload;
@@ -317,6 +326,7 @@ function appendInfectionReport_(payload) {
   const targetRow = findFirstEmptyInfectionRow_(sheet);
   ensureInfectionRowFormula_(sheet, targetRow, 1);
   ensureInfectionRowFormula_(sheet, targetRow, 13);
+  prepareInfectionInputRow_(sheet, targetRow);
 
   sheet.getRange(targetRow, 2, 1, 11).setValues([[
     new Date(),
@@ -391,6 +401,11 @@ function ensureInfectionRowFormula_(sheet, row, column) {
       return;
     }
   }
+}
+
+function prepareInfectionInputRow_(sheet, row) {
+  sheet.getRange(row, 2, 1, 9).clearDataValidations();
+  sheet.getRange(row, 12).clearDataValidations();
 }
 
 function getOrCreateSubmitSheet_(ss, sheetName) {
