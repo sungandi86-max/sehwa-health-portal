@@ -41,7 +41,7 @@ export default function Header() {
           ))}
         </nav>
         <button
-          onClick={() => navigate("/admin/roadmap")}
+          onClick={() => navigate("/admin")}
           className="min-h-10 shrink-0 rounded-full bg-[#1A3B8B] px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md sm:px-3.5"
         >
           관리자 로그인
