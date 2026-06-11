@@ -1850,10 +1850,27 @@ function getRoadmap_(ss) {
         privacyNote:   getValue_(r, ["개인정보주의"]),
         relatedSheet:  getValue_(r, ["관련시트"]),
         relatedMenuId: getValue_(r, ["관련메뉴ID"]),
+        relatedSheetUrl: getValue_(r, ["관련시트_URL"]),
+        sheetUrl:      getValue_(r, ["관련시트_URL"]),
+        tools:         getRoadmapTools_(r),
         sortOrder:     Number(getValue_(r, ["정렬순서"], "999") || 999)
       }))
     : [];
   return { enabled, adminOnly, items };
+}
+
+function getRoadmapTools_(row) {
+  const tools = [];
+  [1, 2, 3].forEach(function(index) {
+    const name = getValue_(row, ["관련도구" + index + "_이름"]);
+    if (!name) return;
+    tools.push({
+      name: name,
+      type: String(getValue_(row, ["관련도구" + index + "_유형"], "info") || "info").trim().toLowerCase(),
+      url: getValue_(row, ["관련도구" + index + "_URL"])
+    });
+  });
+  return tools;
 }
 
 // ════════════════════════════════════════════════════════════════

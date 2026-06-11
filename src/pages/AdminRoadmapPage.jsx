@@ -198,16 +198,116 @@ function SummarySidebar({ selectedTask, selectedItem, recentTask, totalSteps, cu
   );
 }
 
-function ToolCard({ title, description, value, onCopy }) {
+function normalizeToolType(type) {
+  const nextType = String(type || "info").trim().toLowerCase();
+  return ["external", "sheet", "internal", "info"].includes(nextType) ? nextType : "info";
+}
+
+function ToolCard({ tool }) {
+  const type = normalizeToolType(tool.type);
+  const url = String(tool.url || "").trim();
+  const canOpen = (type === "external" || type === "sheet") && url;
+  const typeLabel = {
+    external: "외부 도구",
+    sheet: "시트",
+    internal: "내부 메뉴",
+    info: "정보",
+  }[type];
+
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-black text-[#1A3B8B]">{safeText(tool.name, "관련 도구")}</p>
+        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[0.68rem] font-black text-slate-500">
+          {typeLabel}
+        </span>
+      </div>
+      <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">
+        {type === "internal"
+          ? `내부 메뉴: ${safeText(url, "메뉴 ID 미등록")}`
+          : canOpen
+            ? "새 탭에서 열립니다."
+            : type === "info"
+              ? safeText(url, "정보성 도구입니다.")
+              : "링크 미등록"}
+      </p>
+    </>
+  );
+
+  if (canOpen) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="min-h-24 rounded-2xl border border-[#C9DFFF] bg-[#F7FDFC] p-4 text-left transition hover:-translate-y-[1px] hover:bg-[#EAF3FF]"
+      >
+        {content}
+      </a>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => value && onCopy(value)}
-      className="min-h-24 rounded-2xl border border-[#C9DFFF] bg-[#F7FDFC] p-4 text-left transition hover:-translate-y-[1px] hover:bg-[#EAF3FF]"
+    <div
+      className={`min-h-24 rounded-2xl border p-4 text-left ${
+        type === "internal" || type === "info"
+          ? "border-slate-200 bg-[#F7F9FC]"
+          : "border-slate-200 bg-slate-50 text-slate-500"
+      }`}
     >
-      <p className="text-sm font-black text-[#1A3B8B]">{title}</p>
-      <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">{description}</p>
-    </button>
+      {content}
+    </div>
+  );
+}
+
+function RoadmapToolSection({ item }) {
+  const tools = Array.isArray(item.tools)
+    ? item.tools.filter((tool) => String(tool?.name || "").trim())
+    : [];
+  const relatedSheetUrl = String(item.relatedSheetUrl || item.sheetUrl || "").trim();
+
+  return (
+    <GuideBlock title="관련 도구">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {tools.length ? (
+          tools.map((tool, index) => (
+            <ToolCard key={`${tool.name}-${index}`} tool={tool} />
+          ))
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-[#F7F9FC] p-4 text-sm font-bold text-slate-500">
+            등록된 관련 도구가 없습니다.
+          </div>
+        )}
+
+        {relatedSheetUrl ? (
+          <a
+            href={relatedSheetUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-h-24 rounded-2xl border border-[#A8E6D1] bg-[#F2FBF7] p-4 text-left transition hover:-translate-y-[1px] hover:bg-[#E8F6EE]"
+          >
+            <p className="text-sm font-black text-[#1A3B8B]">관련 시트 열기</p>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">
+              {safeText(item.relatedSheet, "원본 관련 시트")}
+            </p>
+          </a>
+        ) : (
+          <div className="min-h-24 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+            <p className="text-sm font-black text-slate-500">관련 시트 열기</p>
+            <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">링크 미등록</p>
+          </div>
+        )}
+
+        {item.relatedMenuId && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-black text-slate-500">관련 메뉴 ID</p>
+            <p className="mt-2 inline-flex rounded-full bg-[#EAF3FF] px-3 py-1.5 text-xs font-black text-[#1A3B8B]">
+              {item.relatedMenuId}
+            </p>
+          </div>
+        )}
+      </div>
+    </GuideBlock>
   );
 }
 
@@ -274,14 +374,7 @@ function RoadmapGuide({ item, nextItem, onCopy, copiedMessage, stepIndex, totalS
         </div>
       </GuideBlock>
 
-      <GuideBlock title="관련 도구">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <ToolCard title="보건실 메신저 문구 생성기 Lite" description="아래 메신저 템플릿을 복사해 안내 문구 작성에 활용합니다." value={item.messageBody} onCopy={onCopy} />
-          <ToolCard title="보건 공문·보고서 도우미 앱" description="관련 시트명과 메뉴 ID를 참고해 보고 흐름을 점검합니다." value={item.relatedSheet} onCopy={onCopy} />
-          <ToolCard title="관련 시트 바로가기 정보" description={safeText(item.relatedSheet, "관련 시트가 등록되지 않았습니다.")} value={item.relatedSheet} onCopy={onCopy} />
-          <ToolCard title="관련 메뉴 ID 안내" description={safeText(item.relatedMenuId, "관련 메뉴 ID가 등록되지 않았습니다.")} value={item.relatedMenuId} onCopy={onCopy} />
-        </div>
-      </GuideBlock>
+      <RoadmapToolSection item={item} />
 
       <GuideBlock title="관련 메신저 템플릿">
         <div className="grid gap-3">
