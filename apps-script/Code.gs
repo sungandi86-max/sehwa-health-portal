@@ -314,17 +314,11 @@ function appendInfectionReport_(payload) {
     }
   }
 
-  const lastRow = Math.max(sheet.getLastRow(), 1);
-  const nextRow = lastRow + 1;
-  if (lastRow >= 2) {
-    sheet.getRange(lastRow, 1, 1, 13).copyTo(sheet.getRange(nextRow, 1, 1, 13), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-    const serialFormula = sheet.getRange(lastRow, 1).getFormulaR1C1();
-    const monthFormula = sheet.getRange(lastRow, 13).getFormulaR1C1();
-    if (serialFormula) sheet.getRange(nextRow, 1).setFormulaR1C1(serialFormula);
-    if (monthFormula) sheet.getRange(nextRow, 13).setFormulaR1C1(monthFormula);
-  }
+  const targetRow = findFirstEmptyInfectionRow_(sheet);
+  ensureInfectionRowFormula_(sheet, targetRow, 1);
+  ensureInfectionRowFormula_(sheet, targetRow, 13);
 
-  sheet.getRange(nextRow, 2, 1, 11).setValues([[
+  sheet.getRange(targetRow, 2, 1, 11).setValues([[
     new Date(),
     grade,
     classNumber,
@@ -337,8 +331,12 @@ function appendInfectionReport_(payload) {
     false,
     memo
   ]]);
-  sheet.getRange(nextRow, 2).setNumberFormat("yyyy-MM-dd HH:mm:ss");
-  sheet.getRange(nextRow, 8, 1, 3).setNumberFormat("yyyy-MM-dd");
+  sheet.getRange(targetRow, 2).setNumberFormat("yyyy-MM-dd HH:mm:ss");
+  sheet.getRange(targetRow, 8, 1, 3).setNumberFormat("yyyy-MM-dd");
+  sheet.getRange(targetRow, 11).setValue(false);
+  if (!sheet.getRange(targetRow, 13).getFormulaR1C1()) {
+    sheet.getRange(targetRow, 13).setValue(monthKey_(diagnosisDate));
+  }
 
   return { success: true, result: "success", message: "감염병 발생 보고가 제출되었습니다." };
 }
@@ -354,12 +352,45 @@ function dateKey_(value) {
   return match[1] + "-" + String(Number(match[2])).padStart(2, "0") + "-" + String(Number(match[3])).padStart(2, "0");
 }
 
+function monthKey_(value) {
+  const key = dateKey_(value);
+  const match = key.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  return match ? match[1] + "-" + match[2] : "";
+}
+
 function parseDateValue_(value) {
   const text = String(value || "").trim();
   if (!text) return "";
   const match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (!match) return text;
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function findFirstEmptyInfectionRow_(sheet) {
+  const startRow = 5;
+  const lastRow = Math.max(sheet.getLastRow(), startRow);
+  const values = sheet.getRange(startRow, 6, lastRow - startRow + 1, 3).getDisplayValues();
+  for (let i = 0; i < values.length; i++) {
+    const name = String(values[i][0] || "").trim();
+    const disease = String(values[i][1] || "").trim();
+    const diagnosisDate = String(values[i][2] || "").trim();
+    if (!name && !disease && !diagnosisDate) return startRow + i;
+  }
+  return lastRow + 1;
+}
+
+function ensureInfectionRowFormula_(sheet, row, column) {
+  const currentFormula = sheet.getRange(row, column).getFormulaR1C1();
+  if (currentFormula) return;
+
+  const startRow = 5;
+  for (let sourceRow = row - 1; sourceRow >= startRow; sourceRow--) {
+    const formula = sheet.getRange(sourceRow, column).getFormulaR1C1();
+    if (formula) {
+      sheet.getRange(sourceRow, column).copyTo(sheet.getRange(row, column), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+      return;
+    }
+  }
 }
 
 function getOrCreateSubmitSheet_(ss, sheetName) {

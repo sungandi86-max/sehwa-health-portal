@@ -830,7 +830,8 @@ function formatSubmittedAt(date = new Date()) {
   ].join(":");
 }
 
-function isSubmitSuccess(json) {
+function isSubmitSuccess(json, payload) {
+  if (payload?.action === "infectionReport") return json?.success === true;
   return json?.status === "success" || json?.success === true || json?.ok === true;
 }
 
@@ -865,11 +866,17 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (isSubmitSuccess(json)) {
+      if (isSubmitSuccess(json, payload)) {
         setSuccessInfo({
           type: payload.type || type,
           submitterName: payload.fields?.name || "",
           itemTitle: meta.title || "제출 자료",
+          studentInfo: payload.action === "infectionReport"
+            ? `${payload.grade}학년 ${payload.classNumber}반 ${payload.studentNumber}번 ${payload.studentName}`
+            : "",
+          diseaseName: payload.action === "infectionReport"
+            ? (payload.diseaseType === "기타" ? payload.diseaseEtc : payload.diseaseType)
+            : "",
           submittedAt: json.submittedAt || json.timestamp || formatSubmittedAt(),
         });
         setStatus("success");
@@ -969,8 +976,10 @@ function SuccessView({ info, onClose, onAnother }) {
           <p className="mt-2 text-sm leading-7 text-slate-600">{body}</p>
         </div>
         <div className="rounded-2xl bg-[#F7F9FC] p-4 text-left text-sm leading-7 text-slate-700">
-          <p><span className="font-black text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>
+          {!isInfection && <p><span className="font-black text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>}
           <p><span className="font-black text-[#1A3B8B]">제출 항목:</span> {info?.itemTitle || "-"}</p>
+          {isInfection && <p><span className="font-black text-[#1A3B8B]">학생 정보:</span> {info?.studentInfo || "-"}</p>}
+          {isInfection && <p><span className="font-black text-[#1A3B8B]">감염병명:</span> {info?.diseaseName || "-"}</p>}
           <p><span className="font-black text-[#1A3B8B]">제출시간:</span> {info?.submittedAt || "-"}</p>
         </div>
         <p className="text-sm leading-7 text-slate-600">
