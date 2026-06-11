@@ -209,6 +209,9 @@ function doGet(e) {
     if (action === "getAdminReceiptSummary") {
       return jsonOutput_(getAdminReceiptSummary_(e.parameter || {}));
     }
+    if (action === "getAdminInfectionReports") {
+      return jsonOutput_(getAdminInfectionReports_(e.parameter || {}));
+    }
     if (action === "getHealthRoomLocation") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getHealthRoomLocation_(e.parameter || {}), action));
     }
@@ -1272,6 +1275,106 @@ function summarizeAdminReceiptSheet_(ss, options) {
   }
 
   return summary;
+}
+
+function getAdminInfectionReports_(params) {
+  const password = String(params.password || "");
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
+  }
+  if (!correctPassword) {
+    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
+  }
+
+  const ss = getSpreadsheet_();
+  const sheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
+  if (!sheet) {
+    return {
+      success: false,
+      result: "error",
+      message: SHEET_NAMES.infectionManagement + " 탭을 찾을 수 없습니다."
+    };
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const today = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const items = [];
+
+  for (let i = 4; i < values.length; i++) {
+    const row = values[i] || [];
+    const name = String(row[5] || "").trim();
+    const disease = String(row[6] || "").trim();
+    const diagnosisDate = String(row[7] || "").trim();
+    if (!name && !disease && !diagnosisDate) continue;
+
+    const state = getInfectionReportState_(row, today);
+    const receivedAt = String(row[1] || "").trim();
+    const diagnosisKey = normalizeDateText_(diagnosisDate);
+    const receivedKey = normalizeDateText_(receivedAt);
+    const reportComplete = isTruthy_(row[10]);
+    const memo = String(row[11] || "").trim();
+
+    items.push({
+      id: String(i + 1),
+      receivedAt: receivedAt,
+      occurredAt: diagnosisDate,
+      grade: String(row[2] || "").trim(),
+      classNumber: String(row[3] || "").trim(),
+      studentNumber: String(row[4] || "").trim(),
+      diseaseType: disease,
+      diagnosisDate: diagnosisDate,
+      exclusionStartDate: String(row[8] || "").trim(),
+      exclusionEndDate: String(row[9] || "").trim(),
+      status: state,
+      homeroomNoticeStatus: reportComplete ? "보고 완료" : "시트 확인",
+      memoStatus: memo ? "메모 있음 - 원본 시트 확인" : "메모 없음",
+      sortKey: receivedKey || diagnosisKey || ""
+    });
+  }
+
+  items.sort(function(a, b) {
+    return String(b.sortKey || "").localeCompare(String(a.sortKey || ""));
+  });
+
+  const summary = {
+    todayNewCount: 0,
+    activeCount: 0,
+    returnCheckCount: 0,
+    closedCount: 0
+  };
+
+  items.forEach(function(item) {
+    if (normalizeDateText_(item.receivedAt) === today) summary.todayNewCount += 1;
+    if (item.status === "복귀 확인 필요") summary.returnCheckCount += 1;
+    if (item.status === "종결") summary.closedCount += 1;
+    else summary.activeCount += 1;
+  });
+
+  return {
+    success: true,
+    result: "success",
+    updatedAt: Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
+    summary: summary,
+    items: items
+  };
+}
+
+function getInfectionReportState_(row, today) {
+  if (isTruthy_(row[10])) return "종결";
+
+  const receivedDate = normalizeDateText_(row[1]);
+  const startDate = normalizeDateText_(row[8]);
+  const endDate = normalizeDateText_(row[9]);
+
+  if (endDate && endDate < today) return "복귀 확인 필요";
+  if (startDate || endDate) return "관리 중";
+  if (receivedDate === today) return "신규";
+  return "확인 중";
 }
 
 function parseTbRegistrationDate_(value, boundary) {

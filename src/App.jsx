@@ -4,6 +4,7 @@ import AdminAuthGate from "./components/AdminAuthGate.jsx";
 import Footer from "./components/Footer.jsx";
 import Header from "./components/Header.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
+import AdminInfectionReportPage from "./pages/AdminInfectionReportPage.jsx";
 import AdminReceiptStatusPage from "./pages/AdminReceiptStatusPage.jsx";
 import AdminRoadmapPage from "./pages/AdminRoadmapPage.jsx";
 import CheckupPage from "./pages/CheckupPage.jsx";
@@ -144,6 +145,7 @@ export default function App() {
               <Route path="/admin"       element={<AdminPage roadmap={liveRoadmap} />} />
               <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/receipts" element={<AdminAuthGate><AdminReceiptStatusPage /></AdminAuthGate>} />
+              <Route path="/admin/infection-reports" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
             </Routes>
           )}
         </div>

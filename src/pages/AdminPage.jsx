@@ -73,6 +73,31 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
               접수 현황 확인하기
             </button>
           </AppCard>
+
+          <AppCard className="p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black text-[#D94F70]">INFECTION REPORTS</p>
+                <h3 className="mt-1 text-lg font-extrabold leading-7 text-[#263238]">
+                  감염병 보고 관리
+                </h3>
+              </div>
+              <Badge type="pink">관리자 전용</Badge>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-slate-600" style={{ wordBreak: "keep-all" }}>
+              감염병 발생 보고의 처리 상태, 등교중지 기간, 복귀 확인 필요 여부를 확인합니다.
+            </p>
+            <p className="mt-2 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-xs font-bold leading-5 text-[#D94F70]">
+              학생 이름과 상세 건강정보는 표시하지 않습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/admin/infection-reports")}
+              className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
+            >
+              감염병 보고 관리 열기
+            </button>
+          </AppCard>
         </div>
       </div>
     </section>
