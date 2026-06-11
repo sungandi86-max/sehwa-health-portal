@@ -45,7 +45,7 @@ function MessageCard({ item, onCopy }) {
     : [titleText, bodyText].filter(Boolean).join("\n\n");
 
   return (
-    <AppCard className="p-5">
+    <AppCard className="p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black text-[#D94F70]">{safeText(item.step, "단계 미등록")}</p>
@@ -54,12 +54,12 @@ function MessageCard({ item, onCopy }) {
         <Badge type="blue">{safeText(item.audience, "안내대상 미등록")}</Badge>
       </div>
 
-      <div className="mt-4 grid gap-3">
-        <div className="rounded-2xl bg-[#F7F9FC] p-4">
+      <div className="mt-3 grid gap-2 md:mt-4 md:gap-3">
+        <div className="rounded-2xl bg-[#F7F9FC] p-3 md:p-4">
           <p className="text-xs font-black text-[#1A3B8B]">메신저 제목</p>
           <p className="mt-2 font-black text-[#263238]">{title}</p>
         </div>
-        <div className="rounded-2xl bg-[#F7F9FC] p-4">
+        <div className="rounded-2xl bg-[#F7F9FC] p-3 md:p-4">
           <p className="text-xs font-black text-[#1A3B8B]">메신저 문구</p>
           <p className="mt-2 whitespace-pre-line font-semibold leading-7 text-slate-700" style={{ wordBreak: "keep-all" }}>
             {body}
@@ -67,7 +67,7 @@ function MessageCard({ item, onCopy }) {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap md:mt-4 md:gap-2">
         <CopyButton value={item.messageTitle} onCopy={onCopy}>제목 복사</CopyButton>
         <CopyButton value={item.messageBody} onCopy={onCopy}>문구 복사</CopyButton>
         <CopyButton value={combined} onCopy={onCopy}>제목+문구 복사</CopyButton>
@@ -116,6 +116,16 @@ export default function AdminMessageHelperPage({ roadmap = emptyRoadmap }) {
       return stepMatches && audienceMatches && searchMatches;
     }),
     [taskFilteredItems, selectedStep, selectedAudience, searchText]
+  );
+  const shouldHideMobileFullList = selectedTaskName === "전체" && !searchText.trim();
+  const taskSummaries = useMemo(
+    () => taskNames
+      .filter((taskName) => taskName !== "전체")
+      .map((taskName) => ({
+        taskName,
+        count: messageItems.filter((item) => item.taskName === taskName).length,
+      })),
+    [messageItems, taskNames]
   );
 
   const selectTask = (taskName) => {
@@ -254,10 +264,36 @@ export default function AdminMessageHelperPage({ roadmap = emptyRoadmap }) {
 
             <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-500">
               <span>문구 목록</span>
-              <span>{filteredItems.length.toLocaleString("ko-KR")}건</span>
+              <span className="hidden md:inline">{filteredItems.length.toLocaleString("ko-KR")}건</span>
+              <span className="md:hidden">
+                {shouldHideMobileFullList ? "업무 선택 또는 검색 필요" : `${filteredItems.length.toLocaleString("ko-KR")}건`}
+              </span>
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-2">
+            {shouldHideMobileFullList && (
+              <div className="grid gap-2 md:hidden">
+                <AppCard className="p-5 text-center text-sm font-bold text-slate-600">
+                  업무를 선택하거나 검색어를 입력하면 관련 문구가 표시됩니다.
+                </AppCard>
+                <div className="grid gap-2">
+                  {taskSummaries.map((task) => (
+                    <button
+                      key={task.taskName}
+                      type="button"
+                      onClick={() => selectTask(task.taskName)}
+                      className="flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-left text-sm font-black text-[#263238] shadow-sm transition hover:bg-[#EAF3FF] hover:text-[#1A3B8B]"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{task.taskName}</span>
+                      <span className="shrink-0 rounded-full bg-[#EAF3FF] px-2.5 py-1 text-xs font-black text-[#1A3B8B]">
+                        {task.count.toLocaleString("ko-KR")}건
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className={`${shouldHideMobileFullList ? "hidden md:grid" : "grid"} gap-3 lg:grid-cols-2`}>
               {filteredItems.length ? (
                 filteredItems.map((item) => (
                   <MessageCard key={messageKey(item)} item={item} onCopy={copyText} />
