@@ -69,7 +69,7 @@ export default function AdminAuthGate({ children }) {
           <p className="text-sm font-black text-[#D94F70]">ADMIN ACCESS</p>
           <h2 className="mt-2 text-2xl font-black text-[#1A3B8B]">관리자 마스터 인증</h2>
           <p className="mt-2 text-sm font-semibold leading-6 text-slate-600" style={{ wordBreak: "keep-all" }}>
-            보건실 업무 운영 도우미는 관리자 전용 화면입니다. 앱_설정 탭의 관리자마스터_비밀번호를 입력해 주세요.
+            보건실 업무 로드맵 도우미는 관리자 전용 화면입니다. 앱_설정 탭의 관리자마스터_비밀번호를 입력해 주세요.
           </p>
 
           <div className="mt-5">
