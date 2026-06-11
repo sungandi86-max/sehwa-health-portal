@@ -153,7 +153,7 @@ export default function AdminReceiptStatusPage() {
         <SectionTitle
           eyebrow="ADMIN RECEIPTS"
           title="관리자 접수 현황"
-          description="온라인 보건실을 통해 들어온 제출·보고와 이벤트 신청을 건수 중심으로 확인합니다."
+          description="온라인 보건실을 통해 들어온 제출·보고와 이벤트 신청을 건수 중심으로 확인합니다. 상단 요약은 오늘 신규 접수 기준입니다."
         />
 
         <AppCard className="mt-5 p-5">
@@ -198,8 +198,8 @@ export default function AdminReceiptStatusPage() {
               {sections.flatMap((section) => section.items || []).map((item) => (
                 <div key={`summary-${item.id}`} className="rounded-2xl bg-white p-4 shadow-sm">
                   <p className="text-xs font-black text-slate-500">{item.label}</p>
-                  <p className="mt-2 text-2xl font-black text-[#1A3B8B]">{numberText(item.todayCount)}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">오늘 신규</p>
+                  <p className="mt-2 text-sm font-black text-[#2E7D32]">오늘 신규</p>
+                  <p className="mt-1 text-2xl font-black text-[#1A3B8B]">{numberText(item.todayCount)}</p>
                 </div>
               ))}
             </div>
