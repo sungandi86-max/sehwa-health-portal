@@ -1136,7 +1136,50 @@ function verifyAdminMaster_(params) {
   return {
     success: true,
     result: "success",
-    receiptAlert: buildAdminReceiptAlert_(buildAdminReceiptSections_(getSpreadsheet_()))
+    receiptAlert: buildAdminReceiptAlert_(buildAdminReceiptSections_(getSpreadsheet_())),
+    adminDashboard: buildAdminDashboardSummary_(getSpreadsheet_())
+  };
+}
+
+function buildAdminDashboardSummary_(ss) {
+  const receiptSections = buildAdminReceiptSections_(ss);
+  const receiptItems = [];
+  (receiptSections || []).forEach(function(section) {
+    (section.items || []).forEach(function(item) {
+      receiptItems.push(item);
+    });
+  });
+
+  const todayReceiptCount = receiptItems.reduce(function(sum, item) {
+    return sum + Number(item.todayCount || 0);
+  }, 0);
+
+  let recentReceiptAt = "";
+  receiptItems.forEach(function(item) {
+    const receivedAt = String(item.recentReceivedAt || "").trim();
+    if (!receivedAt) return;
+    if (!recentReceiptAt || receivedAt > recentReceiptAt) recentReceiptAt = receivedAt;
+  });
+
+  let activeInfectionCount = 0;
+  const infectionSheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
+  if (infectionSheet) {
+    const infectionResponse = buildAdminInfectionReportsResponse_(infectionSheet);
+    activeInfectionCount = Number(infectionResponse.summary && infectionResponse.summary.activeCount || 0);
+  }
+
+  const roadmapTaskCount = getRows_(ss, SHEET_NAMES.portalRoadmap).length;
+
+  return {
+    todayReceiptCount: todayReceiptCount,
+    activeInfectionCount: activeInfectionCount,
+    recentReceiptAt: recentReceiptAt,
+    roadmapTaskCount: roadmapTaskCount,
+    checkItems: [
+      { label: "신규 접수", count: todayReceiptCount },
+      { label: "미종결 감염병 보고", count: activeInfectionCount },
+      { label: "확인 필요한 제출", count: todayReceiptCount }
+    ]
   };
 }
 

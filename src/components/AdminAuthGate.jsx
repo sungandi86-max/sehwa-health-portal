@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { cloneElement, isValidElement, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AdminLayout from "./AdminLayout.jsx";
 
 const ADMIN_AUTH_KEY = "sehwa_admin_master_verified";
+const ADMIN_DASHBOARD_KEY = "sehwa_admin_dashboard_summary";
 const ADMIN_AUTH_API = "/api/health-room-status";
 const DEV_ADMIN_AUTH_FALLBACK = "https://sehwa-health-portal.vercel.app/api/health-room-status";
 
@@ -38,7 +40,7 @@ function AdminReceiptAlert({ alert }) {
   if (totalToday < 1) return null;
 
   return (
-    <section className="mx-auto max-w-7xl px-3 pt-5 sm:px-4">
+    <section className="mb-4">
       <div className="rounded-[24px] border border-[#A8E6D1] bg-[#F2FBF7] p-4 shadow-sm md:flex md:items-center md:justify-between md:gap-5 md:p-5">
         <div>
           <p className="text-xs font-black text-[#2E7D32]">TODAY RECEIPTS</p>
@@ -68,6 +70,13 @@ function AdminReceiptAlert({ alert }) {
 
 export default function AdminAuthGate({ children }) {
   const [verified, setVerified] = useState(() => sessionStorage.getItem(ADMIN_AUTH_KEY) === "true");
+  const [dashboardSummary, setDashboardSummary] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(ADMIN_DASHBOARD_KEY) || "null");
+    } catch {
+      return null;
+    }
+  });
   const [receiptAlert, setReceiptAlert] = useState(null);
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -85,7 +94,9 @@ export default function AdminAuthGate({ children }) {
       const json = await verifyAdminMaster(password.trim());
       if (json?.success === true || json?.result === "success") {
         sessionStorage.setItem(ADMIN_AUTH_KEY, "true");
+        sessionStorage.setItem(ADMIN_DASHBOARD_KEY, JSON.stringify(json?.adminDashboard || null));
         setReceiptAlert(json?.receiptAlert || null);
+        setDashboardSummary(json?.adminDashboard || null);
         setVerified(true);
         setPassword("");
       } else {
@@ -100,11 +111,14 @@ export default function AdminAuthGate({ children }) {
   };
 
   if (verified) {
+    const content = isValidElement(children)
+      ? cloneElement(children, { adminDashboard: dashboardSummary })
+      : children;
+
     return (
-      <>
-        <AdminReceiptAlert alert={receiptAlert} />
-        {children}
-      </>
+      <AdminLayout alert={<AdminReceiptAlert alert={receiptAlert} />}>
+        {content}
+      </AdminLayout>
     );
   }
 
