@@ -194,6 +194,9 @@ export default function AdminReceiptStatusPage() {
 
         {summary && (
           <>
+            <p className="mt-5 rounded-2xl bg-[#F7F9FC] px-4 py-3 text-sm font-bold leading-6 text-slate-600" style={{ wordBreak: "keep-all" }}>
+              감염병 발생 보고는 감염병 보고 관리 메뉴에서 확인합니다.
+            </p>
             <h2 className="mt-5 text-xl font-black text-[#263238]">오늘 신규 접수 요약</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {sections.flatMap((section) => section.items || []).map((item) => (

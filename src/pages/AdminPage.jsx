@@ -117,7 +117,7 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
             </p>
             <button
               type="button"
-              onClick={() => navigate("/admin/infection-reports")}
+              onClick={() => navigate("/admin/infections")}
               className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
             >
               감염병 보고 관리 열기

@@ -1168,14 +1168,6 @@ function getAdminReceiptSummary_(params) {
 function buildAdminReceiptSections_(ss) {
   const submitReports = [
     summarizeAdminReceiptSheet_(ss, {
-      id: "infection",
-      label: "감염병 발생 보고",
-      sheetName: SHEET_NAMES.infectionManagement,
-      startRow: 5,
-      dateColumn: 2,
-      requiredColumns: [6, 7, 8]
-    }),
-    summarizeAdminReceiptSheet_(ss, {
       id: "tb",
       label: "결핵검진 확인증 제출",
       sheetName: "응답_결핵검진확인증",
@@ -1222,7 +1214,7 @@ function buildAdminReceiptAlert_(sections) {
   const alertItems = [];
   (sections || []).forEach(function(section) {
     (section.items || []).forEach(function(item) {
-      if (["infection", "tb", "cpr", "inbody"].indexOf(item.id) === -1) return;
+      if (["tb", "cpr", "inbody"].indexOf(item.id) === -1) return;
       alertItems.push({
         id: item.id,
         label: item.label,
