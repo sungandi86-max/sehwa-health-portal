@@ -86,8 +86,8 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
           />
           <SummaryCard
             label="최근 제출 현황"
-            value={recentReceiptAt ? "최근 접수" : "최근 접수 없음"}
-            description={recentReceiptAt || "결핵검진 확인증, 심폐소생술 이수증, 채용검진 요청, 인바디 신청 기준입니다."}
+            value={recentReceiptAt || "최근 접수 없음"}
+            description="결핵검진 확인증, 심폐소생술 이수증, 채용검진 요청, 인바디 신청 기준입니다."
             tone="green"
           />
           <SummaryCard

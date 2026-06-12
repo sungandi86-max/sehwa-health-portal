@@ -1168,7 +1168,7 @@ function buildAdminDashboardSummary_(ss) {
     activeInfectionCount = Number(infectionResponse.summary && infectionResponse.summary.activeCount || 0);
   }
 
-  const roadmapTaskCount = getRows_(ss, SHEET_NAMES.portalRoadmap).length;
+  const roadmapTaskCount = countAdminRoadmapTasks_(ss);
 
   return {
     todayReceiptCount: todayReceiptCount,
@@ -1181,6 +1181,17 @@ function buildAdminDashboardSummary_(ss) {
       { label: "확인 필요한 제출", count: todayReceiptCount }
     ]
   };
+}
+
+function countAdminRoadmapTasks_(ss) {
+  const roadmap = getRoadmap_(ss);
+  const taskNames = {};
+  (roadmap.items || []).forEach(function(item) {
+    const taskName = String(item.taskName || "").trim();
+    if (!taskName) return;
+    taskNames[taskName] = true;
+  });
+  return Object.keys(taskNames).length;
 }
 
 function getAdminReceiptSummary_(params) {
@@ -1292,7 +1303,9 @@ function summarizeAdminReceiptSheet_(ss, options) {
 
   if (!sheet) return summary;
 
-  const values = sheet.getDataRange().getDisplayValues();
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  const displayValues = range.getDisplayValues();
   const startIndex = Math.max(Number(options.startRow || 2) - 1, 0);
   const dateIndex = Math.max(Number(options.dateColumn || 1) - 1, 0);
   const requiredIndexes = (options.requiredColumns || [options.dateColumn || 1])
@@ -1300,19 +1313,61 @@ function summarizeAdminReceiptSheet_(ss, options) {
 
   for (let i = startIndex; i < values.length; i++) {
     const row = values[i] || [];
+    const displayRow = displayValues[i] || [];
     const hasData = requiredIndexes.some(function(index) {
-      return String(row[index] || "").trim() !== "";
+      return String(displayRow[index] || "").trim() !== "";
     });
     if (!hasData) continue;
 
     summary.totalCount += 1;
-    const receivedAt = String(row[dateIndex] || "").trim();
+    const receivedAt = row[dateIndex];
+    const receivedAtText = String(displayRow[dateIndex] || receivedAt || "").trim();
     const receivedDate = normalizeDateText_(receivedAt);
     if (receivedDate === today) summary.todayCount += 1;
-    if (receivedAt) summary.recentReceivedAt = receivedAt;
+    const receivedDateTime = parseAdminReceiptDateTime_(receivedAt, receivedAtText);
+    if (
+      receivedDateTime &&
+      (!summary.recentReceivedAtValue || receivedDateTime.getTime() > summary.recentReceivedAtValue)
+    ) {
+      summary.recentReceivedAtValue = receivedDateTime.getTime();
+      summary.recentReceivedAt = formatAdminReceiptDateTime_(receivedDateTime);
+    }
   }
 
+  delete summary.recentReceivedAtValue;
   return summary;
+}
+
+function parseAdminReceiptDateTime_(value, displayText) {
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return value;
+  }
+
+  const raw = String(displayText || value || "").trim();
+  if (!raw) return null;
+
+  const normalized = raw
+    .replace(/\./g, "-")
+    .replace(/\//g, "-")
+    .replace(/\s+/g, " ");
+  const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (match) {
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4] || 0),
+      Number(match[5] || 0),
+      Number(match[6] || 0)
+    );
+  }
+
+  const fallback = new Date(raw);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+function formatAdminReceiptDateTime_(date) {
+  return "최근 접수 " + Utilities.formatDate(date, TIMEZONE, "yyyy-MM-dd HH:mm");
 }
 
 function getAdminInfectionReports_(params) {
