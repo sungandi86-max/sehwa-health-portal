@@ -91,6 +91,20 @@ export const uploadItems = [
     highlight: true
   },
   {
+    title: "결핵검진 진료회신 제출",
+    titleLines: ["결핵검진", "진료회신 제출"],
+    description: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해주세요.",
+    target: "학생 결핵검진 진료회신 제출 대상",
+    documentType: "진료회신란 또는 진료확인서",
+    deadline: "별도 안내일까지",
+    fileGuide: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해 주세요.",
+    buttonText: "진료회신 업로드하기",
+    url: "",
+    status: "접수 중",
+    uploadType: "student-file",
+    highlight: true
+  },
+  {
     title: "채용검진 대체 인정 확인 요청",
     titleLines: ["채용검진 대체 인정", "확인 요청"],
     description: "채용검진 서류를 이미 행정실에 제출하신 경우, 보건실 앱에 결과지를 다시 업로드하지 않으셔도 됩니다.",

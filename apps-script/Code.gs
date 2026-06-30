@@ -24,6 +24,25 @@ const FOLDER_IDS = {
   other: "1T2yMxeKmab1SDqdVCRgdxpHMx3Fu2EO6"
 };
 
+const STUDENT_FILE_DEFAULT_FOLDER_ID = "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63";
+const SUBMISSION_MANAGEMENT_SHEET_NAME = "제출항목관리";
+const SUBMISSION_RECORD_SHEET_NAME = "제출기록";
+const STUDENT_FILE_RECORD_HEADERS = [
+  "제출일시",
+  "제출항목명",
+  "제출유형",
+  "학년",
+  "반",
+  "번호",
+  "학생명",
+  "진료일",
+  "의료기관명",
+  "비고",
+  "파일명",
+  "파일URL",
+  "저장폴더ID"
+];
+
 const SUBMIT_SHEET_HEADERS = {
   "응답_심폐소생술이수증":        ["제출일시","성명","소속/부서","교직원구분","이수일자","이수기관","파일명","파일링크"],
   "응답_결핵검진확인증":          ["제출일시","성명","소속/부서","교직원구분","검진일자","제출자료유형","파일명","파일링크"],
@@ -31,6 +50,7 @@ const SUBMIT_SHEET_HEADERS = {
   "응답_기타보건자료":            ["제출일시","성명","소속/부서","교직원구분","비고","파일명","파일링크"],
   "응답_교직원결핵검진유형선택":  ["제출일시","성명","소속/부서","검진유형","비고"],
   "응답_인바디측정신청": ["제출일시","성명","소속/부서","희망날짜","희망시간대"],
+  "응답_결핵검진진료회신": ["제출일시","학년","반","번호","학생 이름","진료일","의료기관명","파일명","파일링크"],
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -252,6 +272,12 @@ function doPost(e) {
   lock.tryLock(10000);
   try {
     const payload = JSON.parse(e.postData.contents);
+    if (payload.type === "student-file" || payload.submissionType === "student-file") {
+      const result = appendStudentFileSubmission_(payload);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (payload.action === "infectionReport") {
       try {
         const result = appendInfectionReport_(payload);
@@ -288,6 +314,132 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function appendStudentFileSubmission_(payload) {
+  const ss = getSpreadsheet_();
+  const fields = payload.fields || {};
+  const submissionTitle = String(payload.submissionTitle || fields.submissionTitle || "결핵검진 진료회신 제출").trim();
+  const submissionType = String(payload.submissionType || payload.type || "student-file").trim();
+  const grade = String(payload.grade || fields.grade || "").trim();
+  const classNumber = String(payload.classNumber || fields.classNumber || "").trim();
+  const studentNumber = String(payload.studentNumber || fields.studentNumber || "").trim();
+  const studentName = String(payload.studentName || fields.studentName || "").trim();
+  const visitDate = String(payload.visitDate || fields.visitDate || fields.treatmentDate || "").trim();
+  const hospitalName = String(payload.hospitalName || fields.hospitalName || fields.medicalInstitution || "").trim();
+  const note = String(payload.note || fields.note || "").trim();
+  const fileName = String(payload.fileName || "").trim();
+  const fileBase64 = payload.fileBase64 || payload.fileData || payload.base64 || "";
+  const mimeType = payload.fileMimeType || payload.mimeType || "";
+
+  if (!grade || !classNumber || !studentNumber || !studentName) {
+    throw new Error("학생 정보(학년, 반, 번호, 학생명)는 필수입니다.");
+  }
+  if (!fileName || !fileBase64) {
+    throw new Error("업로드 파일이 누락되었습니다.");
+  }
+
+  const managedFolderId = getSubmissionManagedFolderId_(ss, submissionTitle);
+  const folderId = managedFolderId || payload.folderId || STUDENT_FILE_DEFAULT_FOLDER_ID;
+  const folder = DriveApp.getFolderById(folderId);
+  const blob = Utilities.newBlob(Utilities.base64Decode(fileBase64), mimeType, fileName);
+  const driveFile = folder.createFile(blob);
+  const fileUrl = driveFile.getUrl();
+  const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+
+  appendSubmissionRecord_(ss, {
+    "제출일시": now,
+    "제출항목명": submissionTitle,
+    "제출유형": submissionType,
+    "학년": grade,
+    "반": classNumber,
+    "번호": studentNumber,
+    "학생명": studentName,
+    "진료일": visitDate,
+    "의료기관명": hospitalName,
+    "비고": note,
+    "파일명": fileName,
+    "파일URL": fileUrl,
+    "저장폴더ID": folderId
+  });
+
+  return {
+    status: "success",
+    success: true,
+    result: "success",
+    submittedAt: now,
+    fileUrl: fileUrl,
+    folderId: folderId
+  };
+}
+
+function getSubmissionManagedFolderId_(ss, submissionTitle) {
+  const sheet = ss.getSheetByName(SUBMISSION_MANAGEMENT_SHEET_NAME);
+  if (!sheet) return "";
+
+  const values = sheet.getDataRange().getDisplayValues();
+  if (values.length < 2) return "";
+
+  const headers = values[0].map(function(header) { return String(header || "").trim(); });
+  const titleIndex = findHeaderIndex_(headers, ["제출항목명", "제출항목", "제목"]);
+  const folderIndex = findHeaderIndex_(headers, ["저장폴더ID", "폴더ID", "folderId"]);
+  if (titleIndex === -1 || folderIndex === -1) return "";
+
+  for (let i = 1; i < values.length; i++) {
+    const rowTitle = String(values[i][titleIndex] || "").trim();
+    if (rowTitle === submissionTitle) {
+      return String(values[i][folderIndex] || "").trim();
+    }
+  }
+  return "";
+}
+
+function appendSubmissionRecord_(ss, record) {
+  let sheet = ss.getSheetByName(SUBMISSION_RECORD_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SUBMISSION_RECORD_SHEET_NAME);
+    sheet.appendRow(STUDENT_FILE_RECORD_HEADERS);
+    const headerRange = sheet.getRange(1, 1, 1, STUDENT_FILE_RECORD_HEADERS.length);
+    headerRange.setBackground("#1A3B8B");
+    headerRange.setFontColor("#FFFFFF");
+    headerRange.setFontWeight("bold");
+  }
+
+  const headers = ensureSubmissionRecordHeaders_(sheet, STUDENT_FILE_RECORD_HEADERS);
+  const row = headers.map(function(header) {
+    return record[header] !== undefined ? record[header] : "";
+  });
+  sheet.appendRow(row);
+}
+
+function ensureSubmissionRecordHeaders_(sheet, requiredHeaders) {
+  const lastColumn = Math.max(sheet.getLastColumn(), 1);
+  let headers = sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0]
+    .map(function(header) { return String(header || "").trim(); });
+
+  if (headers.length === 1 && !headers[0]) {
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
+    return requiredHeaders.slice();
+  }
+
+  const missing = requiredHeaders.filter(function(header) {
+    return headers.indexOf(header) === -1;
+  });
+
+  if (missing.length > 0) {
+    sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]);
+    headers = headers.concat(missing);
+  }
+
+  return headers;
+}
+
+function findHeaderIndex_(headers, candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const index = headers.indexOf(candidates[i]);
+    if (index !== -1) return index;
+  }
+  return -1;
 }
 
 function appendInfectionReport_(payload) {
@@ -493,6 +645,18 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
     sheet.appendRow([now, fields.name, fields.dept, fields.registrationType, ""]);
   } else if (sheetName === "응답_인바디측정신청") {
     sheet.appendRow([now, fields.name, fields.dept, fields.preferredDate, fields.preferredTime]);
+  } else if (sheetName === "응답_결핵검진진료회신") {
+    sheet.appendRow([
+      now,
+      fields.grade,
+      fields.classNumber,
+      fields.studentNumber,
+      fields.studentName,
+      fields.treatmentDate || "",
+      fields.medicalInstitution || "",
+      fileName,
+      fileLink
+    ]);
   } else {
     sheet.appendRow([now, JSON.stringify(fields), fileName, fileLink]);
   }

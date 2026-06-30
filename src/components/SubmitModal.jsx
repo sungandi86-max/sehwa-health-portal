@@ -400,7 +400,7 @@ function OtherForm({ onSubmit, submitting }) {
 }
 
 // ───────── 제출 버튼 ─────────
-function SubmitButton({ onClick, submitting }) {
+function SubmitButton({ onClick, submitting, children = "제출하기" }) {
   return (
     <button
       type="button"
@@ -421,9 +421,166 @@ function SubmitButton({ onClick, submitting }) {
           제출 중...
         </span>
       ) : (
-        "제출하기"
+        children
       )}
     </button>
+  );
+}
+
+// ───────── 학생 파일 업로드 공통 폼 ─────────
+function StudentFileUploadForm({
+  onSubmit,
+  submitting,
+  meta,
+}) {
+  const [form, setForm] = useState({
+    grade: "",
+    classNumber: "",
+    studentNumber: "",
+    studentName: "",
+    visitDate: "",
+    hospitalName: "",
+    note: "",
+  });
+  const [file, setFile] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  const validate = () => {
+    const nextErrors = {};
+    if (!form.grade) nextErrors.grade = "학년을 선택해주세요.";
+    if (!form.classNumber) nextErrors.classNumber = "반을 선택해주세요.";
+    if (!form.studentNumber.trim()) nextErrors.studentNumber = "번호를 입력해주세요.";
+    if (!form.studentName.trim()) nextErrors.studentName = "학생 이름을 입력해주세요.";
+    if (!file) nextErrors.file = "진료회신 파일을 첨부해주세요.";
+    else if (file.size > 10 * 1024 * 1024) nextErrors.file = "파일 크기가 10MB를 초과합니다.";
+    return nextErrors;
+  };
+
+  const handleSubmit = async () => {
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    const base64 = await fileToBase64(file);
+    const ext = file.name.split(".").pop();
+    const fileName = `${form.grade}학년_${form.classNumber}반_${form.studentNumber}번_${form.studentName}_${meta.fileNameLabel}_${todayStr()}.${ext}`;
+
+    await onSubmit({
+      type: meta.type,
+      sheetName: meta.sheetName,
+      folderId: meta.folderId,
+      fields: {
+        grade: form.grade,
+        classNumber: form.classNumber,
+        studentNumber: form.studentNumber.trim(),
+        studentName: form.studentName.trim(),
+        visitDate: form.visitDate,
+        hospitalName: form.hospitalName.trim(),
+        note: form.note.trim(),
+      },
+      submissionType: meta.submissionType,
+      submissionTitle: meta.submissionTitle,
+      grade: form.grade,
+      classNumber: form.classNumber,
+      studentNumber: form.studentNumber.trim(),
+      studentName: form.studentName.trim(),
+      visitDate: form.visitDate,
+      hospitalName: form.hospitalName.trim(),
+      note: form.note.trim(),
+      fileName,
+      fileBase64: base64,
+      fileMimeType: file.type,
+      mimeType: file.type,
+    });
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        {meta.guide}
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-sm font-black text-[#1A3B8B]">학생 정보</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="학년" required>
+            <select className={selectCls} value={form.grade} onChange={set("grade")}>
+              <option value="">선택</option>
+              {["1", "2", "3"].map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+            {errors.grade && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.grade}</p>}
+          </Field>
+          <Field label="반" required>
+            <select className={selectCls} value={form.classNumber} onChange={set("classNumber")}>
+              <option value="">선택</option>
+              {Array.from({ length: 12 }, (_, index) => String(index + 1)).map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+            {errors.classNumber && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.classNumber}</p>}
+          </Field>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="번호" required>
+            <input className={inputCls} type="number" inputMode="numeric" min="1" value={form.studentNumber} onChange={set("studentNumber")} />
+            {errors.studentNumber && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.studentNumber}</p>}
+          </Field>
+          <Field label="학생 이름" required>
+            <input className={inputCls} value={form.studentName} onChange={set("studentName")} placeholder="학생 이름" />
+            {errors.studentName && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.studentName}</p>}
+          </Field>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-sm font-black text-[#1A3B8B]">진료 정보</p>
+        <Field label="진료일">
+          <input type="date" className={inputCls} value={form.visitDate} onChange={set("visitDate")} />
+        </Field>
+        <Field label="의료기관명">
+          <input className={inputCls} value={form.hospitalName} onChange={set("hospitalName")} placeholder="의료기관명" />
+        </Field>
+        <Field label="비고">
+          <textarea
+            className={inputCls + " resize-none"}
+            rows={3}
+            value={form.note}
+            onChange={set("note")}
+            placeholder="추가로 전달할 내용이 있으면 입력해주세요."
+          />
+        </Field>
+      </div>
+
+      <Field label="파일 업로드" required>
+        <FileUploadArea file={file} onChange={setFile} error={errors.file} />
+        <p className="mt-1.5 text-xs text-slate-400">JPG · PNG · PDF 파일을 첨부해주세요.</p>
+      </Field>
+
+      <SubmitButton onClick={handleSubmit} submitting={submitting}>
+        {meta.submitLabel}
+      </SubmitButton>
+    </div>
+  );
+}
+
+function StudentTbReplyForm({ onSubmit, submitting }) {
+  return (
+    <StudentFileUploadForm
+      onSubmit={onSubmit}
+      submitting={submitting}
+      meta={{
+        type: "student-file",
+        submissionType: "student-file",
+        submissionTitle: "결핵검진 진료회신 제출",
+        sheetName: "응답_결핵검진진료회신",
+        folderId: "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63",
+        fileNameLabel: "결핵검진진료회신",
+        guide: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해 주세요.",
+        submitLabel: "진료회신 업로드하기",
+      }}
+    />
   );
 }
 
@@ -815,6 +972,7 @@ const MODAL_META = {
   other: { title: "기타 보건 관련 자료 제출", icon: "📂", color: "text-slate-600" },
   tb_registration: { title: "교직원 결핵검진 유형 선택", icon: "🫁", color: "text-[#1A3B8B]" },
   inbody: { title: "인바디 측정 신청", icon: "⚖️", color: "text-[#1A3B8B]" },
+  student_tb_reply: { title: "결핵검진 진료회신 제출", icon: "📄", color: "text-[#1A3B8B]" },
   infection: { title: "감염병 발생 보고", icon: "📝", color: "text-[#1A3B8B]" },
 };
 
@@ -867,11 +1025,14 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
       });
       const json = await res.json();
       if (isSubmitSuccess(json, payload)) {
+        const isStudentFile = payload.type === "student-file" || payload.submissionType === "student-file";
         setSuccessInfo({
           type: payload.type || type,
-          submitterName: payload.fields?.name || "",
+          submitterName: payload.fields?.name || payload.fields?.studentName || "",
           itemTitle: meta.title || "제출 자료",
-          studentInfo: payload.action === "infectionReport"
+          studentInfo: isStudentFile
+            ? `${payload.fields.grade}학년 ${payload.fields.classNumber}반 ${payload.fields.studentNumber}번 ${payload.fields.studentName}`
+            : payload.action === "infectionReport"
             ? `${payload.grade}학년 ${payload.classNumber}반 ${payload.studentNumber}번 ${payload.studentName}`
             : "",
           diseaseName: payload.action === "infectionReport"
@@ -933,6 +1094,7 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
               )}
               {type === "cpr" && <CprForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "tb" && <TbForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
+              {type === "student_tb_reply" && <StudentTbReplyForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "recruit" && <RecruitForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "other" && <OtherForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} tbConfig={tbConfig} />}
@@ -950,10 +1112,13 @@ function SuccessView({ info, onClose, onAnother }) {
   const isRecruit = info?.type === "recruit";
   const isInbody = info?.type === "inbody";
   const isInfection = info?.type === "infection";
+  const isStudentFile = info?.type === "student-file" || info?.type === "student_tb_reply";
   const title = isRecruit
     ? "확인 요청이 접수되었습니다."
     : isInbody
       ? "신청 완료"
+      : isStudentFile
+        ? "진료회신 업로드가 완료되었습니다."
       : isInfection
         ? "감염병 발생 보고가 제출되었습니다."
         : "제출이 완료되었습니다.";
@@ -961,6 +1126,8 @@ function SuccessView({ info, onClose, onAnother }) {
     ? `${info?.submitterName || "제출자"} 선생님의 채용검진 대체 인정 확인 요청이 정상 접수되었습니다.`
     : isInbody
       ? "인바디 측정 신청이 완료되었습니다."
+      : isStudentFile
+        ? "학생 진료회신 자료가 정상 업로드되었습니다."
       : isInfection
         ? "보건실에서 확인 후 필요한 경우 추가 안내드리겠습니다."
       : `${info?.submitterName || "제출자"} 선생님의 자료가 정상 제출되었습니다.`;
@@ -976,9 +1143,9 @@ function SuccessView({ info, onClose, onAnother }) {
           <p className="mt-2 text-sm leading-7 text-slate-600">{body}</p>
         </div>
         <div className="rounded-2xl bg-[#F7F9FC] p-4 text-left text-sm leading-7 text-slate-700">
-          {!isInfection && <p><span className="font-black text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>}
+          {!isInfection && !isStudentFile && <p><span className="font-black text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>}
           <p><span className="font-black text-[#1A3B8B]">제출 항목:</span> {info?.itemTitle || "-"}</p>
-          {isInfection && <p><span className="font-black text-[#1A3B8B]">학생 정보:</span> {info?.studentInfo || "-"}</p>}
+          {(isInfection || isStudentFile) && <p><span className="font-black text-[#1A3B8B]">학생 정보:</span> {info?.studentInfo || "-"}</p>}
           {isInfection && <p><span className="font-black text-[#1A3B8B]">감염병명:</span> {info?.diseaseName || "-"}</p>}
           <p><span className="font-black text-[#1A3B8B]">제출시간:</span> {info?.submittedAt || "-"}</p>
         </div>

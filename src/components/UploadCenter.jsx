@@ -9,6 +9,9 @@ const TYPE_MAP = {
   tb: "tb",
   recruit: "recruit",
   infection: "infection",
+  "student-file": "student_tb_reply",
+  student_file: "student_tb_reply",
+  studentfile: "student_tb_reply",
   other: "other",
   file: "other", // fallback
 };
@@ -27,10 +30,34 @@ const INFECTION_REPORT_CARD = {
   highlight: true,
 };
 
+function isStudentFileItem(item) {
+  const values = [
+    item.title,
+    ...(item.titleLines || []),
+    item.buttonText,
+    item.uploadType,
+    item.modalType,
+    item.submissionType,
+    item.url,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  return values.some((value) =>
+    value.includes("진료회신") ||
+    value.includes("student-file") ||
+    value.includes("student_file") ||
+    value.includes("studentfile") ||
+    value.includes("student_tb_reply")
+  );
+}
+
 // uploadType → 모달 type 결정 (API 데이터 대응)
 function resolveModalType(item) {
+  if (isStudentFileItem(item)) return "student_tb_reply";
   if (item.modalType) return item.modalType;
   const t = item.uploadType?.toLowerCase() || "";
+  if (TYPE_MAP[t]) return TYPE_MAP[t];
   if (t === "request") return "recruit";
   if (t === "cpr") return "cpr";
   if (t === "tb") return "tb";
