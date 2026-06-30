@@ -432,6 +432,7 @@ function StudentFileUploadForm({
   onSubmit,
   submitting,
   meta,
+  publicMode = false,
 }) {
   const [form, setForm] = useState({
     grade: "",
@@ -502,6 +503,8 @@ function StudentFileUploadForm({
         {meta.guide}
       </div>
 
+      {publicMode && <PrivacyNoticeBox />}
+
       <div className="space-y-3">
         <p className="text-sm font-black text-[#1A3B8B]">학생 정보</p>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -565,11 +568,37 @@ function StudentFileUploadForm({
   );
 }
 
-function StudentTbReplyForm({ onSubmit, submitting }) {
+function PrivacyNoticeBox() {
+  return (
+    <div className="rounded-2xl border border-[#C9DFFF] bg-[#F7FBFF] p-4 text-sm leading-7 text-slate-700">
+      <p className="mb-2 font-black text-[#1A3B8B]">개인정보 수집·이용 안내</p>
+      <div className="space-y-2">
+        <p>본 제출 화면은 결핵검진 진료회신서 제출을 위한 화면입니다.</p>
+        <p>
+          제출하신 정보는 결핵검진 추가 검진 여부 확인 및 학생 건강관리 목적으로만 사용됩니다.
+        </p>
+        <p>
+          <span className="font-bold text-[#1A3B8B]">수집 항목:</span>{" "}
+          학년, 반, 번호, 학생 이름, 진료일, 의료기관명, 제출 파일
+        </p>
+        <p>
+          제출 파일은 학교 보건업무 담당자가 관리하는 Google Drive 폴더에 저장되며,
+          별도의 외부 서버에는 저장되지 않습니다.
+        </p>
+        <p>
+          제출된 자료는 보건실 내부 확인용으로만 사용되며, 목적 외로 사용하지 않습니다.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function StudentTbReplyForm({ onSubmit, submitting, publicMode = false }) {
   return (
     <StudentFileUploadForm
       onSubmit={onSubmit}
       submitting={submitting}
+      publicMode={publicMode}
       meta={{
         type: "student-file",
         submissionType: "student-file",
@@ -1094,7 +1123,7 @@ export default function SubmitModal({ type, onClose, tbConfig, publicMode = fals
               )}
               {type === "cpr" && <CprForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "tb" && <TbForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
-              {type === "student_tb_reply" && <StudentTbReplyForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
+              {type === "student_tb_reply" && <StudentTbReplyForm onSubmit={handleSubmit} submitting={status === "submitting"} publicMode={publicMode} />}
               {type === "recruit" && <RecruitForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "other" && <OtherForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} tbConfig={tbConfig} />}
