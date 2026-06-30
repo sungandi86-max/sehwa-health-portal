@@ -1,4 +1,15 @@
+import { useLocation } from "react-router-dom";
+
 export default function Footer() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const isPublicUpload =
+    location.pathname === "/upload" &&
+    params.get("mode") === "public" &&
+    params.get("type") === "tbreply";
+
+  if (isPublicUpload) return null;
+
   return (
     <footer className="bg-[#1A3B8B] px-4 py-8 text-center text-sm text-blue-50">
       <p className="font-bold">세화여고 온라인 보건실</p>

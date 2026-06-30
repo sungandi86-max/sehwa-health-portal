@@ -994,7 +994,7 @@ function isSubmitSuccess(json, payload) {
 }
 
 // ───────── 메인 모달 컴포넌트 ─────────
-export default function SubmitModal({ type, onClose, tbConfig }) {
+export default function SubmitModal({ type, onClose, tbConfig, publicMode = false }) {
   const [status, setStatus] = useState("idle"); // idle | submitting | success
   const [submitError, setSubmitError] = useState("");
   const [successInfo, setSuccessInfo] = useState(null);
@@ -1084,7 +1084,7 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
         {/* 바디 */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {status === "success" ? (
-            <SuccessView info={successInfo} onClose={onClose} onAnother={resetForAnother} />
+            <SuccessView info={successInfo} onClose={onClose} onAnother={resetForAnother} publicMode={publicMode} />
           ) : (
             <>
               {submitError && (
@@ -1108,7 +1108,7 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
   );
 }
 
-function SuccessView({ info, onClose, onAnother }) {
+function SuccessView({ info, onClose, onAnother, publicMode = false }) {
   const isRecruit = info?.type === "recruit";
   const isInbody = info?.type === "inbody";
   const isInfection = info?.type === "infection";
@@ -1169,12 +1169,14 @@ function SuccessView({ info, onClose, onAnother }) {
         >
           닫기
         </button>
-        <button
-          onClick={onAnother}
-          className="w-full rounded-2xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-600"
-        >
-          다른 자료 제출하기
-        </button>
+        {!publicMode && (
+          <button
+            onClick={onAnother}
+            className="w-full rounded-2xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-600"
+          >
+            다른 자료 제출하기
+          </button>
+        )}
       </div>
     </div>
   );

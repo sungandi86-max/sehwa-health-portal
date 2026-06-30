@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { quickMenuItems } from "../data/fallbackData.js";
 import { SchoolEmblem } from "./ui.jsx";
 
@@ -15,6 +15,15 @@ const ROUTE_MAP = {
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const isPublicUpload =
+    location.pathname === "/upload" &&
+    params.get("mode") === "public" &&
+    params.get("type") === "tbreply";
+
+  if (isPublicUpload) return null;
+
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-1.5 px-3 py-2 sm:gap-2 sm:px-4 sm:py-2.5 lg:max-w-[1280px]">

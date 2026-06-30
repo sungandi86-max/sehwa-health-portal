@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { uploadIntro } from "../data/fallbackData.js";
 import { AppCard, Badge, SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
@@ -27,6 +27,20 @@ const INFECTION_REPORT_CARD = {
   buttonText: "감염병 발생 보고하기",
   status: "접수 중",
   uploadType: "infection",
+  highlight: true,
+};
+
+const TB_REPLY_PUBLIC_CARD = {
+  title: "결핵검진 진료회신 제출",
+  titleLines: ["결핵검진", "진료회신 제출"],
+  description: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해주세요.",
+  target: "결핵검진 진료회신 제출 대상 학생",
+  documentType: "진료회신란 또는 진료확인서",
+  deadline: "별도 안내일까지",
+  fileGuide: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해 주세요.",
+  buttonText: "진료회신 업로드하기",
+  status: "접수 중",
+  uploadType: "student-file",
   highlight: true,
 };
 
@@ -71,28 +85,43 @@ function resolveModalType(item) {
   return "other";
 }
 
-export default function UploadCenter({ items }) {
+export default function UploadCenter({ items, publicMode = false, publicType = "" }) {
   const [modalType, setModalType] = useState(null); // null | 'cpr' | 'tb' | 'recruit' | 'other'
-  const uploadItems = items.some((item) => resolveModalType(item) === "infection")
+  const allItems = items.some((item) => resolveModalType(item) === "infection")
     ? items
     : [...items, INFECTION_REPORT_CARD];
+  const publicItems = allItems.filter((item) => isStudentFileItem(item));
+  const uploadItems = publicMode && publicType === "tbreply"
+    ? (publicItems.length ? publicItems : [TB_REPLY_PUBLIC_CARD])
+    : allItems;
+
+  useEffect(() => {
+    if (!publicMode || publicType !== "tbreply") return;
+    setModalType("student_tb_reply");
+  }, [publicMode, publicType]);
 
   return (
     <>
-      <section id="upload" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
+      <section id="upload" className={`mx-auto max-w-6xl scroll-mt-24 px-4 ${publicMode ? "py-6" : "py-10"}`}>
         {/* 섹션 헤더 */}
-        <div className="rounded-[32px] bg-[#1A3B8B] p-6 text-white shadow-sm md:p-8">
+        <div className={`rounded-[32px] bg-[#1A3B8B] p-6 text-white shadow-sm md:p-8 ${publicMode ? "mb-5" : ""}`}>
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="mb-2 text-sm font-bold text-[#BFE6CB]">UPLOAD CENTER</p>
-              <h2 className="text-2xl font-black md:text-3xl">{uploadIntro.title}</h2>
+              <p className="mb-2 text-sm font-bold text-[#BFE6CB]">
+                {publicMode ? "SUBMISSION" : "UPLOAD CENTER"}
+              </p>
+              <h2 className="text-2xl font-black md:text-3xl">
+                {publicMode ? "결핵검진 진료회신 제출" : uploadIntro.title}
+              </h2>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-50 md:text-base">
-                {uploadIntro.description}
+                {publicMode
+                  ? "학생이 제출한 진료회신란 또는 진료확인서를 업로드하는 전용 페이지입니다."
+                  : uploadIntro.description}
               </p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-4 text-sm leading-6 text-blue-50 md:max-w-sm">
+            {!publicMode && <div className="rounded-2xl bg-white/10 p-4 text-sm leading-6 text-blue-50 md:max-w-sm">
               {uploadIntro.notice}
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -181,14 +210,16 @@ export default function UploadCenter({ items }) {
           })}
         </div>
 
-        <p className="mt-4 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-500 shadow-sm">
-          {uploadIntro.subNotice}
-        </p>
+        {!publicMode && (
+          <p className="mt-4 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-500 shadow-sm">
+            {uploadIntro.subNotice}
+          </p>
+        )}
       </section>
 
       {/* 제출 모달 */}
       {modalType && (
-        <SubmitModal type={modalType} onClose={() => setModalType(null)} />
+        <SubmitModal type={modalType} onClose={() => setModalType(null)} publicMode={publicMode} />
       )}
     </>
   );
