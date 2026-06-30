@@ -569,25 +569,39 @@ function StudentFileUploadForm({
 }
 
 function PrivacyNoticeBox() {
+  const collectedItems = ["학년", "반", "번호", "학생 이름", "진료일", "의료기관명", "제출 파일"];
+
   return (
-    <div className="rounded-2xl border border-[#C9DFFF] bg-[#F7FBFF] p-4 text-sm leading-7 text-slate-700">
-      <p className="mb-2 font-black text-[#1A3B8B]">개인정보 수집·이용 안내</p>
-      <div className="space-y-2">
+    <div className="rounded-3xl border border-[#C9DFFF] bg-[#F7FBFF] p-5 text-sm leading-8 text-slate-700 sm:p-6">
+      <p className="mb-3 flex items-center gap-2 text-base font-black text-[#1A3B8B]">
+        <span aria-hidden="true">🔒</span>
+        <span>개인정보 처리 안내</span>
+      </p>
+      <div className="space-y-3">
         <p>본 제출 화면은 결핵검진 진료회신서 제출을 위한 화면입니다.</p>
         <p>
-          제출하신 정보는 결핵검진 추가 검진 여부 확인 및 학생 건강관리 목적으로만 사용됩니다.
+          제출하신 정보는 결핵검진 추가 검진 여부 확인 및 학생 건강관리 업무를 위해서만 사용됩니다.
+        </p>
+        <div>
+          <p className="font-bold text-[#1A3B8B]">수집 항목</p>
+          <ul className="mt-2 grid gap-1 pl-1 sm:grid-cols-2">
+            {collectedItems.map((item) => (
+              <li key={item} className="flex gap-2">
+                <span className="text-[#1A3B8B]">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p>
+          제출된 파일은 학교 보건업무 담당자가 관리하는 <span className="font-bold text-[#1A3B8B]">Google Drive</span>에 저장되며,
+          제출 목적 외의 별도 서비스나 외부 저장소에는 저장되지 않습니다.
         </p>
         <p>
-          <span className="font-bold text-[#1A3B8B]">수집 항목:</span>{" "}
-          학년, 반, 번호, 학생 이름, 진료일, 의료기관명, 제출 파일
+          제출된 자료는 결핵검진 진료회신 확인 및 학생 건강관리 업무에만 사용되며,
+          목적 외로 이용되지 않습니다.
         </p>
-        <p>
-          제출 파일은 학교 보건업무 담당자가 관리하는 Google Drive 폴더에 저장되며,
-          별도의 외부 서버에는 저장되지 않습니다.
-        </p>
-        <p>
-          제출된 자료는 보건실 내부 확인용으로만 사용되며, 목적 외로 사용하지 않습니다.
-        </p>
+        <p>문의사항은 학교 보건실로 문의해 주시기 바랍니다.</p>
       </div>
     </div>
   );
