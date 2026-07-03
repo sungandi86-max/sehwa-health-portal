@@ -93,17 +93,18 @@ export default function QuickMenu({ items = quickMenuItems, className = "" }) {
 
   return (
     <section className={`mx-auto w-full max-w-6xl px-3 pb-6 sm:px-4 md:pb-10 lg:max-w-[1280px] ${className}`}>
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4 lg:gap-4">
-        {items.map((item) => {
+      <div className="grid auto-rows-fr grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4 lg:gap-4">
+        {items.map((item, index) => {
           const tone = MENU_TONES[item.id] || MENU_TONES.default;
+          const isSecondary = index >= 4;
           return (
             <button
               key={item.id}
               onClick={() => navigate(ROUTE_MAP[item.id] || "/")}
-              className={`group flex min-h-36 min-w-0 flex-col rounded-[24px] border p-4 text-left shadow-[var(--shh-shadow)] transition hover:-translate-y-0.5 hover:shadow-[var(--shh-shadow-hover)] sm:min-h-44 sm:rounded-[28px] sm:p-6 lg:min-h-48 ${tone.card}`}
+              className={`group flex h-full min-h-36 min-w-0 flex-col rounded-[24px] border p-4 text-left shadow-[var(--shh-shadow)] transition hover:-translate-y-0.5 hover:shadow-[var(--shh-shadow-hover)] sm:min-h-44 sm:rounded-[28px] sm:p-6 lg:min-h-48 ${isSecondary ? "lg:shadow-[0_10px_30px_rgba(30,41,59,0.045)]" : ""} ${tone.card}`}
             >
-              <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
-                <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-[18px] text-white shadow-xl sm:h-16 sm:w-16 ${tone.tile}`}>
+              <div className="mb-2.5 flex items-start justify-between gap-3 sm:mb-3">
+                <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-[18px] text-white shadow-xl sm:h-16 sm:w-16 ${isSecondary ? "lg:opacity-90" : ""} ${tone.tile}`}>
                   <MenuIcon id={item.id} />
                 </span>
                 {item.featured ? <Badge type="pink">핵심</Badge> : <span className={`text-2xl font-black ${tone.cta}`}>→</span>}
@@ -111,10 +112,10 @@ export default function QuickMenu({ items = quickMenuItems, className = "" }) {
               <h3 className="text-base font-black leading-6 text-[#0F1F4B] sm:text-lg" style={{ wordBreak: "keep-all" }}>
                 {item.title}
               </h3>
-              <p className="menu-card-description mt-2 text-xs font-medium leading-5 text-slate-600 sm:text-sm sm:leading-6">
+              <p className="menu-card-description mt-1.5 text-xs font-medium leading-5 text-slate-600 sm:text-sm sm:leading-6">
                 {item.description}
               </p>
-              <p className={`mt-auto pt-4 text-sm font-black ${tone.cta}`}>
+              <p className={`mt-auto flex items-center pt-4 text-sm font-black ${tone.cta}`}>
                 열기 <span className="ml-1">→</span>
               </p>
             </button>
