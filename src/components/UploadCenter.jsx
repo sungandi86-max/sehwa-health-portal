@@ -3,32 +3,97 @@ import { uploadIntro } from "../data/fallbackData.js";
 import { AppCard, Badge, SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
-// uploadType → 모달 type 매핑
-const TYPE_MAP = {
-  cpr: "cpr",
-  tb: "tb",
-  recruit: "recruit",
-  other: "other",
-  file: "other", // fallback
+const SUBMIT_TYPE_CONFIG = {
+  cpr: {
+    modalType: "cpr",
+    sheetName: "응답_심폐소생술이수증",
+    aliases: ["cpr", "cpr_certificate", "심폐소생술", "심폐소생술이수증"],
+    keywords: ["심폐소생술", "cpr", "이수증"],
+  },
+  tb_registration: {
+    modalType: "tb_registration",
+    sheetName: "응답_교직원결핵검진유형선택",
+    aliases: ["tb_registration", "tb-registration", "tb_reply", "tb_response", "결핵검진회신서", "결핵검진유형선택"],
+    keywords: ["교직원 결핵검진 유형", "결핵검진 유형 선택", "결핵검진 회신", "회신서"],
+  },
+  tb: {
+    modalType: "tb",
+    sheetName: "응답_결핵검진확인증",
+    aliases: ["tb", "tb_certificate", "tuberculosis_certificate", "결핵검진확인증"],
+    keywords: ["결핵검진 확인증", "결핵검진확인증", "흉부 x-ray", "흉부X-ray"],
+  },
+  recruit: {
+    modalType: "recruit",
+    sheetName: "응답_채용검진확인요청",
+    aliases: ["recruit", "recruit_checkup", "employment_checkup", "채용검진"],
+    keywords: ["채용검진", "대체 인정", "확인 요청"],
+  },
+  other: {
+    modalType: "other",
+    sheetName: "응답_기타보건자료",
+    aliases: ["other", "기타보건자료"],
+    keywords: ["기타 보건", "기타 자료", "기타보건자료"],
+  },
 };
 
-// uploadType → 모달 type 결정 (API 데이터 대응)
-function resolveModalType(item) {
-  if (item.modalType) return item.modalType;
-  const t = item.uploadType?.toLowerCase() || "";
-  if (t === "request") return "recruit";
-  if (t === "cpr") return "cpr";
-  if (t === "tb") return "tb";
-  if (t === "recruit") return "recruit";
-  // title 기반 추론
-  if (item.title?.includes("심폐소생술")) return "cpr";
-  if (item.title?.includes("결핵")) return "tb";
-  if (item.title?.includes("채용")) return "recruit";
+const SUBMIT_TYPE_ORDER = ["cpr", "tb_registration", "tb", "recruit", "other"];
+const VALID_MODAL_TYPES = new Set(SUBMIT_TYPE_ORDER);
+
+function normalizeSubmitValue(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function includesSubmitKeyword(text, keyword) {
+  return text.includes(normalizeSubmitValue(keyword));
+}
+
+function resolveSubmitCardType(item) {
+  const explicitModalType = normalizeSubmitValue(item.modalType);
+  if (VALID_MODAL_TYPES.has(explicitModalType)) return explicitModalType;
+
+  const sheetName = normalizeSubmitValue(item.sheetName);
+  const sheetMatch = SUBMIT_TYPE_ORDER.find(
+    (type) => normalizeSubmitValue(SUBMIT_TYPE_CONFIG[type].sheetName) === sheetName
+  );
+  if (sheetMatch) return sheetMatch;
+
+  const identityText = [
+    item.submitType,
+    item.type,
+    item.id,
+    item.key,
+    item.uploadType,
+  ].map(normalizeSubmitValue);
+
+  const aliasMatch = SUBMIT_TYPE_ORDER.find((type) =>
+    SUBMIT_TYPE_CONFIG[type].aliases.some((alias) =>
+      identityText.includes(normalizeSubmitValue(alias))
+    )
+  );
+  if (aliasMatch) return aliasMatch;
+
+  const searchableText = normalizeSubmitValue([
+    item.title,
+    ...(item.titleLines || []),
+    item.documentType,
+    item.buttonText,
+    item.fileGuide,
+  ].filter(Boolean).join(" "));
+
+  const keywordMatch = SUBMIT_TYPE_ORDER.find((type) =>
+    SUBMIT_TYPE_CONFIG[type].keywords.some((keyword) =>
+      includesSubmitKeyword(searchableText, keyword)
+    )
+  );
+  if (keywordMatch) return keywordMatch;
+
+  const uploadType = normalizeSubmitValue(item.uploadType);
+  if (uploadType === "request") return "recruit";
   return "other";
 }
 
 export default function UploadCenter({ items }) {
-  const [modalType, setModalType] = useState(null); // null | 'cpr' | 'tb' | 'recruit' | 'other'
+  const [modalType, setModalType] = useState(null);
 
   return (
     <>
@@ -52,10 +117,10 @@ export default function UploadCenter({ items }) {
         {/* 카드 목록 */}
         <div className="mt-5 grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
           {items.map((item) => {
-            const mType = resolveModalType(item);
+            const submitType = resolveSubmitCardType(item);
             return (
               <AppCard
-                key={item.title}
+                key={item.id || `${submitType}-${item.title}`}
                 className={item.highlight ? "border-[#D94F70]/30 ring-2 ring-[#FDEAF0]" : ""}
               >
                 <div className="mb-4">
@@ -122,7 +187,7 @@ export default function UploadCenter({ items }) {
                 {/* 버튼: 항상 표시 (모달 방식) */}
                 {item.buttonText && (
                   <button
-                    onClick={() => setModalType(mType)}
+                    onClick={() => setModalType(submitType)}
                     className={`mt-4 w-full rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md
                       ${item.uploadType === "request" ? "bg-[#1A3B8B]" : "bg-[#1A3B8B]"}`}
                   >
