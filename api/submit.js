@@ -33,7 +33,11 @@ export default async function handler(req, res) {
     try {
       json = JSON.parse(text);
     } catch {
-      json = { status: "success" };
+      return res.status(502).json({
+        status: "error",
+        success: false,
+        message: "Apps Script 응답을 JSON으로 해석할 수 없습니다.",
+      });
     }
     return res.status(200).json(json);
   } catch (err) {

@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --shh-primary: #183B8F;
+  --shh-indigo: #5B5FEF;
+  --shh-emerald: #12A66A;
+  --shh-rose: #E2367F;
+  --shh-violet: #7452EA;
+  --shh-blue: #1663D8;
+  --shh-bg: #F7F8FC;
+  --shh-card: rgba(255, 255, 255, 0.78);
+  --shh-border: rgba(120, 140, 180, 0.14);
+  --shh-shadow: 0 16px 40px rgba(30, 41, 59, 0.06);
+  --shh-shadow-hover: 0 22px 52px rgba(30, 41, 59, 0.1);
+}
+
 *,
 *::before,
 *::after {
@@ -16,6 +30,10 @@ html {
 body {
   width: 100%;
   overflow-x: hidden;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(91, 95, 239, 0.08), transparent 28rem),
+    radial-gradient(circle at 92% 10%, rgba(18, 166, 106, 0.07), transparent 24rem),
+    var(--shh-bg);
   font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

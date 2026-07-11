@@ -12,6 +12,7 @@ const SHEET_NAMES = {
   portalMessages: "앱_메신저문구",
   portalFaqs: "앱_FAQ",
   portalRoadmap: "앱_업무로드맵",
+  infectionManagement: "학생 감염병 관리 현황",
   healthRoomShareConfig: "앱_입실현황공유설정",
   healthRoomHomeroomAuth: "앱_담임권한",
   healthRoomAccessLog: "앱_입실현황접속로그"
@@ -23,6 +24,25 @@ const FOLDER_IDS = {
   other: "1T2yMxeKmab1SDqdVCRgdxpHMx3Fu2EO6"
 };
 
+const STUDENT_FILE_DEFAULT_FOLDER_ID = "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63";
+const SUBMISSION_MANAGEMENT_SHEET_NAME = "제출항목관리";
+const SUBMISSION_RECORD_SHEET_NAME = "제출기록";
+const STUDENT_FILE_RECORD_HEADERS = [
+  "제출일시",
+  "제출항목명",
+  "제출유형",
+  "학년",
+  "반",
+  "번호",
+  "학생명",
+  "진료일",
+  "의료기관명",
+  "비고",
+  "파일명",
+  "파일URL",
+  "저장폴더ID"
+];
+
 const SUBMIT_SHEET_HEADERS = {
   "응답_심폐소생술이수증":        ["제출일시","성명","소속/부서","교직원구분","이수일자","이수기관","파일명","파일링크"],
   "응답_결핵검진확인증":          ["제출일시","성명","소속/부서","교직원구분","검진일자","제출자료유형","파일명","파일링크"],
@@ -30,6 +50,7 @@ const SUBMIT_SHEET_HEADERS = {
   "응답_기타보건자료":            ["제출일시","성명","소속/부서","교직원구분","비고","파일명","파일링크"],
   "응답_교직원결핵검진유형선택":  ["제출일시","성명","소속/부서","검진유형","비고"],
   "응답_인바디측정신청": ["제출일시","성명","소속/부서","희망날짜","희망시간대"],
+  "응답_결핵검진진료회신": ["제출일시","학년","반","번호","학생 이름","진료일","의료기관명","파일명","파일링크"],
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -202,6 +223,18 @@ function doGet(e) {
         return jsonOutput_({ result: "error", message: "비밀번호가 올바르지 않습니다." });
       }
     }
+    if (action === "verifyAdminMaster") {
+      return jsonOutput_(verifyAdminMaster_(e.parameter || {}));
+    }
+    if (action === "getAdminReceiptSummary") {
+      return jsonOutput_(getAdminReceiptSummary_(e.parameter || {}));
+    }
+    if (action === "getAdminInfectionReports") {
+      return jsonOutput_(getAdminInfectionReports_(e.parameter || {}));
+    }
+    if (action === "updateAdminInfectionReportStatus") {
+      return jsonOutput_(updateAdminInfectionReportStatus_(e.parameter || {}));
+    }
     if (action === "getHealthRoomLocation") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getHealthRoomLocation_(e.parameter || {}), action));
     }
@@ -239,6 +272,27 @@ function doPost(e) {
   lock.tryLock(10000);
   try {
     const payload = JSON.parse(e.postData.contents);
+    if (payload.type === "student-file" || payload.submissionType === "student-file") {
+      const result = appendStudentFileSubmission_(payload);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (payload.action === "infectionReport") {
+      try {
+        const result = appendInfectionReport_(payload);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      } catch (error) {
+        Logger.log("infectionReport error: " + error);
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          result: "error",
+          message: "감염병 발생 보고 저장 중 오류가 발생했습니다."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     const { sheetName, folderId, fields, fileName, fileBase64, fileMimeType } = payload;
     if (!sheetName) throw new Error("sheetName 누락");
     const ss    = getSpreadsheet_();
@@ -260,6 +314,259 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function appendStudentFileSubmission_(payload) {
+  const ss = getSpreadsheet_();
+  const fields = payload.fields || {};
+  const submissionTitle = String(payload.submissionTitle || fields.submissionTitle || "결핵검진 진료회신 제출").trim();
+  const submissionType = String(payload.submissionType || payload.type || "student-file").trim();
+  const grade = String(payload.grade || fields.grade || "").trim();
+  const classNumber = String(payload.classNumber || fields.classNumber || "").trim();
+  const studentNumber = String(payload.studentNumber || fields.studentNumber || "").trim();
+  const studentName = String(payload.studentName || fields.studentName || "").trim();
+  const visitDate = String(payload.visitDate || fields.visitDate || fields.treatmentDate || "").trim();
+  const hospitalName = String(payload.hospitalName || fields.hospitalName || fields.medicalInstitution || "").trim();
+  const note = String(payload.note || fields.note || "").trim();
+  const fileName = String(payload.fileName || "").trim();
+  const fileBase64 = payload.fileBase64 || payload.fileData || payload.base64 || "";
+  const mimeType = payload.fileMimeType || payload.mimeType || "";
+
+  if (!grade || !classNumber || !studentNumber || !studentName) {
+    throw new Error("학생 정보(학년, 반, 번호, 학생명)는 필수입니다.");
+  }
+  if (!fileName || !fileBase64) {
+    throw new Error("업로드 파일이 누락되었습니다.");
+  }
+
+  const managedFolderId = getSubmissionManagedFolderId_(ss, submissionTitle);
+  const folderId = managedFolderId || payload.folderId || STUDENT_FILE_DEFAULT_FOLDER_ID;
+  const folder = DriveApp.getFolderById(folderId);
+  const blob = Utilities.newBlob(Utilities.base64Decode(fileBase64), mimeType, fileName);
+  const driveFile = folder.createFile(blob);
+  const fileUrl = driveFile.getUrl();
+  const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+
+  appendSubmissionRecord_(ss, {
+    "제출일시": now,
+    "제출항목명": submissionTitle,
+    "제출유형": submissionType,
+    "학년": grade,
+    "반": classNumber,
+    "번호": studentNumber,
+    "학생명": studentName,
+    "진료일": visitDate,
+    "의료기관명": hospitalName,
+    "비고": note,
+    "파일명": fileName,
+    "파일URL": fileUrl,
+    "저장폴더ID": folderId
+  });
+
+  return {
+    status: "success",
+    success: true,
+    result: "success",
+    submittedAt: now,
+    fileUrl: fileUrl,
+    folderId: folderId
+  };
+}
+
+function getSubmissionManagedFolderId_(ss, submissionTitle) {
+  const sheet = ss.getSheetByName(SUBMISSION_MANAGEMENT_SHEET_NAME);
+  if (!sheet) return "";
+
+  const values = sheet.getDataRange().getDisplayValues();
+  if (values.length < 2) return "";
+
+  const headers = values[0].map(function(header) { return String(header || "").trim(); });
+  const titleIndex = findHeaderIndex_(headers, ["제출항목명", "제출항목", "제목"]);
+  const folderIndex = findHeaderIndex_(headers, ["저장폴더ID", "폴더ID", "folderId"]);
+  if (titleIndex === -1 || folderIndex === -1) return "";
+
+  for (let i = 1; i < values.length; i++) {
+    const rowTitle = String(values[i][titleIndex] || "").trim();
+    if (rowTitle === submissionTitle) {
+      return String(values[i][folderIndex] || "").trim();
+    }
+  }
+  return "";
+}
+
+function appendSubmissionRecord_(ss, record) {
+  let sheet = ss.getSheetByName(SUBMISSION_RECORD_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SUBMISSION_RECORD_SHEET_NAME);
+    sheet.appendRow(STUDENT_FILE_RECORD_HEADERS);
+    const headerRange = sheet.getRange(1, 1, 1, STUDENT_FILE_RECORD_HEADERS.length);
+    headerRange.setBackground("#1A3B8B");
+    headerRange.setFontColor("#FFFFFF");
+    headerRange.setFontWeight("bold");
+  }
+
+  const headers = ensureSubmissionRecordHeaders_(sheet, STUDENT_FILE_RECORD_HEADERS);
+  const row = headers.map(function(header) {
+    return record[header] !== undefined ? record[header] : "";
+  });
+  sheet.appendRow(row);
+}
+
+function ensureSubmissionRecordHeaders_(sheet, requiredHeaders) {
+  const lastColumn = Math.max(sheet.getLastColumn(), 1);
+  let headers = sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0]
+    .map(function(header) { return String(header || "").trim(); });
+
+  if (headers.length === 1 && !headers[0]) {
+    sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
+    return requiredHeaders.slice();
+  }
+
+  const missing = requiredHeaders.filter(function(header) {
+    return headers.indexOf(header) === -1;
+  });
+
+  if (missing.length > 0) {
+    sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]);
+    headers = headers.concat(missing);
+  }
+
+  return headers;
+}
+
+function findHeaderIndex_(headers, candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const index = headers.indexOf(candidates[i]);
+    if (index !== -1) return index;
+  }
+  return -1;
+}
+
+function appendInfectionReport_(payload) {
+  const grade = String(payload.grade || "").trim();
+  const classNumber = String(payload.classNumber || "").trim();
+  const studentNumber = String(payload.studentNumber || "").trim();
+  const studentName = String(payload.studentName || "").trim();
+  const diseaseType = String(payload.diseaseType || "").trim();
+  const diseaseEtc = String(payload.diseaseEtc || "").trim();
+  const diagnosisDate = String(payload.diagnosisDate || "").trim();
+  const exclusionStartDate = String(payload.exclusionStartDate || "").trim();
+  const exclusionEndDate = String(payload.exclusionEndDate || "").trim();
+  const memo = String(payload.memo || "").trim();
+
+  if (!grade || !classNumber || !studentNumber || !studentName || !diseaseType || !diagnosisDate) {
+    return { success: false, result: "error", message: "학년, 반, 번호, 학생 이름, 감염병 종류, 진단일은 필수입니다." };
+  }
+  if (diseaseType === "기타" && !diseaseEtc) {
+    return { success: false, result: "error", message: "기타 감염병명을 입력해 주세요." };
+  }
+
+  const diseaseName = diseaseType === "기타" ? diseaseEtc : diseaseType;
+  const ss = getSpreadsheet_();
+  const sheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
+  if (!sheet) {
+    return { success: false, result: "error", message: SHEET_NAMES.infectionManagement + " 탭을 찾을 수 없습니다." };
+  }
+
+  const diagnosisKey = dateKey_(diagnosisDate);
+  const rows = sheet.getDataRange().getDisplayValues();
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (
+      normalizeKey_(row[2]) === normalizeKey_(grade) &&
+      normalizeKey_(row[3]) === normalizeKey_(classNumber) &&
+      normalizeKey_(row[4]) === normalizeKey_(studentNumber) &&
+      normalizeKey_(row[5]) === normalizeKey_(studentName) &&
+      normalizeKey_(row[6]) === normalizeKey_(diseaseName) &&
+      dateKey_(row[7]) === diagnosisKey
+    ) {
+      return { success: false, result: "error", message: "이미 같은 내용의 감염병 발생 보고가 접수되어 있습니다." };
+    }
+  }
+
+  const targetRow = findFirstEmptyInfectionRow_(sheet);
+  ensureInfectionRowFormula_(sheet, targetRow, 1);
+  ensureInfectionRowFormula_(sheet, targetRow, 13);
+  prepareInfectionInputRow_(sheet, targetRow);
+
+  sheet.getRange(targetRow, 2, 1, 11).setValues([[
+    new Date(),
+    grade,
+    classNumber,
+    studentNumber,
+    studentName,
+    diseaseName,
+    parseDateValue_(diagnosisDate),
+    parseDateValue_(exclusionStartDate),
+    parseDateValue_(exclusionEndDate),
+    false,
+    memo
+  ]]);
+  sheet.getRange(targetRow, 2).setNumberFormat("yyyy-MM-dd HH:mm:ss");
+  sheet.getRange(targetRow, 8, 1, 3).setNumberFormat("yyyy-MM-dd");
+  sheet.getRange(targetRow, 11).setValue(false);
+  if (!sheet.getRange(targetRow, 13).getFormulaR1C1()) {
+    sheet.getRange(targetRow, 13).setValue(monthKey_(diagnosisDate));
+  }
+
+  return { success: true, result: "success", message: "감염병 발생 보고가 제출되었습니다." };
+}
+
+function normalizeKey_(value) {
+  return String(value || "").trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function dateKey_(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (!match) return text;
+  return match[1] + "-" + String(Number(match[2])).padStart(2, "0") + "-" + String(Number(match[3])).padStart(2, "0");
+}
+
+function monthKey_(value) {
+  const key = dateKey_(value);
+  const match = key.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  return match ? match[1] + "-" + match[2] : "";
+}
+
+function parseDateValue_(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!match) return text;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function findFirstEmptyInfectionRow_(sheet) {
+  const startRow = 5;
+  const lastRow = Math.max(sheet.getLastRow(), startRow);
+  const values = sheet.getRange(startRow, 6, lastRow - startRow + 1, 3).getDisplayValues();
+  for (let i = 0; i < values.length; i++) {
+    const name = String(values[i][0] || "").trim();
+    const disease = String(values[i][1] || "").trim();
+    const diagnosisDate = String(values[i][2] || "").trim();
+    if (!name && !disease && !diagnosisDate) return startRow + i;
+  }
+  return lastRow + 1;
+}
+
+function ensureInfectionRowFormula_(sheet, row, column) {
+  const currentFormula = sheet.getRange(row, column).getFormulaR1C1();
+  if (currentFormula) return;
+
+  const startRow = 5;
+  for (let sourceRow = row - 1; sourceRow >= startRow; sourceRow--) {
+    const formula = sheet.getRange(sourceRow, column).getFormulaR1C1();
+    if (formula) {
+      sheet.getRange(sourceRow, column).copyTo(sheet.getRange(row, column), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+      return;
+    }
+  }
+}
+
+function prepareInfectionInputRow_(sheet, row) {
+  sheet.getRange(row, 2, 1, 9).clearDataValidations();
+  sheet.getRange(row, 12).clearDataValidations();
 }
 
 function getOrCreateSubmitSheet_(ss, sheetName) {
@@ -338,6 +645,18 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
     sheet.appendRow([now, fields.name, fields.dept, fields.registrationType, ""]);
   } else if (sheetName === "응답_인바디측정신청") {
     sheet.appendRow([now, fields.name, fields.dept, fields.preferredDate, fields.preferredTime]);
+  } else if (sheetName === "응답_결핵검진진료회신") {
+    sheet.appendRow([
+      now,
+      fields.grade,
+      fields.classNumber,
+      fields.studentNumber,
+      fields.studentName,
+      fields.treatmentDate || "",
+      fields.medicalInstitution || "",
+      fileName,
+      fileLink
+    ]);
   } else {
     sheet.appendRow([now, JSON.stringify(fields), fileName, fileLink]);
   }
@@ -963,6 +1282,417 @@ function getAppConfig_(key) {
   }
   return "";
 }
+
+function verifyAdminMaster_(params) {
+  const password = String(params.password || "");
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
+  }
+  if (!correctPassword) {
+    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
+  }
+
+  return {
+    success: true,
+    result: "success",
+    receiptAlert: buildAdminReceiptAlert_(buildAdminReceiptSections_(getSpreadsheet_())),
+    adminDashboard: buildAdminDashboardSummary_(getSpreadsheet_())
+  };
+}
+
+function buildAdminDashboardSummary_(ss) {
+  const receiptSections = buildAdminReceiptSections_(ss);
+  const receiptItems = [];
+  (receiptSections || []).forEach(function(section) {
+    (section.items || []).forEach(function(item) {
+      receiptItems.push(item);
+    });
+  });
+
+  const todayReceiptCount = receiptItems.reduce(function(sum, item) {
+    return sum + Number(item.todayCount || 0);
+  }, 0);
+
+  let recentReceiptAt = "";
+  receiptItems.forEach(function(item) {
+    const receivedAt = String(item.recentReceivedAt || "").trim();
+    if (!receivedAt) return;
+    if (!recentReceiptAt || receivedAt > recentReceiptAt) recentReceiptAt = receivedAt;
+  });
+
+  let activeInfectionCount = 0;
+  const infectionSheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
+  if (infectionSheet) {
+    const infectionResponse = buildAdminInfectionReportsResponse_(infectionSheet);
+    activeInfectionCount = Number(infectionResponse.summary && infectionResponse.summary.activeCount || 0);
+  }
+
+  const roadmapTaskCount = countAdminRoadmapTasks_(ss);
+
+  return {
+    todayReceiptCount: todayReceiptCount,
+    activeInfectionCount: activeInfectionCount,
+    recentReceiptAt: recentReceiptAt,
+    roadmapTaskCount: roadmapTaskCount,
+    checkItems: [
+      { label: "신규 접수", count: todayReceiptCount },
+      { label: "미종결 감염병 보고", count: activeInfectionCount },
+      { label: "확인 필요한 제출", count: todayReceiptCount }
+    ]
+  };
+}
+
+function countAdminRoadmapTasks_(ss) {
+  const roadmap = getRoadmap_(ss);
+  const taskNames = {};
+  (roadmap.items || []).forEach(function(item) {
+    const taskName = String(item.taskName || "").trim();
+    if (!taskName) return;
+    taskNames[taskName] = true;
+  });
+  return Object.keys(taskNames).length;
+}
+
+function getAdminReceiptSummary_(params) {
+  const password = String(params.password || "");
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
+  }
+  if (!correctPassword) {
+    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
+  }
+
+  const sections = buildAdminReceiptSections_(getSpreadsheet_());
+
+  return {
+    success: true,
+    result: "success",
+    updatedAt: Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
+    sections: sections,
+    alert: buildAdminReceiptAlert_(sections)
+  };
+}
+
+function buildAdminReceiptSections_(ss) {
+  const submitReports = [
+    summarizeAdminReceiptSheet_(ss, {
+      id: "tb",
+      label: "결핵검진 확인증 제출",
+      sheetName: "응답_결핵검진확인증",
+      startRow: 2,
+      dateColumn: 1,
+      requiredColumns: [1]
+    }),
+    summarizeAdminReceiptSheet_(ss, {
+      id: "cpr",
+      label: "심폐소생술 이수증 제출",
+      sheetName: "응답_심폐소생술이수증",
+      startRow: 2,
+      dateColumn: 1,
+      requiredColumns: [1]
+    }),
+    summarizeAdminReceiptSheet_(ss, {
+      id: "recruit",
+      label: "채용검진 대체 확인 요청",
+      sheetName: "응답_채용검진확인요청",
+      startRow: 2,
+      dateColumn: 1,
+      requiredColumns: [1]
+    })
+  ];
+
+  const eventApplications = [
+    summarizeAdminReceiptSheet_(ss, {
+      id: "inbody",
+      label: "인바디 측정 신청",
+      sheetName: "응답_인바디측정신청",
+      startRow: 2,
+      dateColumn: 1,
+      requiredColumns: [1]
+    })
+  ];
+
+  return [
+    { id: "submitReports", title: "제출·보고 현황", items: submitReports },
+    { id: "eventApplications", title: "이벤트 신청 현황", items: eventApplications }
+  ];
+}
+
+function buildAdminReceiptAlert_(sections) {
+  const alertItems = [];
+  (sections || []).forEach(function(section) {
+    (section.items || []).forEach(function(item) {
+      if (["tb", "cpr", "inbody"].indexOf(item.id) === -1) return;
+      alertItems.push({
+        id: item.id,
+        label: item.label,
+        todayCount: Number(item.todayCount || 0),
+        group: section.title
+      });
+    });
+  });
+
+  const totalToday = alertItems.reduce(function(sum, item) {
+    return sum + Number(item.todayCount || 0);
+  }, 0);
+
+  return {
+    totalToday: totalToday,
+    items: alertItems
+  };
+}
+
+function summarizeAdminReceiptSheet_(ss, options) {
+  const sheet = ss.getSheetByName(options.sheetName);
+  const today = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const summary = {
+    id: options.id,
+    label: options.label,
+    sheetName: options.sheetName,
+    totalCount: 0,
+    todayCount: 0,
+    recentReceivedAt: "",
+    available: !!sheet
+  };
+
+  if (!sheet) return summary;
+
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  const displayValues = range.getDisplayValues();
+  const startIndex = Math.max(Number(options.startRow || 2) - 1, 0);
+  const dateIndex = Math.max(Number(options.dateColumn || 1) - 1, 0);
+  const requiredIndexes = (options.requiredColumns || [options.dateColumn || 1])
+    .map(function(column) { return Number(column) - 1; });
+
+  for (let i = startIndex; i < values.length; i++) {
+    const row = values[i] || [];
+    const displayRow = displayValues[i] || [];
+    const hasData = requiredIndexes.some(function(index) {
+      return String(displayRow[index] || "").trim() !== "";
+    });
+    if (!hasData) continue;
+
+    summary.totalCount += 1;
+    const receivedAt = row[dateIndex];
+    const receivedAtText = String(displayRow[dateIndex] || receivedAt || "").trim();
+    const receivedDate = normalizeDateText_(receivedAt);
+    if (receivedDate === today) summary.todayCount += 1;
+    const receivedDateTime = parseAdminReceiptDateTime_(receivedAt, receivedAtText);
+    if (
+      receivedDateTime &&
+      (!summary.recentReceivedAtValue || receivedDateTime.getTime() > summary.recentReceivedAtValue)
+    ) {
+      summary.recentReceivedAtValue = receivedDateTime.getTime();
+      summary.recentReceivedAt = formatAdminReceiptDateTime_(receivedDateTime);
+    }
+  }
+
+  delete summary.recentReceivedAtValue;
+  return summary;
+}
+
+function parseAdminReceiptDateTime_(value, displayText) {
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return value;
+  }
+
+  const raw = String(displayText || value || "").trim();
+  if (!raw) return null;
+
+  const normalized = raw
+    .replace(/\./g, "-")
+    .replace(/\//g, "-")
+    .replace(/\s+/g, " ");
+  const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (match) {
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4] || 0),
+      Number(match[5] || 0),
+      Number(match[6] || 0)
+    );
+  }
+
+  const fallback = new Date(raw);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+function formatAdminReceiptDateTime_(date) {
+  return "최근 접수 " + Utilities.formatDate(date, TIMEZONE, "yyyy-MM-dd HH:mm");
+}
+
+function getAdminInfectionReports_(params) {
+  const password = String(params.password || "");
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
+  }
+  if (!correctPassword) {
+    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
+  }
+
+  const ss = getSpreadsheet_();
+  const sheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
+  if (!sheet) {
+    return {
+      success: false,
+      result: "error",
+      message: SHEET_NAMES.infectionManagement + " 탭을 찾을 수 없습니다."
+    };
+  }
+
+  ensureInfectionStatusColumn_(sheet);
+  return buildAdminInfectionReportsResponse_(sheet);
+}
+
+function buildAdminInfectionReportsResponse_(sheet) {
+  const values = sheet.getDataRange().getDisplayValues();
+  const today = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
+  const items = [];
+  for (let i = 4; i < values.length; i++) {
+    const row = values[i] || [];
+    const name = String(row[5] || "").trim();
+    const disease = String(row[6] || "").trim();
+    const diagnosisDate = String(row[7] || "").trim();
+    if (!name && !disease && !diagnosisDate) continue;
+
+    const state = getInfectionReportState_(row, today);
+    const receivedAt = String(row[1] || "").trim();
+    const diagnosisKey = normalizeDateText_(diagnosisDate);
+    const receivedKey = normalizeDateText_(receivedAt);
+    const reportComplete = isTruthy_(row[10]);
+    const memo = String(row[11] || "").trim();
+
+    items.push({
+      id: String(i + 1),
+      receivedAt: receivedAt,
+      occurredAt: diagnosisDate,
+      grade: String(row[2] || "").trim(),
+      classNumber: String(row[3] || "").trim(),
+      studentNumber: String(row[4] || "").trim(),
+      diseaseType: disease,
+      diagnosisDate: diagnosisDate,
+      exclusionStartDate: String(row[8] || "").trim(),
+      exclusionEndDate: String(row[9] || "").trim(),
+      status: state,
+      homeroomNoticeStatus: reportComplete ? "보고 완료" : "시트 확인",
+      memoStatus: memo ? "메모 있음 - 원본 시트 확인" : "메모 없음",
+      sortKey: receivedKey || diagnosisKey || ""
+    });
+  }
+
+  items.sort(function(a, b) {
+    return String(b.sortKey || "").localeCompare(String(a.sortKey || ""));
+  });
+
+  const summary = {
+    todayNewCount: 0,
+    activeCount: 0,
+    returnCheckCount: 0,
+    closedCount: 0
+  };
+
+  items.forEach(function(item) {
+    if (normalizeDateText_(item.receivedAt) === today) summary.todayNewCount += 1;
+    if (item.status === "복귀 확인 필요") summary.returnCheckCount += 1;
+    if (item.status === "종결") summary.closedCount += 1;
+    else summary.activeCount += 1;
+  });
+
+  return {
+    success: true,
+    result: "success",
+    updatedAt: Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
+    summary: summary,
+    items: items
+  };
+}
+
+function getInfectionReportState_(row, today) {
+  const savedStatus = String(row[13] || "").trim();
+  if (isValidInfectionStatus_(savedStatus)) return savedStatus;
+
+  if (isTruthy_(row[10])) return "종결";
+
+  const receivedDate = normalizeDateText_(row[1]);
+  const startDate = normalizeDateText_(row[8]);
+  const endDate = normalizeDateText_(row[9]);
+
+  if (endDate && endDate < today) return "복귀 확인 필요";
+  if (startDate || endDate) return "관리 중";
+  if (receivedDate === today) return "신규";
+  return "확인 중";
+}
+
+function updateAdminInfectionReportStatus_(params) {
+  const password = String(params.password || "");
+  const rowId = Number(params.rowId || 0);
+  const status = String(params.status || "").trim();
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
+  }
+  if (!correctPassword) {
+    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
+  }
+  if (password !== correctPassword) {
+    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
+  }
+  if (!rowId || rowId < 5) {
+    return { success: false, result: "error", message: "상태를 변경할 보고 행을 찾을 수 없습니다." };
+  }
+  if (!isValidInfectionStatus_(status)) {
+    return { success: false, result: "error", message: "변경할 수 없는 상태값입니다." };
+  }
+
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.infectionManagement);
+  if (!sheet || rowId > sheet.getLastRow()) {
+    return { success: false, result: "error", message: "원본 감염병 보고 행을 찾을 수 없습니다." };
+  }
+
+  const row = sheet.getRange(rowId, 1, 1, 14).getDisplayValues()[0] || [];
+  const hasReport = String(row[5] || "").trim() || String(row[6] || "").trim() || String(row[7] || "").trim();
+  if (!hasReport) {
+    return { success: false, result: "error", message: "원본 감염병 보고 행이 비어 있습니다." };
+  }
+
+  ensureInfectionStatusColumn_(sheet);
+  sheet.getRange(rowId, 14).setValue(status);
+
+  return buildAdminInfectionReportsResponse_(sheet);
+}
+
+function ensureInfectionStatusColumn_(sheet) {
+  const headerRow = 4;
+  const statusColumn = 14;
+  const header = String(sheet.getRange(headerRow, statusColumn).getDisplayValue() || "").trim();
+  if (!header) {
+    sheet.getRange(headerRow, statusColumn).setValue("관리상태");
+  }
+}
+
+function isValidInfectionStatus_(status) {
+  return ["신규", "확인 중", "관리 중", "복귀 확인 필요", "종결"].indexOf(String(status || "").trim()) !== -1;
+}
+
 function parseTbRegistrationDate_(value, boundary) {
   if (!value) return null;
 
@@ -1142,6 +1872,84 @@ function isTrue_(value) {
   return text === "TRUE" || text === "사용" || text === "Y" || text === "YES" || text === "1";
 }
 
+function parseExposureDateBoundary_(value, boundary) {
+  if (!value) return null;
+
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    const date = new Date(value.getTime());
+    if (
+      date.getHours() === 0 &&
+      date.getMinutes() === 0 &&
+      date.getSeconds() === 0 &&
+      date.getMilliseconds() === 0
+    ) {
+      if (boundary === "end") date.setHours(23, 59, 59, 999);
+      else date.setHours(0, 0, 0, 0);
+    }
+    return date;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/\s+/g, " ");
+  const match = normalized.match(
+    /^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/
+  );
+
+  if (!match) {
+    const fallback = new Date(raw);
+    if (isNaN(fallback.getTime())) return null;
+    if (
+      boundary === "end" &&
+      fallback.getHours() === 0 &&
+      fallback.getMinutes() === 0 &&
+      fallback.getSeconds() === 0 &&
+      fallback.getMilliseconds() === 0
+    ) {
+      fallback.setHours(23, 59, 59, 999);
+    }
+    return fallback;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hasTime = match[4] !== undefined;
+
+  if (hasTime) {
+    return new Date(
+      year,
+      month - 1,
+      day,
+      Number(match[4]),
+      Number(match[5]),
+      Number(match[6] || 0),
+      0
+    );
+  }
+
+  if (boundary === "end") return new Date(year, month - 1, day, 23, 59, 59, 999);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function getExposureState_(row, now) {
+  const startRaw = getValue_(row, ["노출시작일"]);
+  const endRaw = getValue_(row, ["노출종료일"]);
+  if (!startRaw && !endRaw) return "visible";
+
+  const start = parseExposureDateBoundary_(startRaw, "start");
+  const end = parseExposureDateBoundary_(endRaw, "end");
+
+  if (start && now.getTime() < start.getTime()) return "before";
+  if (end && now.getTime() > end.getTime()) return "closed";
+  return "visible";
+}
+
+function isVisibleByExposure_(row, now) {
+  return getExposureState_(row, now || new Date()) === "visible";
+}
+
 function splitLines_(text) {
   if (!text) return [];
   return String(text).split(/\r?\n|<br\s*\/?>/i).map(v => v.trim()).filter(Boolean);
@@ -1156,7 +1964,8 @@ function getTitleLines_(row) {
 // ════════════════════════════════════════════════════════════════
 
 function getNotices_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalNotices).map(r => ({
+  const now = new Date();
+  return getRows_(ss, SHEET_NAMES.portalNotices).filter(r => isVisibleByExposure_(r, now)).map(r => ({
     title:       getValue_(r, ["제목"]),
     titleLines:  getTitleLines_(r),
     date:        getValue_(r, ["일시"]),
@@ -1169,7 +1978,8 @@ function getNotices_(ss) {
 }
 
 function getUploads_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalUploads).map(r => ({
+  const now = new Date();
+  return getRows_(ss, SHEET_NAMES.portalUploads).filter(r => isVisibleByExposure_(r, now)).map(r => ({
     title:        getValue_(r, ["제목"]),
     titleLines:   getTitleLines_(r),
     description:  getValue_(r, ["설명"]),
@@ -1186,7 +1996,8 @@ function getUploads_(ss) {
 }
 
 function getCheckups_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalCheckups).map(r => ({
+  const now = new Date();
+  return getRows_(ss, SHEET_NAMES.portalCheckups).filter(r => isVisibleByExposure_(r, now)).map(r => ({
     title:          getValue_(r, ["제목"]),
     description:    getValue_(r, ["설명"]),
     target:         getValue_(r, ["대상"]),
@@ -1293,10 +2104,27 @@ function getRoadmap_(ss) {
         privacyNote:   getValue_(r, ["개인정보주의"]),
         relatedSheet:  getValue_(r, ["관련시트"]),
         relatedMenuId: getValue_(r, ["관련메뉴ID"]),
+        relatedSheetUrl: getValue_(r, ["관련시트_URL"]),
+        sheetUrl:      getValue_(r, ["관련시트_URL"]),
+        tools:         getRoadmapTools_(r),
         sortOrder:     Number(getValue_(r, ["정렬순서"], "999") || 999)
       }))
     : [];
   return { enabled, adminOnly, items };
+}
+
+function getRoadmapTools_(row) {
+  const tools = [];
+  [1, 2, 3].forEach(function(index) {
+    const name = getValue_(row, ["관련도구" + index + "_이름"]);
+    if (!name) return;
+    tools.push({
+      name: name,
+      type: String(getValue_(row, ["관련도구" + index + "_유형"], "info") || "info").trim().toLowerCase(),
+      url: getValue_(row, ["관련도구" + index + "_URL"])
+    });
+  });
+  return tools;
 }
 
 // ════════════════════════════════════════════════════════════════

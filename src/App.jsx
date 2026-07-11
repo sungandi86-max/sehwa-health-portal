@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import AdminAuthGate from "./components/AdminAuthGate.jsx";
 import Footer from "./components/Footer.jsx";
 import Header from "./components/Header.jsx";
+import AdminMessageHelperPage from "./pages/AdminMessageHelperPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
+import AdminInfectionReportPage from "./pages/AdminInfectionReportPage.jsx";
+import AdminReceiptStatusPage from "./pages/AdminReceiptStatusPage.jsx";
 import AdminRoadmapPage from "./pages/AdminRoadmapPage.jsx";
 import CheckupPage from "./pages/CheckupPage.jsx";
 import EducationPage from "./pages/EducationPage.jsx";
@@ -62,7 +66,7 @@ function SkeletonCard() {
 
 function LoadingSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
+    <div className="mx-auto w-full max-w-6xl px-4 py-10 lg:max-w-[1280px]">
       <div className="mb-5 animate-pulse">
         <div className="mb-2 h-3 w-20 rounded bg-slate-200" />
         <div className="h-7 w-48 rounded-lg bg-slate-200" />
@@ -122,13 +126,13 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <main className="min-h-screen w-full overflow-x-hidden bg-[#F7F9FC] font-sans text-[#263238]">
+      <main className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#F7F9FC] font-sans text-[#263238]">
         <Header />
 
-        {isLoading ? (
-          <LoadingSkeleton />
-        ) : (
-          <>
+        <div className="flex-1">
+          {isLoading ? (
+            <LoadingSkeleton />
+          ) : (
             <Routes>
               <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
               <Route path="/today"       element={<TodayPage       items={liveNotices} />} />
@@ -139,11 +143,15 @@ export default function App() {
               <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
               <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
               <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
-              <Route path="/admin"       element={<AdminPage roadmap={liveRoadmap} />} />
-              <Route path="/admin/roadmap" element={<AdminRoadmapPage roadmap={liveRoadmap} />} />
+              <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
+              <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
+              <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
+              <Route path="/admin/receipts" element={<AdminAuthGate><AdminReceiptStatusPage /></AdminAuthGate>} />
+              <Route path="/admin/infections" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
+              <Route path="/admin/infection-reports" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
             </Routes>
-          </>
-        )}
+          )}
+        </div>
 
         <Footer />
       </main>

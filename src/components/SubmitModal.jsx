@@ -10,6 +10,7 @@ const FOLDER_IDS = {
 const STAFF_TYPES = ["교사", "강사", "행정직원"];
 const DEPT_TYPES = ["교무교육과정부", "진로진학홍보부", "연구정보부", "창의인성부", "생활안전부", "1학년부", "2학년부", "3학년부", "행정실", "관리자"];
 const TB_DOC_TYPES = ["결핵검진 확인증", "흉부 X-ray 확인 자료", "기타 동등 자료"];
+const INFECTION_TYPES = ["코로나19", "인플루엔자", "수두", "장염", "기타"];
 
 // ───────── 공통 입력 필드 스타일 ─────────
 const inputCls =
@@ -399,7 +400,7 @@ function OtherForm({ onSubmit, submitting }) {
 }
 
 // ───────── 제출 버튼 ─────────
-function SubmitButton({ onClick, submitting }) {
+function SubmitButton({ onClick, submitting, children = "제출하기" }) {
   return (
     <button
       type="button"
@@ -420,9 +421,209 @@ function SubmitButton({ onClick, submitting }) {
           제출 중...
         </span>
       ) : (
-        "제출하기"
+        children
       )}
     </button>
+  );
+}
+
+// ───────── 학생 파일 업로드 공통 폼 ─────────
+function StudentFileUploadForm({
+  onSubmit,
+  submitting,
+  meta,
+  publicMode = false,
+}) {
+  const [form, setForm] = useState({
+    grade: "",
+    classNumber: "",
+    studentNumber: "",
+    studentName: "",
+    visitDate: "",
+    hospitalName: "",
+    note: "",
+  });
+  const [file, setFile] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  const validate = () => {
+    const nextErrors = {};
+    if (!form.grade) nextErrors.grade = "학년을 선택해주세요.";
+    if (!form.classNumber) nextErrors.classNumber = "반을 선택해주세요.";
+    if (!form.studentNumber.trim()) nextErrors.studentNumber = "번호를 입력해주세요.";
+    if (!form.studentName.trim()) nextErrors.studentName = "학생 이름을 입력해주세요.";
+    if (!file) nextErrors.file = "진료회신 파일을 첨부해주세요.";
+    else if (file.size > 10 * 1024 * 1024) nextErrors.file = "파일 크기가 10MB를 초과합니다.";
+    return nextErrors;
+  };
+
+  const handleSubmit = async () => {
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    const base64 = await fileToBase64(file);
+    const ext = file.name.split(".").pop();
+    const fileName = `${form.grade}학년_${form.classNumber}반_${form.studentNumber}번_${form.studentName}_${meta.fileNameLabel}_${todayStr()}.${ext}`;
+
+    await onSubmit({
+      type: meta.type,
+      sheetName: meta.sheetName,
+      folderId: meta.folderId,
+      fields: {
+        grade: form.grade,
+        classNumber: form.classNumber,
+        studentNumber: form.studentNumber.trim(),
+        studentName: form.studentName.trim(),
+        visitDate: form.visitDate,
+        hospitalName: form.hospitalName.trim(),
+        note: form.note.trim(),
+      },
+      submissionType: meta.submissionType,
+      submissionTitle: meta.submissionTitle,
+      grade: form.grade,
+      classNumber: form.classNumber,
+      studentNumber: form.studentNumber.trim(),
+      studentName: form.studentName.trim(),
+      visitDate: form.visitDate,
+      hospitalName: form.hospitalName.trim(),
+      note: form.note.trim(),
+      fileName,
+      fileBase64: base64,
+      fileMimeType: file.type,
+      mimeType: file.type,
+    });
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        {meta.guide}
+      </div>
+
+      {publicMode && <PrivacyNoticeBox />}
+
+      <div className="space-y-3">
+        <p className="text-sm font-black text-[#1A3B8B]">학생 정보</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="학년" required>
+            <select className={selectCls} value={form.grade} onChange={set("grade")}>
+              <option value="">선택</option>
+              {["1", "2", "3"].map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+            {errors.grade && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.grade}</p>}
+          </Field>
+          <Field label="반" required>
+            <select className={selectCls} value={form.classNumber} onChange={set("classNumber")}>
+              <option value="">선택</option>
+              {Array.from({ length: 12 }, (_, index) => String(index + 1)).map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+            {errors.classNumber && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.classNumber}</p>}
+          </Field>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="번호" required>
+            <input className={inputCls} type="number" inputMode="numeric" min="1" value={form.studentNumber} onChange={set("studentNumber")} />
+            {errors.studentNumber && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.studentNumber}</p>}
+          </Field>
+          <Field label="학생 이름" required>
+            <input className={inputCls} value={form.studentName} onChange={set("studentName")} placeholder="학생 이름" />
+            {errors.studentName && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.studentName}</p>}
+          </Field>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-sm font-black text-[#1A3B8B]">진료 정보</p>
+        <Field label="진료일">
+          <input type="date" className={inputCls} value={form.visitDate} onChange={set("visitDate")} />
+        </Field>
+        <Field label="의료기관명">
+          <input className={inputCls} value={form.hospitalName} onChange={set("hospitalName")} placeholder="의료기관명" />
+        </Field>
+        <Field label="비고">
+          <textarea
+            className={inputCls + " resize-none"}
+            rows={3}
+            value={form.note}
+            onChange={set("note")}
+            placeholder="추가로 전달할 내용이 있으면 입력해주세요."
+          />
+        </Field>
+      </div>
+
+      <Field label="파일 업로드" required>
+        <FileUploadArea file={file} onChange={setFile} error={errors.file} />
+        <p className="mt-1.5 text-xs text-slate-400">JPG · PNG · PDF 파일을 첨부해주세요.</p>
+      </Field>
+
+      <SubmitButton onClick={handleSubmit} submitting={submitting}>
+        {meta.submitLabel}
+      </SubmitButton>
+    </div>
+  );
+}
+
+function PrivacyNoticeBox() {
+  const collectedItems = ["학년", "반", "번호", "학생 이름", "진료일", "의료기관명", "제출 파일"];
+
+  return (
+    <div className="rounded-3xl border border-[#C9DFFF] bg-[#F7FBFF] p-5 text-sm leading-8 text-slate-700 sm:p-6">
+      <p className="mb-3 flex items-center gap-2 text-base font-black text-[#1A3B8B]">
+        <span aria-hidden="true">🔒</span>
+        <span>개인정보 처리 안내</span>
+      </p>
+      <div className="space-y-3">
+        <p>본 제출 화면은 결핵검진 진료회신서 제출을 위한 화면입니다.</p>
+        <p>
+          제출하신 정보는 결핵검진 추가 검진 여부 확인 및 학생 건강관리 업무를 위해서만 사용됩니다.
+        </p>
+        <div>
+          <p className="font-bold text-[#1A3B8B]">수집 항목</p>
+          <ul className="mt-2 grid gap-1 pl-1 sm:grid-cols-2">
+            {collectedItems.map((item) => (
+              <li key={item} className="flex gap-2">
+                <span className="text-[#1A3B8B]">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p>
+          제출된 파일은 학교 보건업무 담당자가 관리하는 <span className="font-bold text-[#1A3B8B]">Google Drive</span>에 저장되며,
+          제출 목적 외의 별도 서비스나 외부 저장소에는 저장되지 않습니다.
+        </p>
+        <p>
+          제출된 자료는 결핵검진 진료회신 확인 및 학생 건강관리 업무에만 사용되며,
+          목적 외로 이용되지 않습니다.
+        </p>
+        <p>문의사항은 학교 보건실로 문의해 주시기 바랍니다.</p>
+      </div>
+    </div>
+  );
+}
+
+function StudentTbReplyForm({ onSubmit, submitting, publicMode = false }) {
+  return (
+    <StudentFileUploadForm
+      onSubmit={onSubmit}
+      submitting={submitting}
+      publicMode={publicMode}
+      meta={{
+        type: "student-file",
+        submissionType: "student-file",
+        submissionTitle: "결핵검진 진료회신 제출",
+        sheetName: "응답_결핵검진진료회신",
+        folderId: "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63",
+        fileNameLabel: "결핵검진진료회신",
+        guide: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해 주세요.",
+        submitLabel: "진료회신 업로드하기",
+      }}
+    />
   );
 }
 
@@ -668,6 +869,144 @@ function InbodyRegistrationForm({ onSubmit, submitting }) {
   );
 }
 
+function InfectionReportForm({ onSubmit, submitting }) {
+  const [form, setForm] = useState({
+    grade: "",
+    classNumber: "",
+    studentNumber: "",
+    studentName: "",
+    diseaseType: "",
+    diseaseEtc: "",
+    diagnosisDate: "",
+    exclusionStartDate: "",
+    exclusionEndDate: "",
+    memo: "",
+  });
+  const [errors, setErrors] = useState({});
+
+  const set = (key) => (event) => {
+    const value = event.target.value;
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key === "diseaseType" && value !== "기타" ? { diseaseEtc: "" } : {}),
+    }));
+  };
+
+  const validate = () => {
+    const nextErrors = {};
+    if (!form.grade) nextErrors.grade = "학년을 선택해주세요.";
+    if (!form.classNumber) nextErrors.classNumber = "반을 선택해주세요.";
+    if (!form.studentNumber.trim()) nextErrors.studentNumber = "번호를 입력해주세요.";
+    if (!form.studentName.trim()) nextErrors.studentName = "학생 이름을 입력해주세요.";
+    if (!form.diseaseType) nextErrors.diseaseType = "감염병 종류를 선택해주세요.";
+    if (form.diseaseType === "기타" && !form.diseaseEtc.trim()) nextErrors.diseaseEtc = "기타 감염병명을 입력해주세요.";
+    if (!form.diagnosisDate) nextErrors.diagnosisDate = "진단일을 선택해주세요.";
+    return nextErrors;
+  };
+
+  const handleSubmit = async () => {
+    const nextErrors = validate();
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    await onSubmit({
+      type: "infection",
+      action: "infectionReport",
+      grade: form.grade,
+      classNumber: form.classNumber,
+      studentNumber: form.studentNumber.trim(),
+      studentName: form.studentName.trim(),
+      diseaseType: form.diseaseType,
+      diseaseEtc: form.diseaseEtc.trim(),
+      diagnosisDate: form.diagnosisDate,
+      exclusionStartDate: form.exclusionStartDate,
+      exclusionEndDate: form.exclusionEndDate,
+      memo: form.memo.trim(),
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        ※ 본 화면은 교직원 내부 업무용입니다.<br />
+        학생 이름과 감염병명이 포함되므로 외부 공유, 화면 캡처, 불필요한 열람을 삼가 주세요.
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="학년" required>
+          <select className={selectCls} value={form.grade} onChange={set("grade")}>
+            <option value="">선택</option>
+            {["1", "2", "3"].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          {errors.grade && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.grade}</p>}
+        </Field>
+        <Field label="반" required>
+          <select className={selectCls} value={form.classNumber} onChange={set("classNumber")}>
+            <option value="">선택</option>
+            {Array.from({ length: 12 }, (_, index) => String(index + 1)).map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+          {errors.classNumber && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.classNumber}</p>}
+        </Field>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="번호" required>
+          <input className={inputCls} type="number" inputMode="numeric" min="1" value={form.studentNumber} onChange={set("studentNumber")} />
+          {errors.studentNumber && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.studentNumber}</p>}
+        </Field>
+        <Field label="학생 이름" required>
+          <input className={inputCls} value={form.studentName} onChange={set("studentName")} placeholder="학생 이름" />
+          {errors.studentName && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.studentName}</p>}
+        </Field>
+      </div>
+
+      <Field label="감염병 종류" required>
+        <select className={selectCls} value={form.diseaseType} onChange={set("diseaseType")}>
+          <option value="">선택해주세요</option>
+          {INFECTION_TYPES.map((value) => <option key={value} value={value}>{value}</option>)}
+        </select>
+        {errors.diseaseType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.diseaseType}</p>}
+      </Field>
+
+      {form.diseaseType === "기타" && (
+        <Field label="기타 감염병명" required>
+          <input className={inputCls} value={form.diseaseEtc} onChange={set("diseaseEtc")} placeholder="감염병명 입력" />
+          {errors.diseaseEtc && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.diseaseEtc}</p>}
+        </Field>
+      )}
+
+      <Field label="진단일" required>
+        <input className={inputCls} type="date" value={form.diagnosisDate} onChange={set("diagnosisDate")} />
+        {errors.diagnosisDate && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.diagnosisDate}</p>}
+      </Field>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="등교중지 시작일">
+          <input className={inputCls} type="date" value={form.exclusionStartDate} onChange={set("exclusionStartDate")} />
+        </Field>
+        <Field label="등교중지 종료일">
+          <input className={inputCls} type="date" value={form.exclusionEndDate} onChange={set("exclusionEndDate")} />
+        </Field>
+      </div>
+
+      <Field label="비고">
+        <textarea
+          className={inputCls + " resize-none"}
+          rows={3}
+          value={form.memo}
+          onChange={set("memo")}
+          placeholder="추가로 전달할 내용이 있으면 입력해주세요."
+        />
+      </Field>
+
+      <SubmitButton onClick={handleSubmit} submitting={submitting} />
+    </div>
+  );
+}
+
 // ───────── 모달 타입 → 제목 ─────────
 const MODAL_META = {
   cpr: { title: "심폐소생술 이수증 제출", icon: "💚", color: "text-[#2E7D32]" },
@@ -676,6 +1015,8 @@ const MODAL_META = {
   other: { title: "기타 보건 관련 자료 제출", icon: "📂", color: "text-slate-600" },
   tb_registration: { title: "교직원 결핵검진 유형 선택", icon: "🫁", color: "text-[#1A3B8B]" },
   inbody: { title: "인바디 측정 신청", icon: "⚖️", color: "text-[#1A3B8B]" },
+  student_tb_reply: { title: "결핵검진 진료회신 제출", icon: "📄", color: "text-[#1A3B8B]" },
+  infection: { title: "감염병 발생 보고", icon: "📝", color: "text-[#1A3B8B]" },
 };
 
 function formatSubmittedAt(date = new Date()) {
@@ -690,12 +1031,13 @@ function formatSubmittedAt(date = new Date()) {
   ].join(":");
 }
 
-function isSubmitSuccess(json) {
+function isSubmitSuccess(json, payload) {
+  if (payload?.action === "infectionReport") return json?.success === true;
   return json?.status === "success" || json?.success === true || json?.ok === true;
 }
 
 // ───────── 메인 모달 컴포넌트 ─────────
-export default function SubmitModal({ type, onClose, tbConfig }) {
+export default function SubmitModal({ type, onClose, tbConfig, publicMode = false }) {
   const [status, setStatus] = useState("idle"); // idle | submitting | success
   const [submitError, setSubmitError] = useState("");
   const [successInfo, setSuccessInfo] = useState(null);
@@ -725,11 +1067,20 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
         body: JSON.stringify(payload),
       });
       const json = await res.json();
-      if (isSubmitSuccess(json)) {
+      if (isSubmitSuccess(json, payload)) {
+        const isStudentFile = payload.type === "student-file" || payload.submissionType === "student-file";
         setSuccessInfo({
           type: payload.type || type,
-          submitterName: payload.fields?.name || "",
+          submitterName: payload.fields?.name || payload.fields?.studentName || "",
           itemTitle: meta.title || "제출 자료",
+          studentInfo: isStudentFile
+            ? `${payload.fields.grade}학년 ${payload.fields.classNumber}반 ${payload.fields.studentNumber}번 ${payload.fields.studentName}`
+            : payload.action === "infectionReport"
+            ? `${payload.grade}학년 ${payload.classNumber}반 ${payload.studentNumber}번 ${payload.studentName}`
+            : "",
+          diseaseName: payload.action === "infectionReport"
+            ? (payload.diseaseType === "기타" ? payload.diseaseEtc : payload.diseaseType)
+            : "",
           submittedAt: json.submittedAt || json.timestamp || formatSubmittedAt(),
         });
         setStatus("success");
@@ -738,7 +1089,9 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
       }
     } catch (err) {
       console.error("[SubmitModal] submit failed", err);
-      setSubmitError("제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주시거나 보건실로 문의해주세요.");
+      setSubmitError(err.message && err.message !== "unknown error"
+        ? err.message
+        : "제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주시거나 보건실로 문의해주세요.");
       setStatus("idle");
     }
   };
@@ -774,7 +1127,7 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
         {/* 바디 */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {status === "success" ? (
-            <SuccessView info={successInfo} onClose={onClose} onAnother={resetForAnother} />
+            <SuccessView info={successInfo} onClose={onClose} onAnother={resetForAnother} publicMode={publicMode} />
           ) : (
             <>
               {submitError && (
@@ -784,10 +1137,12 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
               )}
               {type === "cpr" && <CprForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "tb" && <TbForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
+              {type === "student_tb_reply" && <StudentTbReplyForm onSubmit={handleSubmit} submitting={status === "submitting"} publicMode={publicMode} />}
               {type === "recruit" && <RecruitForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "other" && <OtherForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} tbConfig={tbConfig} />}
               {type === "inbody" && <InbodyRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
+              {type === "infection" && <InfectionReportForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
             </>
           )}
         </div>
@@ -796,18 +1151,28 @@ export default function SubmitModal({ type, onClose, tbConfig }) {
   );
 }
 
-function SuccessView({ info, onClose, onAnother }) {
+function SuccessView({ info, onClose, onAnother, publicMode = false }) {
   const isRecruit = info?.type === "recruit";
   const isInbody = info?.type === "inbody";
+  const isInfection = info?.type === "infection";
+  const isStudentFile = info?.type === "student-file" || info?.type === "student_tb_reply";
   const title = isRecruit
     ? "확인 요청이 접수되었습니다."
     : isInbody
       ? "신청 완료"
-      : "제출이 완료되었습니다.";
+      : isStudentFile
+        ? "진료회신 업로드가 완료되었습니다."
+      : isInfection
+        ? "감염병 발생 보고가 제출되었습니다."
+        : "제출이 완료되었습니다.";
   const body = isRecruit
     ? `${info?.submitterName || "제출자"} 선생님의 채용검진 대체 인정 확인 요청이 정상 접수되었습니다.`
     : isInbody
       ? "인바디 측정 신청이 완료되었습니다."
+      : isStudentFile
+        ? "학생 진료회신 자료가 정상 업로드되었습니다."
+      : isInfection
+        ? "보건실에서 확인 후 필요한 경우 추가 안내드리겠습니다."
       : `${info?.submitterName || "제출자"} 선생님의 자료가 정상 제출되었습니다.`;
 
   return (
@@ -821,8 +1186,10 @@ function SuccessView({ info, onClose, onAnother }) {
           <p className="mt-2 text-sm leading-7 text-slate-600">{body}</p>
         </div>
         <div className="rounded-2xl bg-[#F7F9FC] p-4 text-left text-sm leading-7 text-slate-700">
-          <p><span className="font-black text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>
+          {!isInfection && !isStudentFile && <p><span className="font-black text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>}
           <p><span className="font-black text-[#1A3B8B]">제출 항목:</span> {info?.itemTitle || "-"}</p>
+          {(isInfection || isStudentFile) && <p><span className="font-black text-[#1A3B8B]">학생 정보:</span> {info?.studentInfo || "-"}</p>}
+          {isInfection && <p><span className="font-black text-[#1A3B8B]">감염병명:</span> {info?.diseaseName || "-"}</p>}
           <p><span className="font-black text-[#1A3B8B]">제출시간:</span> {info?.submittedAt || "-"}</p>
         </div>
         <p className="text-sm leading-7 text-slate-600">
@@ -845,12 +1212,14 @@ function SuccessView({ info, onClose, onAnother }) {
         >
           닫기
         </button>
-        <button
-          onClick={onAnother}
-          className="w-full rounded-2xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-600"
-        >
-          다른 자료 제출하기
-        </button>
+        {!publicMode && (
+          <button
+            onClick={onAnother}
+            className="w-full rounded-2xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-600"
+          >
+            다른 자료 제출하기
+          </button>
+        )}
       </div>
     </div>
   );

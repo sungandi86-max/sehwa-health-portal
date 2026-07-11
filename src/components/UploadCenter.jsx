@@ -1,7 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { uploadIntro } from "../data/fallbackData.js";
 import { AppCard, Badge, SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
+
+const INFECTION_REPORT_CARD = {
+  title: "감염병 발생 보고",
+  titleLines: ["감염병 발생", "보고"],
+  description: "학생이 감염병 진단을 받은 경우, 담임 선생님께서 학년·반·번호·학생명·감염병 종류·진단일을 입력해 주세요. 제출된 내용은 보건실 감염병 관리 현황 시트에 자동 기록됩니다.",
+  target: "담임교사",
+  documentType: "감염병 발생 정보",
+  deadline: "수시",
+  fileGuide: "학생 건강정보가 포함되므로 필요한 업무 범위 안에서만 입력해 주세요.",
+  buttonText: "감염병 발생 보고하기",
+  status: "접수 중",
+  uploadType: "infection",
+  highlight: true,
+};
+
+const TB_REPLY_PUBLIC_CARD = {
+  title: "결핵검진 진료회신 제출",
+  titleLines: ["결핵검진", "진료회신 제출"],
+  description: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해주세요.",
+  target: "결핵검진 진료회신 제출 대상 학생",
+  documentType: "진료회신란 또는 진료확인서",
+  deadline: "별도 안내일까지",
+  fileGuide: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해 주세요.",
+  buttonText: "진료회신 업로드하기",
+  status: "접수 중",
+  uploadType: "student-file",
+  highlight: true,
+};
 
 const SUBMIT_TYPE_CONFIG = {
   cpr: {
@@ -16,17 +44,29 @@ const SUBMIT_TYPE_CONFIG = {
     aliases: ["tb_registration", "tb-registration", "tb_reply", "tb_response", "결핵검진회신서", "결핵검진유형선택"],
     keywords: ["교직원 결핵검진 유형", "결핵검진 유형 선택", "결핵검진 회신", "회신서"],
   },
+  student_tb_reply: {
+    modalType: "student_tb_reply",
+    sheetName: "응답_결핵검진진료회신",
+    aliases: ["student_tb_reply", "student-file", "student_file", "studentfile"],
+    keywords: ["진료회신", "진료확인서", "student_tb_reply"],
+  },
   tb: {
     modalType: "tb",
     sheetName: "응답_결핵검진확인증",
     aliases: ["tb", "tb_certificate", "tuberculosis_certificate", "결핵검진확인증"],
-    keywords: ["결핵검진 확인증", "결핵검진확인증", "흉부 x-ray", "흉부X-ray"],
+    keywords: ["결핵검진 확인증", "결핵검진확인증", "흉부 x-ray", "흉부x-ray"],
   },
   recruit: {
     modalType: "recruit",
     sheetName: "응답_채용검진확인요청",
     aliases: ["recruit", "recruit_checkup", "employment_checkup", "채용검진"],
     keywords: ["채용검진", "대체 인정", "확인 요청"],
+  },
+  infection: {
+    modalType: "infection",
+    sheetName: "응답_감염병발생보고",
+    aliases: ["infection", "infection_report", "감염병"],
+    keywords: ["감염병"],
   },
   other: {
     modalType: "other",
@@ -36,7 +76,7 @@ const SUBMIT_TYPE_CONFIG = {
   },
 };
 
-const SUBMIT_TYPE_ORDER = ["cpr", "tb_registration", "tb", "recruit", "other"];
+const SUBMIT_TYPE_ORDER = ["cpr", "tb_registration", "student_tb_reply", "tb", "recruit", "infection", "other"];
 const VALID_MODAL_TYPES = new Set(SUBMIT_TYPE_ORDER);
 
 function normalizeSubmitValue(value) {
@@ -57,13 +97,8 @@ function resolveSubmitCardType(item) {
   );
   if (sheetMatch) return sheetMatch;
 
-  const identityText = [
-    item.submitType,
-    item.type,
-    item.id,
-    item.key,
-    item.uploadType,
-  ].map(normalizeSubmitValue);
+  const identityText = [item.submitType, item.submissionType, item.type, item.id, item.key, item.uploadType, item.url]
+    .map(normalizeSubmitValue);
 
   const aliasMatch = SUBMIT_TYPE_ORDER.find((type) =>
     SUBMIT_TYPE_CONFIG[type].aliases.some((alias) =>
@@ -72,13 +107,11 @@ function resolveSubmitCardType(item) {
   );
   if (aliasMatch) return aliasMatch;
 
-  const searchableText = normalizeSubmitValue([
-    item.title,
-    ...(item.titleLines || []),
-    item.documentType,
-    item.buttonText,
-    item.fileGuide,
-  ].filter(Boolean).join(" "));
+  const searchableText = normalizeSubmitValue(
+    [item.title, ...(item.titleLines || []), item.documentType, item.buttonText, item.fileGuide, item.url]
+      .filter(Boolean)
+      .join(" ")
+  );
 
   const keywordMatch = SUBMIT_TYPE_ORDER.find((type) =>
     SUBMIT_TYPE_CONFIG[type].keywords.some((keyword) =>
@@ -92,31 +125,47 @@ function resolveSubmitCardType(item) {
   return "other";
 }
 
-export default function UploadCenter({ items }) {
+export default function UploadCenter({ items, publicMode = false, publicType = "" }) {
   const [modalType, setModalType] = useState(null);
+  const allItems = items.some((item) => resolveSubmitCardType(item) === "infection")
+    ? items
+    : [...items, INFECTION_REPORT_CARD];
+  const publicItems = allItems.filter((item) => resolveSubmitCardType(item) === "student_tb_reply");
+  const uploadItems = publicMode && publicType === "tbreply"
+    ? (publicItems.length ? publicItems : [TB_REPLY_PUBLIC_CARD])
+    : allItems;
+
+  useEffect(() => {
+    if (!publicMode || publicType !== "tbreply") return;
+    setModalType("student_tb_reply");
+  }, [publicMode, publicType]);
 
   return (
     <>
-      <section id="upload" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
-        {/* 섹션 헤더 */}
-        <div className="rounded-[32px] bg-[#1A3B8B] p-6 text-white shadow-sm md:p-8">
+      <section id="upload" className={`mx-auto max-w-6xl scroll-mt-24 px-4 ${publicMode ? "py-6" : "py-10"}`}>
+        <div className={`rounded-[32px] bg-[#1A3B8B] p-6 text-white shadow-sm md:p-8 ${publicMode ? "mb-5" : ""}`}>
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="mb-2 text-sm font-bold text-[#BFE6CB]">UPLOAD CENTER</p>
-              <h2 className="text-2xl font-black md:text-3xl">{uploadIntro.title}</h2>
+              <p className="mb-2 text-sm font-bold text-[#BFE6CB]">
+                {publicMode ? "SUBMISSION" : "UPLOAD CENTER"}
+              </p>
+              <h2 className="text-2xl font-black md:text-3xl">
+                {publicMode ? "결핵검진 진료회신 제출" : uploadIntro.title}
+              </h2>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-50 md:text-base">
-                {uploadIntro.description}
+                {publicMode
+                  ? "학생이 제출한 진료회신란 또는 진료확인서를 업로드하는 전용 페이지입니다."
+                  : uploadIntro.description}
               </p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-4 text-sm leading-6 text-blue-50 md:max-w-sm">
+            {!publicMode && <div className="rounded-2xl bg-white/10 p-4 text-sm leading-6 text-blue-50 md:max-w-sm">
               {uploadIntro.notice}
-            </div>
+            </div>}
           </div>
         </div>
 
-        {/* 카드 목록 */}
         <div className="mt-5 grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
-          {items.map((item) => {
+          {uploadItems.map((item) => {
             const submitType = resolveSubmitCardType(item);
             return (
               <AppCard
@@ -184,7 +233,6 @@ export default function UploadCenter({ items }) {
                   <SafeText>{item.fileGuide}</SafeText>
                 </p>
 
-                {/* 버튼: 항상 표시 (모달 방식) */}
                 {item.buttonText && (
                   <button
                     onClick={() => setModalType(submitType)}
@@ -199,14 +247,15 @@ export default function UploadCenter({ items }) {
           })}
         </div>
 
-        <p className="mt-4 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-500 shadow-sm">
-          {uploadIntro.subNotice}
-        </p>
+        {!publicMode && (
+          <p className="mt-4 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-500 shadow-sm">
+            {uploadIntro.subNotice}
+          </p>
+        )}
       </section>
 
-      {/* 제출 모달 */}
       {modalType && (
-        <SubmitModal type={modalType} onClose={() => setModalType(null)} />
+        <SubmitModal type={modalType} onClose={() => setModalType(null)} publicMode={publicMode} />
       )}
     </>
   );
