@@ -3,6 +3,17 @@ import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { getActiveEducationResources } from "../lib/educationResources.js";
 
+function isValidUrl(value) {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export default function FirebaseEducationPage() {
   const [resources, setResources] = useState([]);
   const [loadState, setLoadState] = useState({ status: "loading", message: "" });
@@ -79,20 +90,22 @@ export default function FirebaseEducationPage() {
                     {resource.description}
                   </p>
                 )}
-                <div className="mt-4 space-y-2 rounded-2xl bg-[#F7FBF9] p-4 text-sm font-medium leading-6 text-[#627083]">
-                  {resource.schedule && <p>일정 · {resource.schedule}</p>}
-                  {resource.duration && <p>시간 · {resource.duration}</p>}
-                  {resource.confirmation && <p>확인 · {resource.confirmation}</p>}
-                  {resource.status && <p>상태 · {resource.status}</p>}
-                </div>
-                {resource.linkUrl ? (
+                {(resource.schedule || resource.duration || resource.confirmationMethod || resource.status) && (
+                  <div className="mt-4 space-y-2 rounded-2xl bg-[#F7FBF9] p-4 text-sm font-medium leading-6 text-[#627083]">
+                    {resource.schedule && <p>일정 · {resource.schedule}</p>}
+                    {resource.duration && <p>시간 · {resource.duration}</p>}
+                    {resource.confirmationMethod && <p>확인 · {resource.confirmationMethod}</p>}
+                    {resource.status && <p>상태 · {resource.status}</p>}
+                  </div>
+                )}
+                {isValidUrl(resource.linkUrl) ? (
                   <a
                     href={resource.linkUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-auto inline-flex min-h-11 w-fit items-center rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
                   >
-                    {resource.linkLabel || "자료 열기"}
+                    {resource.buttonLabel || "자료 열기"}
                   </a>
                 ) : (
                   <p className="mt-auto text-sm font-black text-[#8A96A8]">링크 미등록</p>
