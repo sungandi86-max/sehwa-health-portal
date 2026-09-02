@@ -19,6 +19,7 @@ const QUICK_MENUS = [
   { title: "검진·검사", description: "Firestore v2 검진 안내", status: "연결됨", href: "/firebase-checkups" },
   { title: "교육자료", description: "Firestore v2 교육자료", status: "연결됨", href: "/firebase-education" },
   { title: "FAQ", description: "Firestore v2 자주 묻는 질문", status: "연결됨", href: "/firebase-faq" },
+  { title: "채용검진 확인 요청", description: "파일 없이 대체 인정 확인 요청", status: "연결됨", href: "/firebase-submit/recruit" },
   { title: "입실현황", description: "보건실 입실 기록 관리", status: "준비 중" },
   { title: "감염병 관리", description: "보고 현황과 조치 흐름", status: "준비 중" },
   { title: "권한 관리", description: "역할·담임·보직 관리 예정", status: "준비 중" },

@@ -4,6 +4,7 @@ import { db } from "./firebase.js";
 const CPR_FOLDER_ID = "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM";
 const TB_FOLDER_ID = "1MfxNVL1muROzpi1ZbV7WDWr4SKMU7ghm";
 const SUBMIT_API_URL = "/api/submit";
+const RECRUIT_REQUEST_TYPE = "employment_checkup_substitution";
 const ALLOWED_SUBMISSION_FILE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const DRIVE_UPLOAD_TIMEOUT_MS = 60_000;
@@ -82,6 +83,13 @@ export function validateSubmissionFile(file) {
 
 export const validateCprFile = validateSubmissionFile;
 
+export function validateRecruitRequest({ staffType, submittedToAdminOffice, xrayDateCheckAcknowledged }) {
+  if (!staffType) return "교직원 구분을 선택해 주세요.";
+  if (submittedToAdminOffice !== true) return "채용검진 서류 제출 확인에 체크해 주세요.";
+  if (xrayDateCheckAcknowledged !== true) return "흉부 X-ray 검진일자 확인 안내에 체크해 주세요.";
+  return "";
+}
+
 function getSubmitter(user) {
   if (!user?.uid || !user?.email) throw new Error("로그인 정보를 확인할 수 없습니다.");
 
@@ -106,7 +114,11 @@ async function uploadDriveSubmission({ type, sheetName, folderId, fields, fileNa
   });
 }
 
-async function saveStaffSubmission(submissionRef, submissionData) {
+async function saveStaffSubmission(
+  submissionRef,
+  submissionData,
+  failureMessage = "파일은 Drive에 업로드되었지만 제출 기록 저장에 실패했습니다."
+) {
   try {
     await setDoc(submissionRef, {
       ...submissionData,
@@ -116,9 +128,9 @@ async function saveStaffSubmission(submissionRef, submissionData) {
     });
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`파일은 Drive에 업로드되었지만 제출 기록 저장에 실패했습니다. ${error.message}`);
+      throw new Error(`${failureMessage} ${error.message}`);
     }
-    throw new Error("파일은 Drive에 업로드되었지만 제출 기록 저장에 실패했습니다.");
+    throw new Error(failureMessage);
   }
 }
 
@@ -200,4 +212,42 @@ export async function createTbSubmission({ user, checkupDate, documentType, staf
   });
 
   return { id: submissionRef.id, file: driveReference };
+}
+
+export async function createRecruitSubmission({
+  user,
+  staffType,
+  submittedToAdminOffice,
+  xrayDateCheckAcknowledged,
+}) {
+  const requestError = validateRecruitRequest({
+    staffType,
+    submittedToAdminOffice,
+    xrayDateCheckAcknowledged,
+  });
+  if (requestError) throw new Error(requestError);
+
+  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
+  const submitter = getSubmitter(user);
+
+  await saveStaffSubmission(
+    submissionRef,
+    {
+      itemId: "recruit",
+      submitter: {
+        uid: submitter.uid,
+        email: submitter.email,
+        displayName: submitter.displayName,
+      },
+      staffType,
+      requestType: RECRUIT_REQUEST_TYPE,
+      confirmations: {
+        submittedToAdminOffice: true,
+        xrayDateCheckAcknowledged: true,
+      },
+    },
+    "확인 요청 저장에 실패했습니다."
+  );
+
+  return { id: submissionRef.id };
 }

@@ -126,17 +126,49 @@ service cloud.firestore {
           ]);
       }
 
+      function hasValidRecruitConfirmations() {
+        return request.resource.data.confirmations.keys().hasOnly([
+          "submittedToAdminOffice",
+          "xrayDateCheckAcknowledged"
+        ])
+        && request.resource.data.confirmations.keys().hasAll([
+          "submittedToAdminOffice",
+          "xrayDateCheckAcknowledged"
+        ])
+        && request.resource.data.confirmations.submittedToAdminOffice == true
+        && request.resource.data.confirmations.xrayDateCheckAcknowledged == true;
+      }
+
+      function isValidRecruitSubmission() {
+        return request.resource.data.itemId == "recruit"
+          && request.resource.data.keys().hasOnly([
+            "itemId",
+            "submitter",
+            "staffType",
+            "requestType",
+            "confirmations",
+            "status",
+            "submittedAt",
+            "updatedAt"
+          ])
+          && request.resource.data.requestType == "employment_checkup_substitution"
+          && request.resource.data.staffType is string
+          && hasValidRecruitConfirmations();
+      }
+
       allow read: if signedIn()
         && (
           resource.data.submitter.uid == request.auth.uid
           || hasCurrentHealthTeacherAssignment()
         );
       allow create: if signedIn()
-        && (isValidCprSubmission() || isValidTbSubmission())
+        && (
+          ((isValidCprSubmission() || isValidTbSubmission()) && hasValidSubmissionFile())
+          || isValidRecruitSubmission()
+        )
         && request.resource.data.status == "submitted"
         && request.resource.data.submitter.uid == request.auth.uid
-        && request.resource.data.submitter.email == request.auth.token.email
-        && hasValidSubmissionFile();
+        && request.resource.data.submitter.email == request.auth.token.email;
       allow update: if hasCurrentHealthTeacherAssignment()
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "updatedAt"]);
       allow delete: if false;
