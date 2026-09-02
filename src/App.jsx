@@ -81,11 +81,14 @@ function LoadingSkeleton() {
 }
 
 export default function App() {
+  const isFirebaseTestPath = window.location.pathname === "/firebase-test";
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!isFirebaseTestPath);
 
   useEffect(() => {
+    if (isFirebaseTestPath) return;
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -109,7 +112,7 @@ export default function App() {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, []);
+  }, [isFirebaseTestPath]);
 
   const liveAppConfig = portalData?.appConfig
     ? { ...fallbackAppConfig, ...portalData.appConfig }

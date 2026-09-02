@@ -48,6 +48,55 @@ export async function getUserAssignment(uid, schoolYear, semester) {
   return assignmentSnapshot.exists() ? assignmentSnapshot.data() : null;
 }
 
+export async function getUserAssignmentResult(uid, schoolYear, semester) {
+  const assignmentId = getAssignmentId(uid, schoolYear, semester);
+
+  if (!uid || !schoolYear || !semester) {
+    return {
+      status: "error",
+      assignment: null,
+      assignmentId,
+      errorCode: "missing-argument",
+      message: "권한 조회에 필요한 사용자 또는 학기 정보가 없습니다.",
+    };
+  }
+
+  try {
+    const assignmentRef = doc(db, "user_assignments", assignmentId);
+    const assignmentSnapshot = await getDoc(assignmentRef);
+
+    if (!assignmentSnapshot.exists()) {
+      return {
+        status: "not-found",
+        assignment: null,
+        assignmentId,
+        errorCode: null,
+        message: "현재 학기의 이용 권한이 아직 등록되지 않았습니다.",
+      };
+    }
+
+    return {
+      status: "found",
+      assignment: assignmentSnapshot.data(),
+      assignmentId,
+      errorCode: null,
+      message: "권한이 확인되었습니다.",
+    };
+  } catch (error) {
+    const isPermissionDenied = error?.code === "permission-denied";
+
+    return {
+      status: isPermissionDenied ? "permission-denied" : "error",
+      assignment: null,
+      assignmentId,
+      errorCode: error?.code || "unknown",
+      message: isPermissionDenied
+        ? "권한 정보를 읽을 수 없습니다. Firestore 보안 설정을 확인해 주세요."
+        : "권한 정보를 불러오는 중 문제가 발생했습니다.",
+    };
+  }
+}
+
 export function hasRole(assignment, role) {
   return Array.isArray(assignment?.roles) && assignment.roles.includes(role);
 }

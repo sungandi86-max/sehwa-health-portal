@@ -11,11 +11,11 @@ service cloud.firestore {
     }
 
     function currentAssignmentPath(uid) {
-      return /databases/$(database)/documents/user_assignments/$(uid + "_2026_1");
+      return /databases/$(database)/documents/user_assignments/$(uid + "_2026_2");
     }
 
     function currentAssignmentId(uid) {
-      return uid + "_2026_1";
+      return uid + "_2026_2";
     }
 
     function hasCurrentHealthTeacherAssignment() {
@@ -50,10 +50,7 @@ service cloud.firestore {
     match /user_assignments/{assignmentId} {
       allow read: if signedIn()
         && (
-          (
-            assignmentId == currentAssignmentId(request.auth.uid)
-            && resource.data.uid == request.auth.uid
-          )
+          assignmentId == currentAssignmentId(request.auth.uid)
           || hasCurrentHealthTeacherAssignment()
         );
       allow create, update, delete: if hasCurrentHealthTeacherAssignment();
