@@ -60,6 +60,13 @@ function AccessMessage({ title, description, action }) {
   );
 }
 
+function announcementBadgeClassName(badgeType) {
+  if (badgeType === "pink") return "rounded-full bg-[#FFF1F7] px-3 py-1 text-xs font-black text-[#C02E6F]";
+  if (badgeType === "green") return "rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]";
+  if (badgeType === "blue") return "rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]";
+  return "rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]";
+}
+
 export default function FirebaseDashboardPage() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -364,8 +371,13 @@ export default function FirebaseDashboardPage() {
                     <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#08754B]">
                       {announcement.target || "전체"}
                     </span>
+                    {announcement.status && (
+                      <span className={announcementBadgeClassName(announcement.badgeType)}>
+                        {announcement.status}
+                      </span>
+                    )}
                     <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">
-                      {formatAnnouncementEndDate(announcement)}
+                      {announcement.dateLabel || formatAnnouncementEndDate(announcement)}
                     </span>
                   </div>
                   <h3 className="mt-4 text-lg font-black leading-7 text-[#102047]">
@@ -374,6 +386,11 @@ export default function FirebaseDashboardPage() {
                   {announcement.description && (
                     <p className="mt-2 line-clamp-3 text-sm font-medium leading-6 text-[#627083]">
                       {announcement.description}
+                    </p>
+                  )}
+                  {announcement.actionText && (
+                    <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#08754B]">
+                      {announcement.actionText}
                     </p>
                   )}
                   {announcement.linkUrl && (
