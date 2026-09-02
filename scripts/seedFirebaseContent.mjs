@@ -126,15 +126,17 @@ async function seedContent() {
   const db = getFirestore();
 
   await db.runTransaction(async (transaction) => {
-    for (const seedDocument of seedDocuments) {
-      const ref = db.collection(seedDocument.collectionName).doc(seedDocument.documentId);
-      const snapshot = await transaction.get(ref);
+    const refs = seedDocuments.map((seedDocument) => db.collection(seedDocument.collectionName).doc(seedDocument.documentId));
+    const snapshots = await Promise.all(refs.map((ref) => transaction.get(ref)));
+
+    seedDocuments.forEach((seedDocument, index) => {
+      const snapshot = snapshots[index];
       const timestamps = snapshot.exists
         ? { updatedAt: FieldValue.serverTimestamp() }
         : { createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() };
 
-      transaction.set(ref, { ...seedDocument.data, ...timestamps }, { merge: true });
-    }
+      transaction.set(refs[index], { ...seedDocument.data, ...timestamps }, { merge: true });
+    });
   });
 
   for (const seedDocument of seedDocuments) {
