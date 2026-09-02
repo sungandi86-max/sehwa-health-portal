@@ -56,6 +56,11 @@ service cloud.firestore {
       allow create, update, delete: if hasCurrentHealthTeacherAssignment();
     }
 
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

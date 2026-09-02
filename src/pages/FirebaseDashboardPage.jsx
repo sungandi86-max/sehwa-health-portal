@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import { formatAnnouncementEndDate, getActiveAnnouncements } from "../lib/announcements.js";
 import { auth, googleProvider } from "../lib/firebase.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
@@ -61,6 +62,8 @@ export default function FirebaseDashboardPage() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementsState, setAnnouncementsState] = useState({ status: "idle", message: "" });
   const [isLoading, setIsLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
   const [message, setMessage] = useState("");
@@ -103,6 +106,46 @@ export default function FirebaseDashboardPage() {
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!hasHealthTeacherAccess) {
+      setAnnouncements([]);
+      setAnnouncementsState({ status: "idle", message: "" });
+      return;
+    }
+
+    let shouldIgnore = false;
+
+    async function loadAnnouncements() {
+      setAnnouncementsState({ status: "loading", message: "" });
+
+      try {
+        const activeAnnouncements = await getActiveAnnouncements();
+        if (shouldIgnore) return;
+
+        setAnnouncements(activeAnnouncements);
+        setAnnouncementsState({ status: "success", message: "" });
+      } catch (error) {
+        if (shouldIgnore) return;
+
+        console.error("[firebase-dashboard] announcements load failed", error);
+        setAnnouncements([]);
+        setAnnouncementsState({
+          status: error?.code === "permission-denied" ? "permission-denied" : "error",
+          message:
+            error?.code === "permission-denied"
+              ? "공지 정보를 읽을 수 없습니다. Firestore 보안 규칙을 확인해 주세요."
+              : "공지 정보를 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+        });
+      }
+    }
+
+    loadAnnouncements();
+
+    return () => {
+      shouldIgnore = true;
+    };
+  }, [hasHealthTeacherAccess]);
 
   const handleSignIn = async () => {
     setIsWorking(true);
@@ -270,6 +313,81 @@ export default function FirebaseDashboardPage() {
               </article>
             ))}
           </div>
+        </section>
+
+        <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">
+                Announcements
+              </p>
+              <h2 className="mt-2 text-xl font-black text-[#102047]">진행 중인 안내</h2>
+            </div>
+            <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+              Firestore v2
+            </span>
+          </div>
+
+          {announcementsState.status === "loading" && (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {[0, 1].map((item) => (
+                <div
+                  key={item}
+                  className="h-36 animate-pulse rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9]"
+                />
+              ))}
+            </div>
+          )}
+
+          {(announcementsState.status === "permission-denied" || announcementsState.status === "error") && (
+            <div className="mt-5 rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-5">
+              <p className="text-sm font-black text-[#9F2525]">{announcementsState.message}</p>
+            </div>
+          )}
+
+          {announcementsState.status === "success" && announcements.length === 0 && (
+            <div className="mt-5 rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-5">
+              <p className="text-sm font-black text-[#627083]">현재 진행 중인 보건실 안내가 없습니다.</p>
+            </div>
+          )}
+
+          {announcementsState.status === "success" && announcements.length > 0 && (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {announcements.map((announcement) => (
+                <article
+                  key={announcement.id}
+                  className="rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-5 shadow-[0_12px_30px_rgba(16,32,71,0.05)]"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#08754B]">
+                      {announcement.target || "전체"}
+                    </span>
+                    <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">
+                      {formatAnnouncementEndDate(announcement)}
+                    </span>
+                  </div>
+                  <h3 className="mt-4 text-lg font-black leading-7 text-[#102047]">
+                    {announcement.title || "제목 없는 안내"}
+                  </h3>
+                  {announcement.description && (
+                    <p className="mt-2 line-clamp-3 text-sm font-medium leading-6 text-[#627083]">
+                      {announcement.description}
+                    </p>
+                  )}
+                  {announcement.linkUrl && (
+                    <a
+                      href={announcement.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex min-h-11 items-center rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] hover:bg-[#178C6C]"
+                    >
+                      {announcement.linkLabel || "링크 열기"}
+                    </a>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
