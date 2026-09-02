@@ -1,11 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
 import process from "node:process";
-import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
-
-const PROJECT_ID = "sehwa-health-portal-v2";
-const ENV_FILE = ".env.local";
+import { initializeFirebaseAdmin, loadLocalEnv } from "./lib/firebaseAdminCli.mjs";
 
 const seedDocuments = [
   {
@@ -61,67 +56,9 @@ const seedDocuments = [
   },
 ];
 
-function loadLocalEnv() {
-  const envPath = path.resolve(ENV_FILE);
-  if (!fs.existsSync(envPath)) return;
-
-  const lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex === -1) continue;
-
-    const key = trimmed.slice(0, separatorIndex).trim();
-    const rawValue = trimmed.slice(separatorIndex + 1).trim();
-    const value = rawValue.replace(/^["']|["']$/g, "");
-
-    if (key && process.env[key] === undefined) {
-      process.env[key] = value;
-    }
-  }
-}
-
-function getCredentialOptions() {
-  const explicitCredentialPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS;
-
-  if (explicitCredentialPath) {
-    const resolvedPath = path.resolve(explicitCredentialPath);
-    if (!fs.existsSync(resolvedPath)) {
-      throw new Error(`서비스 계정 파일을 찾을 수 없습니다: ${resolvedPath}`);
-    }
-
-    return {
-      credential: cert(resolvedPath),
-      projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || PROJECT_ID,
-    };
-  }
-
-  if (getApplicationDefaultCredentialsPath()) {
-    return {
-      credential: applicationDefault(),
-      projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || PROJECT_ID,
-    };
-  }
-
-  throw new Error("로컬 Firebase Admin 인증 경로가 없습니다. .env.local에 FIREBASE_SERVICE_ACCOUNT_PATH를 설정해 주세요.");
-}
-
-function getApplicationDefaultCredentialsPath() {
-  const appData = process.env.APPDATA;
-  if (!appData) return "";
-
-  const adcPath = path.join(appData, "gcloud", "application_default_credentials.json");
-  return fs.existsSync(adcPath) ? adcPath : "";
-}
-
 async function seedContent() {
   loadLocalEnv();
-
-  if (!getApps().length) {
-    initializeApp(getCredentialOptions());
-  }
+  initializeFirebaseAdmin();
 
   const db = getFirestore();
 

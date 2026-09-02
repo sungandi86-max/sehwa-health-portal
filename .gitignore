@@ -4,4 +4,5 @@ dist
 .env.local
 *.service-account.json
 firebase-service-account*.json
+.migration/
 .DS_Store
