@@ -16,6 +16,7 @@ import FirebaseDashboardPage from "./pages/FirebaseDashboardPage.jsx";
 import FirebaseEducationPage from "./pages/FirebaseEducationPage.jsx";
 import FirebaseFaqPage from "./pages/FirebaseFaqPage.jsx";
 import FirebaseCprSubmitPage from "./pages/FirebaseCprSubmitPage.jsx";
+import FirebaseTbSubmitPage from "./pages/FirebaseTbSubmitPage.jsx";
 import FirebaseTestPage from "./pages/FirebaseTestPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import HomeroomPage from "./pages/HomeroomPage.jsx";
@@ -93,6 +94,7 @@ export default function App() {
     "/firebase-education",
     "/firebase-faq",
     "/firebase-submit/cpr",
+    "/firebase-submit/tb",
   ].includes(window.location.pathname);
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
@@ -165,6 +167,7 @@ export default function App() {
               <Route path="/firebase-education" element={<FirebaseEducationPage />} />
               <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
               <Route path="/firebase-submit/cpr" element={<FirebaseCprSubmitPage />} />
+              <Route path="/firebase-submit/tb" element={<FirebaseTbSubmitPage />} />
               <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />

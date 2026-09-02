@@ -2,8 +2,9 @@ import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "./firebase.js";
 
 const CPR_FOLDER_ID = "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM";
+const TB_FOLDER_ID = "1MfxNVL1muROzpi1ZbV7WDWr4SKMU7ghm";
 const SUBMIT_API_URL = "/api/submit";
-const ALLOWED_CPR_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
+const ALLOWED_SUBMISSION_FILE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const DRIVE_UPLOAD_TIMEOUT_MS = 60_000;
 
@@ -72,51 +73,43 @@ function getDriveReference(json, fileName, mimeType) {
   };
 }
 
-export function validateCprFile(file) {
+export function validateSubmissionFile(file) {
   if (!file) return "제출할 파일을 선택해 주세요.";
-  if (!ALLOWED_CPR_TYPES.has(file.type)) return "PDF, JPG, PNG 파일만 제출할 수 있습니다.";
+  if (!ALLOWED_SUBMISSION_FILE_TYPES.has(file.type)) return "PDF, JPG, PNG 파일만 제출할 수 있습니다.";
   if (file.size > MAX_FILE_SIZE) return "파일 크기는 10MB 이하만 제출할 수 있습니다.";
   return "";
 }
 
-export async function createCprSubmission({ user, trainingDate, institution, staffType, file }) {
-  const fileError = validateCprFile(file);
-  if (fileError) throw new Error(fileError);
+export const validateCprFile = validateSubmissionFile;
+
+function getSubmitter(user) {
   if (!user?.uid || !user?.email) throw new Error("로그인 정보를 확인할 수 없습니다.");
 
-  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
-  const submitterName = user.displayName || user.email;
-  const originalName = sanitizeFilename(file.name || "cpr-certificate.pdf");
-  const fileName = sanitizeFilename(`${submitterName}_심폐소생술이수증_${todayString()}_${originalName}`);
+  return {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName || "",
+    name: user.displayName || user.email,
+  };
+}
+
+async function uploadDriveSubmission({ type, sheetName, folderId, fields, fileName, file }) {
   const fileBase64 = await fileToBase64(file);
-  const uploadResult = await postWithTimeout({
-    type: "cpr",
-    sheetName: "응답_심폐소생술이수증",
-    folderId: CPR_FOLDER_ID,
-    fields: {
-      name: submitterName,
-      dept: "Firebase v2 테스트",
-      staffType: staffType || "",
-      completionDate: trainingDate || "",
-      institution: institution || "",
-    },
+  return postWithTimeout({
+    type,
+    sheetName,
+    folderId,
+    fields,
     fileName,
     fileBase64,
     fileMimeType: file.type,
   });
+}
 
+async function saveStaffSubmission(submissionRef, submissionData) {
   try {
     await setDoc(submissionRef, {
-      itemId: "cpr",
-      submitter: {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || "",
-      },
-      trainingDate: trainingDate || null,
-      institution: institution || null,
-      staffType: staffType || null,
-      file: getDriveReference(uploadResult, fileName, file.type),
+      ...submissionData,
       status: "submitted",
       submittedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -127,6 +120,84 @@ export async function createCprSubmission({ user, trainingDate, institution, sta
     }
     throw new Error("파일은 Drive에 업로드되었지만 제출 기록 저장에 실패했습니다.");
   }
+}
 
-  return { id: submissionRef.id, file: getDriveReference(uploadResult, fileName, file.type) };
+export async function createCprSubmission({ user, trainingDate, institution, staffType, file }) {
+  const fileError = validateSubmissionFile(file);
+  if (fileError) throw new Error(fileError);
+
+  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
+  const submitter = getSubmitter(user);
+  const originalName = sanitizeFilename(file.name || "cpr-certificate.pdf");
+  const fileName = sanitizeFilename(`${submitter.name}_심폐소생술이수증_${todayString()}_${originalName}`);
+  const uploadResult = await uploadDriveSubmission({
+    type: "cpr",
+    sheetName: "응답_심폐소생술이수증",
+    folderId: CPR_FOLDER_ID,
+    fields: {
+      name: submitter.name,
+      dept: "Firebase v2 테스트",
+      staffType: staffType || "",
+      completionDate: trainingDate || "",
+      institution: institution || "",
+    },
+    fileName,
+    file,
+  });
+  const driveReference = getDriveReference(uploadResult, fileName, file.type);
+
+  await saveStaffSubmission(submissionRef, {
+    itemId: "cpr",
+    submitter: {
+      uid: submitter.uid,
+      email: submitter.email,
+      displayName: submitter.displayName,
+    },
+    trainingDate: trainingDate || null,
+    institution: institution || null,
+    staffType: staffType || null,
+    file: driveReference,
+  });
+
+  return { id: submissionRef.id, file: driveReference };
+}
+
+export async function createTbSubmission({ user, checkupDate, documentType, staffType, file }) {
+  const fileError = validateSubmissionFile(file);
+  if (fileError) throw new Error(fileError);
+
+  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
+  const submitter = getSubmitter(user);
+  const originalName = sanitizeFilename(file.name || "tb-certificate.pdf");
+  const fileName = sanitizeFilename(`${submitter.name}_결핵검진확인증_${todayString()}_${originalName}`);
+  const uploadResult = await uploadDriveSubmission({
+    type: "tb",
+    sheetName: "응답_결핵검진확인증",
+    folderId: TB_FOLDER_ID,
+    fields: {
+      name: submitter.name,
+      dept: "Firebase v2 테스트",
+      staffType: staffType || "",
+      checkupDate: checkupDate || "",
+      docType: documentType || "",
+    },
+    fileName,
+    file,
+  });
+  const driveReference = getDriveReference(uploadResult, fileName, file.type);
+
+  await saveStaffSubmission(submissionRef, {
+    itemId: "tb",
+    submitter: {
+      uid: submitter.uid,
+      email: submitter.email,
+      displayName: submitter.displayName,
+    },
+    checkupDate: checkupDate || null,
+    documentType: documentType || null,
+    staffType: staffType || null,
+    file: driveReference,
+  });
+
+  return { id: submissionRef.id, file: driveReference };
 }

@@ -82,28 +82,8 @@ service cloud.firestore {
     }
 
     match /staff_submissions/{submissionId} {
-      allow read: if signedIn()
-        && (
-          resource.data.submitter.uid == request.auth.uid
-          || hasCurrentHealthTeacherAssignment()
-        );
-      allow create: if signedIn()
-        && request.resource.data.keys().hasOnly([
-          "itemId",
-          "submitter",
-          "trainingDate",
-          "institution",
-          "staffType",
-          "file",
-          "status",
-          "submittedAt",
-          "updatedAt"
-        ])
-        && request.resource.data.itemId == "cpr"
-        && request.resource.data.status == "submitted"
-        && request.resource.data.submitter.uid == request.auth.uid
-        && request.resource.data.submitter.email == request.auth.token.email
-        && request.resource.data.file.keys().hasOnly([
+      function hasValidSubmissionFile() {
+        return request.resource.data.file.keys().hasOnly([
           "driveFileId",
           "fileName",
           "mimeType",
@@ -114,6 +94,49 @@ service cloud.firestore {
         && request.resource.data.file.fileName is string
         && request.resource.data.file.mimeType in ["application/pdf", "image/jpeg", "image/png"]
         && (request.resource.data.file.driveUrl == null || request.resource.data.file.driveUrl is string);
+      }
+
+      function isValidCprSubmission() {
+        return request.resource.data.itemId == "cpr"
+          && request.resource.data.keys().hasOnly([
+            "itemId",
+            "submitter",
+            "trainingDate",
+            "institution",
+            "staffType",
+            "file",
+            "status",
+            "submittedAt",
+            "updatedAt"
+          ]);
+      }
+
+      function isValidTbSubmission() {
+        return request.resource.data.itemId == "tb"
+          && request.resource.data.keys().hasOnly([
+            "itemId",
+            "submitter",
+            "checkupDate",
+            "documentType",
+            "staffType",
+            "file",
+            "status",
+            "submittedAt",
+            "updatedAt"
+          ]);
+      }
+
+      allow read: if signedIn()
+        && (
+          resource.data.submitter.uid == request.auth.uid
+          || hasCurrentHealthTeacherAssignment()
+        );
+      allow create: if signedIn()
+        && (isValidCprSubmission() || isValidTbSubmission())
+        && request.resource.data.status == "submitted"
+        && request.resource.data.submitter.uid == request.auth.uid
+        && request.resource.data.submitter.email == request.auth.token.email
+        && hasValidSubmissionFile();
       allow update: if hasCurrentHealthTeacherAssignment()
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "updatedAt"]);
       allow delete: if false;
