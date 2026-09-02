@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     });
 
     const text = await scriptRes.text();
-    console.log("Apps Script response:", text);
+    console.log("Apps Script response:", text.slice(0, 500));
     let json;
     try {
       json = JSON.parse(text);

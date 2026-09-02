@@ -76,6 +76,49 @@ service cloud.firestore {
       allow create, update, delete: if hasCurrentHealthTeacherAssignment();
     }
 
+    match /submission_items/{itemId} {
+      allow read: if signedIn();
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /staff_submissions/{submissionId} {
+      allow read: if signedIn()
+        && (
+          resource.data.submitter.uid == request.auth.uid
+          || hasCurrentHealthTeacherAssignment()
+        );
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "itemId",
+          "submitter",
+          "trainingDate",
+          "institution",
+          "staffType",
+          "file",
+          "status",
+          "submittedAt",
+          "updatedAt"
+        ])
+        && request.resource.data.itemId == "cpr"
+        && request.resource.data.status == "submitted"
+        && request.resource.data.submitter.uid == request.auth.uid
+        && request.resource.data.submitter.email == request.auth.token.email
+        && request.resource.data.file.keys().hasOnly([
+          "driveFileId",
+          "fileName",
+          "mimeType",
+          "driveUrl"
+        ])
+        && request.resource.data.file.keys().hasAll(["driveFileId", "fileName", "mimeType", "driveUrl"])
+        && (request.resource.data.file.driveFileId == null || request.resource.data.file.driveFileId is string)
+        && request.resource.data.file.fileName is string
+        && request.resource.data.file.mimeType in ["application/pdf", "image/jpeg", "image/png"]
+        && (request.resource.data.file.driveUrl == null || request.resource.data.file.driveUrl is string);
+      allow update: if hasCurrentHealthTeacherAssignment()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "updatedAt"]);
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

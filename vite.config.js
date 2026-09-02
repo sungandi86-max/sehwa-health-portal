@@ -1,5 +1,25 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import submitHandler from './api/submit.js'
+
+function createVercelLikeResponse(res) {
+  return {
+    setHeader(name, value) {
+      res.setHeader(name, value)
+    },
+    status(code) {
+      res.statusCode = code
+      return this
+    },
+    json(payload) {
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify(payload))
+    },
+    end(payload) {
+      res.end(payload)
+    },
+  }
+}
 
 function viteEnvDevCompatibility() {
   return {
@@ -8,6 +28,11 @@ function viteEnvDevCompatibility() {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const pathname = req.url?.split('?')[0]
+
+        if (pathname === '/api/submit') {
+          await submitHandler(req, createVercelLikeResponse(res))
+          return
+        }
 
         if (pathname !== '/node_modules/vite/dist/client/env.mjs') {
           next()
