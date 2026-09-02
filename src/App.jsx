@@ -11,6 +11,7 @@ import AdminRoadmapPage from "./pages/AdminRoadmapPage.jsx";
 import CheckupPage from "./pages/CheckupPage.jsx";
 import EducationPage from "./pages/EducationPage.jsx";
 import FAQPage from "./pages/FAQPage.jsx";
+import FirebaseDashboardPage from "./pages/FirebaseDashboardPage.jsx";
 import FirebaseTestPage from "./pages/FirebaseTestPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import HomeroomPage from "./pages/HomeroomPage.jsx";
@@ -81,13 +82,13 @@ function LoadingSkeleton() {
 }
 
 export default function App() {
-  const isFirebaseTestPath = window.location.pathname === "/firebase-test";
+  const isFirebaseV2Path = ["/firebase-test", "/firebase-dashboard"].includes(window.location.pathname);
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
-  const [isLoading, setIsLoading] = useState(!isFirebaseTestPath);
+  const [isLoading, setIsLoading] = useState(!isFirebaseV2Path);
 
   useEffect(() => {
-    if (isFirebaseTestPath) return;
+    if (isFirebaseV2Path) return;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -112,7 +113,7 @@ export default function App() {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [isFirebaseTestPath]);
+  }, [isFirebaseV2Path]);
 
   const liveAppConfig = portalData?.appConfig
     ? { ...fallbackAppConfig, ...portalData.appConfig }
@@ -148,6 +149,7 @@ export default function App() {
               <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
               <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
               <Route path="/firebase-test" element={<FirebaseTestPage />} />
+              <Route path="/firebase-dashboard" element={<FirebaseDashboardPage />} />
               <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />

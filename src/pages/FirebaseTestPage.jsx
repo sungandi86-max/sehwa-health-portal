@@ -2,18 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "../lib/firebase.js";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureUserProfile, getUserAssignmentResult } from "../lib/userProfile.js";
-
-const ROLE_LABELS = {
-  staff: "교직원",
-  homeroom: "담임교사",
-  admin: "관리자",
-  health_teacher: "보건교사",
-};
-
-function getRoleLabel(role) {
-  return ROLE_LABELS[role] || role;
-}
 
 function StatusNotice({ result, schoolYear, semester }) {
   if (!result) return null;
@@ -48,8 +38,7 @@ export default function FirebaseTestPage() {
 
   const assignment = assignmentResult?.assignment || null;
   const roleLabels = useMemo(() => {
-    if (!Array.isArray(assignment?.roles)) return [];
-    return assignment.roles.map(getRoleLabel);
+    return getRoleLabels(assignment?.roles);
   }, [assignment]);
 
   useEffect(() => {
