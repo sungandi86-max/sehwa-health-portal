@@ -1,17 +1,44 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "../lib/firebase.js";
+import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import { ensureUserProfile, getUserAssignment } from "../lib/userProfile.js";
 
 export default function FirebaseTestPage() {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [assignment, setAssignment] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isWorking, setIsWorking] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      setProfile(null);
+      setAssignment(null);
       setIsLoading(false);
+
+      if (!currentUser) return;
+
+      setIsProfileLoading(true);
+      try {
+        const ensuredProfile = await ensureUserProfile(currentUser);
+        const currentAssignment = await getUserAssignment(
+          currentUser.uid,
+          CURRENT_SCHOOL_YEAR,
+          CURRENT_SEMESTER
+        );
+
+        setProfile(ensuredProfile);
+        setAssignment(currentAssignment);
+      } catch (error) {
+        console.error("[firebase-test] profile load failed", error);
+        setMessage("사용자 권한 정보를 불러오지 못했습니다. Firestore Rules와 문서 권한을 확인해 주세요.");
+      } finally {
+        setIsProfileLoading(false);
+      }
     });
 
     return unsubscribe;
@@ -58,7 +85,7 @@ export default function FirebaseTestPage() {
         </h1>
         <p className="mt-3 text-sm font-medium leading-6 text-slate-600">
           기존 온라인 보건실 기능과 분리된 Firebase v2 개발용 확인 화면입니다.
-          로그인 정보는 현재 화면에서만 확인하며 users 컬렉션은 생성하지 않습니다.
+          로그인 시 사용자 기본 문서만 확인하고, 학년도/학기별 권한은 별도 문서로 조회합니다.
         </p>
 
         <div className="mt-6 rounded-3xl border border-slate-200 bg-[#F8FAFF] p-5">
@@ -74,11 +101,76 @@ export default function FirebaseTestPage() {
                 <p className="text-xs font-bold text-slate-500">UID</p>
                 <p className="break-all text-sm font-black text-[#183B8F]">{user.uid}</p>
               </div>
+              <div>
+                <p className="text-xs font-bold text-slate-500">Display name</p>
+                <p className="break-all text-sm font-black text-[#183B8F]">
+                  {user.displayName || profile?.displayName || "이름 없음"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-500">users.active</p>
+                <p className="text-sm font-black text-[#183B8F]">
+                  {profile ? String(profile.active === true) : "확인 중"}
+                </p>
+              </div>
             </div>
           ) : (
             <p className="text-sm font-semibold text-slate-600">현재 로그인된 사용자가 없습니다.</p>
           )}
         </div>
+
+        {user && (
+          <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500">현재 학년도/학기</p>
+                <p className="text-sm font-black text-[#183B8F]">
+                  {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
+                </p>
+              </div>
+              {isProfileLoading && (
+                <span className="rounded-full bg-[#EEF1FF] px-3 py-1 text-xs font-black text-[#183B8F]">
+                  권한 확인 중
+                </span>
+              )}
+            </div>
+
+            {!isProfileLoading && assignment ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-bold text-slate-500">roles</p>
+                  <p className="break-all text-sm font-black text-[#183B8F]">
+                    {Array.isArray(assignment.roles) && assignment.roles.length
+                      ? assignment.roles.join(", ")
+                      : "역할 없음"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500">assignment.active</p>
+                  <p className="text-sm font-black text-[#183B8F]">{String(assignment.active === true)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500">grade / classNo</p>
+                  <p className="text-sm font-black text-[#183B8F]">
+                    {assignment.grade || "-"}학년 {assignment.classNo || "-"}반
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500">position</p>
+                  <p className="break-all text-sm font-black text-[#183B8F]">
+                    {assignment.position || "보직 미등록"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              !isProfileLoading && (
+                <p className="mt-4 rounded-2xl bg-[#FFF8E8] px-4 py-3 text-sm font-bold text-[#9A5A00]">
+                  현재 학년도/학기 권한이 등록되지 않았습니다.
+                </p>
+              )
+            )}
+          </div>
+        )}
 
         {message && (
           <p className="mt-4 rounded-2xl bg-[#EEF8F4] px-4 py-3 text-sm font-bold text-[#08754B]">

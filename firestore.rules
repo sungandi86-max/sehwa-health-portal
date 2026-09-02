@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function currentAssignmentPath(uid) {
+      return /databases/$(database)/documents/user_assignments/$(uid + "_2026_1");
+    }
+
+    function currentAssignmentId(uid) {
+      return uid + "_2026_1";
+    }
+
+    function hasCurrentHealthTeacherAssignment() {
+      return signedIn()
+        && exists(currentAssignmentPath(request.auth.uid))
+        && get(currentAssignmentPath(request.auth.uid)).data.active == true
+        && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles"])
+        && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["health_teacher"]);
+    }
+
+    function isValidSelfUserCreate(uid) {
+      return isSelf(uid)
+        && request.resource.data.keys().hasOnly(["uid", "email", "displayName", "active", "createdAt", "updatedAt"])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.active == true;
+    }
+
+    function isValidSelfUserUpdate(uid) {
+      return isSelf(uid)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["email", "displayName", "updatedAt"])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.active == resource.data.active;
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || hasCurrentHealthTeacherAssignment();
+      allow create: if isValidSelfUserCreate(uid);
+      allow update: if isValidSelfUserUpdate(uid) || hasCurrentHealthTeacherAssignment();
+      allow delete: if false;
+    }
+
+    match /user_assignments/{assignmentId} {
+      allow read: if signedIn()
+        && (
+          (
+            assignmentId == currentAssignmentId(request.auth.uid)
+            && resource.data.uid == request.auth.uid
+          )
+          || hasCurrentHealthTeacherAssignment()
+        );
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
