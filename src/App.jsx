@@ -11,6 +11,7 @@ import AdminRoadmapPage from "./pages/AdminRoadmapPage.jsx";
 import CheckupPage from "./pages/CheckupPage.jsx";
 import EducationPage from "./pages/EducationPage.jsx";
 import FAQPage from "./pages/FAQPage.jsx";
+import FirebaseTestPage from "./pages/FirebaseTestPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import HomeroomPage from "./pages/HomeroomPage.jsx";
 import ResourcesPage from "./pages/ResourcesPage.jsx";
@@ -143,6 +144,7 @@ export default function App() {
               <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
               <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
               <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
+              <Route path="/firebase-test" element={<FirebaseTestPage />} />
               <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
