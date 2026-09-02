@@ -11,7 +11,10 @@ import AdminRoadmapPage from "./pages/AdminRoadmapPage.jsx";
 import CheckupPage from "./pages/CheckupPage.jsx";
 import EducationPage from "./pages/EducationPage.jsx";
 import FAQPage from "./pages/FAQPage.jsx";
+import FirebaseCheckupsPage from "./pages/FirebaseCheckupsPage.jsx";
 import FirebaseDashboardPage from "./pages/FirebaseDashboardPage.jsx";
+import FirebaseEducationPage from "./pages/FirebaseEducationPage.jsx";
+import FirebaseFaqPage from "./pages/FirebaseFaqPage.jsx";
 import FirebaseTestPage from "./pages/FirebaseTestPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import HomeroomPage from "./pages/HomeroomPage.jsx";
@@ -82,7 +85,13 @@ function LoadingSkeleton() {
 }
 
 export default function App() {
-  const isFirebaseV2Path = ["/firebase-test", "/firebase-dashboard"].includes(window.location.pathname);
+  const isFirebaseV2Path = [
+    "/firebase-test",
+    "/firebase-dashboard",
+    "/firebase-checkups",
+    "/firebase-education",
+    "/firebase-faq",
+  ].includes(window.location.pathname);
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(!isFirebaseV2Path);
@@ -150,6 +159,9 @@ export default function App() {
               <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
               <Route path="/firebase-test" element={<FirebaseTestPage />} />
               <Route path="/firebase-dashboard" element={<FirebaseDashboardPage />} />
+              <Route path="/firebase-checkups" element={<FirebaseCheckupsPage />} />
+              <Route path="/firebase-education" element={<FirebaseEducationPage />} />
+              <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
               <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />

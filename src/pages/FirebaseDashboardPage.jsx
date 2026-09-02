@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { formatAnnouncementEndDate, getActiveAnnouncements } from "../lib/announcements.js";
 import { auth, googleProvider } from "../lib/firebase.js";
@@ -14,11 +15,12 @@ const PLACEHOLDER_SUMMARY = [
 ];
 
 const QUICK_MENUS = [
-  { title: "오늘의 보건실", description: "일일 보건실 운영 현황", status: "준비 중" },
-  { title: "제출·업로드", description: "교직원 제출 자료 확인", status: "준비 중" },
+  { title: "오늘의 보건실", description: "진행 중인 보건실 안내", status: "연결됨", href: "/firebase-dashboard" },
+  { title: "검진·검사", description: "Firestore v2 검진 안내", status: "연결됨", href: "/firebase-checkups" },
+  { title: "교육자료", description: "Firestore v2 교육자료", status: "연결됨", href: "/firebase-education" },
+  { title: "FAQ", description: "Firestore v2 자주 묻는 질문", status: "연결됨", href: "/firebase-faq" },
   { title: "입실현황", description: "보건실 입실 기록 관리", status: "준비 중" },
   { title: "감염병 관리", description: "보고 현황과 조치 흐름", status: "준비 중" },
-  { title: "업무 로드맵", description: "학기별 보건 업무 진행", status: "준비 중" },
   { title: "권한 관리", description: "역할·담임·보직 관리 예정", status: "준비 중" },
 ];
 
@@ -402,20 +404,36 @@ export default function FirebaseDashboardPage() {
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {QUICK_MENUS.map((menu) => (
-              <button
-                key={menu.title}
-                type="button"
-                disabled
-                className="min-h-28 cursor-not-allowed rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-5 text-left opacity-80"
-              >
+            {QUICK_MENUS.map((menu) => {
+              const content = (
+                <>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#8A96A8]">
                   {menu.status}
                 </span>
                 <span className="mt-4 block text-lg font-black text-[#102047]">{menu.title}</span>
                 <span className="mt-2 block text-sm font-medium leading-5 text-[#627083]">{menu.description}</span>
-              </button>
-            ))}
+                </>
+              );
+
+              return menu.href ? (
+                <Link
+                  key={menu.title}
+                  to={menu.href}
+                  className="min-h-28 rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-5 text-left transition hover:-translate-y-[1px] hover:shadow-[0_14px_30px_rgba(16,32,71,0.07)] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+                >
+                  {content}
+                </Link>
+              ) : (
+                <button
+                  key={menu.title}
+                  type="button"
+                  disabled
+                  className="min-h-28 cursor-not-allowed rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-5 text-left opacity-80"
+                >
+                  {content}
+                </button>
+              );
+            })}
           </div>
         </section>
 

@@ -1,8 +1,9 @@
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "./firebase.js";
-import { isAnnouncementVisible } from "./announcementVisibility.js";
+import { formatContentEndDate, isContentVisible } from "./contentVisibility.js";
 
-export { formatAnnouncementEndDate, isAnnouncementVisible } from "./announcementVisibility.js";
+export const formatAnnouncementEndDate = formatContentEndDate;
+export const isAnnouncementVisible = isContentVisible;
 
 function normalizeOrder(value) {
   const order = Number(value);
@@ -42,5 +43,5 @@ export async function getAllAnnouncements() {
 export async function getActiveAnnouncements(now = new Date()) {
   const announcements = await getAllAnnouncements();
 
-  return announcements.filter((announcement) => isAnnouncementVisible(announcement, now));
+  return announcements.filter((announcement) => isContentVisible(announcement, now));
 }
