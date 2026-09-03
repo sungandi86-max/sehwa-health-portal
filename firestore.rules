@@ -100,7 +100,8 @@ service cloud.firestore {
           "updatedAt",
           "reviewedBy",
           "reviewedAt",
-          "reviewNote"
+          "reviewNote",
+          "applicant"
         ])
         && data.keys().hasAll([
           "uid",
@@ -114,7 +115,8 @@ service cloud.firestore {
           "updatedAt",
           "reviewedBy",
           "reviewedAt",
-          "reviewNote"
+          "reviewNote",
+          "applicant"
         ])
         && data.uid == request.auth.uid
         && data.email == request.auth.token.email
@@ -127,7 +129,17 @@ service cloud.firestore {
         && data.updatedAt == request.time
         && data.reviewedBy == null
         && data.reviewedAt == null
-        && data.reviewNote == null;
+        && data.reviewNote == null
+        && isValidAccessRequestApplicant(data.applicant);
+    }
+
+    function isValidAccessRequestApplicant(applicant) {
+      return applicant.keys().hasOnly(["realName", "department", "staffType"])
+        && applicant.keys().hasAll(["realName", "department", "staffType"])
+        && applicant.realName is string
+        && applicant.realName.size() >= 2
+        && (applicant.department == null || applicant.department is string)
+        && applicant.staffType in ["교사", "직원", "기타"];
     }
 
     function isValidAccessRequestResubmit() {
@@ -139,7 +151,8 @@ service cloud.firestore {
           "updatedAt",
           "reviewedBy",
           "reviewedAt",
-          "reviewNote"
+          "reviewNote",
+          "applicant"
         ])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
@@ -152,7 +165,8 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.reviewedBy == null
         && request.resource.data.reviewedAt == null
-        && request.resource.data.reviewNote == null;
+        && request.resource.data.reviewNote == null
+        && isValidAccessRequestApplicant(request.resource.data.applicant);
     }
 
     function preservesOwnCurrentHealthTeacherAssignment(assignmentId, data) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import { ACCESS_REQUEST_STAFF_TYPES, normalizeAccessRequestApplicant } from "../lib/accessRequestApplicant.js";
 import { getCurrentAccessRequest, submitStaffAccessRequest } from "../lib/accessRequests.js";
 import { getAuthProvider } from "../lib/firebaseAuth.js";
 
@@ -14,6 +15,7 @@ function getRequestMessage(request) {
 export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
   const [request, setRequest] = useState(null);
   const [state, setState] = useState({ status: "loading", message: "" });
+  const [applicant, setApplicant] = useState({ realName: "", department: "", staffType: "교사" });
   const isGoogleUser = getAuthProvider(user) === "google";
 
   useEffect(() => {
@@ -47,10 +49,22 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
     };
   }, [isGoogleUser, user]);
 
-  const handleSubmit = async () => {
+  const handleFieldChange = (event) => {
+    const { name, value } = event.target;
+    setApplicant((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const normalized = normalizeAccessRequestApplicant(applicant);
+    if (!normalized.applicant) {
+      setState({ status: "error", message: normalized.message });
+      return;
+    }
+
     setState({ status: "submitting", message: "권한 신청을 접수하는 중입니다." });
     try {
-      const result = await submitStaffAccessRequest(user, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
+      const result = await submitStaffAccessRequest(user, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER, normalized.applicant);
       const nextRequest = await getCurrentAccessRequest(user.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
       setRequest(nextRequest);
       setState({
@@ -80,20 +94,63 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
   const canSubmit = state.status !== "loading" && state.status !== "submitting" && request?.status !== "pending" && request?.status !== "approved";
 
   return (
-    <div className="mt-6 space-y-3">
+    <form className="mt-6 space-y-3 text-left" onSubmit={handleSubmit}>
       {state.message && (
         <p className={`rounded-2xl px-4 py-3 text-sm font-black ${state.status === "error" ? "bg-[#FFF7F7] text-[#B42318]" : "bg-[#F0FBF7] text-[#08754B]"}`}>
           {state.message}
         </p>
       )}
+      {canSubmit && (
+        <div className="grid gap-3 rounded-[24px] border border-[#DDEAE7] bg-white/90 p-4">
+          <label className="grid gap-2 text-sm font-black text-[#102047]">
+            실명
+            <input
+              type="text"
+              name="realName"
+              value={applicant.realName}
+              onChange={handleFieldChange}
+              placeholder="예: 박숙현"
+              autoComplete="name"
+              className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-4 focus:ring-[#20A982]/15"
+              required
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-black text-[#102047]">
+            소속/부서
+            <input
+              type="text"
+              name="department"
+              value={applicant.department}
+              onChange={handleFieldChange}
+              placeholder="예: 보건실, 행정실"
+              autoComplete="organization-title"
+              className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-4 focus:ring-[#20A982]/15"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-black text-[#102047]">
+            교직원 구분
+            <select
+              name="staffType"
+              value={applicant.staffType}
+              onChange={handleFieldChange}
+              className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-4 focus:ring-[#20A982]/15"
+            >
+              {ACCESS_REQUEST_STAFF_TYPES.map((staffType) => (
+                <option key={staffType} value={staffType}>
+                  {staffType}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <button
-        type="button"
-        onClick={handleSubmit}
+        type="submit"
         disabled={!canSubmit}
         className="min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {state.status === "submitting" ? "신청 중..." : "이용 권한 신청"}
       </button>
-    </div>
+    </form>
   );
 }

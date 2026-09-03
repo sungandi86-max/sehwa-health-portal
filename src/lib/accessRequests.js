@@ -1,5 +1,6 @@
 import { auth } from "./firebase.js";
 import { getAuthProvider } from "./firebaseAuth.js";
+import { normalizeAccessRequestApplicant } from "./accessRequestApplicant.js";
 
 export const ACCESS_REQUEST_STATUSES = ["all", "pending", "approved", "rejected"];
 
@@ -48,13 +49,16 @@ export async function getCurrentAccessRequest(uid, schoolYear, semester) {
   return result.request || null;
 }
 
-export async function submitStaffAccessRequest(firebaseUser, schoolYear, semester) {
+export async function submitStaffAccessRequest(firebaseUser, schoolYear, semester, applicantInput) {
   if (!firebaseUser?.uid) throw new Error("로그인이 필요합니다.");
   if (getAuthProvider(firebaseUser) !== "google") throw new Error("Google 계정만 이용 권한을 신청할 수 있습니다.");
 
+  const { applicant, message } = normalizeAccessRequestApplicant(applicantInput);
+  if (!applicant) throw new Error(message);
+
   return requestJson(ACCESS_REQUEST_API_PATH, {
     method: "POST",
-    body: JSON.stringify({ schoolYear, semester }),
+    body: JSON.stringify({ schoolYear, semester, applicant }),
   });
 }
 

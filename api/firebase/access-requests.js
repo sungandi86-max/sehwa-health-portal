@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getErrorCode, getErrorName, getFirebaseAdminAuth, getFirebaseAdminDb, logDiagnostic } from "../lib/firebaseAdmin.js";
+import { getAccessRequestPosition, normalizeAccessRequestApplicant } from "../../src/lib/accessRequestApplicant.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
@@ -7,10 +8,6 @@ const GOOGLE_PROVIDER_ID = "google.com";
 const ACCESS_REQUEST_LIMIT = 200;
 
 function getAssignmentId(uid, schoolYear = CURRENT_SCHOOL_YEAR, semester = CURRENT_SEMESTER) {
-  return `${uid}_${schoolYear}_${semester}`;
-}
-
-function getAccessRequestId(uid, schoolYear = CURRENT_SCHOOL_YEAR, semester = CURRENT_SEMESTER) {
   return `${uid}_${schoolYear}_${semester}`;
 }
 
@@ -85,7 +82,7 @@ async function getCurrentRequest(req, res, decodedToken) {
 
   let requestSnapshot;
   try {
-    requestSnapshot = await db.collection("access_requests").doc(getAccessRequestId(decodedToken.uid)).get();
+    requestSnapshot = await db.collection("access_requests").doc(getAssignmentId(decodedToken.uid)).get();
     logDiagnostic("firestore", "access-request-read", {
       value: "success",
       exists: requestSnapshot.exists,
@@ -135,9 +132,13 @@ async function submitRequest(req, res, decodedToken) {
     return res.status(403).json({ ok: false, message: "Google 계정만 이용 권한을 신청할 수 있습니다." });
   }
 
+  const body = await readJsonBody(req);
+  const { applicant, message } = normalizeAccessRequestApplicant(body.applicant);
+  if (!applicant) return res.status(400).json({ ok: false, message });
+
   const db = getFirebaseAdminDb();
   const assignmentRef = db.collection("user_assignments").doc(getAssignmentId(decodedToken.uid));
-  const requestRef = db.collection("access_requests").doc(getAccessRequestId(decodedToken.uid));
+  const requestRef = db.collection("access_requests").doc(getAssignmentId(decodedToken.uid));
   const now = Timestamp.now();
 
   const result = await db.runTransaction(async (transaction) => {
@@ -157,6 +158,7 @@ async function submitRequest(req, res, decodedToken) {
           reviewedBy: null,
           reviewedAt: null,
           reviewNote: null,
+          applicant,
         });
         return { status: "resubmitted" };
       }
@@ -175,6 +177,7 @@ async function submitRequest(req, res, decodedToken) {
       reviewedBy: null,
       reviewedAt: null,
       reviewNote: null,
+      applicant,
     });
 
     return { status: "created" };
@@ -221,7 +224,7 @@ async function reviewRequest(req, res, decodedToken) {
           roles: ["staff"],
           grade: null,
           classNo: null,
-          position: "교직원",
+          position: getAccessRequestPosition(accessRequest.applicant),
           active: true,
           createdAt: now,
           updatedAt: now,

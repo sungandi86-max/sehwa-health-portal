@@ -57,6 +57,9 @@ function statusClassName(status) {
 function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
   const isPending = pendingId === accessRequest.id;
   const canReview = accessRequest.status === "pending";
+  const applicantName = accessRequest.applicant?.realName || "실명 미입력";
+  const department = accessRequest.applicant?.department || "소속 미입력";
+  const staffType = accessRequest.applicant?.staffType || "구분 미입력";
 
   return (
     <article className="rounded-[28px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.06)]">
@@ -70,19 +73,34 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
               {accessRequest.schoolYear}학년도 {accessRequest.semester}학기
             </span>
           </div>
-          <h2 className="mt-4 break-keep text-lg font-black text-[#102047]">
-            {accessRequest.displayName || "이름 미등록"}
-          </h2>
+          <h2 className="mt-4 break-keep text-lg font-black text-[#102047]">{applicantName}</h2>
+          {accessRequest.displayName && (
+            <p className="mt-1 text-xs font-bold text-[#8A96A8]">Google 표시이름: {accessRequest.displayName}</p>
+          )}
           <p className="mt-1 break-all text-sm font-bold text-[#627083]">{accessRequest.email || "이메일 없음"}</p>
+          <p className="mt-2 text-sm font-black text-[#08754B]">
+            {department} · {staffType}
+          </p>
         </div>
         <p className="shrink-0 text-xs font-bold text-[#8A96A8]">신청 {formatDateTime(accessRequest.requestedAt)}</p>
       </div>
 
       <dl className="mt-5 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-3">
         <div>
+          <dt className="text-xs font-black text-[#102047]">소속/부서</dt>
+          <dd className="mt-1 text-sm font-medium text-[#627083]">{department}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-black text-[#102047]">교직원 구분</dt>
+          <dd className="mt-1 text-sm font-medium text-[#627083]">{staffType}</dd>
+        </div>
+        <div>
           <dt className="text-xs font-black text-[#102047]">신청 권한</dt>
           <dd className="mt-1 text-sm font-medium text-[#627083]">교직원</dd>
         </div>
+      </dl>
+
+      <dl className="mt-3 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-2">
         <div>
           <dt className="text-xs font-black text-[#102047]">검토일</dt>
           <dd className="mt-1 text-sm font-medium text-[#627083]">{formatDateTime(accessRequest.reviewedAt)}</dd>
