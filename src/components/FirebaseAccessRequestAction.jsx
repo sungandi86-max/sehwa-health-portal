@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
-import { ACCESS_REQUEST_STAFF_TYPES, normalizeAccessRequestApplicant } from "../lib/accessRequestApplicant.js";
+import {
+  ACCESS_REQUEST_STAFF_TYPES,
+  getAccessRequestDepartmentOptions,
+  normalizeAccessRequestApplicant,
+} from "../lib/accessRequestApplicant.js";
 import { getCurrentAccessRequest, submitStaffAccessRequest } from "../lib/accessRequests.js";
 import { getAuthProvider } from "../lib/firebaseAuth.js";
 
@@ -12,11 +16,22 @@ function getRequestMessage(request) {
   return "";
 }
 
+function getInitialDepartment(staffType) {
+  const options = getAccessRequestDepartmentOptions(staffType);
+  return options.length === 1 ? options[0] : "";
+}
+
 export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
   const [request, setRequest] = useState(null);
   const [state, setState] = useState({ status: "loading", message: "" });
-  const [applicant, setApplicant] = useState({ realName: "", department: "", staffType: "교사" });
+  const [applicant, setApplicant] = useState({
+    realName: "",
+    department: getInitialDepartment("교사"),
+    staffType: "교사",
+  });
+  const [usesCustomDepartment, setUsesCustomDepartment] = useState(false);
   const isGoogleUser = getAuthProvider(user) === "google";
+  const departmentOptions = getAccessRequestDepartmentOptions(applicant.staffType);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -52,6 +67,28 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
   const handleFieldChange = (event) => {
     const { name, value } = event.target;
     setApplicant((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleStaffTypeChange = (event) => {
+    const staffType = event.target.value;
+    setUsesCustomDepartment(false);
+    setApplicant((current) => ({
+      ...current,
+      staffType,
+      department: getInitialDepartment(staffType),
+    }));
+  };
+
+  const handleDepartmentSelectChange = (event) => {
+    const value = event.target.value;
+    if (value === "custom") {
+      setUsesCustomDepartment(true);
+      setApplicant((current) => ({ ...current, department: "" }));
+      return;
+    }
+
+    setUsesCustomDepartment(false);
+    setApplicant((current) => ({ ...current, department: value }));
   };
 
   const handleSubmit = async (event) => {
@@ -116,23 +153,11 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
             />
           </label>
           <label className="grid gap-2 text-sm font-black text-[#102047]">
-            소속/부서
-            <input
-              type="text"
-              name="department"
-              value={applicant.department}
-              onChange={handleFieldChange}
-              placeholder="예: 보건실, 행정실"
-              autoComplete="organization-title"
-              className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-4 focus:ring-[#20A982]/15"
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-black text-[#102047]">
             교직원 구분
             <select
               name="staffType"
               value={applicant.staffType}
-              onChange={handleFieldChange}
+              onChange={handleStaffTypeChange}
               className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-4 focus:ring-[#20A982]/15"
             >
               {ACCESS_REQUEST_STAFF_TYPES.map((staffType) => (
@@ -142,6 +167,38 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
               ))}
             </select>
           </label>
+          <label className="grid gap-2 text-sm font-black text-[#102047]">
+            소속/부서
+            <select
+              value={usesCustomDepartment ? "custom" : applicant.department}
+              onChange={handleDepartmentSelectChange}
+              className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-4 focus:ring-[#20A982]/15"
+              required
+            >
+              {departmentOptions.length !== 1 && <option value="">소속/부서 선택</option>}
+              {departmentOptions.map((department) => (
+                <option key={department} value={department}>
+                  {department}
+                </option>
+              ))}
+              {applicant.staffType === "기타" && <option value="custom">직접입력</option>}
+            </select>
+          </label>
+          {applicant.staffType === "기타" && usesCustomDepartment && (
+            <label className="grid gap-2 text-sm font-black text-[#102047]">
+              소속/부서 직접입력
+              <input
+                type="text"
+                name="department"
+                value={applicant.department}
+                onChange={handleFieldChange}
+                placeholder="소속 또는 역할을 입력해 주세요."
+                autoComplete="organization-title"
+                className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-4 focus:ring-[#20A982]/15"
+                required
+              />
+            </label>
+          )}
         </div>
       )}
       <button

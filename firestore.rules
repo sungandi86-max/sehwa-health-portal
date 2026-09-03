@@ -138,8 +138,25 @@ service cloud.firestore {
         && applicant.keys().hasAll(["realName", "department", "staffType"])
         && applicant.realName is string
         && applicant.realName.size() >= 2
-        && (applicant.department == null || applicant.department is string)
-        && applicant.staffType in ["교사", "직원", "기타"];
+        && applicant.department is string
+        && applicant.department.size() > 0
+        && (
+          (
+            applicant.staffType == "교사"
+            && applicant.department in [
+              "교무교육과정부",
+              "진로진학홍보부",
+              "연구정보부",
+              "창의인성부",
+              "생활안전부",
+              "1학년부",
+              "2학년부",
+              "3학년부"
+            ]
+          )
+          || (applicant.staffType == "직원" && applicant.department == "행정실")
+          || applicant.staffType == "기타"
+        );
     }
 
     function isValidAccessRequestResubmit() {

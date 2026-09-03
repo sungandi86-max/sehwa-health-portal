@@ -1,6 +1,25 @@
 export const ACCESS_REQUEST_STAFF_TYPES = ["교사", "직원", "기타"];
 
+export const ACCESS_REQUEST_DEPARTMENT_OPTIONS = {
+  교사: [
+    "교무교육과정부",
+    "진로진학홍보부",
+    "연구정보부",
+    "창의인성부",
+    "생활안전부",
+    "1학년부",
+    "2학년부",
+    "3학년부",
+  ],
+  직원: ["행정실"],
+  기타: ["기타"],
+};
+
 const REAL_NAME_MIN_LENGTH = 2;
+
+export function getAccessRequestDepartmentOptions(staffType) {
+  return ACCESS_REQUEST_DEPARTMENT_OPTIONS[staffType] || [];
+}
 
 export function normalizeAccessRequestApplicant(input = {}) {
   const realName = typeof input.realName === "string" ? input.realName.trim() : "";
@@ -21,10 +40,22 @@ export function normalizeAccessRequestApplicant(input = {}) {
     };
   }
 
+  const departmentOptions = getAccessRequestDepartmentOptions(staffType);
+  const normalizedDepartment = staffType === "기타" && !department ? "기타" : department;
+  const hasValidDepartment =
+    staffType === "기타" ? normalizedDepartment.length > 0 : departmentOptions.includes(normalizedDepartment);
+
+  if (!hasValidDepartment) {
+    return {
+      applicant: null,
+      message: "소속/부서를 선택해 주세요.",
+    };
+  }
+
   return {
     applicant: {
       realName,
-      department: department || null,
+      department: normalizedDepartment,
       staffType,
     },
     message: "",
