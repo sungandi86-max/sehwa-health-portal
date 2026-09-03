@@ -21,6 +21,25 @@ npm run build
 
 ---
 
+## Firebase v2 개발 메모
+
+Firebase v2 전환 작업은 `firebase-v2` 브랜치에서 진행합니다. 운영 중인 Google Sheets + Apps Script 구조는 유지하며, Firebase는 우선 로그인과 학년도/학기별 권한 분리 기반만 준비합니다.
+
+- 사용자 기본 정보: `users/{uid}`
+- 학년도/학기별 권한: `user_assignments/{uid}_{schoolYear}_{semester}`
+- 현재 테스트 기준: `2026`학년도 `1`학기
+- 최초 `health_teacher` assignment는 Firebase Console에서 수동 생성합니다.
+- 로그인만으로 `staff`, `admin`, `health_teacher` 역할을 자동 부여하지 않습니다.
+- 향후 학교 Google Workspace 도메인 제한을 추가할 수 있습니다.
+
+개발용 확인 경로:
+
+```text
+/firebase-test
+```
+
+---
+
 ## 📋 제출·업로드 센터 Apps Script 설정
 
 ### 1단계: Apps Script 코드 적용

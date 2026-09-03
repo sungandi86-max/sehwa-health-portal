@@ -298,15 +298,21 @@ function doPost(e) {
     const ss    = getSpreadsheet_();
     const sheet = getOrCreateSubmitSheet_(ss, sheetName);
     let fileLink = "";
+    let fileId = "";
     if (fileBase64 && folderId && fileName) {
       const folder    = DriveApp.getFolderById(folderId);
       const blob      = Utilities.newBlob(Utilities.base64Decode(fileBase64), fileMimeType, fileName);
       const driveFile = folder.createFile(blob);
       fileLink = driveFile.getUrl();
+      fileId = driveFile.getId();
     }
     const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
     appendSubmitRow_(sheet, sheetName, fields, now, fileName || "", fileLink);
-    return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      fileId: fileId,
+      fileUrl: fileLink
+    }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))

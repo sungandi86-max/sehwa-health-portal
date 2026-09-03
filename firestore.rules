@@ -1,0 +1,279 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function currentAssignmentPath(uid) {
+      return /databases/$(database)/documents/user_assignments/$(uid + "_2026_2");
+    }
+
+    function currentAssignmentId(uid) {
+      return uid + "_2026_2";
+    }
+
+    function hasCurrentHealthTeacherAssignment() {
+      return signedIn()
+        && exists(currentAssignmentPath(request.auth.uid))
+        && get(currentAssignmentPath(request.auth.uid)).data.active == true
+        && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles"])
+        && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["health_teacher"]);
+    }
+
+    function hasCurrentHomeroomAssignment() {
+      return signedIn()
+        && exists(currentAssignmentPath(request.auth.uid))
+        && get(currentAssignmentPath(request.auth.uid)).data.active == true
+        && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles", "grade", "classNo"])
+        && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["homeroom"]);
+    }
+
+    function isValidSelfUserCreate(uid) {
+      return isSelf(uid)
+        && request.resource.data.keys().hasOnly(["uid", "email", "displayName", "active", "createdAt", "updatedAt"])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.active == true;
+    }
+
+    function isValidSelfUserUpdate(uid) {
+      return isSelf(uid)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["email", "displayName", "updatedAt"])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.active == resource.data.active;
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || hasCurrentHealthTeacherAssignment();
+      allow create: if isValidSelfUserCreate(uid);
+      allow update: if isValidSelfUserUpdate(uid) || hasCurrentHealthTeacherAssignment();
+      allow delete: if false;
+    }
+
+    match /user_assignments/{assignmentId} {
+      allow read: if signedIn()
+        && (
+          assignmentId == currentAssignmentId(request.auth.uid)
+          || hasCurrentHealthTeacherAssignment()
+        );
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /faqs/{faqId} {
+      allow read: if signedIn();
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /checkups/{checkupId} {
+      allow read: if signedIn();
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /education_resources/{resourceId} {
+      allow read: if signedIn();
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /submission_items/{itemId} {
+      allow read: if signedIn();
+      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /staff_submissions/{submissionId} {
+      function hasValidSubmissionFile() {
+        return request.resource.data.file.keys().hasOnly([
+          "driveFileId",
+          "fileName",
+          "mimeType",
+          "driveUrl"
+        ])
+        && request.resource.data.file.keys().hasAll(["driveFileId", "fileName", "mimeType", "driveUrl"])
+        && (request.resource.data.file.driveFileId == null || request.resource.data.file.driveFileId is string)
+        && request.resource.data.file.fileName is string
+        && request.resource.data.file.mimeType in ["application/pdf", "image/jpeg", "image/png"]
+        && (request.resource.data.file.driveUrl == null || request.resource.data.file.driveUrl is string);
+      }
+
+      function isValidCprSubmission() {
+        return request.resource.data.itemId == "cpr"
+          && request.resource.data.keys().hasOnly([
+            "itemId",
+            "submitter",
+            "trainingDate",
+            "institution",
+            "staffType",
+            "file",
+            "status",
+            "submittedAt",
+            "updatedAt"
+          ]);
+      }
+
+      function isValidTbSubmission() {
+        return request.resource.data.itemId == "tb"
+          && request.resource.data.keys().hasOnly([
+            "itemId",
+            "submitter",
+            "checkupDate",
+            "documentType",
+            "staffType",
+            "file",
+            "status",
+            "submittedAt",
+            "updatedAt"
+          ]);
+      }
+
+      function hasValidRecruitConfirmations() {
+        return request.resource.data.confirmations.keys().hasOnly([
+          "submittedToAdminOffice",
+          "xrayDateCheckAcknowledged"
+        ])
+        && request.resource.data.confirmations.keys().hasAll([
+          "submittedToAdminOffice",
+          "xrayDateCheckAcknowledged"
+        ])
+        && request.resource.data.confirmations.submittedToAdminOffice == true
+        && request.resource.data.confirmations.xrayDateCheckAcknowledged == true;
+      }
+
+      function isValidRecruitSubmission() {
+        return request.resource.data.itemId == "recruit"
+          && request.resource.data.keys().hasOnly([
+            "itemId",
+            "submitter",
+            "staffType",
+            "requestType",
+            "confirmations",
+            "status",
+            "submittedAt",
+            "updatedAt"
+          ])
+          && request.resource.data.requestType == "employment_checkup_substitution"
+          && request.resource.data.staffType is string
+          && hasValidRecruitConfirmations();
+      }
+
+      allow read: if signedIn()
+        && (
+          resource.data.submitter.uid == request.auth.uid
+          || hasCurrentHealthTeacherAssignment()
+        );
+      allow create: if signedIn()
+        && (
+          ((isValidCprSubmission() || isValidTbSubmission()) && hasValidSubmissionFile())
+          || isValidRecruitSubmission()
+        )
+        && request.resource.data.status == "submitted"
+        && request.resource.data.submitter.uid == request.auth.uid
+        && request.resource.data.submitter.email == request.auth.token.email;
+      allow update: if hasCurrentHealthTeacherAssignment()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "updatedAt"]);
+      allow delete: if false;
+    }
+
+    match /student_health_submissions/{submissionId} {
+      function isCurrentTermInfection(data) {
+        return data.type == "infection"
+          && data.schoolYear == 2026
+          && data.semester == 2;
+      }
+
+      function hasValidStudent(data) {
+        return data.student.keys().hasOnly(["grade", "classNo", "number", "name"])
+          && data.student.keys().hasAll(["grade", "classNo", "number", "name"])
+          && data.student.grade is number
+          && data.student.classNo is number
+          && data.student.number is number
+          && data.student.name is string;
+      }
+
+      function hasValidInfection(data) {
+        return data.infection.keys().hasOnly([
+          "diseaseName",
+          "diagnosisDate",
+          "exclusionStartDate",
+          "exclusionEndDate"
+        ])
+        && data.infection.keys().hasAll(["diseaseName", "diagnosisDate", "exclusionStartDate", "exclusionEndDate"])
+        && data.infection.diseaseName is string
+        && (data.infection.diagnosisDate == null || data.infection.diagnosisDate is string)
+        && (data.infection.exclusionStartDate == null || data.infection.exclusionStartDate is string)
+        && (data.infection.exclusionEndDate == null || data.infection.exclusionEndDate is string);
+      }
+
+      function hasValidReport(data) {
+        return data.report.keys().hasOnly(["status", "note"])
+          && data.report.keys().hasAll(["status", "note"])
+          && data.report.status == "submitted"
+          && (data.report.note == null || data.report.note is string);
+      }
+
+      function hasValidSubmittedBy(data) {
+        return data.submittedBy.keys().hasOnly(["uid", "email", "displayName"])
+          && data.submittedBy.keys().hasAll(["uid", "email", "displayName"])
+          && data.submittedBy.uid == request.auth.uid
+          && data.submittedBy.email == request.auth.token.email
+          && data.submittedBy.displayName is string;
+      }
+
+      function isValidInfectionSubmission(data) {
+        return data.keys().hasOnly([
+          "type",
+          "schoolYear",
+          "semester",
+          "student",
+          "infection",
+          "report",
+          "submittedBy",
+          "submittedAt",
+          "updatedAt"
+        ])
+        && data.keys().hasAll([
+          "type",
+          "schoolYear",
+          "semester",
+          "student",
+          "infection",
+          "report",
+          "submittedBy",
+          "submittedAt",
+          "updatedAt"
+        ])
+        && isCurrentTermInfection(data)
+        && hasValidStudent(data)
+        && hasValidInfection(data)
+        && hasValidReport(data)
+        && hasValidSubmittedBy(data);
+      }
+
+      function matchesCurrentHomeroom(data) {
+        return hasCurrentHomeroomAssignment()
+          && data.schoolYear == get(currentAssignmentPath(request.auth.uid)).data.schoolYear
+          && data.semester == get(currentAssignmentPath(request.auth.uid)).data.semester
+          && data.student.grade == get(currentAssignmentPath(request.auth.uid)).data.grade
+          && data.student.classNo == get(currentAssignmentPath(request.auth.uid)).data.classNo;
+      }
+
+      allow read: if hasCurrentHealthTeacherAssignment()
+        || (isCurrentTermInfection(resource.data) && matchesCurrentHomeroom(resource.data));
+      allow create: if isValidInfectionSubmission(request.resource.data)
+        && (hasCurrentHealthTeacherAssignment() || matchesCurrentHomeroom(request.resource.data));
+      allow update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

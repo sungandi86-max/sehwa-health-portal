@@ -11,6 +11,17 @@ import AdminRoadmapPage from "./pages/AdminRoadmapPage.jsx";
 import CheckupPage from "./pages/CheckupPage.jsx";
 import EducationPage from "./pages/EducationPage.jsx";
 import FAQPage from "./pages/FAQPage.jsx";
+import FirebaseCheckupsPage from "./pages/FirebaseCheckupsPage.jsx";
+import FirebaseDashboardPage from "./pages/FirebaseDashboardPage.jsx";
+import FirebaseEducationPage from "./pages/FirebaseEducationPage.jsx";
+import FirebaseFaqPage from "./pages/FirebaseFaqPage.jsx";
+import FirebaseAdminSubmissionsPage from "./pages/FirebaseAdminSubmissionsPage.jsx";
+import FirebaseCprSubmitPage from "./pages/FirebaseCprSubmitPage.jsx";
+import FirebaseInfectionSubmitPage from "./pages/FirebaseInfectionSubmitPage.jsx";
+import FirebaseRecruitSubmitPage from "./pages/FirebaseRecruitSubmitPage.jsx";
+import FirebaseSubmissionsPage from "./pages/FirebaseSubmissionsPage.jsx";
+import FirebaseTbSubmitPage from "./pages/FirebaseTbSubmitPage.jsx";
+import FirebaseTestPage from "./pages/FirebaseTestPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import HomeroomPage from "./pages/HomeroomPage.jsx";
 import ResourcesPage from "./pages/ResourcesPage.jsx";
@@ -80,11 +91,26 @@ function LoadingSkeleton() {
 }
 
 export default function App() {
+  const isFirebaseV2Path = [
+    "/firebase-test",
+    "/firebase-dashboard",
+    "/firebase-checkups",
+    "/firebase-education",
+    "/firebase-faq",
+    "/firebase-submissions",
+    "/firebase-admin/submissions",
+    "/firebase-submit/cpr",
+    "/firebase-submit/infection",
+    "/firebase-submit/recruit",
+    "/firebase-submit/tb",
+  ].includes(window.location.pathname);
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!isFirebaseV2Path);
 
   useEffect(() => {
+    if (isFirebaseV2Path) return;
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -108,7 +134,7 @@ export default function App() {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, []);
+  }, [isFirebaseV2Path]);
 
   const liveAppConfig = portalData?.appConfig
     ? { ...fallbackAppConfig, ...portalData.appConfig }
@@ -143,6 +169,17 @@ export default function App() {
               <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
               <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
               <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
+              <Route path="/firebase-test" element={<FirebaseTestPage />} />
+              <Route path="/firebase-dashboard" element={<FirebaseDashboardPage />} />
+              <Route path="/firebase-checkups" element={<FirebaseCheckupsPage />} />
+              <Route path="/firebase-education" element={<FirebaseEducationPage />} />
+              <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
+              <Route path="/firebase-submissions" element={<FirebaseSubmissionsPage />} />
+              <Route path="/firebase-admin/submissions" element={<FirebaseAdminSubmissionsPage />} />
+              <Route path="/firebase-submit/cpr" element={<FirebaseCprSubmitPage />} />
+              <Route path="/firebase-submit/infection" element={<FirebaseInfectionSubmitPage />} />
+              <Route path="/firebase-submit/recruit" element={<FirebaseRecruitSubmitPage />} />
+              <Route path="/firebase-submit/tb" element={<FirebaseTbSubmitPage />} />
               <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
               <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
