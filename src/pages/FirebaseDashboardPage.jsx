@@ -3,16 +3,10 @@ import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { formatAnnouncementEndDate, getActiveAnnouncements } from "../lib/announcements.js";
+import { getDashboardSummary } from "../lib/dashboardSummary.js";
 import { auth, googleProvider } from "../lib/firebase.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
-
-const PLACEHOLDER_SUMMARY = [
-  { label: "오늘 입실", value: "0명", note: "Firestore 연결 전" },
-  { label: "신규 제출", value: "0건", note: "Firestore 연결 전" },
-  { label: "감염병 관리", value: "0건", note: "Firestore 연결 전" },
-  { label: "오늘 할 일", value: "0건", note: "Firestore 연결 전" },
-];
 
 const QUICK_MENUS = [
   { title: "오늘의 보건실", description: "진행 중인 보건실 안내", status: "연결됨", href: "/firebase-dashboard" },
@@ -67,12 +61,51 @@ function announcementBadgeClassName(badgeType) {
   return "rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]";
 }
 
+function SummarySkeleton() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {[0, 1, 2, 3].map((item) => (
+        <article
+          key={item}
+          className="h-32 animate-pulse rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]"
+        >
+          <div className="h-4 w-24 rounded-full bg-[#E8F2EF]" />
+          <div className="mt-5 h-8 w-14 rounded-xl bg-[#DFF8EF]" />
+          <div className="mt-4 h-3 w-28 rounded-full bg-[#EEF4FF]" />
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function dashboardErrorMessage(error) {
+  const message = error?.message || "";
+  if (error?.code === "permission-denied") {
+    return {
+      status: "permission-denied",
+      message: "대시보드 집계 정보를 읽을 수 없습니다. Firestore 보안 규칙을 확인해 주세요.",
+    };
+  }
+  if (message.includes("requires an index")) {
+    return {
+      status: "index-required",
+      message: "대시보드 집계 쿼리에 필요한 Firestore index를 확인해 주세요.",
+    };
+  }
+  return {
+    status: "error",
+    message: "대시보드 집계 정보를 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+  };
+}
+
 export default function FirebaseDashboardPage() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsState, setAnnouncementsState] = useState({ status: "idle", message: "" });
+  const [dashboardSummary, setDashboardSummary] = useState(null);
+  const [summaryState, setSummaryState] = useState({ status: "idle", message: "" });
   const [isLoading, setIsLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
   const [message, setMessage] = useState("");
@@ -120,6 +153,8 @@ export default function FirebaseDashboardPage() {
     if (!hasHealthTeacherAccess) {
       setAnnouncements([]);
       setAnnouncementsState({ status: "idle", message: "" });
+      setDashboardSummary(null);
+      setSummaryState({ status: "idle", message: "" });
       return;
     }
 
@@ -150,6 +185,40 @@ export default function FirebaseDashboardPage() {
     }
 
     loadAnnouncements();
+
+    return () => {
+      shouldIgnore = true;
+    };
+  }, [hasHealthTeacherAccess]);
+
+  useEffect(() => {
+    if (!hasHealthTeacherAccess) {
+      setDashboardSummary(null);
+      setSummaryState({ status: "idle", message: "" });
+      return;
+    }
+
+    let shouldIgnore = false;
+
+    async function loadDashboardSummary() {
+      setSummaryState({ status: "loading", message: "" });
+
+      try {
+        const nextSummary = await getDashboardSummary();
+        if (shouldIgnore) return;
+
+        setDashboardSummary(nextSummary);
+        setSummaryState({ status: "success", message: "" });
+      } catch (error) {
+        if (shouldIgnore) return;
+
+        console.error("[firebase-dashboard] summary load failed", error);
+        setDashboardSummary(null);
+        setSummaryState(dashboardErrorMessage(error));
+      }
+    }
+
+    loadDashboardSummary();
 
     return () => {
       shouldIgnore = true;
@@ -310,18 +379,95 @@ export default function FirebaseDashboardPage() {
 
         <section aria-label="오늘의 요약">
           <h2 className="mb-3 px-1 text-lg font-black text-[#102047]">오늘의 요약</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {PLACEHOLDER_SUMMARY.map((item) => (
-              <article
-                key={item.label}
-                className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]"
-              >
-                <p className="text-sm font-black text-[#102047]">{item.label}</p>
-                <p className="mt-3 text-3xl font-black text-[#20A982]">{item.value}</p>
-                <p className="mt-2 text-xs font-bold text-[#8A96A8]">{item.note}</p>
-              </article>
-            ))}
+          {summaryState.status === "loading" && <SummarySkeleton />}
+
+          {(summaryState.status === "permission-denied" ||
+            summaryState.status === "index-required" ||
+            summaryState.status === "error") && (
+            <div className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 shadow-[0_14px_36px_rgba(16,32,71,0.04)]">
+              <p className="text-sm font-black text-[#B42318]">{summaryState.message}</p>
+            </div>
+          )}
+
+          {summaryState.status === "success" && dashboardSummary && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {dashboardSummary.cards.map((item) => (
+                <article
+                  key={item.label}
+                  className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]"
+                >
+                  <p className="text-sm font-black text-[#102047]">{item.label}</p>
+                  <p className="mt-3 text-3xl font-black text-[#20A982]">{item.value}</p>
+                  <p className="mt-2 text-xs font-bold text-[#8A96A8]">{item.note}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">
+                Recent submissions
+              </p>
+              <h2 className="mt-2 text-xl font-black text-[#102047]">최근 제출</h2>
+            </div>
+            <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+              최대 5건
+            </span>
           </div>
+
+          {summaryState.status === "loading" && (
+            <div className="mt-5 space-y-3">
+              {[0, 1, 2].map((item) => (
+                <div
+                  key={item}
+                  className="h-20 animate-pulse rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9]"
+                />
+              ))}
+            </div>
+          )}
+
+          {(summaryState.status === "permission-denied" ||
+            summaryState.status === "index-required" ||
+            summaryState.status === "error") && (
+            <div className="mt-5 rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-5">
+              <p className="text-sm font-black text-[#B42318]">{summaryState.message}</p>
+            </div>
+          )}
+
+          {summaryState.status === "success" && dashboardSummary?.recentSubmissions.length === 0 && (
+            <div className="mt-5 rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-5">
+              <p className="text-sm font-black text-[#627083]">최근 제출 내역이 없습니다.</p>
+            </div>
+          )}
+
+          {summaryState.status === "success" && dashboardSummary?.recentSubmissions.length > 0 && (
+            <div className="mt-5 space-y-3">
+              {dashboardSummary.recentSubmissions.map((submission) => (
+                <article
+                  key={`${submission.source}-${submission.id}`}
+                  className="flex flex-col gap-3 rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-4 shadow-[0_12px_30px_rgba(16,32,71,0.04)] sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+                        {submission.typeLabel}
+                      </span>
+                      <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">
+                        {submission.statusLabel}
+                      </span>
+                    </div>
+                    <p className="mt-3 break-keep text-sm font-black leading-6 text-[#102047]">
+                      {submission.detail}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-xs font-bold text-[#8A96A8]">{submission.submittedAtLabel}</p>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
