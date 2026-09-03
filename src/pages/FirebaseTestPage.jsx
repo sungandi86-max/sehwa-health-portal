@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import { auth, googleProvider } from "../lib/firebase.js";
+import { onAuthStateChanged } from "firebase/auth";
+import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
+import { auth } from "../lib/firebase.js";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import {
+  getAuthProviderLabel,
+  getFirebaseProviderId,
+  getFriendlyAuthErrorMessage,
+  getMicrosoftSchoolDomainBlockMessage,
+  signInWithGoogle,
+  signInWithMicrosoft,
+  signOutFirebase,
+} from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureUserProfile, getUserAssignmentResult } from "../lib/userProfile.js";
 
@@ -46,13 +56,21 @@ export default function FirebaseTestPage() {
       setUser(currentUser);
       setProfile(null);
       setAssignmentResult(null);
-      setMessage("");
+      if (currentUser) setMessage("");
       setIsLoading(false);
 
       if (!currentUser) return;
 
       setIsProfileLoading(true);
       try {
+        const blockedMessage = getMicrosoftSchoolDomainBlockMessage(currentUser);
+        if (blockedMessage) {
+          await signOutFirebase();
+          setUser(null);
+          setMessage(blockedMessage);
+          return;
+        }
+
         const ensuredProfile = await ensureUserProfile(currentUser);
         setProfile(ensuredProfile);
 
@@ -73,16 +91,31 @@ export default function FirebaseTestPage() {
     return unsubscribe;
   }, []);
 
-  const handleSignIn = async () => {
+  const handleMicrosoftSignIn = async () => {
     setIsWorking(true);
     setMessage("");
 
     try {
-      await signInWithPopup(auth, googleProvider);
-      setMessage("Google 로그인이 완료되었습니다.");
+      await signInWithMicrosoft();
+      setMessage("Microsoft Teams 로그인이 완료되었습니다.");
     } catch (error) {
       console.error("[firebase-test] sign in failed", error);
-      setMessage("Google 로그인에 실패했습니다. Firebase 설정과 승인된 도메인을 확인해 주세요.");
+      setMessage(getFriendlyAuthErrorMessage(error, "Microsoft Teams 로그인에 실패했습니다."));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsWorking(true);
+    setMessage("");
+
+    try {
+      await signInWithGoogle();
+      setMessage("Google 관리자 로그인이 완료되었습니다.");
+    } catch (error) {
+      console.error("[firebase-test] google sign in failed", error);
+      setMessage(getFriendlyAuthErrorMessage(error, "Google 관리자 로그인에 실패했습니다."));
     } finally {
       setIsWorking(false);
     }
@@ -93,7 +126,7 @@ export default function FirebaseTestPage() {
     setMessage("");
 
     try {
-      await signOut(auth);
+      await signOutFirebase();
       setMessage("로그아웃되었습니다.");
     } catch (error) {
       console.error("[firebase-test] sign out failed", error);
@@ -116,7 +149,7 @@ export default function FirebaseTestPage() {
                 온라인 보건실 v2
               </h1>
               <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#627083]">
-                교직원 Google 계정으로 로그인해 Firebase 기반 권한 연결 상태를 확인합니다.
+                학교 Teams 계정과 Google 관리자 예비 로그인의 Firebase 권한 연결 상태를 확인합니다.
               </p>
             </div>
             <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#DFF8EF] to-[#EEF4FF] text-2xl font-black text-[#20A982] shadow-[0_12px_28px_rgba(32,169,130,0.16)] sm:flex">
@@ -130,18 +163,16 @@ export default function FirebaseTestPage() {
             </div>
           ) : !user ? (
             <div className="rounded-[26px] border border-[#DDEAE7] bg-gradient-to-br from-white to-[#F0FBF7] p-5">
-              <h2 className="text-xl font-black text-[#102047]">교직원 Google 계정으로 로그인</h2>
+              <h2 className="text-xl font-black text-[#102047]">교직원 계정으로 로그인</h2>
               <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
-                로그인 후 사용자 기본 정보와 현재 학년도/학기 권한 문서를 확인합니다.
+                교직원은 학교 Teams 계정을 사용하고, Google은 관리자 예비 로그인으로 유지합니다.
               </p>
-              <button
-                type="button"
-                onClick={handleSignIn}
-                disabled={isWorking}
-                className="mt-5 min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.22)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isWorking ? "처리 중..." : "Google 로그인"}
-              </button>
+              <FirebaseSignInActions
+                isWorking={isWorking}
+                message={message}
+                onGoogleSignIn={handleGoogleSignIn}
+                onMicrosoftSignIn={handleMicrosoftSignIn}
+              />
             </div>
           ) : (
             <div className="space-y-5">
@@ -154,6 +185,9 @@ export default function FirebaseTestPage() {
                 </h2>
                 <p className="mt-1 break-all text-sm font-bold text-[#627083]">
                   {user.email || "이메일 없음"}
+                </p>
+                <p className="mt-2 text-xs font-black text-[#20A982]">
+                  {getAuthProviderLabel(user)} 로그인
                 </p>
               </div>
 
@@ -226,11 +260,19 @@ export default function FirebaseTestPage() {
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
-                  onClick={handleSignIn}
+                  onClick={handleMicrosoftSignIn}
                   disabled={isWorking}
                   className="min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.2)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isWorking ? "처리 중..." : "Google 로그인"}
+                  {isWorking ? "처리 중..." : "Teams 다시 로그인"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isWorking}
+                  className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Google 관리자 로그인
                 </button>
                 <button
                   type="button"
@@ -244,7 +286,7 @@ export default function FirebaseTestPage() {
             </div>
           )}
 
-          {message && (
+          {user && message && (
             <p className="mt-5 rounded-[22px] border border-[#B8E8D6] bg-[#F0FBF7] px-4 py-3 text-sm font-bold text-[#08754B]">
               {message}
             </p>
@@ -280,6 +322,10 @@ export default function FirebaseTestPage() {
                 <div>
                   <dt className="font-bold text-[#7B8797]">assignment status</dt>
                   <dd className="mt-1 font-black text-[#102047]">{assignmentResult?.status || "checking"}</dd>
+                </div>
+                <div>
+                  <dt className="font-bold text-[#7B8797]">provider</dt>
+                  <dd className="mt-1 font-black text-[#102047]">{getFirebaseProviderId(user) || "-"}</dd>
                 </div>
                 <div>
                   <dt className="font-bold text-[#7B8797]">error code</dt>

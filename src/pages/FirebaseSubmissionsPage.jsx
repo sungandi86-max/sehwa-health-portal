@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
-import { auth, googleProvider } from "../lib/firebase.js";
+import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
+import { auth } from "../lib/firebase.js";
+import {
+  getFriendlyAuthErrorMessage,
+  getMicrosoftSchoolDomainBlockMessage,
+  signInWithGoogle,
+  signInWithMicrosoft,
+  signOutFirebase,
+} from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { getActiveSubmissionItems } from "../lib/submissionItems.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher, isHomeroom } from "../lib/userProfile.js";
@@ -144,6 +152,14 @@ export default function FirebaseSubmissionsPage() {
       if (!currentUser) return;
 
       try {
+        const blockedMessage = getMicrosoftSchoolDomainBlockMessage(currentUser);
+        if (blockedMessage) {
+          await signOutFirebase();
+          setUser(null);
+          setAuthState({ status: "signed-out", message: blockedMessage });
+          return;
+        }
+
         const ensuredProfile = await ensureUserProfile(currentUser);
         const nextAssignment = await getUserAssignmentResult(currentUser.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
         setProfile(ensuredProfile);
@@ -197,13 +213,31 @@ export default function FirebaseSubmissionsPage() {
     };
   }, [user]);
 
-  const handleSignIn = async () => {
+  const handleMicrosoftSignIn = async () => {
     setIsWorking(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithMicrosoft();
     } catch (error) {
       console.error("[firebase-submissions] sign in failed", error);
-      setAuthState({ status: "signed-out", message: "Google 로그인에 실패했습니다. Firebase 설정을 확인해 주세요." });
+      setAuthState({
+        status: "signed-out",
+        message: getFriendlyAuthErrorMessage(error, "Microsoft Teams 로그인에 실패했습니다."),
+      });
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsWorking(true);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      console.error("[firebase-submissions] google sign in failed", error);
+      setAuthState({
+        status: "signed-out",
+        message: getFriendlyAuthErrorMessage(error, "Google 관리자 로그인에 실패했습니다."),
+      });
     } finally {
       setIsWorking(false);
     }
@@ -212,7 +246,7 @@ export default function FirebaseSubmissionsPage() {
   const handleSignOut = async () => {
     setIsWorking(true);
     try {
-      await signOut(auth);
+      await signOutFirebase();
     } finally {
       setIsWorking(false);
     }
@@ -226,17 +260,14 @@ export default function FirebaseSubmissionsPage() {
     return (
       <AccessMessage
         title="제출·보고 센터"
-        description="Firebase v2 제출 항목은 교직원 Google 계정 로그인 후 사용할 수 있습니다."
-        message={authState.message}
+        description="교직원은 학교 Teams 계정으로 로그인하고, Google은 관리자 예비 로그인으로 사용합니다."
         action={
-          <button
-            type="button"
-            onClick={handleSignIn}
-            disabled={isWorking}
-            className="mt-6 min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.22)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isWorking ? "처리 중..." : "Google 로그인"}
-          </button>
+          <FirebaseSignInActions
+            isWorking={isWorking}
+            message={authState.message}
+            onGoogleSignIn={handleGoogleSignIn}
+            onMicrosoftSignIn={handleMicrosoftSignIn}
+          />
         }
       />
     );

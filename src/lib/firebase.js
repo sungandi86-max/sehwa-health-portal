@@ -1,5 +1,5 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, OAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -16,5 +16,9 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+const microsoftProvider = new OAuthProvider("microsoft.com");
+const microsoftTenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID || "sehwa-gs.hs.kr";
 
-export { app, auth, db, GoogleAuthProvider, googleProvider };
+microsoftProvider.setCustomParameters({ tenant: microsoftTenantId });
+
+export { app, auth, db, GoogleAuthProvider, googleProvider, microsoftProvider };

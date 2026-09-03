@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
 import { formatAnnouncementEndDate, getActiveAnnouncements } from "../lib/announcements.js";
 import { getDashboardSummary } from "../lib/dashboardSummary.js";
-import { auth, googleProvider } from "../lib/firebase.js";
+import { auth } from "../lib/firebase.js";
+import {
+  getFriendlyAuthErrorMessage,
+  getMicrosoftSchoolDomainBlockMessage,
+  signInWithGoogle,
+  signInWithMicrosoft,
+  signOutFirebase,
+} from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
 
@@ -128,13 +136,21 @@ export default function FirebaseDashboardPage() {
       setUser(currentUser);
       setProfile(null);
       setAssignmentResult(null);
-      setMessage("");
+      if (currentUser) setMessage("");
       setIsLoading(false);
 
       if (!currentUser) return;
 
       setIsLoading(true);
       try {
+        const blockedMessage = getMicrosoftSchoolDomainBlockMessage(currentUser);
+        if (blockedMessage) {
+          await signOutFirebase();
+          setUser(null);
+          setMessage(blockedMessage);
+          return;
+        }
+
         const ensuredProfile = await ensureUserProfile(currentUser);
         const currentAssignmentResult = await getUserAssignmentResult(
           currentUser.uid,
@@ -231,15 +247,29 @@ export default function FirebaseDashboardPage() {
     };
   }, [hasHealthTeacherAccess]);
 
-  const handleSignIn = async () => {
+  const handleMicrosoftSignIn = async () => {
     setIsWorking(true);
     setMessage("");
 
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithMicrosoft();
     } catch (error) {
       console.error("[firebase-dashboard] sign in failed", error);
-      setMessage("Google 로그인에 실패했습니다. Firebase 설정과 승인된 도메인을 확인해 주세요.");
+      setMessage(getFriendlyAuthErrorMessage(error, "Microsoft Teams 로그인에 실패했습니다."));
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsWorking(true);
+    setMessage("");
+
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      console.error("[firebase-dashboard] google sign in failed", error);
+      setMessage(getFriendlyAuthErrorMessage(error, "Google 관리자 로그인에 실패했습니다."));
     } finally {
       setIsWorking(false);
     }
@@ -250,7 +280,7 @@ export default function FirebaseDashboardPage() {
     setMessage("");
 
     try {
-      await signOut(auth);
+      await signOutFirebase();
     } catch (error) {
       console.error("[firebase-dashboard] sign out failed", error);
       setMessage("로그아웃 중 문제가 발생했습니다.");
@@ -272,16 +302,14 @@ export default function FirebaseDashboardPage() {
     return (
       <AccessMessage
         title="온라인 보건실 v2"
-        description="보건교사 전용 대시보드는 교직원 Google 계정 로그인 후 사용할 수 있습니다."
+        description="교직원은 학교 Teams 계정으로 로그인하고, Google은 관리자 예비 로그인으로 사용합니다."
         action={
-          <button
-            type="button"
-            onClick={handleSignIn}
-            disabled={isWorking}
-            className="mt-6 min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.22)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isWorking ? "처리 중..." : "Google 로그인"}
-          </button>
+          <FirebaseSignInActions
+            isWorking={isWorking}
+            message={message}
+            onGoogleSignIn={handleGoogleSignIn}
+            onMicrosoftSignIn={handleMicrosoftSignIn}
+          />
         }
       />
     );
