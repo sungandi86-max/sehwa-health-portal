@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "firebase": "^12.18.0",
-    "firebase-admin": "^14.3.0",
+    "firebase-admin": "13.10.0",
     "google-auth-library": "^11.0.2",
     "node-fetch": "^3.3.2",
     "react": "^18.3.1",
