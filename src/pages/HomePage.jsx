@@ -11,7 +11,13 @@ const legacyMenuRoutes = {
   resources: "/resources",
 };
 
+const portalHomeManagerNote = "제출한 자료는 보건교사가 관리자 화면에서 확인합니다.";
+
 export default function HomePage({ config }) {
+  const portalHomeConfig = {
+    ...config,
+    managerNote: portalHomeManagerNote,
+  };
   const firebaseMenuById = new Map(firebaseV2MenuItems.map((item) => [item.id, item]));
   const legacyMenuById = new Map(quickMenuItems.map((item) => [item.id, item]));
   const restoredMenuItems = [
@@ -27,7 +33,7 @@ export default function HomePage({ config }) {
 
   return (
     <>
-      <HeroSection config={config} action={<FirebaseHomeAuthPanel />} />
+      <HeroSection config={portalHomeConfig} action={<FirebaseHomeAuthPanel />} />
       <PwaInstallCard />
       <QuickMenu items={restoredMenuItems} variant="portalCompact" />
     </>

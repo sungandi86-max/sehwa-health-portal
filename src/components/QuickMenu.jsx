@@ -105,7 +105,7 @@ export default function QuickMenu({ items = quickMenuItems, className = "", vari
               onClick={() => navigate(target)}
               className={
                 isPortalCompact
-                  ? "group flex h-full min-h-[124px] min-w-0 flex-col rounded-[16px] border border-[#DDEAE7] bg-white/95 p-3 text-left transition hover:-translate-y-0.5 hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 sm:min-h-[132px]"
+                  ? "group flex h-full min-h-[124px] min-w-0 flex-col rounded-[16px] border border-[#DDEAE7] bg-white/95 p-3 text-left transition hover:-translate-y-0.5 hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 sm:min-h-36"
                   : `group flex h-full min-h-36 min-w-0 flex-col rounded-[24px] border p-4 text-left shadow-[var(--shh-shadow)] transition hover:-translate-y-0.5 hover:shadow-[var(--shh-shadow-hover)] sm:min-h-44 sm:rounded-[28px] sm:p-6 lg:min-h-48 ${isSecondary ? "lg:shadow-[0_10px_30px_rgba(30,41,59,0.045)]" : ""} ${tone.card}`
               }
             >

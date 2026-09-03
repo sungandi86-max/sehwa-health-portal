@@ -1,6 +1,11 @@
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import { useLocation, useNavigate } from "react-router-dom";
+import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { quickMenuItems } from "../data/fallbackData.js";
 import { firebaseV2MenuItems } from "../data/firebaseV2Navigation.js";
+import { auth } from "../lib/firebase.js";
+import { getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
 import { SchoolEmblem } from "./ui.jsx";
 
 const ROUTE_MAP = {
@@ -17,6 +22,8 @@ const ROUTE_MAP = {
 export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [assignment, setAssignment] = useState(null);
   const params = new URLSearchParams(location.search);
   const isFirebaseV2 = location.pathname.startsWith("/firebase");
   const isOperationalEntry = isFirebaseV2 || location.pathname === "/";
@@ -25,9 +32,42 @@ export default function Header() {
     params.get("mode") === "public" &&
     params.get("type") === "tbreply";
 
+  useEffect(() => {
+    if (!isOperationalEntry) {
+      setCurrentUser(null);
+      setAssignment(null);
+      return undefined;
+    }
+
+    let isMounted = true;
+    let authRequestId = 0;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!isMounted) return;
+
+      authRequestId += 1;
+      const currentRequestId = authRequestId;
+      setCurrentUser(firebaseUser);
+      setAssignment(null);
+
+      if (!firebaseUser) return;
+
+      const result = await getUserAssignmentResult(firebaseUser.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
+      if (!isMounted || currentRequestId !== authRequestId) return;
+
+      setAssignment(result.assignment);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [isOperationalEntry]);
+
   if (isPublicUpload) return null;
 
   const navItems = isOperationalEntry ? firebaseV2MenuItems : quickMenuItems.slice(0, 5);
+  const canOpenAdmin = isOperationalEntry && currentUser && assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
+  const staffEntryLabel = currentUser ? "제출·보고" : "교직원 로그인";
 
   return (
     <header className="sticky top-0 z-50 border-b border-[rgba(120,140,180,0.14)] bg-white/78 shadow-[0_10px_30px_rgba(30,41,59,0.04)] backdrop-blur-xl">
@@ -74,19 +114,21 @@ export default function Header() {
               onClick={() => navigate("/firebase-submissions")}
               className="min-h-10 rounded-full bg-[#20A982] px-3 py-1.5 text-xs font-bold text-white shadow-[0_10px_24px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] sm:px-3.5"
             >
-              교직원 로그인
+              {staffEntryLabel}
             </button>
           )}
-          <button
-            onClick={() => navigate(isOperationalEntry ? "/firebase-dashboard" : "/admin")}
-            className={`min-h-10 rounded-full px-3 py-1.5 text-xs font-bold transition hover:-translate-y-[1px] sm:px-3.5 ${
-              isOperationalEntry
-                ? "border border-[#DDEAE7] bg-white text-[#102047]"
-                : "bg-[var(--shh-primary)] text-white shadow-[0_10px_24px_rgba(24,59,143,0.22)] hover:shadow-[0_14px_30px_rgba(24,59,143,0.28)]"
-            }`}
-          >
-            {isOperationalEntry ? "관리자" : "관리자 로그인"}
-          </button>
+          {(!isOperationalEntry || canOpenAdmin) && (
+            <button
+              onClick={() => navigate(isOperationalEntry ? "/firebase-dashboard" : "/admin")}
+              className={`min-h-10 rounded-full px-3 py-1.5 text-xs font-bold transition hover:-translate-y-[1px] sm:px-3.5 ${
+                isOperationalEntry
+                  ? "border border-[#DDEAE7] bg-white text-[#102047]"
+                  : "bg-[var(--shh-primary)] text-white shadow-[0_10px_24px_rgba(24,59,143,0.22)] hover:shadow-[0_14px_30px_rgba(24,59,143,0.28)]"
+              }`}
+            >
+              {isOperationalEntry ? "관리자 화면" : "관리자 로그인"}
+            </button>
+          )}
         </div>
       </div>
     </header>
