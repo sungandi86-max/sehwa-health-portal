@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
 import { formatAnnouncementEndDate, getActiveAnnouncements } from "../lib/announcements.js";
 import { getDashboardSummary } from "../lib/dashboardSummary.js";
 import { auth } from "../lib/firebase.js";
+import { getPendingAccessRequestCount } from "../lib/accessRequests.js";
 import {
   getFriendlyAuthErrorMessage,
   getMicrosoftSchoolDomainBlockMessage,
@@ -15,6 +17,7 @@ import {
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
+import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 const QUICK_MENUS = [
   { title: "오늘의 보건실", description: "진행 중인 보건실 안내", status: "연결됨", href: "/firebase-dashboard" },
@@ -24,6 +27,7 @@ const QUICK_MENUS = [
   { title: "제출·보고 센터", description: "CPR, 결핵검진, 채용검진, 감염병 보고", status: "연결됨", href: "/firebase-submissions" },
   { title: "제출·보고 관리", description: "제출 확인과 감염병 보고 처리", status: "관리자", href: "/firebase-admin/submissions" },
   { title: "제출 현황", description: "대상자별 제출·미제출 확인", status: "관리자", href: "/firebase-admin/submission-status" },
+  { title: "권한 신청", description: "Google 계정 권한 신청 승인", status: "관리자", href: "/firebase-admin/access-requests" },
   { title: "입실현황", description: "보건실 입실 기록 관리", status: "준비 중" },
   { title: "교직원 권한 관리", description: "역할·담임·보직 학기별 관리", status: "관리자", href: "/firebase-admin/users" },
 ];
@@ -120,6 +124,7 @@ export default function FirebaseDashboardPage() {
   const [announcements, setAnnouncements] = useState([]);
   const [announcementsState, setAnnouncementsState] = useState({ status: "idle", message: "" });
   const [dashboardSummary, setDashboardSummary] = useState(null);
+  const [pendingAccessCount, setPendingAccessCount] = useState(null);
   const [summaryState, setSummaryState] = useState({ status: "idle", message: "" });
   const [isLoading, setIsLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
@@ -153,6 +158,12 @@ export default function FirebaseDashboardPage() {
         }
 
         const ensuredProfile = await ensureUserProfile(currentUser);
+        const teamStaffResult = await ensureTeamStaffAssignment(currentUser, ensuredProfile);
+        if (teamStaffResult.ok === false) {
+          setMessage(teamStaffResult.message);
+          return;
+        }
+
         const currentAssignmentResult = await getUserAssignmentResult(
           currentUser.uid,
           CURRENT_SCHOOL_YEAR,
@@ -177,6 +188,7 @@ export default function FirebaseDashboardPage() {
       setAnnouncements([]);
       setAnnouncementsState({ status: "idle", message: "" });
       setDashboardSummary(null);
+      setPendingAccessCount(null);
       setSummaryState({ status: "idle", message: "" });
       return;
     }
@@ -232,6 +244,13 @@ export default function FirebaseDashboardPage() {
 
         setDashboardSummary(nextSummary);
         setSummaryState({ status: "success", message: "" });
+
+        try {
+          const nextPendingAccessCount = await getPendingAccessRequestCount();
+          if (!shouldIgnore) setPendingAccessCount(nextPendingAccessCount);
+        } catch (error) {
+          if (!shouldIgnore) setPendingAccessCount(null);
+        }
       } catch (error) {
         if (shouldIgnore) return;
 
@@ -320,17 +339,8 @@ export default function FirebaseDashboardPage() {
     return (
       <AccessMessage
         title="현재 학기 이용 권한이 등록되지 않았습니다."
-        description={`${CURRENT_SCHOOL_YEAR}학년도 ${CURRENT_SEMESTER}학기 권한 문서를 먼저 등록해 주세요.`}
-        action={
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={isWorking}
-            className="mt-6 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            로그아웃
-          </button>
-        }
+        description="등록된 Google 계정은 보건실에 현재 학기 이용 권한을 신청할 수 있습니다."
+        action={<FirebaseAccessRequestAction user={user} />}
       />
     );
   }
@@ -628,10 +638,14 @@ export default function FirebaseDashboardPage() {
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {QUICK_MENUS.map((menu) => {
+              const statusText =
+                menu.href === "/firebase-admin/access-requests" && typeof pendingAccessCount === "number"
+                  ? `${pendingAccessCount}건 대기`
+                  : menu.status;
               const content = (
                 <>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#8A96A8]">
-                  {menu.status}
+                  {statusText}
                 </span>
                 <span className="mt-4 block text-lg font-black text-[#102047]">{menu.title}</span>
                 <span className="mt-2 block text-sm font-medium leading-5 text-[#627083]">{menu.description}</span>

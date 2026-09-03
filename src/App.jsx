@@ -12,6 +12,7 @@ import CheckupPage from "./pages/CheckupPage.jsx";
 import EducationPage from "./pages/EducationPage.jsx";
 import FAQPage from "./pages/FAQPage.jsx";
 import FirebaseCheckupsPage from "./pages/FirebaseCheckupsPage.jsx";
+import FirebaseAccessRequestsPage from "./pages/FirebaseAccessRequestsPage.jsx";
 import FirebaseDashboardPage from "./pages/FirebaseDashboardPage.jsx";
 import FirebaseEducationPage from "./pages/FirebaseEducationPage.jsx";
 import FirebaseFaqPage from "./pages/FirebaseFaqPage.jsx";
@@ -100,6 +101,7 @@ export default function App() {
     "/firebase-education",
     "/firebase-faq",
     "/firebase-submissions",
+    "/firebase-admin/access-requests",
     "/firebase-admin/users",
     "/firebase-admin/submissions",
     "/firebase-admin/submission-status",
@@ -179,6 +181,7 @@ export default function App() {
               <Route path="/firebase-education" element={<FirebaseEducationPage />} />
               <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
               <Route path="/firebase-submissions" element={<FirebaseSubmissionsPage />} />
+              <Route path="/firebase-admin/access-requests" element={<FirebaseAccessRequestsPage />} />
               <Route path="/firebase-admin/users" element={<FirebaseUserAdminPage />} />
               <Route path="/firebase-admin/submissions" element={<FirebaseAdminSubmissionsPage />} />
               <Route path="/firebase-admin/submission-status" element={<FirebaseSubmissionStatusPage />} />

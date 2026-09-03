@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
+import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
 import { auth } from "../lib/firebase.js";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
@@ -14,6 +15,7 @@ import {
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureUserProfile, getUserAssignmentResult } from "../lib/userProfile.js";
+import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 function StatusNotice({ result, schoolYear, semester }) {
   if (!result) return null;
@@ -72,6 +74,12 @@ export default function FirebaseTestPage() {
         }
 
         const ensuredProfile = await ensureUserProfile(currentUser);
+        const teamStaffResult = await ensureTeamStaffAssignment(currentUser, ensuredProfile);
+        if (teamStaffResult.ok === false) {
+          setMessage(teamStaffResult.message);
+          return;
+        }
+
         setProfile(ensuredProfile);
 
         const currentAssignmentResult = await getUserAssignmentResult(
@@ -215,6 +223,7 @@ export default function FirebaseTestPage() {
                     semester={CURRENT_SEMESTER}
                   />
                 </div>
+                {assignmentResult?.status === "not-found" && <FirebaseAccessRequestAction user={user} />}
 
                 {assignment && (
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">

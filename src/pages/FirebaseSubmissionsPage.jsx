@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
 import { auth } from "../lib/firebase.js";
 import {
@@ -14,6 +15,7 @@ import {
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { getActiveSubmissionItems } from "../lib/submissionItems.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher, isHomeroom } from "../lib/userProfile.js";
+import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 const SUBMISSION_ROUTES = {
   cpr: "/firebase-submit/cpr",
@@ -161,6 +163,12 @@ export default function FirebaseSubmissionsPage() {
         }
 
         const ensuredProfile = await ensureUserProfile(currentUser);
+        const teamStaffResult = await ensureTeamStaffAssignment(currentUser, ensuredProfile);
+        if (teamStaffResult.ok === false) {
+          setAuthState({ status: "error", message: teamStaffResult.message });
+          return;
+        }
+
         const nextAssignment = await getUserAssignmentResult(currentUser.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
         setProfile(ensuredProfile);
         setAssignmentResult(nextAssignment);
@@ -302,9 +310,10 @@ export default function FirebaseSubmissionsPage() {
         </header>
 
         {assignmentResult?.status === "not-found" && (
-          <p className="rounded-[24px] border border-[#DDEAE7] bg-white/95 p-4 text-sm font-bold text-[#627083]">
-            현재 학기 권한이 등록되지 않아 감염병 발생 보고 항목은 숨김 처리됩니다.
-          </p>
+          <div className="rounded-[24px] border border-[#DDEAE7] bg-white/95 p-4 text-sm font-bold text-[#627083]">
+            <p>현재 학기 이용 권한이 없습니다.</p>
+            <FirebaseAccessRequestAction user={user} />
+          </div>
         )}
         {(authState.status === "error" || assignmentResult?.status === "permission-denied" || assignmentResult?.status === "error") && (
           <p className="rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-sm font-black text-[#B42318]">

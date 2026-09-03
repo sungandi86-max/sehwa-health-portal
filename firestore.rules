@@ -87,6 +87,74 @@ service cloud.firestore {
         && data.active is bool;
     }
 
+    function isValidAccessRequestCreate(data) {
+      return data.keys().hasOnly([
+          "uid",
+          "email",
+          "displayName",
+          "schoolYear",
+          "semester",
+          "requestedRole",
+          "status",
+          "requestedAt",
+          "updatedAt",
+          "reviewedBy",
+          "reviewedAt",
+          "reviewNote"
+        ])
+        && data.keys().hasAll([
+          "uid",
+          "email",
+          "displayName",
+          "schoolYear",
+          "semester",
+          "requestedRole",
+          "status",
+          "requestedAt",
+          "updatedAt",
+          "reviewedBy",
+          "reviewedAt",
+          "reviewNote"
+        ])
+        && data.uid == request.auth.uid
+        && data.email == request.auth.token.email
+        && data.displayName is string
+        && data.schoolYear == 2026
+        && data.semester == 2
+        && data.requestedRole == "staff"
+        && data.status == "pending"
+        && data.requestedAt == request.time
+        && data.updatedAt == request.time
+        && data.reviewedBy == null
+        && data.reviewedAt == null
+        && data.reviewNote == null;
+    }
+
+    function isValidAccessRequestResubmit() {
+      return isSelf(resource.data.uid)
+        && resource.data.status == "rejected"
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "status",
+          "requestedAt",
+          "updatedAt",
+          "reviewedBy",
+          "reviewedAt",
+          "reviewNote"
+        ])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.displayName == resource.data.displayName
+        && request.resource.data.schoolYear == resource.data.schoolYear
+        && request.resource.data.semester == resource.data.semester
+        && request.resource.data.requestedRole == resource.data.requestedRole
+        && request.resource.data.status == "pending"
+        && request.resource.data.requestedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.reviewedBy == null
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.reviewNote == null;
+    }
+
     function preservesOwnCurrentHealthTeacherAssignment(assignmentId, data) {
       return assignmentId != currentAssignmentId(request.auth.uid)
         || (data.active == true && data.roles.hasAny(["health_teacher"]));
@@ -128,6 +196,16 @@ service cloud.firestore {
         && preservesOwnCurrentHealthTeacherAssignment(assignmentId, request.resource.data);
       allow delete: if hasCurrentHealthTeacherAssignment()
         && assignmentId != currentAssignmentId(request.auth.uid);
+    }
+
+    match /access_requests/{requestId} {
+      allow read: if hasCurrentHealthTeacherAssignment()
+        || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && requestId == currentAssignmentId(request.auth.uid)
+        && isValidAccessRequestCreate(request.resource.data);
+      allow update: if hasCurrentHealthTeacherAssignment() || isValidAccessRequestResubmit();
+      allow delete: if false;
     }
 
     match /announcements/{announcementId} {

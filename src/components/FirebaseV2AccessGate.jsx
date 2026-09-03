@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import FirebaseAccessRequestAction from "./FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
 import { auth } from "../lib/firebase.js";
 import {
@@ -11,6 +12,7 @@ import {
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
+import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 function AccessMessage({ title, description, action }) {
   return (
@@ -60,6 +62,12 @@ export default function FirebaseV2AccessGate({ children }) {
         }
 
         const ensuredProfile = await ensureUserProfile(currentUser);
+        const teamStaffResult = await ensureTeamStaffAssignment(currentUser, ensuredProfile);
+        if (teamStaffResult.ok === false) {
+          setMessage(teamStaffResult.message);
+          return;
+        }
+
         const currentAssignmentResult = await getUserAssignmentResult(
           currentUser.uid,
           CURRENT_SCHOOL_YEAR,
@@ -151,16 +159,19 @@ export default function FirebaseV2AccessGate({ children }) {
     return (
       <AccessMessage
         title="현재 학기 이용 권한이 등록되지 않았습니다."
-        description={`${CURRENT_SCHOOL_YEAR}학년도 ${CURRENT_SEMESTER}학기 권한 문서를 먼저 등록해 주세요.`}
+        description="등록된 Google 계정은 보건실에 현재 학기 이용 권한을 신청할 수 있습니다."
         action={
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={isWorking}
-            className="mt-6 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            로그아웃
-          </button>
+          <>
+            <FirebaseAccessRequestAction user={user} />
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={isWorking}
+              className="mt-4 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              로그아웃
+            </button>
+          </>
         }
       />
     );
