@@ -17,8 +17,8 @@ const SUBMISSION_TYPES = new Map([
   ["결핵검진 확인증 제출", "tb"],
   ["채용검진 대체 인정 확인 요청", "recruit"],
   ["감염병 발생 보고", "infection"],
-  ["결핵검진 진료회신 제출", "student_tb_reply"],
 ]);
+const V2_EXCLUDED_TITLES = new Set(["결핵검진 진료회신 제출"]);
 const isApplyMode = process.argv.includes("--apply");
 
 function sourceSpreadsheetId() {
@@ -87,7 +87,7 @@ function toDocuments(values) {
   const [headers, ...rows] = values;
   if (!headers) throw new Error("앱_제출센터 헤더를 읽지 못했습니다.");
   const indexes = indexesFor(headers);
-  const stats = { sourceRows: rows.length, trueRows: 0, falseRows: 0, emptyRows: 0, titleMissingRows: 0, unknownTypeRows: 0 };
+  const stats = { sourceRows: rows.length, trueRows: 0, falseRows: 0, emptyRows: 0, titleMissingRows: 0, unknownTypeRows: 0, excludedV2Rows: 0 };
   const documents = [];
 
   rows.forEach((row, index) => {
@@ -104,6 +104,10 @@ function toDocuments(values) {
     const title = cell(row, indexes, "제목");
     if (!title) {
       stats.titleMissingRows += 1;
+      return;
+    }
+    if (V2_EXCLUDED_TITLES.has(title)) {
+      stats.excludedV2Rows += 1;
       return;
     }
     const submissionType = SUBMISSION_TYPES.get(title);
@@ -222,6 +226,7 @@ async function main() {
     trueRows: stats.trueRows,
     excludedFalseRows: stats.falseRows,
     excludedEmptyRows: stats.emptyRows,
+    excludedV2Rows: stats.excludedV2Rows,
     titleMissingRows: stats.titleMissingRows,
     unknownTypeRows: stats.unknownTypeRows,
     plannedCreates: planned.create.length,

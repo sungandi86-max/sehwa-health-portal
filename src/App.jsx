@@ -18,6 +18,7 @@ import FirebaseFaqPage from "./pages/FirebaseFaqPage.jsx";
 import FirebaseCprSubmitPage from "./pages/FirebaseCprSubmitPage.jsx";
 import FirebaseInfectionSubmitPage from "./pages/FirebaseInfectionSubmitPage.jsx";
 import FirebaseRecruitSubmitPage from "./pages/FirebaseRecruitSubmitPage.jsx";
+import FirebaseSubmissionsPage from "./pages/FirebaseSubmissionsPage.jsx";
 import FirebaseTbSubmitPage from "./pages/FirebaseTbSubmitPage.jsx";
 import FirebaseTestPage from "./pages/FirebaseTestPage.jsx";
 import HomePage from "./pages/HomePage.jsx";
@@ -95,6 +96,7 @@ export default function App() {
     "/firebase-checkups",
     "/firebase-education",
     "/firebase-faq",
+    "/firebase-submissions",
     "/firebase-submit/cpr",
     "/firebase-submit/infection",
     "/firebase-submit/recruit",
@@ -170,6 +172,7 @@ export default function App() {
               <Route path="/firebase-checkups" element={<FirebaseCheckupsPage />} />
               <Route path="/firebase-education" element={<FirebaseEducationPage />} />
               <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
+              <Route path="/firebase-submissions" element={<FirebaseSubmissionsPage />} />
               <Route path="/firebase-submit/cpr" element={<FirebaseCprSubmitPage />} />
               <Route path="/firebase-submit/infection" element={<FirebaseInfectionSubmitPage />} />
               <Route path="/firebase-submit/recruit" element={<FirebaseRecruitSubmitPage />} />

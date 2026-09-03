@@ -1,6 +1,8 @@
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "./firebase.js";
 import { isContentVisible } from "./contentVisibility.js";
+
+const V2_SUBMISSION_ITEM_IDS = new Set(["cpr", "tb", "recruit", "infection"]);
 
 export function normalizeSubmissionItem(docSnapshot) {
   const data = docSnapshot.data();
@@ -36,4 +38,17 @@ export async function getSubmissionItem(itemId, now = new Date()) {
 
   const item = normalizeSubmissionItem(snapshot);
   return isContentVisible(item, now) ? item : null;
+}
+
+export async function getActiveSubmissionItems(now = new Date()) {
+  const snapshot = await getDocs(collection(db, "submission_items"));
+
+  return snapshot.docs
+    .map(normalizeSubmissionItem)
+    .filter((item) => V2_SUBMISSION_ITEM_IDS.has(item.submissionType))
+    .filter((item) => isContentVisible(item, now))
+    .sort((left, right) => {
+      if (left.order !== right.order) return left.order - right.order;
+      return left.title.localeCompare(right.title, "ko");
+    });
 }
