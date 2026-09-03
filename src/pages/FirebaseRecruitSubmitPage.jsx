@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
+import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { createRecruitSubmission, validateRecruitRequest } from "../lib/staffSubmissions.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
@@ -105,14 +105,14 @@ export default function FirebaseRecruitSubmitPage() {
     Boolean(validateRecruitRequest({ staffType, submittedToAdminOffice, xrayDateCheckAcknowledged }));
 
   return (
-    <FirebaseV2AccessGate>
+    <FirebaseStaffSubmissionAccessGate>
       {({ user, displayName }) => (
-        <FirebaseV2PageShell
-          label="제출"
-          title="채용검진 대체 인정 확인 요청"
-          description="파일 업로드 없이 행정실 제출 여부를 확인 요청하고 Firestore에 접수 기록만 저장합니다."
-          displayName={displayName}
-        >
+          <FirebaseV2PageShell
+            label="제출"
+            title="채용검진 대체 인정 확인 요청"
+            description="파일 업로드 없이 행정실 제출 여부 확인을 요청합니다."
+            displayName={displayName}
+          >
           <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <aside className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]">
               <div className="flex flex-wrap items-center gap-2">
@@ -220,6 +220,6 @@ export default function FirebaseRecruitSubmitPage() {
           </section>
         </FirebaseV2PageShell>
       )}
-    </FirebaseV2AccessGate>
+    </FirebaseStaffSubmissionAccessGate>
   );
 }

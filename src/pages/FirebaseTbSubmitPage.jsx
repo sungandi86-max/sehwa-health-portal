@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
+import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { createTbSubmission, validateSubmissionFile } from "../lib/staffSubmissions.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
@@ -110,14 +110,14 @@ export default function FirebaseTbSubmitPage() {
     submitState.status === "submitting" || Boolean(getFormError({ checkupDate, documentType, staffType, file }));
 
   return (
-    <FirebaseV2AccessGate>
+    <FirebaseStaffSubmissionAccessGate>
       {({ user, displayName }) => (
-        <FirebaseV2PageShell
-          label="제출"
-          title="결핵검진 확인증 제출"
-          description="기존 Google Drive 업로드와 Firestore 기록을 연결해 교직원 결핵검진 확인증 제출 흐름을 검증합니다."
-          displayName={displayName}
-        >
+          <FirebaseV2PageShell
+            label="제출"
+            title="결핵검진 확인증 제출"
+            description="검진일자와 확인 가능한 자료를 제출합니다."
+            displayName={displayName}
+          >
           <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <aside className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]">
               <div className="flex flex-wrap items-center gap-2">
@@ -236,6 +236,6 @@ export default function FirebaseTbSubmitPage() {
           </section>
         </FirebaseV2PageShell>
       )}
-    </FirebaseV2AccessGate>
+    </FirebaseStaffSubmissionAccessGate>
   );
 }

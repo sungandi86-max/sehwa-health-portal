@@ -29,8 +29,10 @@ Firebase v2 surfaces use compact BOGUNON-style spacing, 4px-based rhythm, and ce
 ## 5. Components
 
 - Page shell: soft mint page background, compact white header panel, inline term/user metadata, small secondary navigation.
+- Operational entry: `/` and Firebase v2 paths surface staff login first, then route to Firebase v2 menus. Legacy `/upload` public flows stay reachable only by direct route, not from Firebase v2 navigation.
 - Data panel: white surface with border-first separation and no default heavy shadow.
 - Compact row/card: list-like action surface with tight title, one-line metadata, and a 40px minimum tap target.
+- Submission selector: exactly four Firebase v2 actions appear in order: CPR certificate, TB certificate, recruit check request, and infection report.
 - Status pill: rounded full, small semibold text, used only for status or role.
 - Form field: 40-44px input height, 13-14px labels, concise helper text.
 - Admin list: table/list hybrid on desktop, compact stacked cards on mobile, with details expanded only when needed.

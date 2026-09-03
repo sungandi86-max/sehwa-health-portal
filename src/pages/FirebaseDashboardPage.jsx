@@ -28,7 +28,6 @@ const QUICK_MENUS = [
   { title: "제출·보고 관리", description: "제출 확인과 감염병 보고 처리", status: "관리자", href: "/firebase-admin/submissions" },
   { title: "제출 현황", description: "대상자별 제출·미제출 확인", status: "관리자", href: "/firebase-admin/submission-status" },
   { title: "권한 신청", description: "Google 계정 권한 신청 승인", status: "관리자", href: "/firebase-admin/access-requests" },
-  { title: "입실현황", description: "보건실 입실 기록 관리", status: "준비 중" },
   { title: "교직원 권한 관리", description: "역할·담임·보직 학기별 관리", status: "관리자", href: "/firebase-admin/users" },
 ];
 

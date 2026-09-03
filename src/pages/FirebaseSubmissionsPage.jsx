@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import { firebaseV2SubmissionItems } from "../data/firebaseV2Navigation.js";
 import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
 import { auth } from "../lib/firebase.js";
@@ -31,6 +32,22 @@ const ITEM_TONES = {
   infection: "from-[#FFF7F7] to-white text-[#B42318]",
 };
 
+function getCanonicalSubmissionItems(items) {
+  const remoteItemsByType = new Map(items.map((item) => [item.submissionType, item]));
+
+  return firebaseV2SubmissionItems.flatMap((baseItem) => {
+    const remoteItem = remoteItemsByType.get(baseItem.submissionType);
+    if (!remoteItem) return [];
+
+    return {
+      ...remoteItem,
+      ...baseItem,
+      status: remoteItem?.status || baseItem.status,
+      deadlineLabel: remoteItem?.deadlineLabel || baseItem.deadlineLabel,
+    };
+  });
+}
+
 function isActiveAssignment(assignment) {
   return assignment?.active === true;
 }
@@ -49,7 +66,7 @@ function canUseInfection(assignment) {
 
 function canShowSubmissionItem(item, assignment) {
   if (item.submissionType === "infection") return canUseInfection(assignment);
-  return ["cpr", "tb", "recruit"].includes(item.submissionType);
+  return ["cpr", "tb", "recruit", "infection"].includes(item.submissionType);
 }
 
 function AccessMessage({ title, description, action, message }) {
@@ -140,7 +157,10 @@ export default function FirebaseSubmissionsPage() {
   const [isWorking, setIsWorking] = useState(false);
 
   const assignment = assignmentResult?.assignment || null;
-  const visibleItems = useMemo(() => items.filter((item) => canShowSubmissionItem(item, assignment)), [assignment, items]);
+  const visibleItems = useMemo(
+    () => getCanonicalSubmissionItems(items).filter((item) => canShowSubmissionItem(item, assignment)),
+    [assignment, items],
+  );
   const displayName = user?.displayName || profile?.displayName || "교직원";
 
   useEffect(() => {
@@ -324,7 +344,7 @@ export default function FirebaseSubmissionsPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">Active submissions</p>
-              <h2 className="mt-2 text-xl font-black text-[#102047]">현재 사용 중인 제출 항목</h2>
+              <h2 className="mt-2 text-xl font-black text-[#102047]">제출 항목</h2>
             </div>
             <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
               {visibleItems.length}개 항목

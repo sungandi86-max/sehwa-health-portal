@@ -160,13 +160,13 @@ export default function FirebaseTestPage() {
           <div className="mb-7 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#20A982]">
-                온라인 보건실
+                로그인 점검
               </p>
               <h1 className="mt-3 text-3xl font-black tracking-[-0.02em] text-[#102047] sm:text-4xl">
-                온라인 보건실
+                로그인 점검
               </h1>
               <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#627083]">
-                Teams 또는 Google 계정으로 로그인
+                운영 전 Teams/Google 인증과 권한 상태를 확인합니다.
               </p>
             </div>
           </div>

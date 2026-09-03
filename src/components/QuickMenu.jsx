@@ -97,10 +97,11 @@ export default function QuickMenu({ items = quickMenuItems, className = "" }) {
         {items.map((item, index) => {
           const tone = MENU_TONES[item.id] || MENU_TONES.default;
           const isSecondary = index >= 4;
+          const target = item.href || ROUTE_MAP[item.id] || "/";
           return (
             <button
               key={item.id}
-              onClick={() => navigate(ROUTE_MAP[item.id] || "/")}
+              onClick={() => navigate(target)}
               className={`group flex h-full min-h-36 min-w-0 flex-col rounded-[24px] border p-4 text-left shadow-[var(--shh-shadow)] transition hover:-translate-y-0.5 hover:shadow-[var(--shh-shadow-hover)] sm:min-h-44 sm:rounded-[28px] sm:p-6 lg:min-h-48 ${isSecondary ? "lg:shadow-[0_10px_30px_rgba(30,41,59,0.045)]" : ""} ${tone.card}`}
             >
               <div className="mb-2.5 flex items-start justify-between gap-3 sm:mb-3">

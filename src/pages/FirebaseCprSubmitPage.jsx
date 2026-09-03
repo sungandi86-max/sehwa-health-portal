@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
+import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { createCprSubmission, validateCprFile } from "../lib/staffSubmissions.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
@@ -99,7 +99,7 @@ export default function FirebaseCprSubmitPage() {
   const isSubmitDisabled = submitState.status === "submitting" || Boolean(validateCprFile(file));
 
   return (
-    <FirebaseV2AccessGate>
+    <FirebaseStaffSubmissionAccessGate>
       {({ user, displayName }) => (
         <FirebaseV2PageShell
           label="제출"
@@ -219,6 +219,6 @@ export default function FirebaseCprSubmitPage() {
           </section>
         </FirebaseV2PageShell>
       )}
-    </FirebaseV2AccessGate>
+    </FirebaseStaffSubmissionAccessGate>
   );
 }
