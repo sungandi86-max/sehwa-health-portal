@@ -1,5 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../lib/firebaseAdmin.js";
+import { getErrorCode, getErrorName, getFirebaseAdminAuth, getFirebaseAdminDb, logDiagnostic } from "../lib/firebaseAdmin.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
@@ -51,8 +51,24 @@ function serializeAccessRequest(documentSnapshot) {
 
 async function verifyRequestUser(req) {
   const idToken = getBearerToken(req);
+  logDiagnostic("firebase-auth", "bearer-token", { present: Boolean(idToken) });
   if (!idToken) return null;
-  return getFirebaseAdminAuth().verifyIdToken(idToken);
+
+  try {
+    const decodedToken = await getFirebaseAdminAuth().verifyIdToken(idToken);
+    logDiagnostic("firebase-auth", "verify-id-token", {
+      value: "success",
+      provider: getProviderId(decodedToken) || "unknown",
+    });
+    return decodedToken;
+  } catch (error) {
+    logDiagnostic("firebase-auth", "verify-id-token", {
+      value: "fail",
+      code: getErrorCode(error),
+      name: getErrorName(error),
+    });
+    throw error;
+  }
 }
 
 async function hasHealthTeacherAccess(db, uid) {
@@ -65,7 +81,24 @@ async function hasHealthTeacherAccess(db, uid) {
 
 async function getCurrentRequest(req, res, decodedToken) {
   const db = getFirebaseAdminDb();
-  const requestSnapshot = await db.collection("access_requests").doc(getAccessRequestId(decodedToken.uid)).get();
+  logDiagnostic("firestore", "db", { value: "success" });
+
+  let requestSnapshot;
+  try {
+    requestSnapshot = await db.collection("access_requests").doc(getAccessRequestId(decodedToken.uid)).get();
+    logDiagnostic("firestore", "access-request-read", {
+      value: "success",
+      exists: requestSnapshot.exists,
+    });
+  } catch (error) {
+    logDiagnostic("firestore", "access-request-read", {
+      value: "fail",
+      code: getErrorCode(error),
+      name: getErrorName(error),
+    });
+    throw error;
+  }
+
   return res.status(200).json({
     ok: true,
     request: requestSnapshot.exists ? serializeAccessRequest(requestSnapshot) : null,
@@ -244,6 +277,11 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ ok: false, message: "지원하지 않는 요청입니다." });
   } catch (error) {
+    logDiagnostic("access-requests", "handler", {
+      value: "fail",
+      code: getErrorCode(error),
+      name: getErrorName(error),
+    });
     return res.status(500).json({ ok: false, message: "권한 신청 처리 중 문제가 발생했습니다." });
   }
 }
