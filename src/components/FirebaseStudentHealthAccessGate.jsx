@@ -106,7 +106,7 @@ export default function FirebaseStudentHealthAccessGate({ children }) {
       await signInWithGoogle();
     } catch (error) {
       console.error("[firebase-v2] google sign in failed", error);
-      setMessage(getFriendlyAuthErrorMessage(error, "Google 관리자 로그인에 실패했습니다."));
+      setMessage(getFriendlyAuthErrorMessage(error, "Google 계정으로 로그인하지 못했습니다."));
     } finally {
       setIsWorking(false);
     }

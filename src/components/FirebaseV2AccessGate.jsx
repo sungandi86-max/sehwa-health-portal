@@ -101,7 +101,7 @@ export default function FirebaseV2AccessGate({ children }) {
       await signInWithGoogle();
     } catch (error) {
       console.error("[firebase-v2] google sign in failed", error);
-      setMessage(getFriendlyAuthErrorMessage(error, "Google 관리자 로그인에 실패했습니다."));
+      setMessage(getFriendlyAuthErrorMessage(error, "Google 계정으로 로그인하지 못했습니다."));
     } finally {
       setIsWorking(false);
     }
@@ -134,7 +134,7 @@ export default function FirebaseV2AccessGate({ children }) {
     return (
       <AccessMessage
         title="온라인 보건실 v2"
-        description="교직원은 학교 Teams 계정으로 로그인하고, Google은 관리자 예비 로그인으로 사용합니다."
+        description="교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다."
         action={
           <FirebaseSignInActions
             isWorking={isWorking}

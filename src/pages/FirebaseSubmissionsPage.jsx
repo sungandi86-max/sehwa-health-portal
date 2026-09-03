@@ -236,7 +236,7 @@ export default function FirebaseSubmissionsPage() {
       console.error("[firebase-submissions] google sign in failed", error);
       setAuthState({
         status: "signed-out",
-        message: getFriendlyAuthErrorMessage(error, "Google 관리자 로그인에 실패했습니다."),
+        message: getFriendlyAuthErrorMessage(error, "Google 계정으로 로그인하지 못했습니다."),
       });
     } finally {
       setIsWorking(false);
@@ -260,7 +260,7 @@ export default function FirebaseSubmissionsPage() {
     return (
       <AccessMessage
         title="제출·보고 센터"
-        description="교직원은 학교 Teams 계정으로 로그인하고, Google은 관리자 예비 로그인으로 사용합니다."
+        description="교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다."
         action={
           <FirebaseSignInActions
             isWorking={isWorking}
