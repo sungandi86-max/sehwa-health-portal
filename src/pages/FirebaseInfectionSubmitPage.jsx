@@ -197,7 +197,7 @@ function InfectionForm(props) {
   const isSubmitDisabled = submitState.status === "submitting" || Boolean(formError);
 
   return (
-    <FirebaseV2PageShell label="Student Health" title="감염병 발생 보고" description="담임 학급 또는 보건교사 권한 범위 안에서 필요한 학생 감염병 정보만 접수합니다." displayName={displayName}>
+    <FirebaseV2PageShell label="학생 건강" title="감염병 발생 보고" description="담임 학급 또는 보건교사 권한 범위 안에서 필요한 학생 감염병 정보만 접수합니다." displayName={displayName}>
       <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
         <aside className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]">
           <div className="flex flex-wrap gap-2">

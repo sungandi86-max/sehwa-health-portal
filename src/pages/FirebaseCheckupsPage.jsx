@@ -50,9 +50,9 @@ export default function FirebaseCheckupsPage() {
     <FirebaseV2AccessGate>
       {({ displayName }) => (
         <FirebaseV2PageShell
-          label="Firebase Checkups"
+          label="검진·검사"
           title="검진·검사 안내"
-          description="현재 노출 가능한 검진·검사 안내를 Firestore v2 기준으로 확인합니다."
+          description="현재 노출 가능한 검진·검사 안내를 확인합니다."
           displayName={displayName}
         >
           <section className="grid gap-3 sm:grid-cols-2">

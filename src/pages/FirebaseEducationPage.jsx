@@ -55,9 +55,9 @@ export default function FirebaseEducationPage() {
     <FirebaseV2AccessGate>
       {({ displayName }) => (
         <FirebaseV2PageShell
-          label="Firebase Education"
+          label="교육자료"
           title="교육자료"
-          description="보건 업무에 필요한 교육자료 링크를 Firestore v2 기준으로 확인합니다."
+          description="보건 업무에 필요한 교육자료 링크를 확인합니다."
           displayName={displayName}
         >
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

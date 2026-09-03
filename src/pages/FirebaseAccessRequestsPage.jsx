@@ -200,7 +200,7 @@ function FirebaseAccessRequestsContent({ user, displayName }) {
 
   return (
     <FirebaseV2PageShell
-      label="Firebase Admin"
+      label="관리자"
       title="권한 신청 관리"
       description="등록된 Google 계정의 현재 학기 기본 교직원 권한 신청을 승인하거나 거절합니다."
       displayName={displayName}

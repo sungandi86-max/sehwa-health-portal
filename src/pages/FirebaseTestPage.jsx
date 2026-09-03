@@ -52,6 +52,15 @@ export default function FirebaseTestPage() {
   const roleLabels = useMemo(() => {
     return getRoleLabels(assignment?.roles);
   }, [assignment]);
+  const accessStateLabel = useMemo(() => {
+    if (!user) return `${CURRENT_SCHOOL_YEAR}학년도 ${CURRENT_SEMESTER}학기`;
+    if (isProfileLoading) return "확인 중";
+    if (assignmentResult?.status === "found") return "이용 가능";
+    if (assignmentResult?.status === "not-found") return "권한 신청 필요";
+    if (assignmentResult?.status === "permission-denied") return "확인 불가";
+    if (assignmentResult?.status === "error") return "확인 오류";
+    return "확인 중";
+  }, [assignmentResult, isProfileLoading, user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -145,23 +154,20 @@ export default function FirebaseTestPage() {
   };
 
   return (
-    <section className="min-h-full bg-[#F7FBF9] px-4 py-6 text-[#102047] sm:px-6 sm:py-10">
-      <div className="mx-auto grid w-full max-w-5xl gap-5 lg:grid-cols-[1fr_360px]">
+    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-4 text-[#102047] sm:px-6 sm:py-6">
+      <div className="mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[1fr_320px]">
         <div className="rounded-[30px] border border-[#DDEAE7] bg-white/90 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
           <div className="mb-7 flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#20A982]">
-                Online Health Office v2
+                온라인 보건실
               </p>
               <h1 className="mt-3 text-3xl font-black tracking-[-0.02em] text-[#102047] sm:text-4xl">
-                온라인 보건실 v2
+                온라인 보건실
               </h1>
               <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#627083]">
-                학교 Teams 계정과 등록된 Google 계정의 Firebase 권한 연결 상태를 확인합니다.
+                Teams 또는 Google 계정으로 로그인
               </p>
-            </div>
-            <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#DFF8EF] to-[#EEF4FF] text-2xl font-black text-[#20A982] shadow-[0_12px_28px_rgba(32,169,130,0.16)] sm:flex">
-              v2
             </div>
           </div>
 
@@ -173,7 +179,7 @@ export default function FirebaseTestPage() {
             <div className="rounded-[26px] border border-[#DDEAE7] bg-gradient-to-br from-white to-[#F0FBF7] p-5">
               <h2 className="text-xl font-black text-[#102047]">교직원 계정으로 로그인</h2>
               <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
-                교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
+                교사: Teams · 그 외 교직원: Google
               </p>
               <FirebaseSignInActions
                 isWorking={isWorking}
@@ -186,7 +192,7 @@ export default function FirebaseTestPage() {
             <div className="space-y-5">
               <div className="rounded-[26px] border border-[#DDEAE7] bg-gradient-to-br from-white to-[#F7FBF9] p-5">
                 <p className="text-xs font-black uppercase tracking-[0.12em] text-[#20A982]">
-                  Login profile
+                  로그인 계정
                 </p>
                 <h2 className="mt-2 text-2xl font-black text-[#102047]">
                   {user.displayName || profile?.displayName || "이름 미등록"}
@@ -203,7 +209,7 @@ export default function FirebaseTestPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.12em] text-[#20A982]">
-                      Current term
+                      현재 학기
                     </p>
                     <h2 className="mt-2 text-xl font-black text-[#102047]">
                       {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
@@ -304,12 +310,12 @@ export default function FirebaseTestPage() {
 
         <aside className="space-y-4">
           <div className="rounded-[28px] border border-[#DDEAE7] bg-white/90 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]">
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#20A982]">권한 문서</p>
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#20A982]">이용 권한</p>
             <p className="mt-2 text-lg font-black text-[#102047]">
-              {user ? assignmentResult?.assignmentId || "확인 중" : `${CURRENT_SCHOOL_YEAR}_${CURRENT_SEMESTER}`}
+              {accessStateLabel}
             </p>
             <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
-              현재 화면은 사용자 기본 정보와 학기별 권한 문서를 분리해서 확인합니다.
+              로그인 후 현재 학기 이용 가능 여부를 확인합니다.
             </p>
           </div>
 

@@ -21,9 +21,9 @@ import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 const QUICK_MENUS = [
   { title: "오늘의 보건실", description: "진행 중인 보건실 안내", status: "연결됨", href: "/firebase-dashboard" },
-  { title: "검진·검사", description: "Firestore v2 검진 안내", status: "연결됨", href: "/firebase-checkups" },
-  { title: "교육자료", description: "Firestore v2 교육자료", status: "연결됨", href: "/firebase-education" },
-  { title: "FAQ", description: "Firestore v2 자주 묻는 질문", status: "연결됨", href: "/firebase-faq" },
+  { title: "검진·검사", description: "검진 일정과 확인 사항", status: "연결됨", href: "/firebase-checkups" },
+  { title: "교육자료", description: "수업·연수용 보건 자료", status: "연결됨", href: "/firebase-education" },
+  { title: "FAQ", description: "자주 묻는 보건실 질문", status: "연결됨", href: "/firebase-faq" },
   { title: "제출·보고 센터", description: "CPR, 결핵검진, 채용검진, 감염병 보고", status: "연결됨", href: "/firebase-submissions" },
   { title: "제출·보고 관리", description: "제출 확인과 감염병 보고 처리", status: "관리자", href: "/firebase-admin/submissions" },
   { title: "제출 현황", description: "대상자별 제출·미제출 확인", status: "관리자", href: "/firebase-admin/submission-status" },
@@ -60,11 +60,8 @@ function RoleBadges({ roles }) {
 
 function AccessMessage({ title, description, action }) {
   return (
-    <section className="min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
+    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-xl rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 text-center shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#DFF8EF] to-[#EEF4FF] text-lg font-black text-[#20A982]">
-          v2
-        </div>
         <h1 className="mt-5 text-2xl font-black tracking-[-0.02em] text-[#102047]">{title}</h1>
         <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">{description}</p>
         {action}
@@ -312,7 +309,7 @@ export default function FirebaseDashboardPage() {
   if (isLoading) {
     return (
       <AccessMessage
-        title="온라인 보건실 v2"
+        title="온라인 보건실"
         description="로그인 상태와 현재 학기 권한을 확인하는 중입니다."
       />
     );
@@ -321,8 +318,8 @@ export default function FirebaseDashboardPage() {
   if (!user) {
     return (
       <AccessMessage
-        title="온라인 보건실 v2"
-        description="교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다."
+        title="온라인 보건실"
+        description="교사: Teams · 그 외 교직원: Google"
         action={
           <FirebaseSignInActions
             isWorking={isWorking}
@@ -368,7 +365,7 @@ export default function FirebaseDashboardPage() {
     return (
       <AccessMessage
         title="보건교사 관리자 권한이 없습니다."
-        description="현재 계정은 온라인 보건실 v2 보건교사 대시보드에 접근할 수 없습니다."
+        description="현재 계정은 온라인 보건실 보건교사 대시보드에 접근할 수 없습니다."
         action={
           <button
             type="button"
@@ -384,16 +381,16 @@ export default function FirebaseDashboardPage() {
   }
 
   return (
-    <section className="min-h-full bg-[#F7FBF9] px-4 py-6 text-[#102047] sm:px-6 sm:py-10">
-      <div className="mx-auto w-full max-w-5xl space-y-5">
+    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-4 text-[#102047] sm:px-6 sm:py-6">
+      <div className="mx-auto w-full max-w-6xl space-y-4">
         <header className="rounded-[32px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#20A982]">
-                Online Health Office v2
+                온라인 보건실
               </p>
               <h1 className="mt-3 text-3xl font-black tracking-[-0.02em] text-[#102047] sm:text-4xl">
-                온라인 보건실 v2
+                온라인 보건실
               </h1>
               <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">
                 {displayName} 선생님, 오늘 확인할 보건 업무를 차분하게 점검하세요.
@@ -549,12 +546,12 @@ export default function FirebaseDashboardPage() {
               <h2 className="mt-2 text-xl font-black text-[#102047]">진행 중인 안내</h2>
             </div>
             <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
-              Firestore v2
+              {announcements.length}건
             </span>
           </div>
 
           {announcementsState.status === "loading" && (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="mt-5 space-y-2">
               {[0, 1].map((item) => (
                 <div
                   key={item}
@@ -581,43 +578,43 @@ export default function FirebaseDashboardPage() {
               {announcements.map((announcement) => (
                 <article
                   key={announcement.id}
-                  className="rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-5 shadow-[0_12px_30px_rgba(16,32,71,0.05)]"
+                  className="rounded-[16px] border border-[#DDEAE7] bg-[#FAFDFC] p-3"
                 >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#08754B]">
-                      {announcement.target || "전체"}
-                    </span>
-                    {announcement.status && (
-                      <span className={announcementBadgeClassName(announcement.badgeType)}>
-                        {announcement.status}
-                      </span>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[#627083]">
+                        <span>{announcement.target || "전체"}</span>
+                        {announcement.status && (
+                          <span className={announcementBadgeClassName(announcement.badgeType)}>
+                            {announcement.status}
+                          </span>
+                        )}
+                        <span>{announcement.dateLabel || formatAnnouncementEndDate(announcement)}</span>
+                      </div>
+                      <h3 className="mt-2 text-base font-bold leading-6 text-[#102047]">
+                        {announcement.title || "제목 없는 안내"}
+                      </h3>
+                      {announcement.description && (
+                        <p className="mt-1 line-clamp-2 text-sm font-medium leading-5 text-[#627083]">
+                          {announcement.description}
+                        </p>
+                      )}
+                    </div>
+                    {announcement.linkUrl && (
+                      <a
+                        href={announcement.linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-10 shrink-0 items-center rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white transition hover:-translate-y-[1px] hover:bg-[#178C6C]"
+                      >
+                        {announcement.linkLabel || "링크 열기"}
+                      </a>
                     )}
-                    <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">
-                      {announcement.dateLabel || formatAnnouncementEndDate(announcement)}
-                    </span>
                   </div>
-                  <h3 className="mt-4 text-lg font-black leading-7 text-[#102047]">
-                    {announcement.title || "제목 없는 안내"}
-                  </h3>
-                  {announcement.description && (
-                    <p className="mt-2 line-clamp-3 text-sm font-medium leading-6 text-[#627083]">
-                      {announcement.description}
-                    </p>
-                  )}
                   {announcement.actionText && (
-                    <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#08754B]">
+                    <p className="mt-2 rounded-[10px] bg-white px-3 py-2 text-xs font-semibold text-[#08754B]">
                       {announcement.actionText}
                     </p>
-                  )}
-                  {announcement.linkUrl && (
-                    <a
-                      href={announcement.linkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-4 inline-flex min-h-11 items-center rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] hover:bg-[#178C6C]"
-                    >
-                      {announcement.linkLabel || "링크 열기"}
-                    </a>
                   )}
                 </article>
               ))}
@@ -631,9 +628,6 @@ export default function FirebaseDashboardPage() {
               <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">Quick menu</p>
               <h2 className="mt-2 text-xl font-black text-[#102047]">빠른 메뉴</h2>
             </div>
-            <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
-              v2 준비 화면
-            </span>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -647,8 +641,8 @@ export default function FirebaseDashboardPage() {
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#8A96A8]">
                   {statusText}
                 </span>
-                <span className="mt-4 block text-lg font-black text-[#102047]">{menu.title}</span>
-                <span className="mt-2 block text-sm font-medium leading-5 text-[#627083]">{menu.description}</span>
+                <span className="mt-3 block text-base font-bold text-[#102047]">{menu.title}</span>
+                <span className="mt-1 block truncate text-sm font-medium leading-5 text-[#627083]">{menu.description}</span>
                 </>
               );
 

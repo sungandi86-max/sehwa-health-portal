@@ -16,11 +16,8 @@ import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 function AccessMessage({ title, description, action }) {
   return (
-    <section className="min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
+    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-xl rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 text-center shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#DFF8EF] to-[#EEF4FF] text-lg font-black text-[#20A982]">
-          v2
-        </div>
         <h1 className="mt-5 text-2xl font-black tracking-[-0.02em] text-[#102047]">{title}</h1>
         <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">{description}</p>
         {action}
@@ -132,7 +129,7 @@ export default function FirebaseV2AccessGate({ children }) {
   if (isLoading) {
     return (
       <AccessMessage
-        title="온라인 보건실 v2"
+        title="온라인 보건실"
         description="로그인 상태와 현재 학기 권한을 확인하는 중입니다."
       />
     );
@@ -141,8 +138,8 @@ export default function FirebaseV2AccessGate({ children }) {
   if (!user) {
     return (
       <AccessMessage
-        title="온라인 보건실 v2"
-        description="교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다."
+        title="온라인 보건실"
+        description="교사: Teams · 그 외 교직원: Google"
         action={
           <FirebaseSignInActions
             isWorking={isWorking}
@@ -200,7 +197,7 @@ export default function FirebaseV2AccessGate({ children }) {
     return (
       <AccessMessage
         title="보건교사 관리자 권한이 없습니다."
-        description="현재 계정은 온라인 보건실 v2 콘텐츠 화면에 접근할 수 없습니다."
+        description="현재 계정은 온라인 보건실 콘텐츠 화면에 접근할 수 없습니다."
         action={
           <button
             type="button"

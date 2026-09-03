@@ -113,7 +113,7 @@ export default function FirebaseTbSubmitPage() {
     <FirebaseV2AccessGate>
       {({ user, displayName }) => (
         <FirebaseV2PageShell
-          label="Firebase Submission"
+          label="제출"
           title="결핵검진 확인증 제출"
           description="기존 Google Drive 업로드와 Firestore 기록을 연결해 교직원 결핵검진 확인증 제출 흐름을 검증합니다."
           displayName={displayName}

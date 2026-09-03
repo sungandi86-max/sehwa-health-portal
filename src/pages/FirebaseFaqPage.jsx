@@ -50,7 +50,7 @@ export default function FirebaseFaqPage() {
     <FirebaseV2AccessGate>
       {({ displayName }) => (
         <FirebaseV2PageShell
-          label="Firebase FAQ"
+          label="FAQ"
           title="FAQ"
           description="교직원이 자주 확인하는 보건 업무 질문을 빠르게 검색합니다."
           displayName={displayName}

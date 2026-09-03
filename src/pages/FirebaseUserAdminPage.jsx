@@ -513,7 +513,7 @@ function FirebaseUserAdminContent({ user, displayName }) {
 
   return (
     <FirebaseV2PageShell
-      label="Firebase Admin"
+      label="관리자"
       title="교직원 권한 관리"
       description="사용자 계정 정보와 학년도·학기별 역할, 담임 학급, 보직 권한을 분리해서 관리합니다."
       displayName={displayName}

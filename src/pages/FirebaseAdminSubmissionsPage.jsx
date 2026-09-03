@@ -342,7 +342,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
 
   return (
     <FirebaseV2PageShell
-      label="Firebase Admin"
+      label="관리자"
       title="제출·보고 관리"
       description="교직원 제출과 감염병 보고를 탭으로 구분해 확인하고 처리 상태를 관리합니다."
       displayName={displayName}

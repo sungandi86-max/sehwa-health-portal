@@ -108,7 +108,7 @@ export default function FirebaseRecruitSubmitPage() {
     <FirebaseV2AccessGate>
       {({ user, displayName }) => (
         <FirebaseV2PageShell
-          label="Firebase Submission"
+          label="제출"
           title="채용검진 대체 인정 확인 요청"
           description="파일 업로드 없이 행정실 제출 여부를 확인 요청하고 Firestore에 접수 기록만 저장합니다."
           displayName={displayName}

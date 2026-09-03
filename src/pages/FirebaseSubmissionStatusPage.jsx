@@ -183,7 +183,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
 
   return (
     <FirebaseV2PageShell
-      label="Firebase Admin"
+      label="관리자"
       title="교직원 제출 현황"
       description="현재 학기 대상자 명단과 실제 제출 기록을 비교해 미제출자를 확인합니다."
       displayName={displayName}

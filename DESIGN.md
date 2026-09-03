@@ -20,19 +20,21 @@ This document currently codifies the Firebase v2 BOGUNON-style surfaces only. Th
 
 ## 3. Typography
 
-Use the existing app font stack. Headings use strong weight and tight tracking, body copy uses medium weight and comfortable Korean line-height.
+Use the existing app font stack. Firebase v2 is compact and work-focused: page titles sit around 22-26px, section titles around 16-18px, card titles around 14-16px, body text around 13-14px, and meta text around 11-12px. Prefer 700 for headings, 600 for labels, and 400-500 for body copy.
 
 ## 4. Spacing And Shape
 
-Firebase v2 surfaces use mobile-first cards with 24-32px radius, 4px-based spacing, and central desktop content width around `max-w-5xl`.
+Firebase v2 surfaces use compact BOGUNON-style spacing, 4px-based rhythm, and central desktop content width around `max-w-6xl`. Large panels use 16-20px radius, normal cards use 14-16px radius, inputs/buttons use 10-12px radius, and badges may remain fully rounded.
 
 ## 5. Components
 
-- Page shell: soft mint page background, large white header card, compact term/user panel.
-- Data card: white card, rounded 24-30px, subtle border, soft shadow.
-- Status pill: rounded full, small bold text, mint/blue/error semantic tones.
-- Action card: entire card is clickable when it navigates; focus rings use mint.
-- Disabled action: same shape as action card but lower opacity and no navigation.
+- Page shell: soft mint page background, compact white header panel, inline term/user metadata, small secondary navigation.
+- Data panel: white surface with border-first separation and no default heavy shadow.
+- Compact row/card: list-like action surface with tight title, one-line metadata, and a 40px minimum tap target.
+- Status pill: rounded full, small semibold text, used only for status or role.
+- Form field: 40-44px input height, 13-14px labels, concise helper text.
+- Admin list: table/list hybrid on desktop, compact stacked cards on mobile, with details expanded only when needed.
+- Disabled action: same compact shape as the matching action but lower opacity and no navigation.
 
 ## 6. Motion
 

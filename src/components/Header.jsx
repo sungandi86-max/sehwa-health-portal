@@ -17,6 +17,7 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
+  const isFirebaseV2 = location.pathname.startsWith("/firebase");
   const isPublicUpload =
     location.pathname === "/upload" &&
     params.get("mode") === "public" &&
@@ -27,7 +28,12 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-[rgba(120,140,180,0.14)] bg-white/78 shadow-[0_10px_30px_rgba(30,41,59,0.04)] backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-2.5">
-        <button onClick={() => navigate("/")} className="flex min-w-0 items-center gap-2 text-left sm:gap-2.5">
+        <button
+          onClick={() => navigate("/")}
+          className={`flex min-w-0 items-center gap-2 text-left sm:gap-2.5 ${
+            isFirebaseV2 ? "min-h-10" : ""
+          }`}
+        >
           <SchoolEmblem />
           <div className="min-w-0 pt-0.5">
             <p className="truncate text-xs font-black leading-[1.15] text-[#1A3B8B] sm:text-sm md:text-[0.95rem]">
@@ -44,6 +50,8 @@ export default function Header() {
               key={item.id}
               onClick={() => navigate(ROUTE_MAP[item.id] || "/")}
               className={`rounded-full px-2.5 py-1.5 text-xs font-bold transition ${
+                isFirebaseV2 ? "min-h-10" : ""
+              } ${
                 location.pathname === ROUTE_MAP[item.id]
                   ? "bg-[#EEF1FF] text-[var(--shh-primary)]"
                   : "text-slate-600 hover:bg-[#EEF1FF] hover:text-[var(--shh-primary)]"

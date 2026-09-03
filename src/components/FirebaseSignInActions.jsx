@@ -5,10 +5,7 @@ export default function FirebaseSignInActions({
   onMicrosoftSignIn,
 }) {
   return (
-    <div className="mt-6 space-y-4 text-left">
-      <div className="rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] px-4 py-3 text-sm font-medium leading-6 text-[#627083]">
-        교사는 학교 Teams 계정(@sehwa-gs.hs.kr)을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
-      </div>
+    <div className="mt-5 space-y-3 text-left">
       {message && (
         <p className="rounded-2xl border border-[#F6D8D8] bg-[#FFF7F7] px-4 py-3 text-sm font-black text-[#B42318]">
           {message}

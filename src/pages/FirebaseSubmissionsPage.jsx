@@ -54,11 +54,8 @@ function canShowSubmissionItem(item, assignment) {
 
 function AccessMessage({ title, description, action, message }) {
   return (
-    <section className="min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
+    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-xl rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 text-center shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#DFF8EF] to-[#EEF4FF] text-lg font-black text-[#20A982]">
-          v2
-        </div>
         <h1 className="mt-5 text-2xl font-black tracking-[-0.02em] text-[#102047]">{title}</h1>
         <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">{description}</p>
         {message && <p className="mt-4 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-black text-[#B42318]">{message}</p>}
@@ -90,42 +87,44 @@ function SubmissionCard({ item }) {
   return (
     <Link
       to={href}
-      className={`group flex min-h-[260px] flex-col rounded-[30px] border border-[#DDEAE7] bg-gradient-to-br ${tone} p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] transition hover:-translate-y-[1px] hover:shadow-[0_22px_54px_rgba(16,32,71,0.1)] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 sm:p-6`}
+      className={`group flex flex-col rounded-[16px] border border-[#DDEAE7] bg-gradient-to-br ${tone} p-4 transition hover:-translate-y-[1px] hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 sm:p-4`}
       aria-label={`${item.title} 열기`}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {item.status && <span className="rounded-full bg-white/85 px-3 py-1 text-xs font-black">{item.status}</span>}
-        {item.deadlineLabel && (
-          <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-black text-[#3154A3]">
-            {item.deadlineLabel}
-          </span>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {item.status && <span className="rounded-full bg-white/85 px-3 py-1 text-xs font-semibold">{item.status}</span>}
+          {item.deadlineLabel && (
+            <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-[#3154A3]">
+              {item.deadlineLabel}
+            </span>
+          )}
+        </div>
+        <span className="text-sm font-bold transition group-hover:translate-x-1" aria-hidden="true">→</span>
       </div>
-      <h2 className="mt-5 text-xl font-black tracking-[-0.02em] text-[#102047]">{item.title}</h2>
-      {item.description && <p className="mt-3 line-clamp-3 text-sm font-medium leading-6 text-[#627083]">{item.description}</p>}
-      <dl className="mt-5 space-y-3 text-sm">
+      <h2 className="mt-3 text-base font-bold text-[#102047]">{item.title}</h2>
+      {item.description && <p className="mt-1 line-clamp-2 text-sm font-medium leading-5 text-[#627083]">{item.description}</p>}
+      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
         {item.target && (
           <div>
-            <dt className="font-black text-[#102047]">대상</dt>
+            <dt className="text-xs font-semibold text-[#102047]">대상</dt>
             <dd className="mt-1 font-medium text-[#627083]">{item.target}</dd>
           </div>
         )}
         {item.documentType && (
           <div>
-            <dt className="font-black text-[#102047]">제출자료</dt>
+            <dt className="text-xs font-semibold text-[#102047]">제출자료</dt>
             <dd className="mt-1 font-medium text-[#627083]">{item.documentType}</dd>
           </div>
         )}
         {item.guideText && (
-          <div>
-            <dt className="font-black text-[#102047]">안내</dt>
+          <div className="sm:col-span-2">
+            <dt className="text-xs font-semibold text-[#102047]">안내</dt>
             <dd className="mt-1 line-clamp-2 whitespace-pre-line font-medium text-[#627083]">{item.guideText}</dd>
           </div>
         )}
       </dl>
-      <span className="mt-auto inline-flex items-center pt-5 text-sm font-black">
+      <span className="mt-3 inline-flex items-center text-sm font-bold">
         {item.buttonLabel || "제출하기"}
-        <span className="ml-2 transition group-hover:translate-x-1" aria-hidden="true">→</span>
       </span>
     </Link>
   );
@@ -268,7 +267,7 @@ export default function FirebaseSubmissionsPage() {
     return (
       <AccessMessage
         title="제출·보고 센터"
-        description="교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다."
+        description="교사: Teams · 그 외 교직원: Google"
         action={
           <FirebaseSignInActions
             isWorking={isWorking}
@@ -282,15 +281,15 @@ export default function FirebaseSubmissionsPage() {
   }
 
   return (
-    <section className="min-h-full bg-[#F7FBF9] px-4 py-6 text-[#102047] sm:px-6 sm:py-10">
-      <div className="mx-auto w-full max-w-5xl space-y-5">
+    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-4 text-[#102047] sm:px-6 sm:py-6">
+      <div className="mx-auto w-full max-w-6xl space-y-4">
         <header className="rounded-[32px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#20A982]">Firebase Submission Center</p>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#20A982]">제출·보고 센터</p>
               <h1 className="mt-3 text-3xl font-black tracking-[-0.02em] text-[#102047] sm:text-4xl">제출·보고 센터</h1>
               <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#627083]">
-                Firebase v2에서 사용하는 교직원 제출과 학생 감염병 보고 항목만 모았습니다.
+                교직원 제출과 학생 감염병 보고 항목을 한 화면에서 선택합니다.
               </p>
             </div>
             <div className="rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-4 sm:min-w-64">
@@ -353,7 +352,7 @@ export default function FirebaseSubmissionsPage() {
           )}
 
           {itemsState.status === "success" && visibleItems.length > 0 && (
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
               {visibleItems.map((item) => <SubmissionCard key={item.id} item={item} />)}
             </div>
           )}
