@@ -14,9 +14,15 @@ const QUICK_MENUS = [
   { title: "교육자료", description: "Firestore v2 교육자료", status: "연결됨", href: "/firebase-education" },
   { title: "FAQ", description: "Firestore v2 자주 묻는 질문", status: "연결됨", href: "/firebase-faq" },
   { title: "제출·보고 센터", description: "CPR, 결핵검진, 채용검진, 감염병 보고", status: "연결됨", href: "/firebase-submissions" },
+  { title: "제출·보고 관리", description: "제출 확인과 감염병 보고 처리", status: "관리자", href: "/firebase-admin/submissions" },
   { title: "입실현황", description: "보건실 입실 기록 관리", status: "준비 중" },
   { title: "권한 관리", description: "역할·담임·보직 관리 예정", status: "준비 중" },
 ];
+
+const SUMMARY_LINKS = {
+  "처리 대기 제출": "/firebase-admin/submissions?tab=staff&status=submitted",
+  "미처리 감염병": "/firebase-admin/submissions?tab=infection&status=submitted",
+};
 
 function RoleBadges({ roles }) {
   const roleLabels = getRoleLabels(roles);
@@ -391,16 +397,38 @@ export default function FirebaseDashboardPage() {
 
           {summaryState.status === "success" && dashboardSummary && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {dashboardSummary.cards.map((item) => (
-                <article
-                  key={item.label}
-                  className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]"
-                >
-                  <p className="text-sm font-black text-[#102047]">{item.label}</p>
-                  <p className="mt-3 text-3xl font-black text-[#20A982]">{item.value}</p>
-                  <p className="mt-2 text-xs font-bold text-[#8A96A8]">{item.note}</p>
-                </article>
-              ))}
+              {dashboardSummary.cards.map((item) => {
+                const summaryLink = SUMMARY_LINKS[item.label];
+                const content = (
+                  <>
+                    <p className="text-sm font-black text-[#102047]">{item.label}</p>
+                    <p className="mt-3 text-3xl font-black text-[#20A982]">{item.value}</p>
+                    <p className="mt-2 text-xs font-bold text-[#8A96A8]">{item.note}</p>
+                    {summaryLink && (
+                      <span className="mt-4 inline-flex text-xs font-black text-[#08754B]">
+                        관리 화면 열기
+                      </span>
+                    )}
+                  </>
+                );
+
+                return summaryLink ? (
+                  <Link
+                    key={item.label}
+                    to={summaryLink}
+                    className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)] transition hover:-translate-y-[1px] hover:shadow-[0_18px_42px_rgba(16,32,71,0.08)] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <article
+                    key={item.label}
+                    className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]"
+                  >
+                    {content}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -413,9 +441,12 @@ export default function FirebaseDashboardPage() {
               </p>
               <h2 className="mt-2 text-xl font-black text-[#102047]">최근 제출</h2>
             </div>
-            <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
-              최대 5건
-            </span>
+            <Link
+              to="/firebase-admin/submissions"
+              className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+            >
+              관리 화면
+            </Link>
           </div>
 
           {summaryState.status === "loading" && (
