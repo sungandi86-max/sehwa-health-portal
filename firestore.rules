@@ -48,6 +48,50 @@ service cloud.firestore {
         && request.resource.data.active == resource.data.active;
     }
 
+    function isValidAssignmentData(data) {
+      return data.keys().hasOnly([
+          "uid",
+          "schoolYear",
+          "semester",
+          "roles",
+          "grade",
+          "classNo",
+          "position",
+          "active",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasAll([
+          "uid",
+          "schoolYear",
+          "semester",
+          "roles",
+          "grade",
+          "classNo",
+          "position",
+          "active",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.uid is string
+        && data.schoolYear is number
+        && data.semester is number
+        && data.roles is list
+        && data.roles.size() > 0
+        && data.roles.hasOnly(["staff", "homeroom", "health_teacher", "admin"])
+        && (
+          (data.roles.hasAny(["homeroom"]) && data.grade is number && data.classNo is number)
+          || (!data.roles.hasAny(["homeroom"]) && data.grade == null && data.classNo == null)
+        )
+        && (data.position == null || data.position is string)
+        && data.active is bool;
+    }
+
+    function preservesOwnCurrentHealthTeacherAssignment(assignmentId, data) {
+      return assignmentId != currentAssignmentId(request.auth.uid)
+        || (data.active == true && data.roles.hasAny(["health_teacher"]));
+    }
+
     match /users/{uid} {
       allow read: if isSelf(uid) || hasCurrentHealthTeacherAssignment();
       allow create: if isValidSelfUserCreate(uid);
@@ -61,7 +105,29 @@ service cloud.firestore {
           assignmentId == currentAssignmentId(request.auth.uid)
           || hasCurrentHealthTeacherAssignment()
         );
-      allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+      allow create: if hasCurrentHealthTeacherAssignment()
+        && isValidAssignmentData(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && preservesOwnCurrentHealthTeacherAssignment(assignmentId, request.resource.data);
+      allow update: if hasCurrentHealthTeacherAssignment()
+        && isValidAssignmentData(request.resource.data)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.schoolYear == resource.data.schoolYear
+        && request.resource.data.semester == resource.data.semester
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "roles",
+          "grade",
+          "classNo",
+          "position",
+          "active",
+          "updatedAt"
+        ])
+        && request.resource.data.updatedAt == request.time
+        && preservesOwnCurrentHealthTeacherAssignment(assignmentId, request.resource.data);
+      allow delete: if hasCurrentHealthTeacherAssignment()
+        && assignmentId != currentAssignmentId(request.auth.uid);
     }
 
     match /announcements/{announcementId} {

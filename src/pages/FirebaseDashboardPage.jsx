@@ -16,7 +16,7 @@ const QUICK_MENUS = [
   { title: "제출·보고 센터", description: "CPR, 결핵검진, 채용검진, 감염병 보고", status: "연결됨", href: "/firebase-submissions" },
   { title: "제출·보고 관리", description: "제출 확인과 감염병 보고 처리", status: "관리자", href: "/firebase-admin/submissions" },
   { title: "입실현황", description: "보건실 입실 기록 관리", status: "준비 중" },
-  { title: "권한 관리", description: "역할·담임·보직 관리 예정", status: "준비 중" },
+  { title: "교직원 권한 관리", description: "역할·담임·보직 학기별 관리", status: "관리자", href: "/firebase-admin/users" },
 ];
 
 const SUMMARY_LINKS = {
@@ -662,10 +662,16 @@ export default function FirebaseDashboardPage() {
           </article>
 
           <article className="rounded-[30px] border border-[#DDEAE7] bg-[#F0FBF7] p-5 sm:p-6">
-            <p className="text-sm font-black text-[#08754B]">권한 관리 준비</p>
+            <p className="text-sm font-black text-[#08754B]">권한 관리</p>
             <p className="mt-3 text-sm font-medium leading-6 text-[#31584C]">
-              교직원 목록, 역할 지정, 담임 학년·반, 활성 상태, 학년도/학기 선택, 전년도 권한 복사 기능을 이 영역에서 확장할 예정입니다.
+              교직원 목록, 역할 지정, 담임 학년·반, 활성 상태, 학년도/학기 선택은 권한 관리 화면에서 처리합니다.
             </p>
+            <Link
+              to="/firebase-admin/users"
+              className="mt-5 inline-flex min-h-11 items-center rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+            >
+              교직원 권한 관리
+            </Link>
           </article>
         </section>
       </div>
