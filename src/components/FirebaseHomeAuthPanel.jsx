@@ -33,7 +33,7 @@ function RoleSummary({ assignment }) {
   );
 }
 
-export default function FirebaseHomeAuthPanel() {
+export default function FirebaseHomeAuthPanel({ className = "" }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
@@ -127,84 +127,74 @@ export default function FirebaseHomeAuthPanel() {
   };
 
   return (
-    <section className="firebase-v2-surface mx-auto w-full max-w-6xl px-3 py-3 sm:px-4 lg:max-w-[1280px]">
-      <div className="rounded-[16px] border border-[#DDEAE7] bg-white/95 p-4 text-[#102047]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-[#20A982]">교직원 로그인</p>
-            <h2 className="mt-1 text-lg font-bold text-[#102047]">온라인 보건실 이용</h2>
-            <p className="mt-1 text-sm font-medium leading-5 text-[#627083]">
-              교사는 Microsoft Teams, 그 외 교직원은 등록된 Google 계정으로 로그인합니다.
-            </p>
+    <div className={`rounded-[14px] border border-[#DDEAE7] bg-[#F7FBF9] p-3 text-[#102047] ${className}`}>
+      <p className="text-[11px] font-semibold text-[#20A982]">교직원 로그인</p>
+      <p className="mt-1 text-xs font-medium leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+        교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
+      </p>
+
+      {status === "loading" && (
+        <p className="mt-3 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#627083]">
+          로그인 상태 확인 중
+        </p>
+      )}
+
+      {status !== "loading" && !user && (
+        <FirebaseSignInActions
+          compact
+          isWorking={isWorking}
+          message={message}
+          onGoogleSignIn={handleGoogleSignIn}
+          onMicrosoftSignIn={handleMicrosoftSignIn}
+        />
+      )}
+
+      {user && (
+        <div className="mt-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-center">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-[#102047]">{displayName}</p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-[#627083]">{user.email || "이메일 없음"}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={isWorking}
+              className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              로그아웃
+            </button>
           </div>
-
-          {status === "loading" && (
-            <p className="rounded-[12px] border border-[#DDEAE7] bg-[#F7FBF9] px-3 py-2 text-sm font-semibold text-[#627083]">
-              로그인 상태 확인 중
+          <div className="mt-3">
+            <p className="mb-2 text-xs font-semibold text-[#627083]">
+              {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기 현재 권한
             </p>
-          )}
-
-          {status !== "loading" && !user && (
-            <div className="w-full lg:w-[360px]">
-              <FirebaseSignInActions
-                isWorking={isWorking}
-                message={message}
-                onGoogleSignIn={handleGoogleSignIn}
-                onMicrosoftSignIn={handleMicrosoftSignIn}
-              />
-            </div>
-          )}
-
-          {user && (
-            <div className="w-full rounded-[14px] border border-[#DDEAE7] bg-[#F7FBF9] p-3 lg:w-[430px]">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-[#102047]">{displayName}</p>
-                  <p className="mt-1 truncate text-xs font-semibold text-[#627083]">{user.email || "이메일 없음"}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  disabled={isWorking}
-                  className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  로그아웃
-                </button>
-              </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                <div>
-                  <p className="mb-2 text-xs font-semibold text-[#627083]">
-                    {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기 현재 권한
-                  </p>
-                  <RoleSummary assignment={assignment} />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    to="/firebase-submissions"
-                    className="inline-flex min-h-10 items-center rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white"
-                  >
-                    제출·보고 센터
-                  </Link>
-                  {canOpenDashboard && (
-                    <Link
-                      to="/firebase-dashboard"
-                      className="inline-flex min-h-10 items-center rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
-                    >
-                      대시보드
-                    </Link>
-                  )}
-                </div>
-              </div>
-              {assignmentResult?.status === "not-found" && <FirebaseAccessRequestAction user={user} />}
-              {message && (
-                <p className="mt-3 rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-xs font-semibold text-[#B42318]">
-                  {message}
-                </p>
-              )}
-            </div>
+            <RoleSummary assignment={assignment} />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              to="/firebase-submissions"
+              className="inline-flex min-h-10 items-center rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              제출·보고 센터
+            </Link>
+            {canOpenDashboard && (
+              <Link
+                to="/firebase-dashboard"
+                className="inline-flex min-h-10 items-center rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
+              >
+                대시보드
+              </Link>
+            )}
+          </div>
+          {assignmentResult?.status === "not-found" && <FirebaseAccessRequestAction user={user} />}
+          {message && (
+            <p className="mt-3 rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-xs font-semibold text-[#B42318]">
+              {message}
+            </p>
           )}
         </div>
-      </div>
-    </section>
+      )}
+    </div>
   );
 }

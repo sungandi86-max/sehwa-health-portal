@@ -88,12 +88,13 @@ function MenuIcon({ id }) {
   );
 }
 
-export default function QuickMenu({ items = quickMenuItems, className = "" }) {
+export default function QuickMenu({ items = quickMenuItems, className = "", variant = "default" }) {
   const navigate = useNavigate();
+  const isPortalCompact = variant === "portalCompact";
 
   return (
-    <section className={`mx-auto w-full max-w-6xl px-3 pb-6 sm:px-4 md:pb-10 lg:max-w-[1280px] ${className}`}>
-      <div className="grid auto-rows-fr grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4 lg:gap-4">
+    <section className={`mx-auto w-full max-w-6xl px-3 sm:px-4 lg:max-w-[1280px] ${isPortalCompact ? "pb-2" : "pb-6 md:pb-10"} ${className}`}>
+      <div className={`grid auto-rows-fr grid-cols-2 ${isPortalCompact ? "gap-2.5 lg:grid-cols-4" : "gap-2.5 sm:gap-3 lg:grid-cols-4 lg:gap-4"}`}>
         {items.map((item, index) => {
           const tone = MENU_TONES[item.id] || MENU_TONES.default;
           const isSecondary = index >= 4;
@@ -102,23 +103,33 @@ export default function QuickMenu({ items = quickMenuItems, className = "" }) {
             <button
               key={item.id}
               onClick={() => navigate(target)}
-              className={`group flex h-full min-h-36 min-w-0 flex-col rounded-[24px] border p-4 text-left shadow-[var(--shh-shadow)] transition hover:-translate-y-0.5 hover:shadow-[var(--shh-shadow-hover)] sm:min-h-44 sm:rounded-[28px] sm:p-6 lg:min-h-48 ${isSecondary ? "lg:shadow-[0_10px_30px_rgba(30,41,59,0.045)]" : ""} ${tone.card}`}
+              className={
+                isPortalCompact
+                  ? "group flex h-full min-h-[124px] min-w-0 flex-col rounded-[16px] border border-[#DDEAE7] bg-white/95 p-3 text-left transition hover:-translate-y-0.5 hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 sm:min-h-[140px] sm:p-4"
+                  : `group flex h-full min-h-36 min-w-0 flex-col rounded-[24px] border p-4 text-left shadow-[var(--shh-shadow)] transition hover:-translate-y-0.5 hover:shadow-[var(--shh-shadow-hover)] sm:min-h-44 sm:rounded-[28px] sm:p-6 lg:min-h-48 ${isSecondary ? "lg:shadow-[0_10px_30px_rgba(30,41,59,0.045)]" : ""} ${tone.card}`
+              }
             >
-              <div className="mb-2.5 flex items-start justify-between gap-3 sm:mb-3">
-                <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-[18px] text-white shadow-xl sm:h-16 sm:w-16 ${isSecondary ? "lg:opacity-90" : ""} ${tone.tile}`}>
+              <div className={`${isPortalCompact ? "mb-2 flex items-start justify-between gap-2" : "mb-2.5 flex items-start justify-between gap-3 sm:mb-3"}`}>
+                <span className={
+                  isPortalCompact
+                    ? "grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[#F0FBF7] text-[#08754B]"
+                    : `grid h-14 w-14 shrink-0 place-items-center rounded-[18px] text-white shadow-xl sm:h-16 sm:w-16 ${isSecondary ? "lg:opacity-90" : ""} ${tone.tile}`
+                }>
                   <MenuIcon id={item.id} />
                 </span>
-                {item.featured ? <Badge type="pink">핵심</Badge> : <span className={`text-2xl font-black ${tone.cta}`}>→</span>}
+                {isPortalCompact ? <span className="text-sm font-bold text-[#20A982]">→</span> : item.featured ? <Badge type="pink">핵심</Badge> : <span className={`text-2xl font-black ${tone.cta}`}>→</span>}
               </div>
-              <h3 className="text-base font-black leading-6 text-[#0F1F4B] sm:text-lg" style={{ wordBreak: "keep-all" }}>
+              <h3 className={`${isPortalCompact ? "text-sm font-bold leading-5 sm:text-[15px]" : "text-base font-black leading-6 sm:text-lg"} text-[#0F1F4B]`} style={{ wordBreak: "keep-all" }}>
                 {item.title}
               </h3>
-              <p className="menu-card-description mt-1.5 text-xs font-medium leading-5 text-slate-600 sm:text-sm sm:leading-6">
+              <p className={`${isPortalCompact ? "mt-1 line-clamp-2 text-xs font-medium leading-5" : "menu-card-description mt-1.5 text-xs font-medium leading-5 sm:text-sm sm:leading-6"} text-slate-600`}>
                 {item.description}
               </p>
-              <p className={`mt-auto flex items-center pt-4 text-sm font-black ${tone.cta}`}>
-                열기 <span className="ml-1">→</span>
-              </p>
+              {!isPortalCompact && (
+                <p className={`mt-auto flex items-center pt-4 text-sm font-black ${tone.cta}`}>
+                  열기 <span className="ml-1">→</span>
+                </p>
+              )}
             </button>
           );
         })}
