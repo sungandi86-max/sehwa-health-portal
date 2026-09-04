@@ -269,6 +269,9 @@ function doGet(e) {
     if (mode === "syncStudentCarePresencePublic") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(syncStudentCarePresencePublicFromRequest_(e.parameter || {}), mode));
     }
+    if (mode === "syncStudentCarePresenceHomeroom") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(syncStudentCarePresenceHomeroomFromRequest_(e.parameter || {}), mode));
+    }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
   } catch (error) {
@@ -1555,6 +1558,156 @@ function buildStudentCarePresencePublicItems_(schoolYear, targetDate) {
   });
 
   return { ok: true, items: items };
+}
+
+function syncStudentCarePresenceHomeroomFromRequest_(params) {
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  if (!secretCheck.ok) {
+    return { result: "error", message: secretCheck.message };
+  }
+  return syncStudentCarePresenceHomeroom_(params.schoolYear, params.month);
+}
+
+function syncStudentCarePresenceHomeroomCurrentMonth() {
+  const currentMonth = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM");
+  return syncStudentCarePresenceHomeroom_(String(new Date().getFullYear()), currentMonth);
+}
+
+function syncStudentCarePresenceHomeroom_(schoolYear, month) {
+  const year = Number(schoolYear);
+  const monthText = normalizeStudentCareAggregateMonth_(year, month);
+  if (!year || !monthText) {
+    return { result: "error", message: "학년도와 조회 월을 확인해 주세요." };
+  }
+
+  const proxySecret = PropertiesService.getScriptProperties().getProperty("STUDENT_CARE_PROXY_SECRET");
+  if (!proxySecret) {
+    return { result: "error", message: "학생 건강관리 서버 보호 설정이 필요합니다." };
+  }
+
+  const endpoint = getStudentCareSyncEndpoint_();
+  if (!endpoint) {
+    return { result: "error", message: "학생 건강관리 동기화 endpoint가 설정되지 않았습니다." };
+  }
+
+  const items = buildStudentCarePresenceHomeroomItems_(year, monthText);
+  if (!items.ok) return items;
+
+  const payload = {
+    type: "presenceHomeroom",
+    presenceHomeroom: {
+      schoolYear: year,
+      semester: CURRENT_STUDENT_CARE_SEMESTER,
+      month: monthText,
+      items: items.items,
+      source: {
+        type: "google_sheet",
+        sheetName: SHEET_NAMES.visit
+      }
+    }
+  };
+
+  const response = UrlFetchApp.fetch(endpoint, {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "x-student-care-proxy-secret": proxySecret
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  const bodyText = response.getContentText();
+  let body = {};
+  try {
+    body = bodyText ? JSON.parse(bodyText) : {};
+  } catch (error) {
+    return { result: "error", message: "동기화 API 응답을 JSON으로 읽을 수 없습니다." };
+  }
+
+  if (status < 200 || status >= 300 || body.ok !== true) {
+    return {
+      result: "error",
+      message: body.message || "담임용 보건실 projection 동기화에 실패했습니다.",
+      status: status
+    };
+  }
+
+  return {
+    result: "success",
+    month: monthText,
+    count: items.items.length,
+    written: body.written || 0,
+    removed: body.removed || 0
+  };
+}
+
+function buildStudentCarePresenceHomeroomItems_(schoolYear, month) {
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet) {
+    return { result: "error", message: SHEET_NAMES.visit + " 탭을 찾을 수 없습니다." };
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const items = [];
+
+  for (let i = 3; i < values.length; i++) {
+    const row = values[i];
+    const rowDate = normalizeDateText_(row[0]);
+    if (!rowDate || rowDate.slice(0, 7) !== month) continue;
+
+    const grade = Number(String(row[2] || "").trim());
+    const classNo = Number(String(row[3] || "").trim());
+    const number = Number(String(row[4] || "").trim());
+    const maskedName = maskStudentName_(row[5]);
+    if (!grade || !classNo || !number || !maskedName) continue;
+
+    const returnedAt = String(row[7] || "").trim();
+    const resultDetail = String(row[12] || "").trim();
+    const status = normalizeHealthRoomStatus_(String(row[1] || "").trim(), returnedAt, resultDetail);
+
+    items.push({
+      schoolYear: schoolYear,
+      semester: CURRENT_STUDENT_CARE_SEMESTER,
+      date: rowDate,
+      month: rowDate.slice(0, 7),
+      grade: grade,
+      classNo: classNo,
+      number: number,
+      studentNo: [String(grade), String(classNo), String(number)].join("-"),
+      maskedName: maskedName,
+      enteredAt: String(row[6] || "").trim(),
+      returnedAt: returnedAt,
+      duration: String(row[11] || "").trim(),
+      status: status,
+      resultCategory: mapHealthRoomResultCategory_(resultDetail),
+      attendanceNote: mapAttendanceNote_(resultDetail),
+      homeroomConfirmed: isTruthy_(row[10]),
+      sourceRef: {
+        type: "google_sheet",
+        sheetName: SHEET_NAMES.visit,
+        rowNumber: i + 1
+      }
+    });
+  }
+
+  items.sort(function(a, b) {
+    const dateCompare = String(a.date || "").localeCompare(String(b.date || ""));
+    if (dateCompare !== 0) return dateCompare;
+    return Number(a.number || 0) - Number(b.number || 0);
+  });
+
+  return { ok: true, items: items };
+}
+
+function mapHealthRoomResultCategory_(resultDetail) {
+  const text = String(resultDetail || "").trim();
+  if (text.indexOf("질병결과") >= 0) return "질병결과";
+  if (text.indexOf("생리결과") >= 0) return "생리결과";
+  if (text.indexOf("복귀") >= 0) return "복귀";
+  if (text.indexOf("조퇴") >= 0 || text.indexOf("귀가") >= 0) return "귀가";
+  if (text.indexOf("병원") >= 0) return "병원";
+  return text ? "확인 필요" : "";
 }
 
 function normalizeStudentCareAggregateMonth_(schoolYear, month) {

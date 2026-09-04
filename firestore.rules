@@ -290,6 +290,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /student_care_presence_homeroom/{presenceId} {
+      allow read: if hasCurrentHealthTeacherOrAdminAssignment()
+        || (
+          hasCurrentHomeroomAssignment()
+          && resource.data.schoolYear == get(currentAssignmentPath(request.auth.uid)).data.schoolYear
+          && resource.data.semester == get(currentAssignmentPath(request.auth.uid)).data.semester
+          && resource.data.grade == get(currentAssignmentPath(request.auth.uid)).data.grade
+          && resource.data.classNo == get(currentAssignmentPath(request.auth.uid)).data.classNo
+        );
+      allow write: if false;
+    }
+
     match /staff_submissions/{submissionId} {
       function hasValidSubmissionFile() {
         return request.resource.data.file.keys().hasOnly([

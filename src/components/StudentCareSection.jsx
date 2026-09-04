@@ -11,7 +11,11 @@ import {
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
-import { getPublicHealthRoomPresence } from "../lib/studentCarePresence.js";
+import {
+  getHomeroomHealthRoomPresence,
+  getHomeroomMonthlyVisitRecords,
+  getPublicHealthRoomPresence,
+} from "../lib/studentCarePresence.js";
 import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher, isHomeroom, isStaff } from "../lib/userProfile.js";
 import FirebaseAccessRequestAction from "./FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
@@ -338,11 +342,13 @@ function HealthRoomLocationModal({ onClose, authState }) {
     resetResult();
     try {
       let fallbackMessage = "";
-      if (accessType === "subject") {
+      if (accessType === "subject" || accessType === "homeroom") {
         try {
-          const presence = await getPublicHealthRoomPresence();
+          const presence = accessType === "homeroom"
+            ? await getHomeroomHealthRoomPresence({ assignment: authState.assignment })
+            : await getPublicHealthRoomPresence();
           if (presence.stale) {
-            throw new Error("stale public presence projection");
+            throw new Error(`stale ${accessType} presence projection`);
           }
           setRows(presence.rows);
           setMessage(presence.rows.length ? "" : "조회된 보건실 소재 기록이 없습니다.");
@@ -352,7 +358,7 @@ function HealthRoomLocationModal({ onClose, authState }) {
             code: projectionError?.code || "",
             message: projectionError?.message || "unknown",
           });
-          fallbackMessage = "최신 소재 정보를 불러오는 중 문제가 발생해 기존 조회 방식으로 확인했습니다.";
+          fallbackMessage = "최신 조회 정보를 불러오지 못해 기존 방식으로 확인했습니다.";
           setMessage(fallbackMessage);
         }
       }
@@ -489,6 +495,37 @@ function MonthlyVisitModal({ onClose, authState }) {
     setSummary(null);
 
     try {
+      let fallbackMessage = "";
+      try {
+        const projection = await getHomeroomMonthlyVisitRecords({
+          assignment: authState.assignment,
+          month: month.trim(),
+        });
+        if (projection.stale) {
+          throw new Error("stale homeroom monthly projection");
+        }
+        const nextRecords = projection.records;
+        setRecords(nextRecords);
+        setSummary({
+          grade: String(authState.assignment.grade || ""),
+          classNo: String(authState.assignment.classNo || ""),
+          month: projection.month || month.trim(),
+          total: projection.summary.total,
+          diseaseCount: nextRecords.filter(r => r.result?.includes("질병")).length,
+          periodCount:  nextRecords.filter(r => r.result?.includes("생리")).length,
+          noResultCount: nextRecords.filter(r => !r.result || r.result === "-").length,
+        });
+        setMessage(nextRecords.length ? "" : "조회된 월별 보건실 입실 기록이 없습니다.");
+        return;
+      } catch (projectionError) {
+        console.warn("[HealthRoom:monthlyVisit] Firestore projection fallback", {
+          code: projectionError?.code || "",
+          message: projectionError?.message || "unknown",
+        });
+        fallbackMessage = "최신 조회 정보를 불러오지 못해 기존 방식으로 확인했습니다.";
+        setMessage(fallbackMessage);
+      }
+
       const params = new URLSearchParams({
         mode: "monthlyVisit",
         month: month.trim(),
@@ -506,7 +543,7 @@ function MonthlyVisitModal({ onClose, authState }) {
           periodCount:  nextRecords.filter(r => r.result?.includes("생리")).length,
           noResultCount: nextRecords.filter(r => !r.result || r.result === "-").length,
         });
-        setMessage(nextRecords.length ? "" : "조회된 월별 보건실 입실 기록이 없습니다.");
+        setMessage(fallbackMessage || (nextRecords.length ? "" : "조회된 월별 보건실 입실 기록이 없습니다."));
       } else {
         setError(json.message || json.debug || "월별 입실 기록을 조회할 수 없습니다.");
       }
