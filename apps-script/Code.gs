@@ -43,6 +43,14 @@ const STUDENT_FILE_RECORD_HEADERS = [
   "파일URL",
   "저장폴더ID"
 ];
+const STUDENT_CARE_PROJECTION_SYNC = {
+  statusProperty: "STUDENT_CARE_PROJECTION_SYNC_STATUS",
+  installableEditHandler: "handleStudentCareProjectionOnEdit",
+  recentBatchHandler: "syncStudentCareRecentProjectionBatch_",
+  nightlyRebuildHandler: "rebuildStudentCareProjectionsNightly_",
+  relevantColumns: [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13],
+  recentBatchDays: 2
+};
 
 const SUBMIT_SHEET_HEADERS = {
   "응답_심폐소생술이수증":        ["제출일시","성명","소속/부서","교직원구분","이수일자","이수기관","파일명","파일링크"],
@@ -271,6 +279,24 @@ function doGet(e) {
     }
     if (mode === "syncStudentCarePresenceHomeroom") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(syncStudentCarePresenceHomeroomFromRequest_(e.parameter || {}), mode));
+    }
+    if (mode === "syncStudentCareRowProjection") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(runStudentCareProjectionMaintenance_(e.parameter || {}, syncStudentCareRowProjectionFromRequest_), mode));
+    }
+    if (mode === "syncStudentCareRecentProjectionBatch") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(runStudentCareProjectionMaintenance_(e.parameter || {}, syncStudentCareRecentProjectionBatch_), mode));
+    }
+    if (mode === "rebuildStudentCareProjectionsNightly") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(runStudentCareProjectionMaintenance_(e.parameter || {}, rebuildStudentCareProjectionsNightly_), mode));
+    }
+    if (mode === "listStudentCareProjectionTriggers") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(runStudentCareProjectionMaintenance_(e.parameter || {}, listStudentCareProjectionTriggers), mode));
+    }
+    if (mode === "setupStudentCareProjectionTriggers") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(runStudentCareProjectionMaintenance_(e.parameter || {}, setupStudentCareProjectionTriggers), mode));
+    }
+    if (mode === "removeStudentCareProjectionTriggers") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(runStudentCareProjectionMaintenance_(e.parameter || {}, removeStudentCareProjectionTriggers), mode));
     }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
@@ -1698,6 +1724,353 @@ function buildStudentCarePresenceHomeroomItems_(schoolYear, month) {
   });
 
   return { ok: true, items: items };
+}
+
+function handleStudentCareProjectionOnEdit(e) {
+  if (!e || !e.range) return;
+  const range = e.range;
+  const sheet = range.getSheet();
+  if (sheet.getName() !== SHEET_NAMES.visit) return;
+  if (range.getRow() < 4) return;
+
+  const columns = getEditedColumns_(range);
+  if (!hasStudentCareProjectionRelevantColumn_(columns)) return;
+
+  const rowNumber = range.getRow();
+  const rowDate = getStudentCareRowProjectionDate_(sheet, rowNumber);
+  if (!rowDate) {
+    recordStudentCareProjectionSyncStatus_("onEdit", "skipped", {
+      reason: "missing-date",
+    });
+    return;
+  }
+
+  syncStudentCareProjectionForDate_(rowDate, "onEdit");
+}
+
+function syncStudentCareRecentProjectionBatch_() {
+  const dates = getRecentStudentCareProjectionDates_();
+  const results = [];
+  dates.forEach(function(dateText) {
+    results.push(syncStudentCareProjectionForDate_(dateText, "batch"));
+  });
+
+  const currentMonth = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM");
+  results.push(syncStudentCareProjectionForMonth_(String(new Date().getFullYear()), currentMonth, "batch"));
+  const hasError = results.some(function(result) {
+    return result.result !== "success";
+  });
+  recordStudentCareProjectionSyncStatus_("batch", hasError ? "error" : "success", {
+    dateCount: dates.length,
+    month: currentMonth,
+    errorStage: hasError ? "batch-sync" : "",
+  });
+  return {
+    result: hasError ? "error" : "success",
+    dateCount: dates.length,
+    month: currentMonth,
+    results: summarizeStudentCareSyncResults_(results),
+  };
+}
+
+function runStudentCareProjectionMaintenance_(params, handler) {
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  if (!secretCheck.ok) {
+    return { result: "error", message: secretCheck.message };
+  }
+  return handler(params);
+}
+
+function syncStudentCareRecentProjectionBatch() {
+  return syncStudentCareRecentProjectionBatch_();
+}
+
+function rebuildStudentCareProjectionsNightly_() {
+  const months = getNightlyStudentCareProjectionMonths_();
+  const results = [];
+  months.forEach(function(monthText) {
+    const year = Number(monthText.slice(0, 4));
+    const dates = getStudentCareProjectionDatesInMonth_(monthText);
+    dates.forEach(function(dateText) {
+      results.push(syncStudentCarePresencePublic_(year, dateText));
+    });
+    results.push(syncStudentCareProjectionForMonth_(String(year), monthText, "nightly"));
+  });
+
+  const hasError = results.some(function(result) {
+    return result.result !== "success";
+  });
+  recordStudentCareProjectionSyncStatus_("nightly", hasError ? "error" : "success", {
+    monthCount: months.length,
+    errorStage: hasError ? "nightly-sync" : "",
+  });
+  return {
+    result: hasError ? "error" : "success",
+    monthCount: months.length,
+    results: summarizeStudentCareSyncResults_(results),
+  };
+}
+
+function rebuildStudentCareProjectionsNightly() {
+  return rebuildStudentCareProjectionsNightly_();
+}
+
+function setupStudentCareProjectionTriggers() {
+  const ss = getSpreadsheet_();
+  const triggers = ScriptApp.getProjectTriggers();
+  const created = [];
+
+  if (!hasStudentCareProjectionTrigger_(triggers, STUDENT_CARE_PROJECTION_SYNC.installableEditHandler)) {
+    ScriptApp.newTrigger(STUDENT_CARE_PROJECTION_SYNC.installableEditHandler)
+      .forSpreadsheet(ss)
+      .onEdit()
+      .create();
+    created.push(STUDENT_CARE_PROJECTION_SYNC.installableEditHandler);
+  }
+
+  if (!hasStudentCareProjectionTrigger_(triggers, STUDENT_CARE_PROJECTION_SYNC.recentBatchHandler)) {
+    ScriptApp.newTrigger(STUDENT_CARE_PROJECTION_SYNC.recentBatchHandler)
+      .timeBased()
+      .everyMinutes(5)
+      .create();
+    created.push(STUDENT_CARE_PROJECTION_SYNC.recentBatchHandler);
+  }
+
+  if (!hasStudentCareProjectionTrigger_(triggers, STUDENT_CARE_PROJECTION_SYNC.nightlyRebuildHandler)) {
+    ScriptApp.newTrigger(STUDENT_CARE_PROJECTION_SYNC.nightlyRebuildHandler)
+      .timeBased()
+      .atHour(1)
+      .everyDays(1)
+      .create();
+    created.push(STUDENT_CARE_PROJECTION_SYNC.nightlyRebuildHandler);
+  }
+
+  return {
+    result: "success",
+    created: created,
+    existing: listStudentCareProjectionTriggers_(),
+  };
+}
+
+function removeStudentCareProjectionTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  const removed = [];
+  triggers.forEach(function(trigger) {
+    const handler = trigger.getHandlerFunction();
+    if (isStudentCareProjectionTriggerHandler_(handler)) {
+      ScriptApp.deleteTrigger(trigger);
+      removed.push(handler);
+    }
+  });
+  return {
+    result: "success",
+    removed: removed,
+    remaining: listStudentCareProjectionTriggers_(),
+  };
+}
+
+function listStudentCareProjectionTriggers() {
+  return {
+    result: "success",
+    triggers: listStudentCareProjectionTriggers_(),
+  };
+}
+
+function listStudentCareProjectionTriggers_() {
+  return ScriptApp.getProjectTriggers()
+    .filter(function(trigger) {
+      return isStudentCareProjectionTriggerHandler_(trigger.getHandlerFunction());
+    })
+    .map(function(trigger) {
+      return {
+        handler: trigger.getHandlerFunction(),
+        eventType: String(trigger.getEventType()),
+        source: String(trigger.getTriggerSource()),
+      };
+    });
+}
+
+function syncStudentCareProjectionForDate_(dateText, stage) {
+  const year = Number(dateText.slice(0, 4));
+  const monthText = dateText.slice(0, 7);
+  const results = [
+    syncStudentCarePresencePublic_(year, dateText),
+    syncStudentCareProjectionForMonth_(String(year), monthText, stage),
+  ];
+  const hasError = results.some(function(result) {
+    return result.result !== "success";
+  });
+  recordStudentCareProjectionSyncStatus_(stage, hasError ? "error" : "success", {
+    date: dateText,
+    month: monthText,
+    errorStage: hasError ? "date-sync" : "",
+  });
+  return {
+    result: hasError ? "error" : "success",
+    stage: stage,
+    date: dateText,
+    month: monthText,
+    results: summarizeStudentCareSyncResults_(results),
+  };
+}
+
+function syncStudentCareRowProjection_(rowNumber) {
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet) {
+    return { result: "error", message: SHEET_NAMES.visit + " 탭을 찾을 수 없습니다." };
+  }
+  const row = Number(rowNumber);
+  if (!row || row < 4) {
+    return { result: "error", message: "동기화할 행 번호를 확인해 주세요." };
+  }
+  const rowDate = getStudentCareRowProjectionDate_(sheet, row);
+  if (!rowDate) {
+    return { result: "error", message: "동기화할 행의 날짜가 비어 있습니다." };
+  }
+  return syncStudentCareProjectionForDate_(rowDate, "row");
+}
+
+function syncStudentCareRowProjection(rowNumber) {
+  return syncStudentCareRowProjection_(rowNumber);
+}
+
+function syncStudentCareRowProjectionFromRequest_(params) {
+  return syncStudentCareRowProjection_(params.rowNumber);
+}
+
+function syncStudentCareProjectionForMonth_(schoolYear, month, stage) {
+  const results = [
+    syncStudentCarePresenceHomeroom_(schoolYear, month),
+    syncStudentCareMonthlyAggregate_(schoolYear, month),
+  ];
+  const hasError = results.some(function(result) {
+    return result.result !== "success";
+  });
+  if (hasError) {
+    recordStudentCareProjectionSyncStatus_(stage, "error", {
+      month: month,
+      errorStage: "month-sync",
+    });
+  }
+  return {
+    result: hasError ? "error" : "success",
+    stage: stage,
+    month: month,
+    results: summarizeStudentCareSyncResults_(results),
+  };
+}
+
+function getEditedColumns_(range) {
+  const columns = [];
+  const start = range.getColumn();
+  const end = start + range.getNumColumns() - 1;
+  for (let column = start; column <= end; column++) {
+    columns.push(column);
+  }
+  return columns;
+}
+
+function hasStudentCareProjectionRelevantColumn_(columns) {
+  return columns.some(function(column) {
+    return STUDENT_CARE_PROJECTION_SYNC.relevantColumns.indexOf(column) >= 0;
+  });
+}
+
+function getStudentCareRowProjectionDate_(sheet, rowNumber) {
+  return normalizeDateText_(sheet.getRange(rowNumber, getColumns().date).getDisplayValue());
+}
+
+function getRecentStudentCareProjectionDates_() {
+  const dates = [];
+  const now = new Date();
+  for (let offset = 0; offset <= STUDENT_CARE_PROJECTION_SYNC.recentBatchDays; offset++) {
+    const date = new Date(now.getTime());
+    date.setDate(now.getDate() - offset);
+    dates.push(Utilities.formatDate(date, TIMEZONE, "yyyy-MM-dd"));
+  }
+  return dates;
+}
+
+function getNightlyStudentCareProjectionMonths_() {
+  const currentMonth = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM");
+  const previousMonth = getPreviousStudentCareProjectionMonth_(currentMonth);
+  return [currentMonth, previousMonth].filter(function(monthText, index, values) {
+    return monthText && values.indexOf(monthText) === index;
+  });
+}
+
+function getPreviousStudentCareProjectionMonth_(monthText) {
+  const match = String(monthText || "").match(/^(\d{4})-(\d{2})$/);
+  if (!match) return "";
+  const date = new Date(Number(match[1]), Number(match[2]) - 2, 1);
+  return Utilities.formatDate(date, TIMEZONE, "yyyy-MM");
+}
+
+function getStudentCareProjectionDatesInMonth_(monthText) {
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet) return [];
+  const values = sheet.getDataRange().getDisplayValues();
+  const dates = {};
+  for (let i = 3; i < values.length; i++) {
+    const rowDate = normalizeDateText_(values[i][0]);
+    if (rowDate && rowDate.slice(0, 7) === monthText) {
+      dates[rowDate] = true;
+    }
+  }
+  return Object.keys(dates).sort();
+}
+
+function hasStudentCareProjectionTrigger_(triggers, handler) {
+  return triggers.some(function(trigger) {
+    return trigger.getHandlerFunction() === handler;
+  });
+}
+
+function isStudentCareProjectionTriggerHandler_(handler) {
+  return [
+    STUDENT_CARE_PROJECTION_SYNC.installableEditHandler,
+    STUDENT_CARE_PROJECTION_SYNC.recentBatchHandler,
+    STUDENT_CARE_PROJECTION_SYNC.nightlyRebuildHandler,
+  ].indexOf(handler) >= 0;
+}
+
+function summarizeStudentCareSyncResults_(results) {
+  return results.map(function(result) {
+    return {
+      result: result.result || "unknown",
+      date: result.date || "",
+      month: result.month || "",
+      count: result.count || 0,
+      written: result.written || 0,
+      removed: result.removed || 0,
+      id: result.id || "",
+      message: result.result === "success" ? "" : String(result.message || ""),
+    };
+  });
+}
+
+function recordStudentCareProjectionSyncStatus_(stage, status, data) {
+  const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+  const properties = PropertiesService.getScriptProperties();
+  const raw = properties.getProperty(STUDENT_CARE_PROJECTION_SYNC.statusProperty);
+  let current = {};
+  try {
+    current = raw ? JSON.parse(raw) : {};
+  } catch (error) {
+    current = {};
+  }
+
+  current.lastStage = stage;
+  current.updatedAt = now;
+  if (status === "success") {
+    current.lastSuccessAt = now;
+    if (stage === "batch") current.lastBatchAt = now;
+    if (stage === "nightly") current.lastNightlyAt = now;
+  } else if (status === "error") {
+    current.lastErrorAt = now;
+    current.lastErrorStage = data && data.errorStage ? data.errorStage : stage;
+  }
+  properties.setProperty(STUDENT_CARE_PROJECTION_SYNC.statusProperty, JSON.stringify(current));
 }
 
 function mapHealthRoomResultCategory_(resultDetail) {
