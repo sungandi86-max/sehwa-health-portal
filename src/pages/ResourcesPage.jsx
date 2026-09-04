@@ -6,11 +6,11 @@ import { getActiveHealthResources } from "../lib/healthResources.js";
 const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
 
 async function fetchLegacyResources(signal) {
-  const response = await fetch("/api/portal", { signal });
+  const response = await fetch("/api/portal?scope=fallback&type=resources", { signal });
   const contentType = response.headers.get("content-type") || "";
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   if (!contentType.includes("application/json") && import.meta.env.DEV) {
-    return fetchLegacyResourcesFromUrl(`${DEV_PORTAL_API_FALLBACK}?preview=local`, signal);
+    return fetchLegacyResourcesFromUrl(`${DEV_PORTAL_API_FALLBACK}?scope=fallback&type=resources&preview=local`, signal);
   }
 
   const portal = await response.json();

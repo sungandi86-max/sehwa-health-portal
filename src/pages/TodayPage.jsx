@@ -6,11 +6,11 @@ import { getActiveAnnouncements } from "../lib/announcements.js";
 const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
 
 async function fetchLegacyNotices(signal) {
-  const response = await fetch("/api/portal", { signal });
+  const response = await fetch("/api/portal?scope=fallback&type=today", { signal });
   const contentType = response.headers.get("content-type") || "";
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   if (!contentType.includes("application/json") && import.meta.env.DEV) {
-    return fetchLegacyNoticesFromUrl(`${DEV_PORTAL_API_FALLBACK}?preview=local`, signal);
+    return fetchLegacyNoticesFromUrl(`${DEV_PORTAL_API_FALLBACK}?scope=fallback&type=today&preview=local`, signal);
   }
 
   const portal = await response.json();

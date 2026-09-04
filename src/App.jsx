@@ -44,8 +44,19 @@ import {
 const PORTAL_API_URL = "/api/portal";
 const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
 
-async function fetchPortalData(signal) {
-  const response = await fetch(PORTAL_API_URL, { signal });
+function portalScopeForPath(pathname) {
+  if (pathname === "/upload") return "upload";
+  if (pathname === "/admin" || pathname === "/admin/roadmap") return "admin";
+  return "";
+}
+
+function portalUrlForScope(scope) {
+  if (!scope) return PORTAL_API_URL;
+  return `${PORTAL_API_URL}?scope=${encodeURIComponent(scope)}`;
+}
+
+async function fetchPortalData(signal, scope = "") {
+  const response = await fetch(portalUrlForScope(scope), { signal });
   const contentType = response.headers.get("content-type") || "";
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -54,7 +65,9 @@ async function fetchPortalData(signal) {
   }
 
   if (import.meta.env.DEV) {
-    const fallbackResponse = await fetch(`${DEV_PORTAL_API_FALLBACK}?preview=local`, { signal });
+    const separator = scope ? "&" : "?";
+    const fallbackUrl = `${DEV_PORTAL_API_FALLBACK}${scope ? `?scope=${encodeURIComponent(scope)}` : ""}${separator}preview=local`;
+    const fallbackResponse = await fetch(fallbackUrl, { signal });
     if (!fallbackResponse.ok) throw new Error(`fallback HTTP ${fallbackResponse.status}`);
     return fallbackResponse.json();
   }
@@ -94,7 +107,9 @@ function LoadingSkeleton() {
 }
 
 export default function App() {
-  const isFirebaseV2Path = [
+  const portalScope = portalScopeForPath(window.location.pathname);
+  const shouldSkipPortalPreload = [
+    "/",
     "/firebase-test",
     "/firebase-dashboard",
     "/firebase-checkups",
@@ -109,23 +124,29 @@ export default function App() {
     "/firebase-submit/infection",
     "/firebase-submit/recruit",
     "/firebase-submit/tb",
+    "/homeroom",
+    "/student-care",
     "/today",
     "/resources",
     "/faq",
     "/checkup",
     "/education",
-  ].includes(window.location.pathname);
+    "/admin/messages",
+    "/admin/receipts",
+    "/admin/infections",
+    "/admin/infection-reports",
+  ].includes(window.location.pathname) || !portalScope;
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
-  const [isLoading, setIsLoading] = useState(!isFirebaseV2Path);
+  const [isLoading, setIsLoading] = useState(!shouldSkipPortalPreload);
 
   useEffect(() => {
-    if (isFirebaseV2Path) return;
+    if (shouldSkipPortalPreload) return;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    fetchPortalData(controller.signal)
+    fetchPortalData(controller.signal, portalScope)
       .then((portal) => {
         clearTimeout(timeoutId);
         if (portal?.success === false || portal?.result === "error") {
@@ -146,7 +167,7 @@ export default function App() {
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [isFirebaseV2Path]);
+  }, [shouldSkipPortalPreload, portalScope]);
 
   const liveAppConfig = portalData?.appConfig
     ? { ...fallbackAppConfig, ...portalData.appConfig }

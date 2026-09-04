@@ -13,6 +13,15 @@ function jsonError(res, status, message, debug) {
   });
 }
 
+function portalQuery(req) {
+  const scope = String(req.query?.scope || "").trim();
+  const type = String(req.query?.type || "").trim();
+  const params = new URLSearchParams({ mode: "portal" });
+  if (scope) params.set("scope", scope);
+  if (type) params.set("type", type);
+  return params.toString();
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
@@ -43,8 +52,12 @@ export default async function handler(req, res) {
     );
   }
 
-  const targetUrl = `${scriptUrl}?mode=portal`;
-  console.log("[portal] proxy request", { mode: "portal" });
+  const targetUrl = `${scriptUrl}?${portalQuery(req)}`;
+  console.log("[portal] proxy request", {
+    mode: "portal",
+    scope: req.query?.scope || "full",
+    type: req.query?.type || "",
+  });
 
   try {
     const scriptRes = await fetch(targetUrl, {
@@ -58,7 +71,7 @@ export default async function handler(req, res) {
       status: scriptRes.status,
       ok: scriptRes.ok,
       contentType,
-      body: text,
+      bytes: Buffer.byteLength(text, "utf8"),
     });
 
     if (!scriptRes.ok) {

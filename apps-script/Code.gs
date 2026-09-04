@@ -298,7 +298,7 @@ function doGet(e) {
     if (mode === "removeStudentCareProjectionTriggers") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(runStudentCareProjectionMaintenance_(e.parameter || {}, removeStudentCareProjectionTriggers), mode));
     }
-    if (mode === "portal") return jsonOutput_(getPortalData_());
+    if (mode === "portal") return jsonOutput_(getPortalData_(e.parameter || {}));
     return jsonOutput_(getVisitSummaryData_());
   } catch (error) {
     return jsonOutput_({
@@ -2889,10 +2889,32 @@ function getVisitSummaryData_() {
 // 포털 데이터
 // ════════════════════════════════════════════════════════════════
 
-function getPortalData_() {
+function getPortalData_(options) {
   const ss = getSpreadsheet_();
-  return {
+  const base = {
     updatedAt: Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
+  };
+  const scope = String((options && options.scope) || "").trim();
+  const type = String((options && options.type) || "").trim();
+
+  if (scope === "upload") {
+    return Object.assign({}, base, {
+      tbConfig: getPortalTbConfig_(),
+      uploads: getUploads_(ss)
+    });
+  }
+
+  if (scope === "admin") {
+    return Object.assign({}, base, {
+      roadmap: getRoadmap_(ss)
+    });
+  }
+
+  if (scope === "fallback") {
+    return getPortalFallbackData_(ss, base, type);
+  }
+
+  return Object.assign({}, base, {
     appConfig: {
       appName:       "세화여자고등학교 온라인 보건실",
       subtitle:      "보건 안내 확인부터 자료 제출까지 한 곳에서 간편하게.",
@@ -2900,13 +2922,7 @@ function getPortalData_() {
       privacyNotice: "학생 개인정보 및 민감정보는 앱 화면에 직접 표시하지 않습니다.",
       managerNote:   "제출 자료 확인 및 세부 관리는 보건업무시트에서 별도로 진행됩니다."
     },
-    tbConfig: {
-      enabled:       getAppConfig_("결핵검진유형선택_사용"),
-      startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
-      endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
-      closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
-      closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
-    },
+    tbConfig:    getPortalTbConfig_(),
     notices:     getNotices_(ss),
     uploads:     getUploads_(ss),
     checkups:    getCheckups_(ss),
@@ -2916,7 +2932,59 @@ function getPortalData_() {
     messages:    getMessages_(ss),
     faqs:        getFaqs_(ss),
     roadmap:     getRoadmap_(ss)
+  });
+}
+
+function getPortalTbConfig_() {
+  const config = getPortalAppConfigValues_([
+    "결핵검진유형선택_사용",
+    "결핵검진유형선택_접수시작",
+    "결핵검진유형선택_접수마감",
+    "결핵검진유형선택_마감버튼",
+    "결핵검진유형선택_마감후버튼",
+    "결핵검진유형선택_마감안내"
+  ]);
+
+  return {
+    enabled:       config["결핵검진유형선택_사용"],
+    startDate:     config["결핵검진유형선택_접수시작"],
+    endDate:       config["결핵검진유형선택_접수마감"],
+    closedButton:  config["결핵검진유형선택_마감버튼"] || config["결핵검진유형선택_마감후버튼"],
+    closedMessage: config["결핵검진유형선택_마감안내"],
   };
+}
+
+function getPortalAppConfigValues_(keys) {
+  const result = {};
+  const wanted = {};
+  keys.forEach(function(key) {
+    wanted[key] = true;
+    result[key] = "";
+  });
+
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("앱_설정");
+  if (!sheet) return result;
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 0; i < data.length; i++) {
+    const key = String(data[i][0]);
+    if (wanted[key]) result[key] = String(data[i][1] || "");
+  }
+  return result;
+}
+
+function getPortalFallbackData_(ss, base, type) {
+  if (type === "today") return Object.assign({}, base, { notices: getNotices_(ss) });
+  if (type === "faq") return Object.assign({}, base, { faqs: getFaqs_(ss) });
+  if (type === "checkups") {
+    return Object.assign({}, base, {
+      tbConfig: getPortalTbConfig_(),
+      checkups: getCheckups_(ss)
+    });
+  }
+  if (type === "education") return Object.assign({}, base, { educations: getEducations_(ss) });
+  if (type === "resources") return Object.assign({}, base, { resources: getResources_(ss) });
+  return Object.assign({}, base, {});
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -3220,7 +3288,16 @@ function getRoadmapTools_(row) {
 // ════════════════════════════════════════════════════════════════
 
 function testPortalData() {
-  Logger.log(JSON.stringify(getPortalData_(), null, 2));
+  const portal = getPortalData_();
+  Logger.log(JSON.stringify({
+    keys: Object.keys(portal),
+    uploadCount: (portal.uploads || []).length,
+    noticeCount: (portal.notices || []).length,
+    checkupCount: (portal.checkups || []).length,
+    educationCount: (portal.educations || []).length,
+    resourceCount: (portal.resources || []).length,
+    faqCount: (portal.faqs || []).length
+  }, null, 2));
 }
 
 function testVisitSummaryData() {
