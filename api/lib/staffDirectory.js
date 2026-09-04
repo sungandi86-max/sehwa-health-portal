@@ -106,7 +106,7 @@ function normalizeDirectory(values) {
   };
 }
 
-async function readSheetValues() {
+export async function readGoogleSheetValues({ spreadsheetId, range }) {
   const serviceAccount = getFirebaseServiceAccount();
   if (!serviceAccount?.client_email || !serviceAccount?.private_key) {
     throw new Error("Google Sheets 읽기에 사용할 서비스 계정 환경변수가 필요합니다.");
@@ -117,16 +117,18 @@ async function readSheetValues() {
     key: serviceAccount.private_key,
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   });
-  const spreadsheetId = process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || DEFAULT_HEALTH_SPREADSHEET_ID;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
-    STAFF_ROSTER_RANGE
+    range
   )}`;
   const response = await auth.request({ url });
   return Array.isArray(response.data.values) ? response.data.values : [];
 }
 
 export async function readStaffDirectory() {
-  return normalizeDirectory(await readSheetValues());
+  return normalizeDirectory(await readGoogleSheetValues({
+    spreadsheetId: process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || DEFAULT_HEALTH_SPREADSHEET_ID,
+    range: STAFF_ROSTER_RANGE,
+  }));
 }
 
 export async function verifyDirectoryAdmin(req) {
