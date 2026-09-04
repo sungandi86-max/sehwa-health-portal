@@ -16,6 +16,16 @@ import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
 
+const HOURLY_INSTRUCTOR_POSITIONS = new Set(["강사", "시간강사"]);
+
+function normalizePosition(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function canOpenMySubmissionStatus(assignment) {
+  return assignment?.active === true && !HOURLY_INSTRUCTOR_POSITIONS.has(normalizePosition(assignment.position));
+}
+
 function RoleSummary({ assignment }) {
   const labels = getRoleLabels(assignment?.roles);
 
@@ -44,6 +54,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
   const assignment = assignmentResult?.assignment || null;
   const displayName = user?.displayName || profile?.displayName || "교직원";
   const canOpenDashboard = useMemo(() => isHealthTeacher(assignment) && assignment?.active === true, [assignment]);
+  const canOpenMyStatus = useMemo(() => canOpenMySubmissionStatus(assignment), [assignment]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -178,6 +189,14 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
             >
               제출·보고 센터
             </Link>
+            {canOpenMyStatus && (
+              <Link
+                to="/my-submission-status"
+                className="inline-flex min-h-10 items-center rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
+              >
+                나의 제출·이수 현황
+              </Link>
+            )}
             {canOpenDashboard && (
               <Link
                 to="/firebase-dashboard"

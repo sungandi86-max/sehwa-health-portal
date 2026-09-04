@@ -26,7 +26,8 @@ export default function Header() {
   const [assignment, setAssignment] = useState(null);
   const params = new URLSearchParams(location.search);
   const isFirebaseV2 = location.pathname.startsWith("/firebase");
-  const isOperationalEntry = isFirebaseV2 || location.pathname === "/";
+  const isOperationalEntry =
+    isFirebaseV2 || location.pathname === "/" || location.pathname === "/my-submission-status";
   const isPublicUpload =
     location.pathname === "/upload" &&
     params.get("mode") === "public" &&

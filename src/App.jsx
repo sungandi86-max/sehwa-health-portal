@@ -40,6 +40,7 @@ const FirebaseTestPage = lazy(() => import("./pages/FirebaseTestPage.jsx"));
 const FirebaseUserAdminPage = lazy(() => import("./pages/FirebaseUserAdminPage.jsx"));
 const HomePage = lazy(() => import("./pages/HomePage.jsx"));
 const HomeroomPage = lazy(() => import("./pages/HomeroomPage.jsx"));
+const MySubmissionStatusPage = lazy(() => import("./pages/MySubmissionStatusPage.jsx"));
 const ResourcesPage = lazy(() => import("./pages/ResourcesPage.jsx"));
 const StudentCarePage = lazy(() => import("./pages/StudentCarePage.jsx"));
 const TodayPage = lazy(() => import("./pages/TodayPage.jsx"));
@@ -126,6 +127,7 @@ export default function App() {
     "/firebase-submit/recruit",
     "/firebase-submit/tb",
     "/homeroom",
+    "/my-submission-status",
     "/student-care",
     "/today",
     "/resources",
@@ -220,6 +222,7 @@ export default function App() {
                 <Route path="/firebase-submit/infection" element={<FirebaseInfectionSubmitPage />} />
                 <Route path="/firebase-submit/recruit" element={<FirebaseRecruitSubmitPage />} />
                 <Route path="/firebase-submit/tb" element={<FirebaseTbSubmitPage />} />
+                <Route path="/my-submission-status" element={<MySubmissionStatusPage />} />
                 <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
                 <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
                 <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
