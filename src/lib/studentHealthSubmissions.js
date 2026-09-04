@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
+import { INFECTION_CASE_STATUS, INFECTION_SUBMISSION_STATUS } from "./infectionStatus.js";
 import { isHealthTeacher, isHomeroom } from "./userProfile.js";
 
 const COLLECTION_NAME = "student_health_submissions";
@@ -73,6 +74,8 @@ export async function createInfectionReport({
     },
     report: {
       status: "submitted",
+      submissionStatus: INFECTION_SUBMISSION_STATUS.submitted,
+      caseStatus: INFECTION_CASE_STATUS.new,
       note: note.trim() || null,
     },
     submittedBy: getSubmitter(user),

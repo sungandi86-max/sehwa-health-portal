@@ -450,9 +450,11 @@ service cloud.firestore {
       }
 
       function hasValidReport(data) {
-        return data.report.keys().hasOnly(["status", "note"])
+        return data.report.keys().hasOnly(["status", "submissionStatus", "caseStatus", "note"])
           && data.report.keys().hasAll(["status", "note"])
           && data.report.status == "submitted"
+          && (!data.report.keys().hasAny(["submissionStatus"]) || data.report.submissionStatus == "submitted")
+          && (!data.report.keys().hasAny(["caseStatus"]) || data.report.caseStatus == "new")
           && (data.report.note == null || data.report.note is string);
       }
 

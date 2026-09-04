@@ -1,6 +1,15 @@
 import { collection, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
+import {
+  INFECTION_LEGACY_STATUS_OPTIONS,
+  getInfectionCaseStatus,
+  getInfectionStatusLabels,
+  getInfectionLegacyStatus,
+  getInfectionStatusUpdate,
+  getInfectionSubmissionStatus,
+} from "./infectionStatus.js";
+export { INFECTION_STATUS_LABELS } from "./infectionStatus.js";
 
 const STAFF_COLLECTION = "staff_submissions";
 const STUDENT_HEALTH_COLLECTION = "student_health_submissions";
@@ -13,14 +22,8 @@ export const STAFF_STATUS_LABELS = {
   rejected: "보완 필요",
 };
 
-export const INFECTION_STATUS_LABELS = {
-  submitted: "처리 대기",
-  reviewing: "확인 중",
-  completed: "처리 완료",
-};
-
 export const STAFF_STATUS_OPTIONS = ["submitted", "reviewing", "completed", "rejected"];
-export const INFECTION_STATUS_OPTIONS = ["submitted", "reviewing", "completed"];
+export const INFECTION_STATUS_OPTIONS = INFECTION_LEGACY_STATUS_OPTIONS;
 
 export const STAFF_TYPE_LABELS = {
   cpr: "심폐소생술 이수증",
@@ -74,13 +77,20 @@ function normalizeStaffSubmission(documentSnapshot) {
 function normalizeInfectionReport(documentSnapshot) {
   const data = documentSnapshot.data();
   const submittedAtMillis = getTimestampMillis(data.submittedAt);
-  const status = data.report?.status || "submitted";
+  const status = getInfectionLegacyStatus(data);
+  const submissionStatus = getInfectionSubmissionStatus(data);
+  const caseStatus = getInfectionCaseStatus(data);
+  const statusLabels = getInfectionStatusLabels(data);
 
   return {
     id: documentSnapshot.id,
     ...data,
     status,
-    statusLabel: INFECTION_STATUS_LABELS[status] || status,
+    submissionStatus,
+    caseStatus,
+    statusLabel: statusLabels.statusLabel,
+    submissionStatusLabel: statusLabels.submissionStatusLabel,
+    caseStatusLabel: statusLabels.caseStatusLabel,
     submittedAtMillis,
     submittedAtLabel: formatSubmissionDateTime(data.submittedAt),
   };
@@ -126,10 +136,8 @@ export async function updateStaffSubmissionStatus(submissionId, status) {
 }
 
 export async function updateInfectionReportStatus(submissionId, status) {
-  if (!INFECTION_STATUS_OPTIONS.includes(status)) throw new Error("지원하지 않는 감염병 보고 상태입니다.");
-
   await updateDoc(doc(db, STUDENT_HEALTH_COLLECTION, submissionId), {
-    "report.status": status,
+    ...getInfectionStatusUpdate(status),
     updatedAt: serverTimestamp(),
   });
 }
