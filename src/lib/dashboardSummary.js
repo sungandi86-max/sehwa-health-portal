@@ -10,6 +10,12 @@ import {
 } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
+import {
+  INFECTION_CASE_STATUS,
+  INFECTION_SUBMISSION_STATUS,
+  getInfectionCaseStatus,
+  getInfectionSubmissionStatus,
+} from "./infectionStatus.js";
 
 const STAFF_SUBMISSIONS = "staff_submissions";
 const STUDENT_HEALTH_SUBMISSIONS = "student_health_submissions";
@@ -86,10 +92,6 @@ function isCurrentTermInfection(data) {
   );
 }
 
-function isSubmittedInfection(data) {
-  return isCurrentTermInfection(data) && data?.report?.status === "submitted";
-}
-
 function normalizeStaffSubmission(documentSnapshot) {
   const data = documentSnapshot.data();
   const typeLabel = STAFF_SUBMISSION_LABELS[data.itemId] || "교직원 제출";
@@ -111,26 +113,51 @@ function normalizeStaffSubmission(documentSnapshot) {
 
 function normalizeInfectionSubmission(documentSnapshot) {
   const data = documentSnapshot.data();
-  const student = data.student || {};
   const submittedAtMillis = getTimestampMillis(data.submittedAt);
-  const classLabel =
-    Number.isFinite(Number(student.grade)) && Number.isFinite(Number(student.classNo))
-      ? `${student.grade}학년 ${student.classNo}반`
-      : "학급 정보 없음";
-  const studentLabel = student.name ? `${classLabel} ${student.name}` : classLabel;
 
   return {
     id: documentSnapshot.id,
     source: "student-health",
     typeLabel: "감염병 발생 보고",
     title: "감염병 발생 보고",
-    detail: `${studentLabel} · 감염병 발생 보고`,
+    detail: "감염병 발생 보고 · 전용 사례관리 화면에서 확인",
     status: data.report?.status || "submitted",
     statusLabel: STATUS_LABELS[data.report?.status] || data.report?.status || "접수됨",
     submittedAt: data.submittedAt || null,
     submittedAtMillis,
     submittedAtLabel: formatKstDateTime(data.submittedAt),
   };
+}
+
+export function getInfectionDashboardCounts(documents = []) {
+  return documents.reduce(
+    (counts, documentData) => {
+      if (!isCurrentTermInfection(documentData)) return counts;
+
+      const submissionStatus = getInfectionSubmissionStatus(documentData);
+      const caseStatus = getInfectionCaseStatus(documentData);
+
+      if (submissionStatus === INFECTION_SUBMISSION_STATUS.submitted) {
+        counts.newReports += 1;
+      } else if (
+        caseStatus === INFECTION_CASE_STATUS.checking ||
+        caseStatus === INFECTION_CASE_STATUS.managing
+      ) {
+        counts.activeCases += 1;
+      }
+
+      if (caseStatus === INFECTION_CASE_STATUS.returnCheckNeeded) {
+        counts.returnCheckNeeded += 1;
+      }
+
+      return counts;
+    },
+    {
+      newReports: 0,
+      activeCases: 0,
+      returnCheckNeeded: 0,
+    }
+  );
 }
 
 export async function getRecentSubmissions() {
@@ -175,9 +202,11 @@ export async function getDashboardSummary(now = new Date()) {
     where("submittedAt", "<", endAt)
   );
   const pendingStaffQuery = query(collection(db, STAFF_SUBMISSIONS), where("status", "==", "submitted"));
-  const pendingInfectionQuery = query(
+  const currentTermInfectionQuery = query(
     collection(db, STUDENT_HEALTH_SUBMISSIONS),
-    where("report.status", "==", "submitted")
+    where("type", "==", "infection"),
+    where("schoolYear", "==", CURRENT_SCHOOL_YEAR),
+    where("semester", "==", CURRENT_SEMESTER)
   );
   const recentStaffQuery = query(
     collection(db, STAFF_SUBMISSIONS),
@@ -192,7 +221,7 @@ export async function getDashboardSummary(now = new Date()) {
     staffTodayCount,
     infectionTodaySnapshot,
     pendingStaffCount,
-    pendingInfectionSnapshot,
+    currentTermInfectionSnapshot,
     recentStaffCount,
     recentInfectionSnapshot,
     recentSubmissions,
@@ -200,14 +229,20 @@ export async function getDashboardSummary(now = new Date()) {
     countServerQuery(staffTodayQuery),
     getDocs(infectionTodayQuery),
     countServerQuery(pendingStaffQuery),
-    getDocs(pendingInfectionQuery),
+    getDocs(currentTermInfectionQuery),
     countServerQuery(recentStaffQuery),
     getDocs(recentInfectionQuery),
     getRecentSubmissions(),
   ]);
 
   const infectionTodayCount = countMatchingDocs(infectionTodaySnapshot, isCurrentTermInfection);
-  const pendingInfectionCount = countMatchingDocs(pendingInfectionSnapshot, isSubmittedInfection);
+  const infectionWorkflowCounts = getInfectionDashboardCounts(
+    currentTermInfectionSnapshot.docs.map((documentSnapshot) => documentSnapshot.data())
+  );
+  const pendingInfectionCount =
+    infectionWorkflowCounts.newReports +
+    infectionWorkflowCounts.activeCases +
+    infectionWorkflowCounts.returnCheckNeeded;
   const recentInfectionCount = countMatchingDocs(recentInfectionSnapshot, isCurrentTermInfection);
   const todayCount = staffTodayCount + infectionTodayCount;
   const recentSevenDayCount = recentStaffCount + recentInfectionCount;
@@ -225,9 +260,17 @@ export async function getDashboardSummary(now = new Date()) {
         note: "교직원 제출 접수됨 상태",
       },
       {
-        label: "미처리 감염병",
+        label: "감염병 관리",
         value: `${pendingInfectionCount}건`,
-        note: `${CURRENT_SCHOOL_YEAR}학년도 ${CURRENT_SEMESTER}학기`,
+        note: pendingInfectionCount
+          ? "신규·관리·복귀 확인 필요"
+          : "현재 확인이 필요한 감염병 사례가 없습니다.",
+        href: "/firebase-admin/infections",
+        metrics: [
+          { label: "신규 보고", value: infectionWorkflowCounts.newReports },
+          { label: "관리 중", value: infectionWorkflowCounts.activeCases },
+          { label: "복귀 확인", value: infectionWorkflowCounts.returnCheckNeeded, priority: true },
+        ],
       },
       {
         label: "최근 7일 제출",
@@ -239,6 +282,7 @@ export async function getDashboardSummary(now = new Date()) {
       todayCount,
       pendingStaffCount,
       pendingInfectionCount,
+      infectionWorkflowCounts,
       recentSevenDayCount,
     },
     recentSubmissions,

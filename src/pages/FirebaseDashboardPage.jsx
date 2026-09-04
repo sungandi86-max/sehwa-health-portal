@@ -34,7 +34,6 @@ const QUICK_MENUS = [
 
 const SUMMARY_LINKS = {
   "처리 대기 제출": "/firebase-admin/submissions?tab=staff&status=submitted",
-  "미처리 감염병": "/firebase-admin/submissions?tab=infection&status=submitted",
 };
 
 function RoleBadges({ roles }) {
@@ -434,12 +433,24 @@ export default function FirebaseDashboardPage() {
           {summaryState.status === "success" && dashboardSummary && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {dashboardSummary.cards.map((item) => {
-                const summaryLink = SUMMARY_LINKS[item.label];
+                const summaryLink = item.href || SUMMARY_LINKS[item.label];
                 const content = (
                   <>
                     <p className="text-sm font-black text-[#102047]">{item.label}</p>
                     <p className="mt-3 text-3xl font-black text-[#20A982]">{item.value}</p>
                     <p className="mt-2 text-xs font-bold text-[#8A96A8]">{item.note}</p>
+                    {item.metrics && (
+                      <dl className="mt-4 grid gap-2 text-xs font-bold text-[#627083]">
+                        {item.metrics.map((metric) => (
+                          <div key={metric.label} className="flex items-center justify-between gap-3">
+                            <dt>{metric.label}</dt>
+                            <dd className={metric.priority && metric.value > 0 ? "text-[#B42318]" : "text-[#102047]"}>
+                              {metric.value}건
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
                     {summaryLink && (
                       <span className="mt-4 inline-flex text-xs font-black text-[#08754B]">
                         관리 화면 열기
