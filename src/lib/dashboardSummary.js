@@ -137,11 +137,15 @@ export function getInfectionDashboardCounts(documents = []) {
       const submissionStatus = getInfectionSubmissionStatus(documentData);
       const caseStatus = getInfectionCaseStatus(documentData);
 
-      if (submissionStatus === INFECTION_SUBMISSION_STATUS.submitted) {
+      if (
+        submissionStatus === INFECTION_SUBMISSION_STATUS.submitted &&
+        caseStatus === INFECTION_CASE_STATUS.new
+      ) {
         counts.newReports += 1;
       } else if (
-        caseStatus === INFECTION_CASE_STATUS.checking ||
-        caseStatus === INFECTION_CASE_STATUS.managing
+        submissionStatus === INFECTION_SUBMISSION_STATUS.reviewed &&
+        (caseStatus === INFECTION_CASE_STATUS.checking ||
+          caseStatus === INFECTION_CASE_STATUS.managing)
       ) {
         counts.activeCases += 1;
       }
