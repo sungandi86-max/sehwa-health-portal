@@ -3,9 +3,11 @@ const INCOMPLETE_VALUES = new Set(["미이수", "미완료", "미수료", "미�
 const HEALTH_TRAINING_COLUMNS = ["감염병", "4대폭력", "아동학대", "장애인학대"];
 
 const RESEARCH_HEADERS = {
+  sequence: ["순", "순번", "번호", "no"],
   realName: ["성명", "이름", "실명", "교직원명", "성명(한글)", "name"],
   department: ["소속부서", "부서", "부서명", "소속", "소속/부서", "department"],
   position: ["직책", "직위", "직급", "보직", "업무", "position"],
+  completionNumber: ["이수번호", "이수 번호", "수료번호", "수료 번호"],
   status: ["이수상태", "이수여부", "수료상태", "완료여부", "이수", "상태", "status"],
 };
 
@@ -30,26 +32,50 @@ function findHeaderIndex(headers, aliases) {
   return -1;
 }
 
+function findHeaderIndexes(rows, rowIndex) {
+  const row = rows[rowIndex] || [];
+  const nextRow = rows[rowIndex + 1] || [];
+  const combinedRow = row.map((value, index) => {
+    const nextValue = nextRow[index];
+    return [value, nextValue].map(text).filter(Boolean).join(" ");
+  });
+  const indexes = {};
+  const sourceRows = {};
+  for (const [field, aliases] of Object.entries(RESEARCH_HEADERS)) {
+    const rowIndexMatch = findHeaderIndex(row, aliases);
+    const nextRowIndexMatch = findHeaderIndex(nextRow, aliases);
+    const combinedIndexMatch = findHeaderIndex(combinedRow, aliases);
+    const index = rowIndexMatch !== -1 ? rowIndexMatch : nextRowIndexMatch !== -1 ? nextRowIndexMatch : combinedIndexMatch;
+    indexes[field] = index === -1 ? null : index;
+    sourceRows[field] = rowIndexMatch !== -1 || combinedIndexMatch !== -1 ? rowIndex : nextRowIndexMatch !== -1 ? rowIndex + 1 : null;
+  }
+  const headerDepth = Object.values(sourceRows).some((sourceRow) => sourceRow === rowIndex + 1) ? 2 : 1;
+  return { indexes, headers: combinedRow.map(text).filter(Boolean), headerDepth };
+}
+
 function findResearchHeaderRow(rows) {
   let fallback = null;
   for (let rowIndex = 0; rowIndex < Math.min(rows.length, 30); rowIndex += 1) {
-    const row = rows[rowIndex] || [];
-    const indexes = {};
-    for (const [field, aliases] of Object.entries(RESEARCH_HEADERS)) {
-      const index = findHeaderIndex(row, aliases);
-      indexes[field] = index === -1 ? null : index;
-    }
+    const { indexes, headers, headerDepth } = findHeaderIndexes(rows, rowIndex);
     const foundCount = Object.values(indexes).filter((index) => index !== null).length;
     if (!fallback || foundCount > fallback.foundCount) {
-      fallback = { headerRowIndex: rowIndex, indexes, headers: row.map(text).filter(Boolean), foundCount };
+      fallback = { headerRowIndex: rowIndex, dataStartRowIndex: rowIndex + headerDepth, indexes, headers, foundCount };
     }
-    if (indexes.realName !== null && indexes.status !== null) {
-      return { headerRowIndex: rowIndex, indexes, headers: row.map(text).filter(Boolean), parseStatus: "success" };
+    if (indexes.position !== null && indexes.realName !== null && indexes.status !== null) {
+      return { headerRowIndex: rowIndex, dataStartRowIndex: rowIndex + headerDepth, indexes, headers, parseStatus: "success" };
     }
   }
   return {
     headerRowIndex: fallback?.headerRowIndex ?? 0,
-    indexes: fallback?.indexes || { realName: null, department: null, position: null, status: null },
+    dataStartRowIndex: fallback?.dataStartRowIndex ?? 1,
+    indexes: fallback?.indexes || {
+      sequence: null,
+      realName: null,
+      department: null,
+      position: null,
+      completionNumber: null,
+      status: null,
+    },
     headers: fallback?.headers || [],
     parseStatus: "header_not_found",
   };
@@ -120,7 +146,7 @@ export function summarizeResearchRows(values) {
       headerInfo,
       rows: [],
       stats: {
-        sourceRows: Math.max(values.length - headerInfo.headerRowIndex - 1, 0),
+        sourceRows: Math.max(values.length - headerInfo.dataStartRowIndex, 0),
         validRows: 0,
         blankRows: 0,
         missingNameRows: 0,
@@ -137,20 +163,20 @@ export function summarizeResearchRows(values) {
   let missingNameRows = 0;
   let lecturerRows = 0;
 
-  values.slice(headerInfo.headerRowIndex + 1).forEach((row) => {
+  values.slice(headerInfo.dataStartRowIndex).forEach((row) => {
     if (!row.some((value) => Boolean(text(value)))) {
       blankRows += 1;
       return;
     }
 
     const realName = cell(row, headerInfo.indexes, "realName");
-    if (!realName) {
+    const position = cell(row, headerInfo.indexes, "position");
+    if (!realName || !position) {
       missingNameRows += 1;
       return;
     }
 
     const sourceStatus = cell(row, headerInfo.indexes, "status");
-    const position = cell(row, headerInfo.indexes, "position");
     const statusKey = exactText(sourceStatus) || "(blank)";
     statusValues[statusKey] = (statusValues[statusKey] || 0) + 1;
     nameCounts.set(exactText(realName), (nameCounts.get(exactText(realName)) || 0) + 1);
@@ -167,7 +193,7 @@ export function summarizeResearchRows(values) {
     headerInfo,
     rows,
     stats: {
-      sourceRows: Math.max(values.length - headerInfo.headerRowIndex - 1, 0),
+      sourceRows: Math.max(values.length - headerInfo.dataStartRowIndex, 0),
       validRows: rows.length,
       blankRows,
       missingNameRows,
