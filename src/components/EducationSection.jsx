@@ -1,6 +1,6 @@
 import { AppCard, Badge, PrimaryButton, SectionTitle } from "./ui.jsx";
 
-export default function EducationSection({ items }) {
+export default function EducationSection({ items, isLoading = false, loadFailed = false, fallbackUsed = false }) {
   return (
     <section id="education" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
       <SectionTitle
@@ -8,8 +8,26 @@ export default function EducationSection({ items }) {
         title="교육 자료실"
         description="응급처치교육, 성교육, 장애인식 개선교육, 약물 오남용 예방교육 링크를 모아둔 공간입니다."
       />
+      {fallbackUsed && (
+        <div className="mb-4 rounded-[20px] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          교육 자료를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
-        {items.map((item) => (
+        {isLoading && (
+          <AppCard>
+            <p className="text-sm font-bold text-slate-600">교육 자료를 불러오는 중입니다.</p>
+          </AppCard>
+        )}
+
+        {!isLoading && loadFailed && (
+          <AppCard>
+            <p className="text-sm font-bold text-slate-600">교육 자료를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p>
+          </AppCard>
+        )}
+
+        {!isLoading && !loadFailed && items.map((item) => (
           <AppCard key={item.title}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <h3 className="text-lg font-extrabold text-[#263238]">{item.title}</h3>

@@ -112,6 +112,7 @@ export default function App() {
     "/resources",
     "/faq",
     "/checkup",
+    "/education",
   ].includes(window.location.pathname);
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
