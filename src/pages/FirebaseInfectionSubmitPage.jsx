@@ -54,7 +54,7 @@ export default function FirebaseInfectionSubmitPage() {
       try {
         const infectionItem = await getSubmissionItem("infection");
         if (shouldIgnore) return;
-        setItem(infectionItem || DEFAULT_ITEM);
+        setItem(infectionItem ? { ...infectionItem, description: DEFAULT_ITEM.description, guideText: DEFAULT_ITEM.guideText } : DEFAULT_ITEM);
         setLoadState({ status: infectionItem ? "success" : "empty", message: "" });
       } catch (error) {
         if (shouldIgnore) return;
