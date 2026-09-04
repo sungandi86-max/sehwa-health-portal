@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { uploadIntro } from "../data/fallbackData.js";
 import { AppCard, Badge, SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
@@ -6,13 +7,13 @@ import SubmitModal from "./SubmitModal.jsx";
 const INFECTION_REPORT_CARD = {
   title: "감염병 발생 보고",
   titleLines: ["감염병 발생", "보고"],
-  description: "학생이 감염병 진단을 받은 경우, 담임 선생님께서 학년·반·번호·학생명·감염병 종류·진단일을 입력해 주세요. 제출된 내용은 보건실 감염병 관리 현황 시트에 자동 기록됩니다.",
+  description: "학생이 감염병 진단을 받은 경우, 로그인 후 Firebase 감염병 보고 화면에서 접수해 주세요.",
   target: "담임교사",
   documentType: "감염병 발생 정보",
   deadline: "수시",
-  fileGuide: "학생 건강정보가 포함되므로 필요한 업무 범위 안에서만 입력해 주세요.",
+  fileGuide: "감염병 보고는 로그인 후 제출할 수 있습니다. 제출 내용은 보건교사가 전용 사례관리 화면에서 확인합니다.",
   buttonText: "감염병 발생 보고하기",
-  status: "접수 중",
+  status: "로그인 후 접수",
   uploadType: "infection",
   highlight: true,
 };
@@ -126,6 +127,7 @@ function resolveSubmitCardType(item) {
 }
 
 export default function UploadCenter({ items, publicMode = false, publicType = "" }) {
+  const navigate = useNavigate();
   const [modalType, setModalType] = useState(null);
   const allItems = items.some((item) => resolveSubmitCardType(item) === "infection")
     ? items
@@ -167,10 +169,14 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
         <div className="mt-5 grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
           {uploadItems.map((item) => {
             const submitType = resolveSubmitCardType(item);
+            const displayItem = submitType === "infection" ? { ...item, ...INFECTION_REPORT_CARD } : item;
+            const handleClick = () => (
+              submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
+            );
             return (
               <AppCard
-                key={item.id || `${submitType}-${item.title}`}
-                className={item.highlight ? "border-[#D94F70]/30 ring-2 ring-[#FDEAF0]" : ""}
+                key={displayItem.id || `${submitType}-${displayItem.title}`}
+                className={displayItem.highlight ? "border-[#D94F70]/30 ring-2 ring-[#FDEAF0]" : ""}
               >
                 <div className="mb-4">
                   <div className="mb-3 flex justify-start">
@@ -178,12 +184,12 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                       type={
                         item.uploadType === "request"
                           ? "blue"
-                          : item.highlight
+                          : displayItem.highlight
                           ? "pink"
                           : "gray"
                       }
                     >
-                      {item.status}
+                      {displayItem.status}
                     </Badge>
                   </div>
                   <h3
@@ -194,7 +200,7 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                       letterSpacing: "-0.02em",
                     }}
                   >
-                    {(item.titleLines || [item.title]).map((line, i) => (
+                    {(displayItem.titleLines || [displayItem.title]).map((line, i) => (
                       <span key={i} className="block whitespace-nowrap">
                         {line}
                       </span>
@@ -204,42 +210,41 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                     className="mt-2 text-sm leading-7 text-slate-600"
                     style={{ wordBreak: "keep-all", overflowWrap: "normal" }}
                   >
-                    {item.description}
+                    {displayItem.description}
                   </p>
                 </div>
 
                 <div className="grid gap-3 rounded-2xl bg-[#F7F9FC] p-4 text-sm text-slate-700">
                   <div className="grid grid-cols-[44px_1fr] gap-2">
                     <b>대상</b>
-                    <SafeText>{item.target}</SafeText>
+                    <SafeText>{displayItem.target}</SafeText>
                   </div>
                   <div className="grid grid-cols-[44px_1fr] gap-2">
                     <b>자료</b>
-                    <SafeText>{item.documentType}</SafeText>
+                    <SafeText>{displayItem.documentType}</SafeText>
                   </div>
                   <div className="grid grid-cols-[44px_1fr] gap-2">
                     <b>마감</b>
-                    <SafeText>{item.deadline}</SafeText>
+                    <SafeText>{displayItem.deadline}</SafeText>
                   </div>
                 </div>
 
                 <p
                   className={`mt-4 whitespace-pre-line rounded-2xl p-4 text-sm leading-7 ${
-                    item.uploadType === "request"
+                    displayItem.uploadType === "request"
                       ? "bg-[#EAF3FF] text-[#1A3B8B]"
                       : "bg-[#DFF4EC] text-[#1B5E20]"
                   }`}
                 >
-                  <SafeText>{item.fileGuide}</SafeText>
+                  <SafeText>{displayItem.fileGuide}</SafeText>
                 </p>
 
-                {item.buttonText && (
+                {displayItem.buttonText && (
                   <button
-                    onClick={() => setModalType(submitType)}
-                    className={`mt-4 w-full rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md
-                      ${item.uploadType === "request" ? "bg-[#1A3B8B]" : "bg-[#1A3B8B]"}`}
+                    onClick={handleClick}
+                    className="mt-4 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
                   >
-                    {item.buttonText}
+                    {displayItem.buttonText}
                   </button>
                 )}
               </AppCard>

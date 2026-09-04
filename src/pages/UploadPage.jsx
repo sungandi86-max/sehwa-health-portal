@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import UploadCenter from "../components/UploadCenter.jsx";
 
 export default function UploadPage({ items }) {
@@ -7,6 +7,13 @@ export default function UploadPage({ items }) {
   const isPublicTbReply =
     searchParams.get("mode") === "public" &&
     searchParams.get("type") === "tbreply";
+  const legacyInfectionType = ["infection", "infection_report", "infectionreport"].includes(
+    String(searchParams.get("type") || "").trim().toLowerCase()
+  );
+
+  if (legacyInfectionType) {
+    return <Navigate to="/firebase-submit/infection" replace />;
+  }
 
   return (
     <>

@@ -15,10 +15,10 @@ const quickLinks = [
     description: "확인증 제출, 채용검진 요청, 인바디 신청 현황을 확인합니다.",
   },
   {
-    label: "감염병 보고 관리",
-    path: "/admin/infections",
+    label: "감염병 사례관리",
+    path: "/firebase-admin/infections",
     tone: "pink",
-    description: "감염병 보고 상태와 복귀 확인 필요 건을 관리합니다.",
+    description: "Firestore 기준 감염병 사례 상태와 복귀 확인 필요 건을 관리합니다.",
   },
   {
     label: "메신저 문구 도우미",

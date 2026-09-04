@@ -141,6 +141,13 @@ function buildAuthorizedLegacyAdminParams(params, assignment) {
   if (!isAdminAssignment(assignment)) {
     return { ok: false, status: 403, message: "관리자 권한이 없습니다." };
   }
+  if (params.action === "updateAdminInfectionReportStatus") {
+    return {
+      ok: false,
+      status: 410,
+      message: "감염병 사례관리는 Firebase 전용 화면에서 처리해 주세요.",
+    };
+  }
 
   const proxySecret = getStudentCareProxySecret();
   if (!proxySecret) {
@@ -151,11 +158,6 @@ function buildAuthorizedLegacyAdminParams(params, assignment) {
     proxySecret,
     action: String(params.action || ""),
   };
-
-  if (params.action === "updateAdminInfectionReportStatus") {
-    payload.rowId = String(params.rowId || "");
-    payload.status = String(params.status || "");
-  }
 
   return { ok: true, payload };
 }

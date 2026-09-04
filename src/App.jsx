@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Footer from "./components/Footer.jsx";
 import FirebaseAuthRedirectHandler from "./components/FirebaseAuthRedirectHandler.jsx";
 import {
@@ -19,7 +19,6 @@ const AdminAuthGate = lazy(() => import("./components/AdminAuthGate.jsx"));
 const Header = lazy(() => import("./components/Header.jsx"));
 const AdminMessageHelperPage = lazy(() => import("./pages/AdminMessageHelperPage.jsx"));
 const AdminPage = lazy(() => import("./pages/AdminPage.jsx"));
-const AdminInfectionReportPage = lazy(() => import("./pages/AdminInfectionReportPage.jsx"));
 const AdminReceiptStatusPage = lazy(() => import("./pages/AdminReceiptStatusPage.jsx"));
 const AdminRoadmapPage = lazy(() => import("./pages/AdminRoadmapPage.jsx"));
 const CheckupPage = lazy(() => import("./pages/CheckupPage.jsx"));
@@ -237,8 +236,8 @@ export default function App() {
                 <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
                 <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
                 <Route path="/admin/receipts" element={<AdminAuthGate><AdminReceiptStatusPage /></AdminAuthGate>} />
-                <Route path="/admin/infections" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
-                <Route path="/admin/infection-reports" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
+                <Route path="/admin/infections" element={<Navigate to="/firebase-admin/infections" replace />} />
+                <Route path="/admin/infection-reports" element={<Navigate to="/firebase-admin/infections" replace />} />
               </Routes>
             </Suspense>
           )}

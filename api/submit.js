@@ -8,6 +8,18 @@ export const config = {
   api: { bodyParser: false }
 };
 
+function parseJsonBody(rawBody) {
+  try {
+    return JSON.parse(rawBody || "{}");
+  } catch {
+    return null;
+  }
+}
+
+function isLegacyInfectionSubmit(payload) {
+  return payload?.action === "infectionReport" || payload?.type === "infection";
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -20,6 +32,16 @@ export default async function handler(req, res) {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const rawBody = Buffer.concat(chunks).toString("utf-8");
+    const payload = parseJsonBody(rawBody);
+
+    if (isLegacyInfectionSubmit(payload)) {
+      return res.status(410).json({
+        status: "error",
+        success: false,
+        message: "감염병 보고는 로그인 후 새 감염병 보고 화면에서 제출해 주세요.",
+        redirectTo: "/firebase-submit/infection",
+      });
+    }
 
     const scriptRes = await fetch(SCRIPT_URL, {
       method: "POST",

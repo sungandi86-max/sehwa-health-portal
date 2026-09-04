@@ -4,14 +4,14 @@ const adminMenuItems = [
   { label: "관리자 홈", path: "/admin" },
   { label: "업무 로드맵", path: "/admin/roadmap" },
   { label: "접수 현황", path: "/admin/receipts" },
-  { label: "감염병 보고 관리", path: "/admin/infections" },
+  { label: "감염병 사례관리", path: "/firebase-admin/infections" },
   { label: "메신저 문구 도우미", path: "/admin/messages" },
 ];
 
 function isMenuActive(path, currentPath) {
   if (path === "/admin") return currentPath === "/admin";
-  if (path === "/admin/infections") {
-    return currentPath === "/admin/infections" || currentPath === "/admin/infection-reports";
+  if (path === "/firebase-admin/infections") {
+    return ["/firebase-admin/infections", "/admin/infections", "/admin/infection-reports"].includes(currentPath);
   }
   return currentPath === path;
 }
