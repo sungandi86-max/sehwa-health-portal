@@ -1,5 +1,5 @@
 import { healthColumnMode, summarizePlan, summarizeResearchRows } from "./healthMandatoryTrainingAnalysis.js";
-import { readGoogleSheetValues, readStaffDirectory } from "./staffDirectory.js";
+import { readGoogleSheetValues, readStaffDirectory } from "../api/lib/staffDirectory.js";
 
 const RESEARCH_SPREADSHEET_ID = "1rn4CVt41lq2f_o8Uiodij4h_R4Q9lVbpPMNFJjy6-IM";
 const RESEARCH_SHEET_NAME = "법정의무연수 묶음과정";

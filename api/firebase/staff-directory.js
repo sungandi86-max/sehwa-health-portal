@@ -1,4 +1,4 @@
-import { runHealthMandatoryTrainingDryRun } from "../lib/healthMandatoryTrainingDryRun.js";
+import { runHealthMandatoryTrainingDryRun } from "../../server/healthMandatoryTrainingDryRun.js";
 import { readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../lib/staffDirectory.js";
 
 function isPermissionError(error) {
