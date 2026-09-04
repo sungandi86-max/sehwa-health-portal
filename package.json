@@ -13,6 +13,7 @@
     "migrate:checkups": "node scripts/migrateCheckupsToFirestore.mjs",
     "migrate:education": "node scripts/migrateEducationResourcesToFirestore.mjs",
     "migrate:faqs": "node scripts/migrateFaqsToFirestore.mjs",
+    "migrate:health-resources": "node scripts/migrateHealthResourcesToFirestore.mjs",
     "migrate:submission-items": "node scripts/migrateSubmissionItemsToFirestore.mjs",
     "seed:firebase-content": "node scripts/seedFirebaseContent.mjs",
     "preview": "vite preview"

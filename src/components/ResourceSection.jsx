@@ -4,7 +4,7 @@ import SubmitModal from "./SubmitModal.jsx";
 
 const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
 
-export default function ResourceSection({ items, loadFailed }) {
+export default function ResourceSection({ items, loadFailed, isLoading = false, fallbackUsed = false }) {
   const [category, setCategory] = useState("전체");
   const [inbodyOpen, setInbodyOpen] = useState(false);
 
@@ -25,8 +25,17 @@ export default function ResourceSection({ items, loadFailed }) {
         title="건강정보/이벤트"
         description="보건 관련 안내문, 참고 자료 링크, 보건실 이벤트를 모아두는 공간입니다."
       />
-      {items.length > 0 ? (
+      {isLoading ? (
+        <div className="rounded-[24px] border border-slate-100 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">
+          자료를 불러오는 중입니다.
+        </div>
+      ) : items.length > 0 ? (
         <>
+          {fallbackUsed && (
+            <div className="mb-4 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-3 text-sm font-bold text-slate-500">
+              자료를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
+            </div>
+          )}
           <div className="mb-5 flex gap-2 overflow-x-auto pb-2">
             {categories.map((cat) => (
               <button

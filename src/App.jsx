@@ -109,6 +109,7 @@ export default function App() {
     "/firebase-submit/infection",
     "/firebase-submit/recruit",
     "/firebase-submit/tb",
+    "/resources",
   ].includes(window.location.pathname);
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
