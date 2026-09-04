@@ -525,6 +525,15 @@ Use a slower, safer read-only snapshot:
 - no source write
 - no source schema change
 
+Production automation:
+
+- Vercel Cron calls `/api/cron/health-mandatory-training-sync` once daily at
+  `30 20 * * *` UTC, which is 05:30 KST.
+- The cron endpoint requires `CRON_SECRET` through the `Authorization: Bearer`
+  header and reuses the same safe apply helper as the admin manual refresh.
+- A failed cron run keeps the latest valid snapshot, does not delete orphan
+  snapshots, and never writes to the research department Sheet.
+
 ### `firestore_submission`
 
 Recalculate status immediately after submission creation or admin review status

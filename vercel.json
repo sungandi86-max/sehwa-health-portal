@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/health-mandatory-training-sync",
+      "schedule": "30 20 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/" }
