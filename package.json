@@ -17,6 +17,7 @@
     "migrate:submission-items": "node scripts/migrateSubmissionItemsToFirestore.mjs",
     "seed:staff-submission-tasks": "node scripts/seedStaffSubmissionTasks.mjs",
     "map:staff-ids": "node scripts/mapStaffIdsToUsers.mjs",
+    "sync:tb-screening-status": "node scripts/syncTbScreeningStatus.mjs",
     "seed:firebase-content": "node scripts/seedFirebaseContent.mjs",
     "preview": "vite preview"
   },

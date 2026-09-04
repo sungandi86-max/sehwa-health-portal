@@ -293,6 +293,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /staff_submission_status/{statusId} {
+      allow read: if hasCurrentHealthTeacherOrAdminAssignment()
+        || (
+          hasCurrentStudentCarePublicAssignment()
+          && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAny(["staffId"])
+          && get(currentAssignmentPath(request.auth.uid)).data.staffId is string
+          && resource.data.staffId == get(currentAssignmentPath(request.auth.uid)).data.staffId
+        );
+      allow write: if false;
+    }
+
     match /student_care_monthly_aggregates/{aggregateId} {
       allow read: if hasCurrentHealthTeacherOrAdminAssignment();
       allow write: if false;
