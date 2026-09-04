@@ -17,7 +17,6 @@ const STATUS_TONES = {
   unknown: "border-[#F3D8A8] bg-[#FFF8E8] text-[#9A5B00]",
   completed: "border-[#BFEBDC] bg-[#F0FBF7] text-[#08754B]",
 };
-
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
@@ -51,7 +50,7 @@ function TaskSummary({ task, selected, onSelect }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-bold leading-5 text-[#102047]">{task.title}</h2>
-          <p className="mt-1 text-[12px] font-semibold text-[#627083]">조회 기준 {task.summary.total}명{task.sourceType === "research_sheet" && task.summary.latestSyncedAtLabel ? ` · 최근 갱신 ${task.summary.latestSyncedAtLabel}` : ""}</p>
+          <p className="mt-1 text-[12px] font-semibold text-[#627083]">조회 기준 {task.summary.total}명{task.taskId === "health-mandatory-training-2026" && task.summary.latestSyncedAtLabel ? ` · 최근 갱신 ${task.summary.latestSyncedAtLabel}` : ""}</p>
         </div>
         <span className="rounded-full bg-white px-3 py-1 text-[12px] font-semibold text-[#08754B]">
           {task.category === "screening" ? "검진" : "연수"}

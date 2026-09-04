@@ -27,7 +27,6 @@ function normalizeTask(documentSnapshot) {
     title: data.title || documentSnapshot.id,
     description: data.description || "",
     category: data.category || "",
-    sourceType: data.sourceType || "",
     enabled: data.enabled === true,
     order: Number.isFinite(Number(data.order)) ? Number(data.order) : 999,
   };
