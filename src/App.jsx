@@ -1,36 +1,6 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import AdminAuthGate from "./components/AdminAuthGate.jsx";
 import Footer from "./components/Footer.jsx";
-import Header from "./components/Header.jsx";
-import AdminMessageHelperPage from "./pages/AdminMessageHelperPage.jsx";
-import AdminPage from "./pages/AdminPage.jsx";
-import AdminInfectionReportPage from "./pages/AdminInfectionReportPage.jsx";
-import AdminReceiptStatusPage from "./pages/AdminReceiptStatusPage.jsx";
-import AdminRoadmapPage from "./pages/AdminRoadmapPage.jsx";
-import CheckupPage from "./pages/CheckupPage.jsx";
-import EducationPage from "./pages/EducationPage.jsx";
-import FAQPage from "./pages/FAQPage.jsx";
-import FirebaseCheckupsPage from "./pages/FirebaseCheckupsPage.jsx";
-import FirebaseAccessRequestsPage from "./pages/FirebaseAccessRequestsPage.jsx";
-import FirebaseDashboardPage from "./pages/FirebaseDashboardPage.jsx";
-import FirebaseEducationPage from "./pages/FirebaseEducationPage.jsx";
-import FirebaseFaqPage from "./pages/FirebaseFaqPage.jsx";
-import FirebaseAdminSubmissionsPage from "./pages/FirebaseAdminSubmissionsPage.jsx";
-import FirebaseCprSubmitPage from "./pages/FirebaseCprSubmitPage.jsx";
-import FirebaseInfectionSubmitPage from "./pages/FirebaseInfectionSubmitPage.jsx";
-import FirebaseRecruitSubmitPage from "./pages/FirebaseRecruitSubmitPage.jsx";
-import FirebaseSubmissionStatusPage from "./pages/FirebaseSubmissionStatusPage.jsx";
-import FirebaseSubmissionsPage from "./pages/FirebaseSubmissionsPage.jsx";
-import FirebaseTbSubmitPage from "./pages/FirebaseTbSubmitPage.jsx";
-import FirebaseTestPage from "./pages/FirebaseTestPage.jsx";
-import FirebaseUserAdminPage from "./pages/FirebaseUserAdminPage.jsx";
-import HomePage from "./pages/HomePage.jsx";
-import HomeroomPage from "./pages/HomeroomPage.jsx";
-import ResourcesPage from "./pages/ResourcesPage.jsx";
-import StudentCarePage from "./pages/StudentCarePage.jsx";
-import TodayPage from "./pages/TodayPage.jsx";
-import UploadPage from "./pages/UploadPage.jsx";
 import {
   appConfig as fallbackAppConfig,
   checkupItems,
@@ -43,6 +13,37 @@ import {
 
 const PORTAL_API_URL = "/api/portal";
 const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
+
+const AdminAuthGate = lazy(() => import("./components/AdminAuthGate.jsx"));
+const Header = lazy(() => import("./components/Header.jsx"));
+const AdminMessageHelperPage = lazy(() => import("./pages/AdminMessageHelperPage.jsx"));
+const AdminPage = lazy(() => import("./pages/AdminPage.jsx"));
+const AdminInfectionReportPage = lazy(() => import("./pages/AdminInfectionReportPage.jsx"));
+const AdminReceiptStatusPage = lazy(() => import("./pages/AdminReceiptStatusPage.jsx"));
+const AdminRoadmapPage = lazy(() => import("./pages/AdminRoadmapPage.jsx"));
+const CheckupPage = lazy(() => import("./pages/CheckupPage.jsx"));
+const EducationPage = lazy(() => import("./pages/EducationPage.jsx"));
+const FAQPage = lazy(() => import("./pages/FAQPage.jsx"));
+const FirebaseAccessRequestsPage = lazy(() => import("./pages/FirebaseAccessRequestsPage.jsx"));
+const FirebaseAdminSubmissionsPage = lazy(() => import("./pages/FirebaseAdminSubmissionsPage.jsx"));
+const FirebaseCheckupsPage = lazy(() => import("./pages/FirebaseCheckupsPage.jsx"));
+const FirebaseCprSubmitPage = lazy(() => import("./pages/FirebaseCprSubmitPage.jsx"));
+const FirebaseDashboardPage = lazy(() => import("./pages/FirebaseDashboardPage.jsx"));
+const FirebaseEducationPage = lazy(() => import("./pages/FirebaseEducationPage.jsx"));
+const FirebaseFaqPage = lazy(() => import("./pages/FirebaseFaqPage.jsx"));
+const FirebaseInfectionSubmitPage = lazy(() => import("./pages/FirebaseInfectionSubmitPage.jsx"));
+const FirebaseRecruitSubmitPage = lazy(() => import("./pages/FirebaseRecruitSubmitPage.jsx"));
+const FirebaseSubmissionStatusPage = lazy(() => import("./pages/FirebaseSubmissionStatusPage.jsx"));
+const FirebaseSubmissionsPage = lazy(() => import("./pages/FirebaseSubmissionsPage.jsx"));
+const FirebaseTbSubmitPage = lazy(() => import("./pages/FirebaseTbSubmitPage.jsx"));
+const FirebaseTestPage = lazy(() => import("./pages/FirebaseTestPage.jsx"));
+const FirebaseUserAdminPage = lazy(() => import("./pages/FirebaseUserAdminPage.jsx"));
+const HomePage = lazy(() => import("./pages/HomePage.jsx"));
+const HomeroomPage = lazy(() => import("./pages/HomeroomPage.jsx"));
+const ResourcesPage = lazy(() => import("./pages/ResourcesPage.jsx"));
+const StudentCarePage = lazy(() => import("./pages/StudentCarePage.jsx"));
+const TodayPage = lazy(() => import("./pages/TodayPage.jsx"));
+const UploadPage = lazy(() => import("./pages/UploadPage.jsx"));
 
 function portalScopeForPath(pathname) {
   if (pathname === "/upload") return "upload";
@@ -186,43 +187,47 @@ export default function App() {
   return (
     <BrowserRouter>
       <main className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#F7F9FC] font-sans text-[#263238]">
-        <Header />
+        <Suspense fallback={null}>
+          <Header />
+        </Suspense>
 
         <div className="flex-1">
           {isLoading ? (
             <LoadingSkeleton />
           ) : (
-            <Routes>
-              <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
-              <Route path="/today"       element={<TodayPage       items={liveNotices} />} />
-              <Route path="/upload"      element={<UploadPage      items={liveUploads} />} />
-              <Route path="/checkup"     element={<CheckupPage     items={liveCheckups} tbConfig={tbConfig} />} />
-              <Route path="/education"   element={<EducationPage   items={liveEducations} />} />
-              <Route path="/homeroom"    element={<HomeroomPage />} />
-              <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
-              <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
-              <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
-              <Route path="/firebase-test" element={<FirebaseTestPage />} />
-              <Route path="/firebase-dashboard" element={<FirebaseDashboardPage />} />
-              <Route path="/firebase-checkups" element={<FirebaseCheckupsPage />} />
-              <Route path="/firebase-education" element={<FirebaseEducationPage />} />
-              <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
-              <Route path="/firebase-submissions" element={<FirebaseSubmissionsPage />} />
-              <Route path="/firebase-admin/access-requests" element={<FirebaseAccessRequestsPage />} />
-              <Route path="/firebase-admin/users" element={<FirebaseUserAdminPage />} />
-              <Route path="/firebase-admin/submissions" element={<FirebaseAdminSubmissionsPage />} />
-              <Route path="/firebase-admin/submission-status" element={<FirebaseSubmissionStatusPage />} />
-              <Route path="/firebase-submit/cpr" element={<FirebaseCprSubmitPage />} />
-              <Route path="/firebase-submit/infection" element={<FirebaseInfectionSubmitPage />} />
-              <Route path="/firebase-submit/recruit" element={<FirebaseRecruitSubmitPage />} />
-              <Route path="/firebase-submit/tb" element={<FirebaseTbSubmitPage />} />
-              <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
-              <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
-              <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
-              <Route path="/admin/receipts" element={<AdminAuthGate><AdminReceiptStatusPage /></AdminAuthGate>} />
-              <Route path="/admin/infections" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
-              <Route path="/admin/infection-reports" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
-            </Routes>
+            <Suspense fallback={<LoadingSkeleton />}>
+              <Routes>
+                <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
+                <Route path="/today"       element={<TodayPage       items={liveNotices} />} />
+                <Route path="/upload"      element={<UploadPage      items={liveUploads} />} />
+                <Route path="/checkup"     element={<CheckupPage     items={liveCheckups} tbConfig={tbConfig} />} />
+                <Route path="/education"   element={<EducationPage   items={liveEducations} />} />
+                <Route path="/homeroom"    element={<HomeroomPage />} />
+                <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
+                <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
+                <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
+                <Route path="/firebase-test" element={<FirebaseTestPage />} />
+                <Route path="/firebase-dashboard" element={<FirebaseDashboardPage />} />
+                <Route path="/firebase-checkups" element={<FirebaseCheckupsPage />} />
+                <Route path="/firebase-education" element={<FirebaseEducationPage />} />
+                <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
+                <Route path="/firebase-submissions" element={<FirebaseSubmissionsPage />} />
+                <Route path="/firebase-admin/access-requests" element={<FirebaseAccessRequestsPage />} />
+                <Route path="/firebase-admin/users" element={<FirebaseUserAdminPage />} />
+                <Route path="/firebase-admin/submissions" element={<FirebaseAdminSubmissionsPage />} />
+                <Route path="/firebase-admin/submission-status" element={<FirebaseSubmissionStatusPage />} />
+                <Route path="/firebase-submit/cpr" element={<FirebaseCprSubmitPage />} />
+                <Route path="/firebase-submit/infection" element={<FirebaseInfectionSubmitPage />} />
+                <Route path="/firebase-submit/recruit" element={<FirebaseRecruitSubmitPage />} />
+                <Route path="/firebase-submit/tb" element={<FirebaseTbSubmitPage />} />
+                <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
+                <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
+                <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
+                <Route path="/admin/receipts" element={<AdminAuthGate><AdminReceiptStatusPage /></AdminAuthGate>} />
+                <Route path="/admin/infections" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
+                <Route path="/admin/infection-reports" element={<AdminAuthGate><AdminInfectionReportPage /></AdminAuthGate>} />
+              </Routes>
+            </Suspense>
           )}
         </div>
 
