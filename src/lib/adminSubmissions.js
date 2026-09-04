@@ -1,8 +1,10 @@
-import { collection, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc } from "firebase/firestore";
+import { collection, getDoc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
 import {
   INFECTION_LEGACY_STATUS_OPTIONS,
+  INFECTION_CASE_STATUS,
+  LEGACY_INFECTION_STATUS,
   getInfectionCaseStatus,
   getInfectionStatusLabels,
   getInfectionLegacyStatus,
@@ -110,7 +112,13 @@ export async function getStaffSubmissions({ status = "" } = {}) {
 
 export async function getInfectionReports({ status = "" } = {}) {
   const snapshot = await getDocs(
-    query(collection(db, STUDENT_HEALTH_COLLECTION), orderBy("submittedAt", "desc"), limit(LIST_LIMIT))
+    query(
+      collection(db, STUDENT_HEALTH_COLLECTION),
+      where("type", "==", "infection"),
+      where("schoolYear", "==", CURRENT_SCHOOL_YEAR),
+      where("semester", "==", CURRENT_SEMESTER),
+      limit(LIST_LIMIT)
+    )
   );
 
   const reports = snapshot.docs
@@ -123,7 +131,7 @@ export async function getInfectionReports({ status = "" } = {}) {
       );
     });
 
-  return filterByStatus(reports, status);
+  return filterByStatus(reports, status).sort((left, right) => right.submittedAtMillis - left.submittedAtMillis);
 }
 
 export async function updateStaffSubmissionStatus(submissionId, status) {
@@ -136,8 +144,22 @@ export async function updateStaffSubmissionStatus(submissionId, status) {
 }
 
 export async function updateInfectionReportStatus(submissionId, status) {
-  await updateDoc(doc(db, STUDENT_HEALTH_COLLECTION, submissionId), {
-    ...getInfectionStatusUpdate(status),
+  const submissionRef = doc(db, STUDENT_HEALTH_COLLECTION, submissionId);
+  const snapshot = await getDoc(submissionRef);
+  const updatePayload = getInfectionStatusUpdate(status);
+
+  if (snapshot.exists() && status === LEGACY_INFECTION_STATUS.reviewing) {
+    const currentCaseStatus = getInfectionCaseStatus(snapshot.data());
+    if (
+      currentCaseStatus === INFECTION_CASE_STATUS.managing ||
+      currentCaseStatus === INFECTION_CASE_STATUS.returnCheckNeeded
+    ) {
+      updatePayload["report.caseStatus"] = currentCaseStatus;
+    }
+  }
+
+  await updateDoc(submissionRef, {
+    ...updatePayload,
     updatedAt: serverTimestamp(),
   });
 }

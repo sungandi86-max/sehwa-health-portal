@@ -23,6 +23,14 @@ export const INFECTION_LEGACY_STATUS_OPTIONS = [
   LEGACY_INFECTION_STATUS.completed,
 ];
 
+export const INFECTION_CASE_STATUS_OPTIONS = [
+  INFECTION_CASE_STATUS.new,
+  INFECTION_CASE_STATUS.checking,
+  INFECTION_CASE_STATUS.managing,
+  INFECTION_CASE_STATUS.returnCheckNeeded,
+  INFECTION_CASE_STATUS.closed,
+];
+
 export const INFECTION_STATUS_LABELS = {
   [LEGACY_INFECTION_STATUS.submitted]: "처리 대기",
   [LEGACY_INFECTION_STATUS.reviewing]: "확인 중",
@@ -55,6 +63,14 @@ const LEGACY_STATUS_COMPATIBILITY = {
     submissionStatus: INFECTION_SUBMISSION_STATUS.reviewed,
     caseStatus: INFECTION_CASE_STATUS.closed,
   },
+};
+
+const CASE_STATUS_LEGACY_STATUS = {
+  [INFECTION_CASE_STATUS.new]: LEGACY_INFECTION_STATUS.submitted,
+  [INFECTION_CASE_STATUS.checking]: LEGACY_INFECTION_STATUS.reviewing,
+  [INFECTION_CASE_STATUS.managing]: LEGACY_INFECTION_STATUS.reviewing,
+  [INFECTION_CASE_STATUS.returnCheckNeeded]: LEGACY_INFECTION_STATUS.reviewing,
+  [INFECTION_CASE_STATUS.closed]: LEGACY_INFECTION_STATUS.completed,
 };
 
 function hasOwnValue(options, value) {
@@ -102,5 +118,22 @@ export function getInfectionStatusUpdate(status) {
     "report.status": status,
     "report.submissionStatus": compatibility.submissionStatus,
     "report.caseStatus": compatibility.caseStatus,
+  };
+}
+
+export function getLegacyStatusForCaseStatus(caseStatus) {
+  if (!INFECTION_CASE_STATUS_OPTIONS.includes(caseStatus)) {
+    throw new Error("지원하지 않는 감염병 사례 상태입니다.");
+  }
+
+  return CASE_STATUS_LEGACY_STATUS[caseStatus];
+}
+
+export function getInfectionCaseStatusUpdate(caseStatus) {
+  const legacyStatus = getLegacyStatusForCaseStatus(caseStatus);
+  return {
+    "report.status": legacyStatus,
+    "report.submissionStatus": INFECTION_SUBMISSION_STATUS.reviewed,
+    "report.caseStatus": caseStatus,
   };
 }

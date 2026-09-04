@@ -466,6 +466,58 @@ service cloud.firestore {
           && data.submittedBy.displayName is string;
       }
 
+      function isValidLegacyInfectionStatus(status) {
+        return status in ["submitted", "reviewing", "completed"];
+      }
+
+      function isValidInfectionSubmissionStatus(status) {
+        return status in ["submitted", "reviewed"];
+      }
+
+      function isValidInfectionCaseStatus(status) {
+        return status in ["new", "checking", "managing", "return_check_needed", "closed"];
+      }
+
+      function hasValidManagedReport(data) {
+        return data.report.keys().hasOnly([
+          "status",
+          "submissionStatus",
+          "caseStatus",
+          "note",
+          "reviewedAt",
+          "reviewedBy",
+          "caseUpdatedAt",
+          "caseUpdatedBy"
+        ])
+        && data.report.keys().hasAll(["status", "note"])
+        && isValidLegacyInfectionStatus(data.report.status)
+        && (!data.report.keys().hasAny(["submissionStatus"]) || isValidInfectionSubmissionStatus(data.report.submissionStatus))
+        && (!data.report.keys().hasAny(["caseStatus"]) || isValidInfectionCaseStatus(data.report.caseStatus))
+        && (!data.report.keys().hasAny(["reviewedAt"]) || data.report.reviewedAt is timestamp)
+        && (!data.report.keys().hasAny(["reviewedBy"]) || data.report.reviewedBy is string)
+        && (!data.report.keys().hasAny(["caseUpdatedAt"]) || data.report.caseUpdatedAt is timestamp)
+        && (!data.report.keys().hasAny(["caseUpdatedBy"]) || data.report.caseUpdatedBy is string)
+        && (data.report.note == null || data.report.note is string);
+      }
+
+      function hasCompatibleManagedReportStatus(data) {
+        return !data.report.keys().hasAny(["caseStatus"])
+          || (
+            data.report.caseStatus == "new"
+            && data.report.status == "submitted"
+          )
+          || (
+            data.report.caseStatus in ["checking", "managing", "return_check_needed"]
+            && data.report.status == "reviewing"
+            && data.report.submissionStatus == "reviewed"
+          )
+          || (
+            data.report.caseStatus == "closed"
+            && data.report.status == "completed"
+            && data.report.submissionStatus == "reviewed"
+          );
+      }
+
       function isValidInfectionSubmission(data) {
         return data.keys().hasOnly([
           "type",
@@ -504,11 +556,44 @@ service cloud.firestore {
           && data.student.classNo == get(currentAssignmentPath(request.auth.uid)).data.classNo;
       }
 
+      function isValidHealthTeacherInfectionUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["report", "updatedAt"])
+          && request.resource.data.report.diff(resource.data.report).affectedKeys().hasOnly([
+            "status",
+            "submissionStatus",
+            "caseStatus",
+            "reviewedAt",
+            "reviewedBy",
+            "caseUpdatedAt",
+            "caseUpdatedBy"
+          ])
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.type == resource.data.type
+          && request.resource.data.schoolYear == resource.data.schoolYear
+          && request.resource.data.semester == resource.data.semester
+          && request.resource.data.student == resource.data.student
+          && request.resource.data.infection == resource.data.infection
+          && request.resource.data.submittedBy == resource.data.submittedBy
+          && request.resource.data.submittedAt == resource.data.submittedAt
+          && (!request.resource.data.report.diff(resource.data.report).affectedKeys().hasAny(["reviewedAt"])
+            || request.resource.data.report.reviewedAt == request.time)
+          && (!request.resource.data.report.diff(resource.data.report).affectedKeys().hasAny(["reviewedBy"])
+            || request.resource.data.report.reviewedBy == request.auth.uid)
+          && (!request.resource.data.report.diff(resource.data.report).affectedKeys().hasAny(["caseUpdatedAt"])
+            || request.resource.data.report.caseUpdatedAt == request.time)
+          && (!request.resource.data.report.diff(resource.data.report).affectedKeys().hasAny(["caseUpdatedBy"])
+            || request.resource.data.report.caseUpdatedBy == request.auth.uid)
+          && hasValidManagedReport(request.resource.data)
+          && hasCompatibleManagedReportStatus(request.resource.data);
+      }
+
       allow read: if hasCurrentHealthTeacherAssignment()
         || (isCurrentTermInfection(resource.data) && matchesCurrentHomeroom(resource.data));
       allow create: if isValidInfectionSubmission(request.resource.data)
         && (hasCurrentHealthTeacherAssignment() || matchesCurrentHomeroom(request.resource.data));
-      allow update, delete: if hasCurrentHealthTeacherAssignment();
+      allow update: if hasCurrentHealthTeacherAssignment()
+        && isValidHealthTeacherInfectionUpdate();
+      allow delete: if false;
     }
 
     match /{document=**} {

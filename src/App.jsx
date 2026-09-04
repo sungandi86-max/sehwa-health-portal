@@ -26,6 +26,7 @@ const CheckupPage = lazy(() => import("./pages/CheckupPage.jsx"));
 const EducationPage = lazy(() => import("./pages/EducationPage.jsx"));
 const FAQPage = lazy(() => import("./pages/FAQPage.jsx"));
 const FirebaseAccessRequestsPage = lazy(() => import("./pages/FirebaseAccessRequestsPage.jsx"));
+const FirebaseAdminInfectionsPage = lazy(() => import("./pages/FirebaseAdminInfectionsPage.jsx"));
 const FirebaseAdminSubmissionsPage = lazy(() => import("./pages/FirebaseAdminSubmissionsPage.jsx"));
 const FirebaseCheckupsPage = lazy(() => import("./pages/FirebaseCheckupsPage.jsx"));
 const FirebaseCprSubmitPage = lazy(() => import("./pages/FirebaseCprSubmitPage.jsx"));
@@ -123,6 +124,7 @@ export default function App() {
     "/firebase-faq",
     "/firebase-submissions",
     "/firebase-admin/access-requests",
+    "/firebase-admin/infections",
     "/firebase-admin/users",
     "/firebase-admin/submissions",
     "/firebase-admin/submission-status",
@@ -221,6 +223,7 @@ export default function App() {
                 <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
                 <Route path="/firebase-submissions" element={<FirebaseSubmissionsPage />} />
                 <Route path="/firebase-admin/access-requests" element={<FirebaseAccessRequestsPage />} />
+                <Route path="/firebase-admin/infections" element={<FirebaseAdminInfectionsPage />} />
                 <Route path="/firebase-admin/users" element={<FirebaseUserAdminPage />} />
                 <Route path="/firebase-admin/submissions" element={<FirebaseAdminSubmissionsPage />} />
                 <Route path="/firebase-admin/submission-status" element={<FirebaseSubmissionStatusPage />} />
