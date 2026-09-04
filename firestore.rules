@@ -210,7 +210,7 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isSelf(uid) || hasCurrentHealthTeacherAssignment();
+      allow read: if isSelf(uid) || hasCurrentHealthTeacherOrAdminAssignment();
       allow create: if isValidSelfUserCreate(uid);
       allow update: if isValidSelfUserUpdate(uid) || hasCurrentHealthTeacherAssignment();
       allow delete: if false;
@@ -220,7 +220,7 @@ service cloud.firestore {
       allow read: if signedIn()
         && (
           assignmentId == currentAssignmentId(request.auth.uid)
-          || hasCurrentHealthTeacherAssignment()
+          || hasCurrentHealthTeacherOrAdminAssignment()
         );
       allow create: if hasCurrentHealthTeacherAssignment()
         && isValidAssignmentData(request.resource.data)
