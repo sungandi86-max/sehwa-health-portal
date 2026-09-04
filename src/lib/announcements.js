@@ -17,13 +17,16 @@ function sortAnnouncements(a, b) {
 
 export function normalizeAnnouncement(docSnapshot) {
   const data = docSnapshot.data();
+  const titleLines = [data.titleLine1, data.titleLine2].filter(Boolean);
 
   return {
     id: docSnapshot.id,
     title: data.title || "",
     titleLine1: data.titleLine1 || null,
     titleLine2: data.titleLine2 || null,
+    titleLines,
     dateLabel: data.dateLabel || null,
+    date: data.dateLabel || null,
     description: data.description || "",
     target: data.target || null,
     actionText: data.actionText || null,

@@ -109,6 +109,7 @@ export default function App() {
     "/firebase-submit/infection",
     "/firebase-submit/recruit",
     "/firebase-submit/tb",
+    "/today",
     "/resources",
     "/faq",
     "/checkup",
