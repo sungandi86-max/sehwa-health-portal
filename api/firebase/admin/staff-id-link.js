@@ -9,6 +9,14 @@ import {
 
 const ASSIGNMENT_LIMIT = 700;
 
+class StaffIdLinkTransactionError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+    this.userMessage = message;
+  }
+}
+
 function normalizeStaffId(value) {
   return String(value || "").normalize("NFKC").trim();
 }
@@ -107,13 +115,32 @@ export default async function handler(req, res) {
       });
     }
 
-    await assignmentRef.set(
-      {
+    await db.runTransaction(async (transaction) => {
+      const latestAssignmentSnapshot = await transaction.get(assignmentRef);
+      if (!latestAssignmentSnapshot.exists) {
+        throw new StaffIdLinkTransactionError(404, "연결할 권한 문서를 찾지 못했습니다.");
+      }
+
+      const latestAssignment = latestAssignmentSnapshot.data();
+      if (!isActiveAssignment(latestAssignment)) {
+        throw new StaffIdLinkTransactionError(409, "활성 권한 문서에만 교직원ID를 연결할 수 있습니다.");
+      }
+      if (
+        latestAssignment.uid !== uid ||
+        Number(latestAssignment.schoolYear) !== schoolYear ||
+        Number(latestAssignment.semester) !== semester
+      ) {
+        throw new StaffIdLinkTransactionError(409, "권한 문서와 요청 정보가 일치하지 않습니다.");
+      }
+      if (latestAssignment.staffId) {
+        throw new StaffIdLinkTransactionError(409, "이미 교직원ID가 연결된 사용자입니다.");
+      }
+
+      transaction.update(assignmentRef, {
         staffId,
         updatedAt: Timestamp.now(),
-      },
-      { merge: true }
-    );
+      });
+    });
 
     return res.status(200).json({
       ok: true,
@@ -121,7 +148,11 @@ export default async function handler(req, res) {
       assignmentId,
       staff: directoryItem,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof StaffIdLinkTransactionError) {
+      return res.status(error.status).json({ ok: false, message: error.userMessage });
+    }
+
     return res.status(500).json({ ok: false, message: "교직원ID 연결을 저장하지 못했습니다." });
   }
 }
