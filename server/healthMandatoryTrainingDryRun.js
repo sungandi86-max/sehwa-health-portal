@@ -27,6 +27,7 @@ export async function runHealthMandatoryTrainingDryRun() {
       description: "감염병 · 4대폭력예방 · 아동학대예방 · 장애인학대예방",
     },
     headerInfo: {
+      parseStatus: source.headerInfo.parseStatus,
       headerRow: source.headerInfo.headerRowIndex + 1,
       hasNameColumn: source.headerInfo.indexes.realName !== null,
       hasDepartmentColumn: source.headerInfo.indexes.department !== null,

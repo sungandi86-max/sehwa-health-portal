@@ -3,10 +3,10 @@ const INCOMPLETE_VALUES = new Set(["미이수", "미완료", "미수료", "미�
 const HEALTH_TRAINING_COLUMNS = ["감염병", "4대폭력", "아동학대", "장애인학대"];
 
 const RESEARCH_HEADERS = {
-  realName: ["성명", "이름", "실명", "name"],
-  department: ["소속부서", "부서", "소속/부서", "department"],
-  position: ["직책", "직위", "보직", "업무", "position"],
-  status: ["이수상태", "상태", "status"],
+  realName: ["성명", "이름", "실명", "교직원명", "성명(한글)", "name"],
+  department: ["소속부서", "부서", "부서명", "소속", "소속/부서", "department"],
+  position: ["직책", "직위", "직급", "보직", "업무", "position"],
+  status: ["이수상태", "이수여부", "수료상태", "완료여부", "이수", "상태", "status"],
 };
 
 function text(value) {
@@ -31,6 +31,7 @@ function findHeaderIndex(headers, aliases) {
 }
 
 function findResearchHeaderRow(rows) {
+  let fallback = null;
   for (let rowIndex = 0; rowIndex < Math.min(rows.length, 30); rowIndex += 1) {
     const row = rows[rowIndex] || [];
     const indexes = {};
@@ -38,11 +39,20 @@ function findResearchHeaderRow(rows) {
       const index = findHeaderIndex(row, aliases);
       indexes[field] = index === -1 ? null : index;
     }
+    const foundCount = Object.values(indexes).filter((index) => index !== null).length;
+    if (!fallback || foundCount > fallback.foundCount) {
+      fallback = { headerRowIndex: rowIndex, indexes, headers: row.map(text).filter(Boolean), foundCount };
+    }
     if (indexes.realName !== null && indexes.status !== null) {
-      return { headerRowIndex: rowIndex, indexes, headers: row.map(text).filter(Boolean) };
+      return { headerRowIndex: rowIndex, indexes, headers: row.map(text).filter(Boolean), parseStatus: "success" };
     }
   }
-  throw new Error("연구부 연수 시트에서 성명/이수상태 헤더를 찾지 못했습니다.");
+  return {
+    headerRowIndex: fallback?.headerRowIndex ?? 0,
+    indexes: fallback?.indexes || { realName: null, department: null, position: null, status: null },
+    headers: fallback?.headers || [],
+    parseStatus: "header_not_found",
+  };
 }
 
 function cell(row, indexes, key) {
@@ -105,6 +115,21 @@ function resolveStaff(sourceRow, indexes) {
 
 export function summarizeResearchRows(values) {
   const headerInfo = findResearchHeaderRow(values);
+  if (headerInfo.parseStatus !== "success") {
+    return {
+      headerInfo,
+      rows: [],
+      stats: {
+        sourceRows: Math.max(values.length - headerInfo.headerRowIndex - 1, 0),
+        validRows: 0,
+        blankRows: 0,
+        missingNameRows: 0,
+        duplicateNames: 0,
+        lecturerRows: 0,
+      },
+      statusValues: {},
+    };
+  }
   const rows = [];
   const statusValues = {};
   const nameCounts = new Map();

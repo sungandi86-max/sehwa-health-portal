@@ -40,8 +40,15 @@ function StatusValueList({ values }) {
 }
 
 function ResultPanel({ data }) {
+  const headerMissing = data.headerInfo?.parseStatus === "header_not_found";
+
   return (
     <div className="mt-3 rounded-[14px] border border-[#DDEAE7] bg-[#F7FBF9] p-3">
+      {headerMissing && (
+        <p className="mb-3 rounded-[12px] border border-[#F3D8A8] bg-[#FFFDF7] px-3 py-2 text-[12px] font-semibold leading-5 text-[#9A5B00]">
+          성명/이수상태 헤더를 자동 확인하지 못했습니다. 연구부 시트 구조를 확인해 주세요.
+        </p>
+      )}
       <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <CountItem label="원본 행" value={data.rows?.sourceRows} />
         <CountItem label="유효 행" value={data.rows?.validRows} />
