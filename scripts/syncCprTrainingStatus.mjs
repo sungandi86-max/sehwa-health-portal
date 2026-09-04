@@ -4,14 +4,15 @@ import { initializeFirebaseAdmin, loadLocalEnv } from "./lib/firebaseAdminCli.mj
 import { runStaffSubmissionStatusSync } from "./lib/staffSubmissionStatusSync.mjs";
 
 const taskConfig = {
-  taskId: "tb-screening-2026",
-  sheetName: "교직원 결핵검진현황",
-  completedValue: "검진완료",
+  taskId: "cpr-training-2026",
+  sheetName: "교직원 심폐소생술 연수 이수",
+  completedValue: "확인완료",
+  allowNameDepartmentFallback: true,
   headers: {
     position: ["직책", "직위", "position"],
     department: ["부서", "소속부서", "소속/부서", "department"],
     realName: ["성명", "이름", "실명", "name"],
-    status: ["검진상태", "상태", "status"],
+    status: ["확인상태", "상태", "status"],
   },
 };
 
@@ -27,7 +28,7 @@ async function main() {
 
 // no-excuse-ok: catch - CLI boundary prints concise sync failure.
 main().catch((error) => {
-  console.error("TB screening status sync failed.");
+  console.error("CPR training status sync failed.");
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });
