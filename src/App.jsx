@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Footer from "./components/Footer.jsx";
+import FirebaseAuthRedirectHandler from "./components/FirebaseAuthRedirectHandler.jsx";
 import {
   appConfig as fallbackAppConfig,
   checkupItems,
@@ -194,6 +195,7 @@ export default function App() {
     <BrowserRouter>
       <main className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#F7F9FC] font-sans text-[#263238]">
         <Suspense fallback={null}>
+          <FirebaseAuthRedirectHandler />
           <Header />
         </Suspense>
 
