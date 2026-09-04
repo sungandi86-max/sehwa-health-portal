@@ -266,7 +266,7 @@ service cloud.firestore {
     }
 
     match /checkups/{checkupId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create, update, delete: if hasCurrentHealthTeacherAssignment();
     }
 

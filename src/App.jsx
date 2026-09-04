@@ -111,6 +111,7 @@ export default function App() {
     "/firebase-submit/tb",
     "/resources",
     "/faq",
+    "/checkup",
   ].includes(window.location.pathname);
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);

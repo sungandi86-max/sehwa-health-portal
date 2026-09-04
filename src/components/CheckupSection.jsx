@@ -110,7 +110,7 @@ function CheckupModal({ modal, onClose }) {
   );
 }
 
-export default function CheckupSection({ items, tbConfig }) {
+export default function CheckupSection({ items, tbConfig, isLoading = false, loadFailed = false, fallbackUsed = false }) {
   const navigate = useNavigate();
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
@@ -170,8 +170,26 @@ export default function CheckupSection({ items, tbConfig }) {
         title="검진·검사 안내"
         description="1학년 건강검진, 2·3학년 결핵검진·소변검사, 교직원 결핵검진 안내를 모아둔 영역입니다."
       />
+      {fallbackUsed && (
+        <div className="mb-4 rounded-[20px] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          검진·검사 안내를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
-        {items.map((item) => {
+        {isLoading && (
+          <AppCard>
+            <p className="text-sm font-bold text-slate-600">검진·검사 안내를 불러오는 중입니다.</p>
+          </AppCard>
+        )}
+
+        {!isLoading && loadFailed && (
+          <AppCard>
+            <p className="text-sm font-bold text-slate-600">검진·검사 안내를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p>
+          </AppCard>
+        )}
+
+        {!isLoading && !loadFailed && items.map((item) => {
           const internalTarget = INTERNAL_BUTTONS[item.buttonText];
           const displayMode = String(item.displayMode || "link").trim().toLowerCase();
           const secondaryAction = String(item.secondaryAction || "").trim().toLowerCase();
@@ -220,7 +238,7 @@ export default function CheckupSection({ items, tbConfig }) {
         })}
 
         {/* 교직원 결핵검진 유형 선택 카드 — 사용 TRUE이고 접수기간 안일 때만 표시 */}
-        {shouldShowTbRegistrationCard && (
+        {!isLoading && !loadFailed && shouldShowTbRegistrationCard && (
           <AppCard>
             <div className="flex items-start justify-between gap-3">
               <h3 className="text-lg font-extrabold text-[#263238]">교직원 결핵검진 유형 선택</h3>
