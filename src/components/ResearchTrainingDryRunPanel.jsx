@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { checkResearchTrainingDryRun } from "../lib/researchTrainingDryRun.js";
+import { applyResearchTrainingSnapshot, checkResearchTrainingDryRun } from "../lib/researchTrainingDryRun.js";
 
 const EMPTY_RESULT = {
   status: "idle",
@@ -63,6 +63,11 @@ function ResultPanel({ data }) {
         <CountItem label="확인필요" value={data.status?.unknown} tone="text-[#3154A3]" />
         <CountItem label="강사/시간강사 포함" value={data.rows?.lecturerRows} />
       </div>
+      {data.apply && (
+        <p className="mt-3 rounded-[12px] border border-[#BFEBDC] bg-white px-3 py-2 text-[12px] font-semibold leading-5 text-[#08754B]">
+          Firestore snapshot {data.apply.docsWritten}건을 반영했습니다. 기존 research snapshot 중 원본에 없는 항목은 {data.apply.orphanSnapshots}건이며 삭제하지 않았습니다.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         <HeaderCheck label="성명 컬럼" value={data.headerInfo?.hasNameColumn} />
         <HeaderCheck label="소속부서" value={data.headerInfo?.hasDepartmentColumn} />
@@ -80,8 +85,15 @@ function ResultPanel({ data }) {
   );
 }
 
-export default function ResearchTrainingDryRunPanel() {
+export default function ResearchTrainingDryRunPanel({ onApplied }) {
   const [result, setResult] = useState(EMPTY_RESULT);
+
+  const handleError = (error) => {
+    const message = error?.status >= 500
+      ? "연수 현황 점검 설정을 확인해 주세요."
+      : error?.message || "연수 현황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    setResult({ status: "error", message, data: null });
+  };
 
   const handleCheck = async () => {
     setResult({ status: "loading", message: "연수 현황 확인 중...", data: null });
@@ -89,12 +101,25 @@ export default function ResearchTrainingDryRunPanel() {
       const data = await checkResearchTrainingDryRun();
       setResult({ status: "success", message: "", data });
     } catch (error) {
-      const message = error?.status >= 500
-        ? "연수 현황 점검 설정을 확인해 주세요."
-        : error?.message || "연수 현황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
-      setResult({ status: "error", message, data: null });
+      handleError(error);
     }
   };
+
+  const handleApply = async () => {
+    const confirmed = window.confirm("연구부 Sheet를 다시 읽어 Firestore snapshot을 새로고침하시겠습니까? 연구부 Sheet는 수정하지 않습니다.");
+    if (!confirmed) return;
+
+    setResult({ status: "applying", message: "연수 현황 snapshot 반영 중...", data: null });
+    try {
+      const data = await applyResearchTrainingSnapshot();
+      setResult({ status: "success", message: "", data });
+      await onApplied?.();
+    } catch (error) {
+      handleError(error);
+    }
+  };
+
+  const isWorking = result.status === "loading" || result.status === "applying";
 
   return (
     <section className="rounded-[16px] border border-[#DDEAE7] bg-white/95 p-4">
@@ -103,19 +128,29 @@ export default function ResearchTrainingDryRunPanel() {
           <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#627083]">RESEARCH SHEET CHECK</p>
           <h2 className="mt-1 text-[15px] font-bold text-[#102047]">연구부 연수 현황 점검</h2>
           <p className="mt-1 text-[12px] font-semibold leading-5 text-[#627083]">
-            연구부 원본 Sheet를 읽기 전용으로 확인하고, Firestore에는 저장하지 않습니다.
+            점검은 저장하지 않고, 새로고침은 검증 후 Firestore snapshot만 반영합니다.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleCheck}
-          disabled={result.status === "loading"}
-          className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-2 text-[13px] font-bold text-[#102047] transition hover:border-[#20A982] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {result.status === "loading" ? "확인 중..." : "연구부 연수 현황 점검"}
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={handleCheck}
+            disabled={isWorking}
+            className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-2 text-[13px] font-bold text-[#102047] transition hover:border-[#20A982] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {result.status === "loading" ? "확인 중..." : "연구부 연수 현황 점검"}
+          </button>
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={isWorking}
+            className="min-h-10 rounded-[10px] border border-[#20A982] bg-[#20A982] px-4 py-2 text-[13px] font-bold text-white transition hover:bg-[#08754B] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {result.status === "applying" ? "반영 중..." : "연수 현황 새로고침"}
+          </button>
+        </div>
       </div>
-      {result.status === "loading" && <p className="mt-3 text-[13px] font-semibold text-[#627083]">{result.message}</p>}
+      {(result.status === "loading" || result.status === "applying") && <p className="mt-3 text-[13px] font-semibold text-[#627083]">{result.message}</p>}
       {result.status === "error" && (
         <p className="mt-3 rounded-[12px] border border-[#F3D8A8] bg-[#FFFDF7] px-3 py-2 text-[13px] font-semibold text-[#9A5B00]">
           {result.message}

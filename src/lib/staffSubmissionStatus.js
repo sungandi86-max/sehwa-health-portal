@@ -1,7 +1,7 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "./firebase.js";
 
-export const STAFF_STATUS_TASK_IDS = ["tb-screening-2026", "cpr-training-2026"];
+export const STAFF_STATUS_TASK_IDS = ["tb-screening-2026", "cpr-training-2026", "health-mandatory-training-2026"];
 
 export const STAFF_STATUS_LABELS = {
   incomplete: "미완료",

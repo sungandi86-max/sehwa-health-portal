@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPanel.jsx";
@@ -8,7 +8,7 @@ const STATUS_FILTERS = [
   { value: "incomplete", label: "미완료" },
   { value: "all", label: "전체" },
   { value: "completed", label: "완료" },
-  { value: "unknown", label: "상태확인필요" },
+  { value: "needs_check", label: "확인 필요" },
 ];
 
 const STATUS_TONES = {
@@ -136,7 +136,10 @@ function buildFilterOptions(items) {
 function filterItems(items, filters) {
   const search = normalizeText(filters.search);
   return items.filter((item) => {
-    const statusMatch = filters.status === "all" || item.status === filters.status;
+    const statusMatch =
+      filters.status === "all" ||
+      item.status === filters.status ||
+      (filters.status === "needs_check" && ["pending", "unknown"].includes(item.status));
     const departmentMatch = filters.department === "all" || item.department === filters.department;
     const positionMatch = filters.position === "all" || item.position === filters.position;
     const searchMatch = !search || normalizeText(item.realName).includes(search);
@@ -144,38 +147,48 @@ function filterItems(items, filters) {
   });
 }
 
+function getDefaultStatusFilter(task) {
+  if (!task) return "incomplete";
+  if (task.summary.incomplete > 0) return "incomplete";
+  if (task.summary.unknown + task.summary.pending > 0) return "needs_check";
+  return "all";
+}
+
 function AdminStatusContent({ displayName }) {
   const [overview, setOverview] = useState(null);
   const [selectedTaskId, setSelectedTaskId] = useState("tb-screening-2026");
   const [filters, setFilters] = useState({ status: "incomplete", department: "all", position: "all", search: "" });
   const [state, setState] = useState({ status: "loading", message: "" });
+  const loadOverview = useCallback(async (options = {}) => {
+    const shouldApply = options.shouldApply || (() => true);
+    setState({ status: "loading", message: "" });
+    try {
+      const nextOverview = await getAdminStaffSubmissionStatusOverview();
+      if (!shouldApply()) return;
+      setOverview(nextOverview);
+      setSelectedTaskId((currentTaskId) => {
+        if (nextOverview.tasks.some((task) => task.taskId === currentTaskId)) return currentTaskId;
+        return nextOverview.tasks[0]?.taskId || "tb-screening-2026";
+      });
+      setState({ status: nextOverview.tasks.length ? "success" : "empty", message: "" });
+    } catch (error) {
+      if (!shouldApply()) return;
+      setOverview(null);
+      setState({
+        status: error?.code === "permission-denied" ? "permission-denied" : "error",
+        message: "제출·이수 현황을 불러오지 못했습니다.",
+      });
+    }
+  }, []);
 
   useEffect(() => {
     let shouldIgnore = false;
 
-    async function loadOverview() {
-      setState({ status: "loading", message: "" });
-      try {
-        const nextOverview = await getAdminStaffSubmissionStatusOverview();
-        if (shouldIgnore) return;
-        setOverview(nextOverview);
-        setSelectedTaskId(nextOverview.tasks[0]?.taskId || "tb-screening-2026");
-        setState({ status: nextOverview.tasks.length ? "success" : "empty", message: "" });
-      } catch (error) {
-        if (shouldIgnore) return;
-        setOverview(null);
-        setState({
-          status: error?.code === "permission-denied" ? "permission-denied" : "error",
-          message: "제출·이수 현황을 불러오지 못했습니다.",
-        });
-      }
-    }
-
-    loadOverview();
+    loadOverview({ shouldApply: () => !shouldIgnore });
     return () => {
       shouldIgnore = true;
     };
-  }, []);
+  }, [loadOverview]);
 
   const selectedTask = overview?.tasks.find((task) => task.taskId === selectedTaskId) || overview?.tasks[0] || null;
   const filterOptions = useMemo(() => buildFilterOptions(selectedTask?.items || []), [selectedTask]);
@@ -185,10 +198,10 @@ function AdminStatusContent({ displayName }) {
     <FirebaseV2PageShell
       label="관리자"
       title="교직원 제출·이수 현황"
-      description="결핵검진과 심폐소생술 연수의 완료 상태를 Firestore projection 기준으로 확인합니다."
+      description="결핵검진, 심폐소생술 연수, 보건 관련 법정의무연수 상태를 Firestore projection 기준으로 확인합니다."
       displayName={displayName}
     >
-      <ResearchTrainingDryRunPanel />
+      <ResearchTrainingDryRunPanel onApplied={loadOverview} />
 
       {state.status === "success" && selectedTask && (
         <>
@@ -200,7 +213,7 @@ function AdminStatusContent({ displayName }) {
                 selected={task.taskId === selectedTask.taskId}
                 onSelect={() => {
                   setSelectedTaskId(task.taskId);
-                  setFilters((current) => ({ ...current, status: "incomplete", department: "all", position: "all", search: "" }));
+                  setFilters((current) => ({ ...current, status: getDefaultStatusFilter(task), department: "all", position: "all", search: "" }));
                 }}
               />
             ))}
@@ -233,7 +246,7 @@ function AdminStatusContent({ displayName }) {
               <div>{filteredItems.map((item) => <StaffRow key={item.id} item={item} />)}</div>
             ) : (
               <div className="px-4 py-8 text-center text-[13px] font-semibold text-[#627083]">
-                현재 미완료로 확인된 교직원이 없습니다.
+                현재 선택한 조건에 해당하는 교직원이 없습니다.
               </div>
             )}
           </section>

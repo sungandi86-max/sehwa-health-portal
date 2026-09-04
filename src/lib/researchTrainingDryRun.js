@@ -10,12 +10,25 @@ async function getIdToken() {
 }
 
 export async function checkResearchTrainingDryRun() {
+  return requestResearchTrainingSync({ method: "GET" });
+}
+
+export async function applyResearchTrainingSnapshot() {
+  return requestResearchTrainingSync({
+    method: "POST",
+    body: JSON.stringify({ apply: true }),
+  });
+}
+
+async function requestResearchTrainingSync(options) {
   const idToken = await getIdToken();
   const response = await fetch(RESEARCH_TRAINING_DRY_RUN_API, {
+    method: options.method,
     headers: {
       Authorization: `Bearer ${idToken}`,
       "Content-Type": "application/json",
     },
+    body: options.body,
   });
   const result = await response.json().catch(() => null);
 

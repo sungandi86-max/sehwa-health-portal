@@ -150,7 +150,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
     >
       <section className="grid gap-3 sm:grid-cols-3">
         <SummaryStat label="미완료" value={overview?.summary.incomplete || 0} tone="text-[#9A5B00]" />
-        <SummaryStat label="확인중" value={overview?.summary.pending || 0} tone="text-[#3154A3]" />
+        <SummaryStat label="확인 필요" value={(overview?.summary.pending || 0) + (overview?.summary.unknown || 0)} tone="text-[#3154A3]" />
         <SummaryStat label="완료" value={overview?.summary.completed || 0} tone="text-[#08754B]" />
       </section>
 

@@ -1,6 +1,7 @@
 const COMPLETED_VALUE = "이수완료";
 const INCOMPLETE_VALUES = new Set(["미이수", "미완료", "미수료", "미완"]);
 const HEALTH_TRAINING_COLUMNS = ["감염병", "4대폭력", "아동학대", "장애인학대"];
+const HEALTH_MANDATORY_TRAINING_TASK_ID = "health-mandatory-training-2026";
 
 const RESEARCH_HEADERS = {
   sequence: ["순", "순번", "번호", "no"],
@@ -68,14 +69,7 @@ function findResearchHeaderRow(rows) {
   return {
     headerRowIndex: fallback?.headerRowIndex ?? 0,
     dataStartRowIndex: fallback?.dataStartRowIndex ?? 1,
-    indexes: fallback?.indexes || {
-      sequence: null,
-      realName: null,
-      department: null,
-      position: null,
-      completionNumber: null,
-      status: null,
-    },
+    indexes: fallback?.indexes || Object.fromEntries(Object.keys(RESEARCH_HEADERS).map((key) => [key, null])),
     headers: fallback?.headers || [],
     parseStatus: "header_not_found",
   };
@@ -233,6 +227,38 @@ export function summarizePlan(sourceRows, directory) {
     duplicateCanonicalStaffIds: indexes.duplicateCanonicalStaffIds,
     matchCriteria,
     issueReasons,
+  };
+}
+
+export function buildSnapshotPlan(sourceRows, directory) {
+  const indexes = buildDirectoryIndexes(directory);
+  const docs = [];
+  const seenStaffIds = new Set();
+  const duplicateStaffIds = new Set();
+
+  sourceRows.forEach((sourceRow) => {
+    const resolved = resolveStaff(sourceRow, indexes);
+    if (resolved.kind !== "matched") return;
+
+    const staffId = resolved.match.staffId;
+    if (seenStaffIds.has(staffId)) duplicateStaffIds.add(staffId);
+    seenStaffIds.add(staffId);
+    docs.push({
+      id: `${staffId}_${HEALTH_MANDATORY_TRAINING_TASK_ID}`,
+      data: {
+        staffId,
+        taskId: HEALTH_MANDATORY_TRAINING_TASK_ID,
+        status: normalizeStatus(sourceRow.sourceStatus),
+        sourceType: "research_sheet",
+        sourceUpdatedAt: null,
+        sourceStatusVersion: "research_training_status_v1",
+      },
+    });
+  });
+
+  return {
+    docs,
+    duplicateStaffIds: duplicateStaffIds.size,
   };
 }
 
