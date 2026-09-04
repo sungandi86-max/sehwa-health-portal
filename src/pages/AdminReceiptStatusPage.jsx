@@ -1,15 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
 
 const ADMIN_API = "/api/health-room-status";
 const DEV_ADMIN_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/health-room-status";
 
-async function requestReceiptSummary(password) {
-  const payload = { action: "getAdminReceiptSummary", password };
+async function requestReceiptSummary(firebaseUser) {
+  const idToken = await firebaseUser.getIdToken();
+  const payload = { action: "getAdminReceiptSummary" };
   const response = await fetch(ADMIN_API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
     body: JSON.stringify(payload),
   });
   const contentType = response.headers.get("content-type") || "";
@@ -21,7 +25,10 @@ async function requestReceiptSummary(password) {
   if (import.meta.env.DEV) {
     const fallbackResponse = await fetch(DEV_ADMIN_API_FALLBACK, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
       body: JSON.stringify(payload),
     });
     return fallbackResponse.json();
@@ -103,24 +110,23 @@ function SectionBlock({ section }) {
   );
 }
 
-export default function AdminReceiptStatusPage() {
+export default function AdminReceiptStatusPage({ adminUser }) {
   const navigate = useNavigate();
-  const [password, setPassword] = useState("");
   const [summary, setSummary] = useState(null);
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const fetchSummary = async () => {
-    if (!password.trim()) {
-      setMessage("마스터 비밀번호를 입력해 주세요.");
+    if (!adminUser) {
+      setMessage("Firebase 관리자 권한 확인 후 접수 현황을 조회할 수 있습니다.");
+      setLoading(false);
       return;
     }
 
     setLoading(true);
     setMessage("");
     try {
-      const json = await requestReceiptSummary(password.trim());
-      setPassword("");
+      const json = await requestReceiptSummary(adminUser);
       if (json?.success === true || json?.result === "success") {
         setSummary(json);
       } else {
@@ -132,10 +138,13 @@ export default function AdminReceiptStatusPage() {
       setSummary(null);
       setMessage("접수 현황 조회 중 오류가 발생했습니다.");
     } finally {
-      setPassword("");
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchSummary();
+  }, [adminUser]);
 
   const sections = Array.isArray(summary?.sections) ? summary.sections : [];
 
@@ -157,19 +166,12 @@ export default function AdminReceiptStatusPage() {
         />
 
         <AppCard className="mt-5 p-5">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <label className="mb-1.5 block text-sm font-black text-[#263238]">
-                마스터 비밀번호 재확인
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter") fetchSummary(); }}
-                className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm font-bold text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
-                placeholder="조회할 때만 사용되며 저장하지 않습니다."
-              />
+              <p className="text-sm font-black text-[#263238]">Firebase 관리자 권한으로 조회</p>
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-500" style={{ wordBreak: "keep-all" }}>
+                로그인한 보건교사/관리자 권한을 서버에서 확인한 뒤 기존 접수 현황을 불러옵니다.
+              </p>
             </div>
             <button
               type="button"
@@ -182,9 +184,6 @@ export default function AdminReceiptStatusPage() {
               {loading ? "조회 중..." : "접수 현황 조회"}
             </button>
           </div>
-          <p className="mt-3 text-xs font-bold leading-5 text-slate-500" style={{ wordBreak: "keep-all" }}>
-            비밀번호는 브라우저 저장소에 보관하지 않으며, 조회 요청에만 사용합니다. 학생명, 진단명, 파일 링크 등 민감정보는 표시하지 않습니다.
-          </p>
           {message && (
             <p className="mt-3 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-sm font-black text-[#D94F70]">
               {message}

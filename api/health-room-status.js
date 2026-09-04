@@ -75,6 +75,15 @@ function isAdminAssignment(assignment) {
   return isActiveAssignment(assignment) && hasAnyRole(assignment, ["health_teacher", "admin"]);
 }
 
+function isLegacyAdminAction(params) {
+  return [
+    "verifyAdminMaster",
+    "getAdminReceiptSummary",
+    "getAdminInfectionReports",
+    "updateAdminInfectionReportStatus",
+  ].includes(String(params.action || ""));
+}
+
 function canUseSubjectScope(assignment) {
   return isActiveAssignment(assignment) && hasAnyRole(assignment, ["staff", "homeroom", "health_teacher", "admin"]);
 }
@@ -83,9 +92,15 @@ function sanitizeForLog(params) {
   return Object.fromEntries(
     Object.entries(params).map(([key, value]) => [
       key,
-      key.toLowerCase().includes("password") ? "[hidden]" : value,
+      /password|secret|token/i.test(key) ? "[hidden]" : value,
     ])
   );
+}
+
+function sanitizeDebugMessage(message) {
+  return String(message || "")
+    .replace(/([?&](?:proxySecret|password|token)=)[^&\s]+/gi, "$1[hidden]")
+    .replace(/(Bearer\s+)[^\s]+/gi, "$1[hidden]");
 }
 
 function jsonError(res, status, message, debug) {
@@ -93,7 +108,7 @@ function jsonError(res, status, message, debug) {
     success: false,
     result: "error",
     message,
-    debug,
+    debug: sanitizeDebugMessage(debug),
   });
 }
 
@@ -117,6 +132,32 @@ async function getVerifiedStudentCareAccess(req) {
   }
 
   return { ok: true, decodedToken, assignment };
+}
+
+function buildAuthorizedLegacyAdminParams(params, assignment) {
+  if (!isLegacyAdminAction(params)) {
+    return { ok: false, status: 400, message: "지원하지 않는 관리자 요청입니다." };
+  }
+  if (!isAdminAssignment(assignment)) {
+    return { ok: false, status: 403, message: "관리자 권한이 없습니다." };
+  }
+
+  const proxySecret = getStudentCareProxySecret();
+  if (!proxySecret) {
+    return { ok: false, status: 500, message: "관리자 서버 보호 설정이 필요합니다." };
+  }
+
+  const payload = {
+    proxySecret,
+    action: String(params.action || ""),
+  };
+
+  if (params.action === "updateAdminInfectionReportStatus") {
+    payload.rowId = String(params.rowId || "");
+    payload.status = String(params.status || "");
+  }
+
+  return { ok: true, payload };
 }
 
 function buildAuthorizedStudentCareParams(params, assignment) {
@@ -248,7 +289,74 @@ async function forwardToAppsScript(searchParams, scriptUrl, res) {
       );
     }
   } catch (error) {
-    console.error("[health-room-status] proxy failed", error);
+    console.error("[health-room-status] proxy failed", {
+      name: error?.name || "Error",
+      message: sanitizeDebugMessage(error?.message || "unknown"),
+    });
+    return jsonError(
+      res,
+      502,
+      "Apps Script 요청에 실패했습니다. 네트워크, 배포 URL, Vercel 환경변수를 확인해 주세요.",
+      error.message
+    );
+  }
+}
+
+async function postToAppsScript(payload, scriptUrl, res) {
+  try {
+    const scriptRes = await fetch(scriptUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    const text = await scriptRes.text();
+    const contentType = scriptRes.headers.get("content-type") || "";
+
+    console.log("[health-room-status] Apps Script POST response", {
+      status: scriptRes.status,
+      ok: scriptRes.ok,
+      contentType,
+    });
+
+    if (!scriptRes.ok) {
+      return jsonError(
+        res,
+        502,
+        "Apps Script 응답 상태가 정상 범위가 아닙니다. 웹앱 배포 권한과 GAS_URL을 확인해 주세요.",
+        `Apps Script HTTP ${scriptRes.status}`
+      );
+    }
+
+    const trimmed = text.trim();
+    if (trimmed.startsWith("<") || /<html|<!doctype/i.test(trimmed)) {
+      return jsonError(
+        res,
+        502,
+        "Apps Script가 JSON이 아닌 HTML을 반환했습니다. 로그인 페이지, 권한 오류, 또는 잘못된 배포 URL일 수 있습니다.",
+        "Apps Script returned HTML"
+      );
+    }
+
+    try {
+      const json = JSON.parse(text);
+      return res.status(200).json(json);
+    } catch (error) {
+      console.error("[health-room-status] POST JSON parse failed", error);
+      return jsonError(
+        res,
+        502,
+        "Apps Script 응답을 JSON으로 해석할 수 없습니다.",
+        "Invalid JSON from Apps Script"
+      );
+    }
+  } catch (error) {
+    console.error("[health-room-status] POST proxy failed", {
+      name: error?.name || "Error",
+      message: sanitizeDebugMessage(error?.message || "unknown"),
+    });
     return jsonError(
       res,
       502,
@@ -294,6 +402,18 @@ export default async function handler(req, res) {
       const access = await getVerifiedStudentCareAccess(req);
       if (!access.ok) return jsonError(res, access.status, access.message);
 
+      if (isLegacyAdminAction(params)) {
+        const authorizedAdmin = buildAuthorizedLegacyAdminParams(params, access.assignment);
+        if (!authorizedAdmin.ok) {
+          return jsonError(res, authorizedAdmin.status, authorizedAdmin.message);
+        }
+
+        console.log("[health-room-status] firebase legacy admin request", {
+          action: params.action || "",
+        });
+        return postToAppsScript(authorizedAdmin.payload, scriptUrl, res);
+      }
+
       const authorized = buildAuthorizedStudentCareParams(params, access.assignment);
       if (!authorized.ok) return jsonError(res, authorized.status, authorized.message);
 
@@ -318,6 +438,10 @@ export default async function handler(req, res) {
       searchParams.set(key, String(value));
     }
   });
+
+  if (isLegacyAdminAction(params)) {
+    return jsonError(res, 401, "Firebase 관리자 로그인이 필요한 요청입니다.");
+  }
 
   console.log("[health-room-status] proxy request", {
     action: params.action,

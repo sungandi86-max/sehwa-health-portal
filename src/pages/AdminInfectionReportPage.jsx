@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
 
@@ -7,10 +7,14 @@ const DEV_ADMIN_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/healt
 const STATUS_OPTIONS = ["신규", "확인 중", "관리 중", "복귀 확인 필요", "종결"];
 const FILTERS = ["전체", ...STATUS_OPTIONS];
 
-async function requestAdminInfection(payload) {
+async function requestAdminInfection(firebaseUser, payload) {
+  const idToken = await firebaseUser.getIdToken();
   const response = await fetch(ADMIN_API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
     body: JSON.stringify(payload),
   });
   const contentType = response.headers.get("content-type") || "";
@@ -22,7 +26,10 @@ async function requestAdminInfection(payload) {
   if (import.meta.env.DEV) {
     const fallbackResponse = await fetch(DEV_ADMIN_API_FALLBACK, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
       body: JSON.stringify(payload),
     });
     return fallbackResponse.json();
@@ -120,15 +127,13 @@ function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, up
   );
 }
 
-export default function AdminInfectionReportPage() {
+export default function AdminInfectionReportPage({ adminUser }) {
   const navigate = useNavigate();
-  const [password, setPassword] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState("전체");
   const [statusDrafts, setStatusDrafts] = useState({});
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState("");
 
   const applyData = (json) => {
@@ -141,50 +146,44 @@ export default function AdminInfectionReportPage() {
   };
 
   const fetchReports = async () => {
-    const nextPassword = password.trim();
-    if (!nextPassword) {
-      setMessage("마스터 비밀번호를 입력해 주세요.");
+    if (!adminUser) {
+      setMessage("Firebase 관리자 권한 확인 후 감염병 보고를 조회할 수 있습니다.");
+      setLoading(false);
       return;
     }
 
     setLoading(true);
     setMessage("");
     try {
-      const json = await requestAdminInfection({ action: "getAdminInfectionReports", password: nextPassword });
-      setPassword("");
+      const json = await requestAdminInfection(adminUser, { action: "getAdminInfectionReports" });
       if (json?.success === true || json?.result === "success") {
-        setAuthPassword(nextPassword);
         applyData(json);
         setFilter("전체");
       } else {
-        setAuthPassword("");
         setData(null);
         setMessage(json?.message || "감염병 보고 목록을 불러올 수 없습니다.");
       }
     } catch (error) {
       console.error("[admin-infection-reports] fetch failed", error);
-      setAuthPassword("");
       setData(null);
       setMessage("감염병 보고 목록 조회 중 오류가 발생했습니다.");
     } finally {
-      setPassword("");
       setLoading(false);
     }
   };
 
   const updateStatus = async (item) => {
     const nextStatus = statusDrafts[item.id] || item.status || "확인 중";
-    if (!authPassword) {
-      setMessage("먼저 마스터 비밀번호로 감염병 보고를 조회해 주세요.");
+    if (!adminUser) {
+      setMessage("Firebase 관리자 권한 확인 후 상태를 변경할 수 있습니다.");
       return;
     }
 
     setUpdatingId(item.id);
     setMessage("");
     try {
-      const json = await requestAdminInfection({
+      const json = await requestAdminInfection(adminUser, {
         action: "updateAdminInfectionReportStatus",
-        password: authPassword,
         rowId: item.id,
         status: nextStatus,
       });
@@ -201,6 +200,10 @@ export default function AdminInfectionReportPage() {
       setUpdatingId("");
     }
   };
+
+  useEffect(() => {
+    fetchReports();
+  }, [adminUser]);
 
   const items = Array.isArray(data?.items) ? data.items : [];
   const filteredItems = useMemo(() => {
@@ -226,17 +229,12 @@ export default function AdminInfectionReportPage() {
         />
 
         <AppCard className="mt-5 p-5">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <label className="mb-1.5 block text-sm font-black text-[#263238]">마스터 비밀번호 재확인</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter") fetchReports(); }}
-                className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm font-bold text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
-                placeholder="조회 후 현재 화면에서만 임시 사용합니다."
-              />
+              <p className="text-sm font-black text-[#263238]">Firebase 관리자 권한으로 조회</p>
+              <p className="mt-1 text-xs font-bold leading-5 text-slate-500" style={{ wordBreak: "keep-all" }}>
+                로그인한 보건교사/관리자 권한을 서버에서 확인한 뒤 기존 감염병 보고 시트를 조회·수정합니다.
+              </p>
             </div>
             <button
               type="button"
@@ -249,9 +247,6 @@ export default function AdminInfectionReportPage() {
               {loading ? "조회 중..." : "감염병 보고 조회"}
             </button>
           </div>
-          <p className="mt-3 text-xs font-bold leading-5 text-slate-500" style={{ wordBreak: "keep-all" }}>
-            입력한 비밀번호는 브라우저 저장소에 보관하지 않습니다. 조회 성공 후 현재 화면에서만 상태 변경 요청에 임시 사용되며, 새로고침하거나 페이지를 벗어나면 사라집니다.
-          </p>
         </AppCard>
 
         {message && (
@@ -301,7 +296,7 @@ export default function AdminInfectionReportPage() {
                     onStatusDraftChange={(id, status) => setStatusDrafts((prev) => ({ ...prev, [id]: status }))}
                     onStatusUpdate={updateStatus}
                     updating={updatingId === item.id}
-                    canUpdate={Boolean(authPassword)}
+                    canUpdate={Boolean(adminUser)}
                   />
                 ))
               ) : (

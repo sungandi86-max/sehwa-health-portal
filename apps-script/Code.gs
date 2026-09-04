@@ -340,6 +340,19 @@ function doPost(e) {
   lock.tryLock(10000);
   try {
     const payload = JSON.parse(e.postData.contents);
+    if (payload.action === "verifyAdminMaster") {
+      return jsonOutput_(verifyAdminMaster_(payload));
+    }
+    if (payload.action === "getAdminReceiptSummary") {
+      return jsonOutput_(getAdminReceiptSummary_(payload));
+    }
+    if (payload.action === "getAdminInfectionReports") {
+      return jsonOutput_(getAdminInfectionReports_(payload));
+    }
+    if (payload.action === "updateAdminInfectionReportStatus") {
+      return jsonOutput_(updateAdminInfectionReportStatus_(payload));
+    }
+
     if (payload.type === "student-file" || payload.submissionType === "student-file") {
       const result = appendStudentFileSubmission_(payload);
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -2613,18 +2626,8 @@ function getAppConfig_(key) {
 }
 
 function verifyAdminMaster_(params) {
-  const password = String(params.password || "");
-  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
-
-  if (!password) {
-    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
-  }
-  if (!correctPassword) {
-    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
-  }
-  if (password !== correctPassword) {
-    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
-  }
+  const access = verifyAdminMasterAccess_(params);
+  if (!access.ok) return access.error;
 
   return {
     success: true,
@@ -2632,6 +2635,33 @@ function verifyAdminMaster_(params) {
     receiptAlert: buildAdminReceiptAlert_(buildAdminReceiptSections_(getSpreadsheet_())),
     adminDashboard: buildAdminDashboardSummary_(getSpreadsheet_())
   };
+}
+
+function verifyAdminMasterAccess_(params) {
+  if (String(params.proxySecret || "")) {
+    const secretCheck = verifyStudentCareProxySecret_(params);
+    if (!secretCheck.ok) {
+      return {
+        ok: false,
+        error: { success: false, result: "error", message: "관리자 서버 권한을 확인할 수 없습니다." }
+      };
+    }
+    return { ok: true };
+  }
+
+  const password = String(params.password || "");
+  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
+
+  if (!password) {
+    return { ok: false, error: { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." } };
+  }
+  if (!correctPassword) {
+    return { ok: false, error: { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." } };
+  }
+  if (password !== correctPassword) {
+    return { ok: false, error: { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." } };
+  }
+  return { ok: true };
 }
 
 function buildAdminDashboardSummary_(ss) {
@@ -2688,18 +2718,8 @@ function countAdminRoadmapTasks_(ss) {
 }
 
 function getAdminReceiptSummary_(params) {
-  const password = String(params.password || "");
-  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
-
-  if (!password) {
-    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
-  }
-  if (!correctPassword) {
-    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
-  }
-  if (password !== correctPassword) {
-    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
-  }
+  const access = verifyAdminMasterAccess_(params);
+  if (!access.ok) return access.error;
 
   const sections = buildAdminReceiptSections_(getSpreadsheet_());
 
@@ -2864,18 +2884,8 @@ function formatAdminReceiptDateTime_(date) {
 }
 
 function getAdminInfectionReports_(params) {
-  const password = String(params.password || "");
-  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
-
-  if (!password) {
-    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
-  }
-  if (!correctPassword) {
-    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
-  }
-  if (password !== correctPassword) {
-    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
-  }
+  const access = verifyAdminMasterAccess_(params);
+  if (!access.ok) return access.error;
 
   const ss = getSpreadsheet_();
   const sheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
@@ -2971,20 +2981,10 @@ function getInfectionReportState_(row, today) {
 }
 
 function updateAdminInfectionReportStatus_(params) {
-  const password = String(params.password || "");
   const rowId = Number(params.rowId || 0);
   const status = String(params.status || "").trim();
-  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
-
-  if (!password) {
-    return { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." };
-  }
-  if (!correctPassword) {
-    return { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." };
-  }
-  if (password !== correctPassword) {
-    return { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." };
-  }
+  const access = verifyAdminMasterAccess_(params);
+  if (!access.ok) return access.error;
   if (!rowId || rowId < 5) {
     return { success: false, result: "error", message: "상태를 변경할 보고 행을 찾을 수 없습니다." };
   }
