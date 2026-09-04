@@ -145,5 +145,5 @@ export async function verifyDirectoryAdmin(req) {
   const hasAccess = assignment.active === true && (roles.includes("health_teacher") || roles.includes("admin"));
   if (!hasAccess) return { ok: false, status: 403, message: "관리자 권한이 없습니다." };
 
-  return { ok: true, decodedToken, assignment, db };
+  return { ok: true, decodedToken, assignment, auth: getFirebaseAdminAuth(), db };
 }

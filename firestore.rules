@@ -212,7 +212,7 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isSelf(uid) || hasCurrentHealthTeacherOrAdminAssignment();
       allow create: if isValidSelfUserCreate(uid);
-      allow update: if isValidSelfUserUpdate(uid) || hasCurrentHealthTeacherAssignment();
+      allow update: if isValidSelfUserUpdate(uid);
       allow delete: if false;
     }
 
@@ -243,8 +243,7 @@ service cloud.firestore {
         ])
         && request.resource.data.updatedAt == request.time
         && preservesOwnCurrentHealthTeacherAssignment(assignmentId, request.resource.data);
-      allow delete: if hasCurrentHealthTeacherAssignment()
-        && assignmentId != currentAssignmentId(request.auth.uid);
+      allow delete: if false;
     }
 
     match /access_requests/{requestId} {

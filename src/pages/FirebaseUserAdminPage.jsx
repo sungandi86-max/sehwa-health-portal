@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
+import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
+import FirebaseUserDangerActions from "../components/FirebaseUserDangerActions.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { getRoleLabel, getRoleLabels } from "../lib/firebaseRoles.js";
+import { checkUserDeletion, deactivateUserAccount, deleteUserAccount } from "../lib/adminUserAccounts.js";
 import {
   ASSIGNMENT_FILTERS,
   ASSIGNMENT_ROLES,
@@ -65,6 +67,14 @@ function getStaffIdSuggestion(user, directory) {
 
 function staffDirectoryLabel(item) {
   return [item.staffId, item.name, item.position, item.department].filter(Boolean).join(" · ");
+}
+
+function formatAccountState(user) {
+  const accountState = user.active ? "계정 활성" : "계정 비활성";
+  const assignmentState = user.assignment
+    ? user.assignment.active === true ? "권한 활성" : "권한 비활성"
+    : "권한 미등록";
+  return `${accountState} · ${assignmentState}`;
 }
 
 function RoleBadges({ roles }) {
@@ -327,6 +337,9 @@ function UserAssignmentCard({
   pendingId,
   onSave,
   onLinkStaffId,
+  onCheckDeletion,
+  onDeactivateUser,
+  onDeleteUser,
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(() => createDraft(user, schoolYear, semester));
@@ -433,10 +446,8 @@ function UserAssignmentCard({
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-black text-[#102047]">문서</dt>
-            <dd className="mt-1 break-all text-sm font-medium text-[#627083]">
-              {assignment?.id || `${user.uid}_${schoolYear}_${semester}`}
-            </dd>
+            <dt className="text-xs font-black text-[#102047]">계정 상태</dt>
+            <dd className="mt-1 text-sm font-medium text-[#627083]">{formatAccountState(user)}</dd>
           </div>
         </dl>
       )}
@@ -451,6 +462,19 @@ function UserAssignmentCard({
           linkedStaffIdCounts={linkedStaffIdCounts}
           pendingId={pendingId}
           onLinkStaffId={onLinkStaffId}
+        />
+      )}
+
+      {!isEditing && (
+        <FirebaseUserDangerActions
+          user={user}
+          schoolYear={schoolYear}
+          semester={semester}
+          currentUid={currentUid}
+          pendingId={pendingId}
+          onCheckDeletion={onCheckDeletion}
+          onDeactivateUser={onDeactivateUser}
+          onDeleteUser={onDeleteUser}
         />
       )}
 
@@ -824,6 +848,56 @@ function FirebaseUserAdminContent({ user, displayName }) {
     }
   };
 
+  const handleCheckDeletion = async (targetUid) => {
+    setPendingId(targetUid);
+    setActionState({ status: "loading", message: "삭제 가능 여부를 확인하는 중입니다." });
+    try {
+      const result = await checkUserDeletion(targetUid);
+      setActionState({ status: "success", message: result.message });
+      return { ok: true, ...result };
+    } catch (error) {
+      const message = error?.message || "삭제 가능 여부를 확인하지 못했습니다.";
+      setActionState({ status: "error", message });
+      return { ok: false, message, references: error?.references || null };
+    } finally {
+      setPendingId("");
+    }
+  };
+
+  const handleDeactivateUser = async (payload) => {
+    setPendingId(payload.uid);
+    setActionState({ status: "loading", message: "계정 접근을 비활성화하는 중입니다." });
+    try {
+      const result = await deactivateUserAccount(payload);
+      await loadUsers();
+      setActionState({ status: "success", message: result.message || "계정 접근을 비활성화했습니다." });
+      return { ok: true };
+    } catch (error) {
+      const message = error?.message || "계정을 비활성화하지 못했습니다.";
+      setActionState({ status: "error", message });
+      return { ok: false, message };
+    } finally {
+      setPendingId("");
+    }
+  };
+
+  const handleDeleteUser = async (payload) => {
+    setPendingId(payload.uid);
+    setActionState({ status: "loading", message: "계정을 완전히 삭제하는 중입니다." });
+    try {
+      const result = await deleteUserAccount(payload);
+      await loadUsers();
+      setActionState({ status: "success", message: result.message || "계정을 완전히 삭제했습니다." });
+      return { ok: true };
+    } catch (error) {
+      const message = error?.message || "계정을 완전히 삭제하지 못했습니다.";
+      setActionState({ status: "error", message });
+      return { ok: false, message, references: error?.references || null };
+    } finally {
+      setPendingId("");
+    }
+  };
+
   return (
     <FirebaseV2PageShell
       label="관리자"
@@ -930,6 +1004,9 @@ function FirebaseUserAdminContent({ user, displayName }) {
               pendingId={pendingId}
               onSave={handleSave}
               onLinkStaffId={handleLinkStaffId}
+              onCheckDeletion={handleCheckDeletion}
+              onDeactivateUser={handleDeactivateUser}
+              onDeleteUser={handleDeleteUser}
             />
           ))}
 
@@ -947,8 +1024,8 @@ function FirebaseUserAdminContent({ user, displayName }) {
 
 export default function FirebaseUserAdminPage() {
   return (
-    <FirebaseV2AccessGate>
+    <FirebaseAdminRoleAccessGate deniedTitle="교직원 권한 관리 권한이 없습니다.">
       {({ user, displayName }) => <FirebaseUserAdminContent user={user} displayName={displayName} />}
-    </FirebaseV2AccessGate>
+    </FirebaseAdminRoleAccessGate>
   );
 }
