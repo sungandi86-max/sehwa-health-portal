@@ -261,7 +261,7 @@ service cloud.firestore {
     }
 
     match /faqs/{faqId} {
-      allow read: if signedIn();
+      allow read: if true;
       allow create, update, delete: if hasCurrentHealthTeacherAssignment();
     }
 

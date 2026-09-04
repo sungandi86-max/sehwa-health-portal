@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SectionTitle } from "./ui.jsx";
 
-export default function FAQSection({ items }) {
+export default function FAQSection({ items, isLoading = false, loadFailed = false, fallbackUsed = false }) {
   const [openIndex, setOpenIndex] = useState(0);
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
@@ -35,11 +35,21 @@ export default function FAQSection({ items }) {
           />
         </label>
       </div>
+      {fallbackUsed && (
+        <div className="mb-4 rounded-[20px] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          FAQ를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
+        </div>
+      )}
+
       <div className="space-y-3">
-        {filteredItems.length ? (
+        {isLoading ? (
+          <div className="rounded-[22px] border border-slate-100 bg-white p-6 text-center text-sm font-bold text-slate-600 shadow-sm">
+            FAQ를 불러오는 중입니다.
+          </div>
+        ) : filteredItems.length ? (
           filteredItems.map((item, idx) => (
             <div
-              key={item.question}
+              key={item.id || item.question}
               className="overflow-hidden rounded-[22px] border border-slate-100 bg-white shadow-sm"
             >
               <button
@@ -56,6 +66,10 @@ export default function FAQSection({ items }) {
               )}
             </div>
           ))
+        ) : loadFailed ? (
+          <div className="rounded-[22px] border border-slate-100 bg-white p-6 text-center text-sm font-bold text-slate-600 shadow-sm">
+            FAQ를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.
+          </div>
         ) : (
           <div className="rounded-[22px] border border-slate-100 bg-white p-6 text-center text-sm font-bold text-slate-600 shadow-sm">
             검색 결과가 없습니다. 필요한 경우 보건실로 문의해주세요.
