@@ -51,6 +51,26 @@ const STUDENT_CARE_PROJECTION_SYNC = {
   relevantColumns: [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13],
   recentBatchDays: 2
 };
+const HEALTH_ROOM_BACKUP = {
+  sourceSpreadsheetIdProperty: "HEALTH_ROOM_SOURCE_SPREADSHEET_ID",
+  backupFolderIdProperty: "HEALTH_ROOM_BACKUP_FOLDER_ID",
+  backupHourProperty: "HEALTH_ROOM_BACKUP_HOUR",
+  statusProperty: "HEALTH_ROOM_BACKUP_STATUS",
+  nightlyHandler: "backupHealthRoomSpreadsheetNightly_",
+  sourceMimeType: "application/vnd.google-apps.spreadsheet",
+  expectedSheets: [
+    SHEET_NAMES.visit,
+    SHEET_NAMES.portalNotices,
+    SHEET_NAMES.portalUploads,
+    SHEET_NAMES.portalCheckups,
+    SHEET_NAMES.portalEducations,
+    SHEET_NAMES.portalStudentCare,
+    SHEET_NAMES.infectionManagement,
+    "응답_심폐소생술이수증",
+    "응답_결핵검진확인증",
+    "응답_채용검진확인요청"
+  ]
+};
 
 const SUBMIT_SHEET_HEADERS = {
   "응답_심폐소생술이수증":        ["제출일시","성명","소속/부서","교직원구분","이수일자","이수기관","파일명","파일링크"],
@@ -1888,6 +1908,227 @@ function listStudentCareProjectionTriggers_() {
         source: String(trigger.getTriggerSource()),
       };
     });
+}
+
+function backupHealthRoomSpreadsheetDryRun() {
+  return runHealthRoomSpreadsheetBackup_({ dryRun: true, stage: "dry-run" });
+}
+
+function backupHealthRoomSpreadsheetNow() {
+  return runHealthRoomSpreadsheetBackup_({ dryRun: false, stage: "manual" });
+}
+
+function backupHealthRoomSpreadsheetNightly_() {
+  try {
+    return runHealthRoomSpreadsheetBackup_({ dryRun: false, stage: "nightly" });
+  } catch (error) {
+    const result = {
+      result: "error",
+      stage: "nightly",
+      message: sanitizeHealthRoomBackupError_(error)
+    };
+    recordHealthRoomBackupStatus_("nightly", "error", result);
+    console.error("Health room backup failed: " + result.message);
+    return result;
+  }
+}
+
+function setupHealthRoomBackupTrigger() {
+  const hour = readHealthRoomBackupHour_();
+  const triggers = ScriptApp.getProjectTriggers();
+  const existing = listHealthRoomBackupTriggers_();
+
+  if (hasHealthRoomBackupTrigger_(triggers)) {
+    return {
+      result: "success",
+      created: false,
+      hour: hour,
+      existing: existing,
+      message: "backup trigger already exists"
+    };
+  }
+
+  ScriptApp.newTrigger(HEALTH_ROOM_BACKUP.nightlyHandler)
+    .timeBased()
+    .atHour(hour)
+    .everyDays(1)
+    .inTimezone(TIMEZONE)
+    .create();
+
+  return {
+    result: "success",
+    created: true,
+    hour: hour,
+    existing: listHealthRoomBackupTriggers_()
+  };
+}
+
+function removeHealthRoomBackupTrigger() {
+  const removed = [];
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (isHealthRoomBackupTriggerHandler_(trigger.getHandlerFunction())) {
+      ScriptApp.deleteTrigger(trigger);
+      removed.push(trigger.getHandlerFunction());
+    }
+  });
+
+  return {
+    result: "success",
+    removed: removed,
+    remaining: listHealthRoomBackupTriggers_()
+  };
+}
+
+function listHealthRoomBackupTriggers() {
+  return {
+    result: "success",
+    triggers: listHealthRoomBackupTriggers_()
+  };
+}
+
+function runHealthRoomSpreadsheetBackup_(options) {
+  const config = readHealthRoomBackupConfig_();
+  const validation = validateHealthRoomBackupConfig_(config);
+  const backupName = buildHealthRoomBackupName_(new Date());
+  const sourceIntegrity = readHealthRoomBackupIntegrity_(validation.sourceSpreadsheetId);
+
+  if (options.dryRun) {
+    const result = {
+      result: "success",
+      dryRun: true,
+      stage: options.stage,
+      backupName: backupName,
+      source: sourceIntegrity,
+      folderName: validation.backupFolder.getName()
+    };
+    recordHealthRoomBackupStatus_(options.stage, "success", result);
+    return result;
+  }
+
+  const backupFile = validation.sourceFile.makeCopy(backupName, validation.backupFolder);
+  const backupIntegrity = readHealthRoomBackupIntegrity_(backupFile.getId());
+  const result = {
+    result: "success",
+    dryRun: false,
+    stage: options.stage,
+    backedUpAt: Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
+    backupFileId: backupFile.getId(),
+    backupName: backupFile.getName(),
+    source: sourceIntegrity,
+    backup: backupIntegrity
+  };
+  recordHealthRoomBackupStatus_(options.stage, "success", result);
+  return result;
+}
+
+function readHealthRoomBackupConfig_() {
+  const properties = PropertiesService.getScriptProperties();
+  return {
+    sourceSpreadsheetId: String(properties.getProperty(HEALTH_ROOM_BACKUP.sourceSpreadsheetIdProperty) || SPREADSHEET_ID || "").trim(),
+    backupFolderId: String(properties.getProperty(HEALTH_ROOM_BACKUP.backupFolderIdProperty) || "").trim()
+  };
+}
+
+function validateHealthRoomBackupConfig_(config) {
+  if (!config.sourceSpreadsheetId) {
+    throw new Error("source spreadsheet id is not configured");
+  }
+  if (!config.backupFolderId) {
+    throw new Error("backup folder id is not configured");
+  }
+  if (config.sourceSpreadsheetId === config.backupFolderId) {
+    throw new Error("source spreadsheet id and backup folder id must differ");
+  }
+
+  const sourceFile = DriveApp.getFileById(config.sourceSpreadsheetId);
+  if (sourceFile.isTrashed()) {
+    throw new Error("source spreadsheet is trashed");
+  }
+  if (sourceFile.getMimeType() !== HEALTH_ROOM_BACKUP.sourceMimeType) {
+    throw new Error("source file is not a Google Sheets spreadsheet");
+  }
+
+  const backupFolder = DriveApp.getFolderById(config.backupFolderId);
+  return {
+    sourceSpreadsheetId: config.sourceSpreadsheetId,
+    sourceFile: sourceFile,
+    backupFolder: backupFolder
+  };
+}
+
+function buildHealthRoomBackupName_(now) {
+  return "2026학년도 보건실 업무_BACKUP_" +
+    Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd_HHmmss");
+}
+
+function readHealthRoomBackupIntegrity_(spreadsheetId) {
+  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+  const sheetNames = spreadsheet.getSheets().map(function(sheet) {
+    return sheet.getName();
+  });
+  const missingSheets = HEALTH_ROOM_BACKUP.expectedSheets.filter(function(sheetName) {
+    return sheetNames.indexOf(sheetName) === -1;
+  });
+
+  return {
+    sheetCount: sheetNames.length,
+    expectedSheetCount: HEALTH_ROOM_BACKUP.expectedSheets.length,
+    missingSheets: missingSheets
+  };
+}
+
+function recordHealthRoomBackupStatus_(stage, status, data) {
+  const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+  const integrity = data && data.backup ? data.backup : (data && data.source ? data.source : null);
+  const safeData = {
+    stage: stage,
+    status: status,
+    updatedAt: now,
+    backupName: data && data.backupName ? data.backupName : "",
+    backupFileId: data && data.backupFileId ? data.backupFileId : "",
+    sheetCount: integrity ? integrity.sheetCount : "",
+    missingSheets: integrity ? integrity.missingSheets : [],
+    message: data && data.message ? data.message : ""
+  };
+  PropertiesService.getScriptProperties()
+    .setProperty(HEALTH_ROOM_BACKUP.statusProperty, JSON.stringify(safeData));
+}
+
+function readHealthRoomBackupHour_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(HEALTH_ROOM_BACKUP.backupHourProperty);
+  const hour = Number(raw);
+  if (!/^\d{1,2}$/.test(String(raw || "")) || hour < 0 || hour > 23) {
+    throw new Error(HEALTH_ROOM_BACKUP.backupHourProperty + " must be set to an hour from 0 to 23 before installing the backup trigger");
+  }
+  return hour;
+}
+
+function hasHealthRoomBackupTrigger_(triggers) {
+  return triggers.some(function(trigger) {
+    return isHealthRoomBackupTriggerHandler_(trigger.getHandlerFunction());
+  });
+}
+
+function listHealthRoomBackupTriggers_() {
+  return ScriptApp.getProjectTriggers()
+    .filter(function(trigger) {
+      return isHealthRoomBackupTriggerHandler_(trigger.getHandlerFunction());
+    })
+    .map(function(trigger) {
+      return {
+        handler: trigger.getHandlerFunction(),
+        eventType: String(trigger.getEventType()),
+        source: String(trigger.getTriggerSource())
+      };
+    });
+}
+
+function isHealthRoomBackupTriggerHandler_(handler) {
+  return handler === HEALTH_ROOM_BACKUP.nightlyHandler;
+}
+
+function sanitizeHealthRoomBackupError_(error) {
+  return String(error && error.message ? error.message : error || "unknown error");
 }
 
 function syncStudentCareProjectionForDate_(dateText, stage) {
