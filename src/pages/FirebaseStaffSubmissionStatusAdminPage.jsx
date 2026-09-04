@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPanel.jsx";
 import { getAdminStaffSubmissionStatusOverview } from "../lib/staffSubmissionStatusAdmin.js";
 
 const STATUS_FILTERS = [
@@ -187,6 +188,8 @@ function AdminStatusContent({ displayName }) {
       description="결핵검진과 심폐소생술 연수의 완료 상태를 Firestore projection 기준으로 확인합니다."
       displayName={displayName}
     >
+      <ResearchTrainingDryRunPanel />
+
       {state.status === "success" && selectedTask && (
         <>
           <section className="grid gap-3 lg:grid-cols-2">
