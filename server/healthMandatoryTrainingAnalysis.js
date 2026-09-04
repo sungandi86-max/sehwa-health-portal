@@ -95,17 +95,14 @@ function addUnique(index, key, value) {
 }
 
 function buildDirectoryIndexes(directory) {
-  const byNameDepartment = new Map();
   const byNamePosition = new Map();
   const staffIdCounts = new Map();
   directory.forEach((item) => {
     const name = exactText(item.name);
-    addUnique(byNameDepartment, `${name}|${exactText(item.department)}`, item);
     addUnique(byNamePosition, `${name}|${exactText(item.position)}`, item);
     staffIdCounts.set(item.staffId, (staffIdCounts.get(item.staffId) || 0) + 1);
   });
   return {
-    byNameDepartment,
     byNamePosition,
     duplicateCanonicalStaffIds: [...staffIdCounts.values()].filter((count) => count > 1).length,
   };
@@ -121,16 +118,11 @@ function uniqueLookup(index, key) {
 
 function resolveStaff(sourceRow, indexes) {
   const name = exactText(sourceRow.realName);
-  const department = exactText(sourceRow.department);
   const position = exactText(sourceRow.position);
-  const byDepartment = uniqueLookup(indexes.byNameDepartment, `${name}|${department}`);
-  if (byDepartment.kind === "matched") return { kind: "matched", match: byDepartment.match, criterion: "realName_department_exact" };
-  if (byDepartment.kind === "ambiguous") return { kind: "ambiguous", criterion: "realName_department_exact" };
-
   const byPosition = uniqueLookup(indexes.byNamePosition, `${name}|${position}`);
   if (byPosition.kind === "matched") return { kind: "matched", match: byPosition.match, criterion: "realName_position_exact" };
   if (byPosition.kind === "ambiguous") return { kind: "ambiguous", criterion: "realName_position_exact" };
-  return { kind: "unmatched", criterion: department || position ? "exact_secondary_identifier" : "no_secondary_identifier" };
+  return { kind: "unmatched", criterion: position ? "realName_position_exact" : "no_secondary_identifier" };
 }
 
 export function summarizeResearchRows(values) {
