@@ -1,7 +1,7 @@
 import { auth } from "./firebase.js";
 
-const RESEARCH_TRAINING_DRY_RUN_API =
-  "/api/firebase/staff-directory?resource=health-mandatory-training-sync&dryRun=1";
+const RESEARCH_TRAINING_SYNC_API = "/api/firebase/staff-directory?resource=health-mandatory-training-sync";
+const RESEARCH_TRAINING_DRY_RUN_API = `${RESEARCH_TRAINING_SYNC_API}&dryRun=1`;
 
 async function getIdToken() {
   const currentUser = auth.currentUser;
@@ -15,6 +15,7 @@ export async function checkResearchTrainingDryRun() {
 
 export async function applyResearchTrainingSnapshot() {
   return requestResearchTrainingSync({
+    url: RESEARCH_TRAINING_SYNC_API,
     method: "POST",
     body: JSON.stringify({ apply: true }),
   });
@@ -22,7 +23,7 @@ export async function applyResearchTrainingSnapshot() {
 
 async function requestResearchTrainingSync(options) {
   const idToken = await getIdToken();
-  const response = await fetch(RESEARCH_TRAINING_DRY_RUN_API, {
+  const response = await fetch(options.url || RESEARCH_TRAINING_DRY_RUN_API, {
     method: options.method,
     headers: {
       Authorization: `Bearer ${idToken}`,

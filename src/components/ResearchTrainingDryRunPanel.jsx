@@ -39,8 +39,22 @@ function StatusValueList({ values }) {
   );
 }
 
+function formatApplySyncedAt(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
 function ResultPanel({ data }) {
   const headerMissing = data.headerInfo?.parseStatus === "header_not_found";
+  const applySyncedAt = formatApplySyncedAt(data.apply?.syncedAt);
 
   return (
     <div className="mt-3 rounded-[14px] border border-[#DDEAE7] bg-[#F7FBF9] p-3">
@@ -65,7 +79,8 @@ function ResultPanel({ data }) {
       </div>
       {data.apply && (
         <p className="mt-3 rounded-[12px] border border-[#BFEBDC] bg-white px-3 py-2 text-[12px] font-semibold leading-5 text-[#08754B]">
-          Firestore snapshot {data.apply.docsWritten}건을 반영했습니다. 기존 research snapshot 중 원본에 없는 항목은 {data.apply.orphanSnapshots}건이며 삭제하지 않았습니다.
+          Firestore snapshot {data.apply.docsWritten}건을 새로고침했습니다. 기존 research snapshot 중 원본에 없는 항목은 {data.apply.orphanSnapshots}건이며 삭제하지 않았습니다.
+          {applySyncedAt ? ` 최근 갱신: ${applySyncedAt}` : ""}
         </p>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
@@ -88,10 +103,10 @@ function ResultPanel({ data }) {
 export default function ResearchTrainingDryRunPanel({ onApplied }) {
   const [result, setResult] = useState(EMPTY_RESULT);
 
-  const handleError = (error) => {
+  const handleError = (error, fallbackMessage) => {
     const message = error?.status >= 500
       ? "연수 현황 점검 설정을 확인해 주세요."
-      : error?.message || "연수 현황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+      : error?.message || fallbackMessage;
     setResult({ status: "error", message, data: null });
   };
 
@@ -101,21 +116,21 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
       const data = await checkResearchTrainingDryRun();
       setResult({ status: "success", message: "", data });
     } catch (error) {
-      handleError(error);
+      handleError(error, "연수 현황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     }
   };
 
   const handleApply = async () => {
-    const confirmed = window.confirm("연구부 Sheet를 다시 읽어 Firestore snapshot을 새로고침하시겠습니까? 연구부 Sheet는 수정하지 않습니다.");
+    const confirmed = window.confirm("연구부 시트의 현재 이수상태를 다시 확인하여 온라인 보건실 현황을 갱신합니다. 연구부 원본 시트는 수정하지 않습니다.");
     if (!confirmed) return;
 
-    setResult({ status: "applying", message: "연수 현황 snapshot 반영 중...", data: null });
+    setResult({ status: "applying", message: "연수 현황 새로고침 중...", data: null });
     try {
       const data = await applyResearchTrainingSnapshot();
       setResult({ status: "success", message: "", data });
       await onApplied?.();
     } catch (error) {
-      handleError(error);
+      setResult({ status: "error", message: error?.status === 403 ? error.message : "연수 현황을 새로고침하지 못했습니다. 기존 현황은 유지됩니다.", data: null });
     }
   };
 
@@ -146,7 +161,7 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
             disabled={isWorking}
             className="min-h-10 rounded-[10px] border border-[#20A982] bg-[#20A982] px-4 py-2 text-[13px] font-bold text-white transition hover:bg-[#08754B] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {result.status === "applying" ? "반영 중..." : "연수 현황 새로고침"}
+            {result.status === "applying" ? "새로고침 중..." : "연수 현황 새로고침"}
           </button>
         </div>
       </div>

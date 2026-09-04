@@ -37,6 +37,9 @@ export default async function handler(req, res) {
       if (isPermissionError(error)) {
         return res.status(403).json({ ok: false, message: "연구부 연수 시트를 읽을 권한이 없습니다." });
       }
+      if (req.method === "POST") {
+        return res.status(500).json({ ok: false, message: "연수 현황을 새로고침하지 못했습니다. 기존 현황은 유지됩니다." });
+      }
       return res.status(500).json({ ok: false, message: "연구부 연수 시트 dry-run을 완료하지 못했습니다." });
     }
     return res.status(500).json({ ok: false, message: "교직원명단을 불러오지 못했습니다." });

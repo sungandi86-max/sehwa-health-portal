@@ -102,6 +102,7 @@ export async function applyHealthMandatoryTrainingSnapshot({ db }) {
   const sourceStaffIds = new Set(snapshotPlan.docs.map((item) => item.data.staffId));
   const orphanSnapshots = existingSnapshot.docs.filter((doc) => !sourceStaffIds.has(doc.data()?.staffId)).length;
   const batch = db.batch();
+  const syncedAt = new Date().toISOString();
   snapshotPlan.docs.forEach((item) => {
     batch.set(db.collection("staff_submission_status").doc(item.id), {
       ...item.data,
@@ -123,6 +124,7 @@ export async function applyHealthMandatoryTrainingSnapshot({ db }) {
       deletedSnapshots: 0,
       sheetWrite: false,
       firestoreWrite: true,
+      syncedAt,
     },
   };
 }

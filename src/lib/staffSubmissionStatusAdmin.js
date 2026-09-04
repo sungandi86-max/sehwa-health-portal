@@ -27,6 +27,7 @@ function normalizeTask(documentSnapshot) {
     title: data.title || documentSnapshot.id,
     description: data.description || "",
     category: data.category || "",
+    sourceType: data.sourceType || "",
     enabled: data.enabled === true,
     order: Number.isFinite(Number(data.order)) ? Number(data.order) : 999,
   };
@@ -54,6 +55,28 @@ function countStatuses(items) {
     }),
     { completed: 0, incomplete: 0, pending: 0, unknown: 0, not_applicable: 0 }
   );
+}
+
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.toDate === "function") return value.toDate().getTime();
+  const millis = Date.parse(String(value));
+  return Number.isFinite(millis) ? millis : 0;
+}
+
+function formatSyncedAt(value) {
+  const millis = toMillis(value);
+  if (!millis) return "";
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(millis));
 }
 
 function normalizeDirectoryItem(documentSnapshot) {
@@ -142,6 +165,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
       .map((item) => decorateStatus(item, directoryResult.directory))
       .sort(sortStatusItems);
     const summary = countStatuses(items);
+    const latestSyncedAt = items.reduce((latest, item) => (toMillis(item.syncedAt) > toMillis(latest) ? item.syncedAt : latest), null);
 
     return {
       ...task,
@@ -150,6 +174,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
         ...summary,
         total: items.length,
         directoryLinked: items.filter((item) => item.hasDirectory).length,
+        latestSyncedAtLabel: formatSyncedAt(latestSyncedAt),
       },
     };
   });
