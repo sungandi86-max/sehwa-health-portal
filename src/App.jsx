@@ -131,8 +131,9 @@ export default function App() {
         setIsLoading(false);
       })
       .catch((error) => {
-        console.error("[portal] load failed", error);
         clearTimeout(timeoutId);
+        if (error?.name === "AbortError") return;
+        console.error("[portal] load failed", error);
         setIsLoading(false);
       });
 
