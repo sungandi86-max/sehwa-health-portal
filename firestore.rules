@@ -26,6 +26,14 @@ service cloud.firestore {
         && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["health_teacher"]);
     }
 
+    function hasCurrentHealthTeacherOrAdminAssignment() {
+      return signedIn()
+        && exists(currentAssignmentPath(request.auth.uid))
+        && get(currentAssignmentPath(request.auth.uid)).data.active == true
+        && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles"])
+        && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["health_teacher", "admin"]);
+    }
+
     function hasCurrentHomeroomAssignment() {
       return signedIn()
         && exists(currentAssignmentPath(request.auth.uid))
@@ -262,6 +270,11 @@ service cloud.firestore {
     match /submission_items/{itemId} {
       allow read: if signedIn();
       allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /student_care_monthly_aggregates/{aggregateId} {
+      allow read: if hasCurrentHealthTeacherOrAdminAssignment();
+      allow write: if false;
     }
 
     match /staff_submissions/{submissionId} {

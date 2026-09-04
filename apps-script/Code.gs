@@ -262,6 +262,9 @@ function doGet(e) {
     if (mode === "adminVisitStatsByRole") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getAdminVisitStatsByRole_(e.parameter || {}), mode));
     }
+    if (mode === "syncStudentCareMonthlyAggregate") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(syncStudentCareMonthlyAggregateFromRequest_(e.parameter || {}), mode));
+    }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
   } catch (error) {
@@ -1321,6 +1324,111 @@ function getAdminVisitStatsByRole_(params) {
     gradeStats: gradeStats,
     classStats: classStats
   };
+}
+
+function syncStudentCareMonthlyAggregateFromRequest_(params) {
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  if (!secretCheck.ok) {
+    return { result: "error", message: secretCheck.message };
+  }
+  return syncStudentCareMonthlyAggregate_(params.schoolYear, params.month);
+}
+
+function syncStudentCareMonthlyAggregateCurrentMonth() {
+  const currentMonth = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM");
+  return syncStudentCareMonthlyAggregate_(String(new Date().getFullYear()), currentMonth);
+}
+
+function syncStudentCareMonthlyAggregate_(schoolYear, month) {
+  const year = Number(schoolYear);
+  const monthText = normalizeStudentCareAggregateMonth_(year, month);
+  if (!year || !monthText) {
+    return { result: "error", message: "학년도와 조회 월을 확인해 주세요." };
+  }
+
+  const proxySecret = PropertiesService.getScriptProperties().getProperty("STUDENT_CARE_PROXY_SECRET");
+  if (!proxySecret) {
+    return { result: "error", message: "학생 건강관리 서버 보호 설정이 필요합니다." };
+  }
+
+  const stats = getAdminVisitStatsByRole_({
+    proxySecret: proxySecret,
+    month: monthText
+  });
+  if (stats.result !== "success") {
+    return stats;
+  }
+
+  const endpoint = getStudentCareSyncEndpoint_();
+  if (!endpoint) {
+    return { result: "error", message: "학생 건강관리 통계 동기화 endpoint가 설정되지 않았습니다." };
+  }
+
+  const payload = {
+    aggregate: {
+      schoolYear: year,
+      month: monthText,
+      summary: stats.summary || {},
+      gradeStats: stats.gradeStats || [],
+      classStats: stats.classStats || [],
+      source: {
+        type: "google_sheet",
+        sheetName: SHEET_NAMES.visit
+      }
+    }
+  };
+
+  const response = UrlFetchApp.fetch(endpoint, {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "x-student-care-proxy-secret": proxySecret
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  const bodyText = response.getContentText();
+  let body = {};
+  try {
+    body = bodyText ? JSON.parse(bodyText) : {};
+  } catch (error) {
+    return { result: "error", message: "동기화 API 응답을 JSON으로 읽을 수 없습니다." };
+  }
+
+  if (status < 200 || status >= 300 || body.ok !== true) {
+    return {
+      result: "error",
+      message: body.message || "월별 통계 projection 동기화에 실패했습니다.",
+      status: status
+    };
+  }
+
+  return {
+    result: "success",
+    id: body.id || "",
+    schoolYear: year,
+    month: monthText,
+    summary: stats.summary || {},
+    gradeStatsCount: (stats.gradeStats || []).length,
+    classStatsCount: (stats.classStats || []).length
+  };
+}
+
+function normalizeStudentCareAggregateMonth_(schoolYear, month) {
+  const text = String(month || "").trim();
+  if (/^\d{4}-\d{2}$/.test(text)) return text;
+  if (!schoolYear) return "";
+  const monthNumber = Number(text);
+  if (monthNumber >= 1 && monthNumber <= 12) {
+    return String(schoolYear) + "-" + ("0" + monthNumber).slice(-2);
+  }
+  return "";
+}
+
+function getStudentCareSyncEndpoint_() {
+  return PropertiesService.getScriptProperties().getProperty("STUDENT_CARE_SYNC_ENDPOINT") ||
+    "https://sehwa-health-portal.vercel.app/api/firebase/student-care-sync";
 }
 
 function compareNumericText_(a, b) {
