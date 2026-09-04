@@ -15,7 +15,15 @@ import { getAssignmentId } from "../config/school.js";
 import { db } from "./firebase.js";
 
 export const ASSIGNMENT_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
-export const ASSIGNMENT_FILTERS = ["all", "unregistered", "staff", "homeroom", "health_teacher", "inactive"];
+export const ASSIGNMENT_FILTERS = [
+  "all",
+  "unregistered",
+  "needsStaffId",
+  "staff",
+  "homeroom",
+  "health_teacher",
+  "inactive",
+];
 
 const USER_LIMIT = 300;
 const ASSIGNMENT_LIMIT = 500;

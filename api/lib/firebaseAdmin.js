@@ -48,6 +48,10 @@ function getServiceAccount() {
   return null;
 }
 
+export function getFirebaseServiceAccount() {
+  return getServiceAccount();
+}
+
 export function getFirebaseAdminApp() {
   if (getApps().length) {
     return getApps()[0];

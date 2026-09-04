@@ -13,10 +13,12 @@ import {
   saveUserAssignment,
   validateAssignmentDraft,
 } from "../lib/userAssignmentsAdmin.js";
+import { getStaffDirectory, linkStaffIdToAssignment } from "../lib/staffIdLinking.js";
 
 const FILTER_LABELS = {
   all: "전체",
   unregistered: "권한 미등록",
+  needsStaffId: "교직원ID 연결 필요",
   staff: "교직원",
   homeroom: "담임교사",
   health_teacher: "보건교사",
@@ -25,6 +27,45 @@ const FILTER_LABELS = {
 
 const GRADE_OPTIONS = [1, 2, 3];
 const CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const DIRECTORY_PREVIEW_LIMIT = 12;
+
+function normalizeSearchText(value) {
+  return String(value || "").normalize("NFKC").replace(/\s+/g, "").toLowerCase();
+}
+
+function exactText(value) {
+  return String(value || "").normalize("NFKC").trim().replace(/\s+/g, " ");
+}
+
+function isActiveAssignment(assignment) {
+  return assignment?.active === true;
+}
+
+function needsStaffIdLink(user) {
+  return isActiveAssignment(user.assignment) && !user.assignment?.staffId;
+}
+
+function getStaffIdSuggestion(user, directory) {
+  const assignment = user.assignment || {};
+  const displayName = exactText(user.displayName);
+  const position = exactText(assignment.position);
+  const department = exactText(assignment.department);
+
+  if (!displayName || (!position && !department)) return "";
+
+  const matches = directory.filter((item) => {
+    if (exactText(item.name) !== displayName) return false;
+    const positionMatches = position && exactText(item.position) === position;
+    const departmentMatches = department && exactText(item.department) === department;
+    return positionMatches || departmentMatches;
+  });
+
+  return matches.length === 1 ? matches[0].staffId : "";
+}
+
+function staffDirectoryLabel(item) {
+  return [item.staffId, item.name, item.position, item.department].filter(Boolean).join(" · ");
+}
 
 function RoleBadges({ roles }) {
   const labels = getRoleLabels(roles);
@@ -85,7 +126,208 @@ function createDraft(user, schoolYear, semester) {
   };
 }
 
-function UserAssignmentCard({ user, schoolYear, semester, currentUid, pendingId, onSave }) {
+function StaffIdLinkPanel({
+  user,
+  schoolYear,
+  semester,
+  directory,
+  directoryState,
+  linkedStaffIdCounts,
+  pendingId,
+  onLinkStaffId,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selectedStaffId, setSelectedStaffId] = useState("");
+  const [localMessage, setLocalMessage] = useState("");
+  const isPending = pendingId === user.uid;
+  const suggestionStaffId = useMemo(() => getStaffIdSuggestion(user, directory), [directory, user]);
+
+  const filteredDirectory = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(query);
+    const ordered = [...directory].sort((left, right) => {
+      if (left.staffId === suggestionStaffId) return -1;
+      if (right.staffId === suggestionStaffId) return 1;
+      return left.staffId.localeCompare(right.staffId, "ko");
+    });
+
+    if (!normalizedQuery) return ordered.slice(0, DIRECTORY_PREVIEW_LIMIT);
+
+    return ordered
+      .filter((item) => {
+        return [item.staffId, item.name, item.position, item.department]
+          .some((value) => normalizeSearchText(value).includes(normalizedQuery));
+      })
+      .slice(0, DIRECTORY_PREVIEW_LIMIT);
+  }, [directory, query, suggestionStaffId]);
+
+  const selectedItem = directory.find((item) => item.staffId === selectedStaffId) || null;
+  const duplicateCount = selectedItem ? linkedStaffIdCounts.get(selectedItem.staffId) || 0 : 0;
+
+  const handleSubmit = async () => {
+    setLocalMessage("");
+    if (!selectedItem) {
+      setLocalMessage("연결할 교직원을 선택해 주세요.");
+      return;
+    }
+
+    const duplicateNotice = duplicateCount
+      ? `\n\n주의: 같은 교직원ID가 다른 활성 권한 ${duplicateCount}건에 이미 연결되어 있습니다.`
+      : "";
+    const confirmed = window.confirm(
+      `이 사용자를 ${staffDirectoryLabel(selectedItem)} 선생님과 연결하시겠습니까?${duplicateNotice}`
+    );
+    if (!confirmed) return;
+
+    const result = await onLinkStaffId({
+      uid: user.uid,
+      schoolYear,
+      semester,
+      staffId: selectedItem.staffId,
+      confirmDuplicate: duplicateCount > 0,
+    });
+
+    if (result?.ok) {
+      setIsOpen(false);
+      setSelectedStaffId("");
+      setQuery("");
+      return;
+    }
+
+    setLocalMessage(result?.message || "교직원ID를 연결하지 못했습니다.");
+  };
+
+  if (user.assignment?.staffId) {
+    return (
+      <p className="mt-3 rounded-[14px] border border-[#DDEAE7] bg-white px-3 py-2 text-[12px] font-semibold text-[#08754B]">
+        연결됨 · {user.assignment.staffId}
+      </p>
+    );
+  }
+
+  if (!needsStaffIdLink(user)) {
+    return (
+      <p className="mt-3 rounded-[14px] border border-[#DDEAE7] bg-white px-3 py-2 text-[12px] font-semibold text-[#627083]">
+        활성 권한 등록 후 연결 가능
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-[16px] border border-[#DDEAE7] bg-white p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[12px] font-bold text-[#B42318]">교직원ID 연결 필요</p>
+          {suggestionStaffId && (
+            <p className="mt-1 text-[12px] font-medium text-[#08754B]">추천 · {suggestionStaffId}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setIsOpen((value) => !value);
+            setLocalMessage("");
+            if (!selectedStaffId && suggestionStaffId) setSelectedStaffId(suggestionStaffId);
+          }}
+          disabled={isPending || directoryState.status === "loading"}
+          className="min-h-10 rounded-[10px] border border-[#BFEBDC] bg-[#F0FBF7] px-3 py-2 text-[12px] font-bold text-[#08754B] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isOpen ? "연결 닫기" : "교직원 연결"}
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="mt-3 space-y-3">
+          {directoryState.status === "error" && (
+            <p className="rounded-[12px] bg-[#FFF7F7] px-3 py-2 text-[12px] font-bold text-[#B42318]">
+              {directoryState.message}
+            </p>
+          )}
+          {directoryState.status !== "error" && (
+            <>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="이름, 교직원ID, 부서, 직책 검색"
+                className="min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-[#F7FBF9] px-3 text-[13px] font-semibold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+              />
+              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                {filteredDirectory.map((item) => {
+                  const itemDuplicateCount = linkedStaffIdCounts.get(item.staffId) || 0;
+                  const isSelected = selectedStaffId === item.staffId;
+                  return (
+                    <label
+                      key={item.staffId}
+                      className={`flex cursor-pointer items-start gap-3 rounded-[12px] border px-3 py-2 text-[12px] transition ${
+                        isSelected ? "border-[#20A982] bg-[#F0FBF7]" : "border-[#DDEAE7] bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={`staff-id-link-${user.uid}`}
+                        checked={isSelected}
+                        onChange={() => setSelectedStaffId(item.staffId)}
+                        className="mt-1 h-4 w-4 accent-[#20A982]"
+                      />
+                      <span className="min-w-0">
+                        <span className="block break-keep font-bold text-[#102047]">
+                          {staffDirectoryLabel(item)}
+                          {item.staffId === suggestionStaffId && (
+                            <span className="ml-2 rounded-full bg-[#20A982] px-2 py-0.5 text-[11px] font-bold text-white">
+                              추천
+                            </span>
+                          )}
+                        </span>
+                        {itemDuplicateCount > 0 && (
+                          <span className="mt-1 block font-semibold text-[#B42318]">
+                            같은 교직원ID가 다른 활성 권한 {itemDuplicateCount}건에 연결됨
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+                {filteredDirectory.length === 0 && (
+                  <p className="rounded-[12px] bg-[#F7FBF9] px-3 py-2 text-[12px] font-semibold text-[#627083]">
+                    검색 결과가 없습니다.
+                  </p>
+                )}
+              </div>
+              {localMessage && (
+                <p className="rounded-[12px] bg-[#FFF7F7] px-3 py-2 text-[12px] font-bold text-[#B42318]">
+                  {localMessage}
+                </p>
+              )}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isPending || !selectedItem}
+                  className="min-h-10 rounded-[10px] bg-[#20A982] px-4 py-2 text-[12px] font-bold text-white transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isPending ? "연결 중..." : "연결 저장"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserAssignmentCard({
+  user,
+  schoolYear,
+  semester,
+  currentUid,
+  directory,
+  directoryState,
+  linkedStaffIdCounts,
+  pendingId,
+  onSave,
+  onLinkStaffId,
+}) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(() => createDraft(user, schoolYear, semester));
   const [localMessage, setLocalMessage] = useState("");
@@ -171,7 +413,7 @@ function UserAssignmentCard({ user, schoolYear, semester, currentUid, pendingId,
       </div>
 
       {!isEditing && (
-        <dl className="mt-5 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-3">
+        <dl className="mt-5 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-4">
           <div>
             <dt className="text-xs font-black text-[#102047]">보직/업무</dt>
             <dd className="mt-1 text-sm font-medium text-[#627083]">{assignment?.position || "미등록"}</dd>
@@ -185,12 +427,31 @@ function UserAssignmentCard({ user, schoolYear, semester, currentUid, pendingId,
             </dd>
           </div>
           <div>
+            <dt className="text-xs font-black text-[#102047]">교직원ID</dt>
+            <dd className="mt-1 text-sm font-medium text-[#627083]">
+              {assignment?.staffId ? `연결됨 · ${assignment.staffId}` : assignment ? "연결 필요" : "미등록"}
+            </dd>
+          </div>
+          <div>
             <dt className="text-xs font-black text-[#102047]">문서</dt>
             <dd className="mt-1 break-all text-sm font-medium text-[#627083]">
               {assignment?.id || `${user.uid}_${schoolYear}_${semester}`}
             </dd>
           </div>
         </dl>
+      )}
+
+      {!isEditing && (
+        <StaffIdLinkPanel
+          user={user}
+          schoolYear={schoolYear}
+          semester={semester}
+          directory={directory}
+          directoryState={directoryState}
+          linkedStaffIdCounts={linkedStaffIdCounts}
+          pendingId={pendingId}
+          onLinkStaffId={onLinkStaffId}
+        />
       )}
 
       {isEditing && (
@@ -432,6 +693,8 @@ function FirebaseUserAdminContent({ user, displayName }) {
   const [schoolYear, setSchoolYear] = useState(CURRENT_SCHOOL_YEAR);
   const [semester, setSemester] = useState(CURRENT_SEMESTER);
   const [users, setUsers] = useState([]);
+  const [staffDirectory, setStaffDirectory] = useState([]);
+  const [directoryState, setDirectoryState] = useState({ status: "idle", message: "" });
   const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [loadState, setLoadState] = useState({ status: "idle", message: "" });
@@ -462,9 +725,41 @@ function FirebaseUserAdminContent({ user, displayName }) {
     }
   };
 
+  const loadStaffDirectory = async () => {
+    setDirectoryState({ status: "loading", message: "" });
+    try {
+      const result = await getStaffDirectory();
+      setStaffDirectory(result.directory);
+      setDirectoryState({ status: "success", message: "" });
+    } catch (error) {
+      setStaffDirectory([]);
+      setDirectoryState({
+        status: "error",
+        message: error?.message || "교직원명단을 불러오지 못했습니다.",
+      });
+    }
+  };
+
   useEffect(() => {
     loadUsers();
   }, [schoolYear, semester]);
+
+  useEffect(() => {
+    loadStaffDirectory();
+  }, []);
+
+  const linkedStaffIdCounts = useMemo(() => {
+    const counts = new Map();
+    users.forEach((userItem) => {
+      const staffId = userItem.assignment?.staffId;
+      if (isActiveAssignment(userItem.assignment) && staffId) {
+        counts.set(staffId, (counts.get(staffId) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [users]);
+
+  const needsStaffIdCount = useMemo(() => users.filter(needsStaffIdLink).length, [users]);
 
   const visibleUsers = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -474,12 +769,13 @@ function FirebaseUserAdminContent({ user, displayName }) {
       const matchesFilter =
         filter === "all" ||
         (filter === "unregistered" && !assignment) ||
+        (filter === "needsStaffId" && needsStaffIdLink(userItem)) ||
         (filter === "inactive" && assignment && assignment.active !== true) ||
         roles.includes(filter);
       if (!matchesFilter) return false;
       if (!normalizedSearch) return true;
 
-      return [userItem.displayName, userItem.email, assignment?.position]
+      return [userItem.displayName, userItem.email, assignment?.position, assignment?.staffId]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
     });
@@ -506,6 +802,23 @@ function FirebaseUserAdminContent({ user, displayName }) {
         message,
       });
       return { ok: false, message };
+    } finally {
+      setPendingId("");
+    }
+  };
+
+  const handleLinkStaffId = async (payload) => {
+    setPendingId(payload.uid);
+    setActionState({ status: "loading", message: "교직원ID를 연결하는 중입니다." });
+    try {
+      await linkStaffIdToAssignment(payload);
+      await loadUsers();
+      setActionState({ status: "success", message: "교직원ID가 연결되었습니다." });
+      return { ok: true };
+    } catch (error) {
+      const message = error?.message || "교직원ID를 연결하지 못했습니다.";
+      setActionState({ status: "error", message });
+      return { ok: false, message, code: error?.code || "" };
     } finally {
       setPendingId("");
     }
@@ -569,7 +882,7 @@ function FirebaseUserAdminContent({ user, displayName }) {
           ))}
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl bg-[#F7FBF9] px-4 py-3">
             <p className="text-xs font-black text-[#627083]">전체 사용자</p>
             <p className="mt-1 text-2xl font-black text-[#102047]">{users.length}</p>
@@ -582,7 +895,16 @@ function FirebaseUserAdminContent({ user, displayName }) {
             <p className="text-xs font-black text-[#627083]">현재 표시</p>
             <p className="mt-1 text-2xl font-black text-[#3154A3]">{visibleUsers.length}</p>
           </div>
+          <div className="rounded-2xl bg-[#FFF7F7] px-4 py-3">
+            <p className="text-xs font-black text-[#627083]">교직원ID 연결 필요</p>
+            <p className="mt-1 text-2xl font-black text-[#B42318]">{needsStaffIdCount}</p>
+          </div>
         </div>
+
+        <p className="mt-4 rounded-2xl bg-[#F7FBF9] px-4 py-3 text-xs font-bold leading-5 text-[#627083]">
+          교직원ID는 Google Sheet 교직원명단을 읽어 선택하며, 저장 시 현재 권한 문서에 staffId만 연결합니다.
+          {directoryState.status === "success" ? ` 교직원명단 ${staffDirectory.length}건 로드됨` : ""}
+        </p>
 
         {actionState.message && (
           <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-black ${actionState.status === "success" ? "bg-[#F0FBF7] text-[#08754B]" : actionState.status === "loading" ? "bg-[#EEF4FF] text-[#3154A3]" : "bg-[#FFF7F7] text-[#B42318]"}`}>
@@ -602,8 +924,12 @@ function FirebaseUserAdminContent({ user, displayName }) {
               schoolYear={schoolYear}
               semester={semester}
               currentUid={user.uid}
+              directory={staffDirectory}
+              directoryState={directoryState}
+              linkedStaffIdCounts={linkedStaffIdCounts}
               pendingId={pendingId}
               onSave={handleSave}
+              onLinkStaffId={handleLinkStaffId}
             />
           ))}
 
