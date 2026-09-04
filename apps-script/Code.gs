@@ -1,5 +1,6 @@
 const SPREADSHEET_ID = "1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs";
 const TIMEZONE = "Asia/Seoul";
+const CURRENT_STUDENT_CARE_SEMESTER = 2;
 
 const SHEET_NAMES = {
   visit: "학생 보건실 입실현황",
@@ -264,6 +265,9 @@ function doGet(e) {
     }
     if (mode === "syncStudentCareMonthlyAggregate") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(syncStudentCareMonthlyAggregateFromRequest_(e.parameter || {}), mode));
+    }
+    if (mode === "syncStudentCarePresencePublic") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(syncStudentCarePresencePublicFromRequest_(e.parameter || {}), mode));
     }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
@@ -1415,6 +1419,144 @@ function syncStudentCareMonthlyAggregate_(schoolYear, month) {
   };
 }
 
+function syncStudentCarePresencePublicFromRequest_(params) {
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  if (!secretCheck.ok) {
+    return { result: "error", message: secretCheck.message };
+  }
+  return syncStudentCarePresencePublic_(params.schoolYear, params.date);
+}
+
+function syncStudentCarePresencePublicToday() {
+  const today = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
+  return syncStudentCarePresencePublic_(String(new Date().getFullYear()), today);
+}
+
+function syncStudentCarePresencePublic_(schoolYear, targetDate) {
+  const year = Number(schoolYear);
+  const dateText = normalizeStudentCareProjectionDate_(targetDate);
+  if (!year || !dateText) {
+    return { result: "error", message: "학년도와 대상 날짜를 확인해 주세요." };
+  }
+
+  const proxySecret = PropertiesService.getScriptProperties().getProperty("STUDENT_CARE_PROXY_SECRET");
+  if (!proxySecret) {
+    return { result: "error", message: "학생 건강관리 서버 보호 설정이 필요합니다." };
+  }
+
+  const endpoint = getStudentCareSyncEndpoint_();
+  if (!endpoint) {
+    return { result: "error", message: "학생 건강관리 동기화 endpoint가 설정되지 않았습니다." };
+  }
+
+  const items = buildStudentCarePresencePublicItems_(year, dateText);
+  if (!items.ok) return items;
+
+  const payload = {
+    type: "presencePublic",
+    presencePublic: {
+      schoolYear: year,
+      semester: CURRENT_STUDENT_CARE_SEMESTER,
+      date: dateText,
+      month: dateText.slice(0, 7),
+      items: items.items,
+      source: {
+        type: "google_sheet",
+        sheetName: SHEET_NAMES.visit
+      }
+    }
+  };
+
+  const response = UrlFetchApp.fetch(endpoint, {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "x-student-care-proxy-secret": proxySecret
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  const bodyText = response.getContentText();
+  let body = {};
+  try {
+    body = bodyText ? JSON.parse(bodyText) : {};
+  } catch (error) {
+    return { result: "error", message: "동기화 API 응답을 JSON으로 읽을 수 없습니다." };
+  }
+
+  if (status < 200 || status >= 300 || body.ok !== true) {
+    return {
+      result: "error",
+      message: body.message || "보건실 소재 projection 동기화에 실패했습니다.",
+      status: status
+    };
+  }
+
+  return {
+    result: "success",
+    date: dateText,
+    count: items.items.length,
+    written: body.written || 0,
+    removed: body.removed || 0
+  };
+}
+
+function buildStudentCarePresencePublicItems_(schoolYear, targetDate) {
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet) {
+    return { result: "error", message: SHEET_NAMES.visit + " 탭을 찾을 수 없습니다." };
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const items = [];
+
+  for (let i = 3; i < values.length; i++) {
+    const row = values[i];
+    const rowDate = normalizeDateText_(row[0]);
+    if (rowDate !== targetDate) continue;
+
+    const grade = Number(String(row[2] || "").trim());
+    const classNo = Number(String(row[3] || "").trim());
+    const number = Number(String(row[4] || "").trim());
+    const maskedName = maskStudentName_(row[5]);
+    if (!grade || !classNo || !number || !maskedName) continue;
+
+    const returnedAt = String(row[7] || "").trim();
+    const resultDetail = String(row[12] || "").trim();
+    const status = normalizeHealthRoomStatus_(String(row[1] || "").trim(), returnedAt, resultDetail);
+
+    items.push({
+      schoolYear: schoolYear,
+      semester: CURRENT_STUDENT_CARE_SEMESTER,
+      date: rowDate,
+      month: rowDate.slice(0, 7),
+      grade: grade,
+      classNo: classNo,
+      number: number,
+      studentNo: [String(grade), String(classNo), String(number)].join("-"),
+      maskedName: maskedName,
+      enteredAt: String(row[6] || "").trim(),
+      returnedAt: returnedAt,
+      status: status,
+      sourceRef: {
+        type: "google_sheet",
+        sheetName: SHEET_NAMES.visit,
+        rowNumber: i + 1
+      }
+    });
+  }
+
+  items.sort(function(a, b) {
+    const aCurrent = a.status === "현재 이용중" ? 0 : 1;
+    const bCurrent = b.status === "현재 이용중" ? 0 : 1;
+    if (aCurrent !== bCurrent) return aCurrent - bCurrent;
+    return String(b.enteredAt || "").localeCompare(String(a.enteredAt || ""));
+  });
+
+  return { ok: true, items: items };
+}
+
 function normalizeStudentCareAggregateMonth_(schoolYear, month) {
   const text = String(month || "").trim();
   if (/^\d{4}-\d{2}$/.test(text)) return text;
@@ -1424,6 +1566,12 @@ function normalizeStudentCareAggregateMonth_(schoolYear, month) {
     return String(schoolYear) + "-" + ("0" + monthNumber).slice(-2);
   }
   return "";
+}
+
+function normalizeStudentCareProjectionDate_(value) {
+  const text = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  return normalizeDateText_(value);
 }
 
 function getStudentCareSyncEndpoint_() {

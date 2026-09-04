@@ -11,6 +11,7 @@ import {
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
+import { getPublicHealthRoomPresence } from "../lib/studentCarePresence.js";
 import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher, isHomeroom, isStaff } from "../lib/userProfile.js";
 import FirebaseAccessRequestAction from "./FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
@@ -336,6 +337,26 @@ function HealthRoomLocationModal({ onClose, authState }) {
     setLoading(true);
     resetResult();
     try {
+      let fallbackMessage = "";
+      if (accessType === "subject") {
+        try {
+          const presence = await getPublicHealthRoomPresence();
+          if (presence.stale) {
+            throw new Error("stale public presence projection");
+          }
+          setRows(presence.rows);
+          setMessage(presence.rows.length ? "" : "조회된 보건실 소재 기록이 없습니다.");
+          return;
+        } catch (projectionError) {
+          console.warn("[HealthRoom:getHealthRoomLocation] Firestore projection fallback", {
+            code: projectionError?.code || "",
+            message: projectionError?.message || "unknown",
+          });
+          fallbackMessage = "최신 소재 정보를 불러오는 중 문제가 발생해 기존 조회 방식으로 확인했습니다.";
+          setMessage(fallbackMessage);
+        }
+      }
+
       const params = new URLSearchParams({
         action: "getHealthRoomLocation",
         accessType,
@@ -343,7 +364,7 @@ function HealthRoomLocationModal({ onClose, authState }) {
       const json = await requestGasJson(params, "HealthRoom:getHealthRoomLocation", authState.user);
       if (isGasSuccess(json)) {
         setRows(Array.isArray(json.items) ? json.items : []);
-        setMessage(json.message || (Array.isArray(json.items) && json.items.length ? "" : "조회된 보건실 소재 기록이 없습니다."));
+        setMessage(fallbackMessage || json.message || (Array.isArray(json.items) && json.items.length ? "" : "조회된 보건실 소재 기록이 없습니다."));
       } else {
         setError(json.message || json.debug || "조회할 수 없습니다.");
       }
