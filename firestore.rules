@@ -73,6 +73,7 @@ service cloud.firestore {
           "grade",
           "classNo",
           "position",
+          "staffId",
           "active",
           "createdAt",
           "updatedAt"
@@ -100,6 +101,7 @@ service cloud.firestore {
           || (!data.roles.hasAny(["homeroom"]) && data.grade == null && data.classNo == null)
         )
         && (data.position == null || data.position is string)
+        && (!data.keys().hasAny(["staffId"]) || data.staffId == null || data.staffId is string)
         && data.active is bool;
     }
 
@@ -236,6 +238,7 @@ service cloud.firestore {
           "grade",
           "classNo",
           "position",
+          "staffId",
           "active",
           "updatedAt"
         ])
@@ -283,6 +286,11 @@ service cloud.firestore {
     match /submission_items/{itemId} {
       allow read: if signedIn();
       allow create, update, delete: if hasCurrentHealthTeacherAssignment();
+    }
+
+    match /staff_submission_tasks/{taskId} {
+      allow read: if hasCurrentStudentCarePublicAssignment();
+      allow write: if false;
     }
 
     match /student_care_monthly_aggregates/{aggregateId} {
