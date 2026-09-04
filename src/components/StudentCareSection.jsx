@@ -1,5 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { studentCareIntro } from "../data/fallbackData.js";
+import { auth } from "../lib/firebase.js";
+import {
+  getFriendlyAuthErrorMessage,
+  getMicrosoftSchoolDomainBlockMessage,
+  signInWithGoogle,
+  signInWithMicrosoft,
+  signOutFirebase,
+} from "../lib/firebaseAuth.js";
+import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
+import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher, isHomeroom, isStaff } from "../lib/userProfile.js";
+import FirebaseAccessRequestAction from "./FirebaseAccessRequestAction.jsx";
+import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
 import { AppCard, Badge, SectionTitle } from "./ui.jsx";
 
 const inputCls =
@@ -44,6 +58,41 @@ const ACCESS_TABS = [
   { value: "admin", label: "보건교사용" },
 ];
 
+function hasActiveAssignment(assignment) {
+  return assignment?.active === true;
+}
+
+function canUseSubjectScope(assignment) {
+  return hasActiveAssignment(assignment) && (
+    isStaff(assignment) ||
+    isHomeroom(assignment) ||
+    isHealthTeacher(assignment) ||
+    isAdmin(assignment)
+  );
+}
+
+function canUseHomeroomScope(assignment) {
+  return (
+    hasActiveAssignment(assignment) &&
+    isHomeroom(assignment) &&
+    Number.isFinite(Number(assignment.grade)) &&
+    Number.isFinite(Number(assignment.classNo))
+  );
+}
+
+function canUseAdminScope(assignment) {
+  return hasActiveAssignment(assignment) && (isHealthTeacher(assignment) || isAdmin(assignment));
+}
+
+function getAllowedAccessTabs(assignment) {
+  return ACCESS_TABS.filter((tab) => {
+    if (tab.value === "subject") return canUseSubjectScope(assignment);
+    if (tab.value === "homeroom") return canUseHomeroomScope(assignment);
+    if (tab.value === "admin") return canUseAdminScope(assignment);
+    return false;
+  });
+}
+
 function getGasErrorMessage(error, fallback) {
   if (error?.userMessage) return error.userMessage;
   if (error?.name === "SyntaxError") {
@@ -52,25 +101,23 @@ function getGasErrorMessage(error, fallback) {
   return fallback;
 }
 
-function sanitizeParams(params) {
-  const sanitized = {};
-  params.forEach((value, key) => {
-    sanitized[key] = key.toLowerCase().includes("password") ? "[hidden]" : value;
-  });
-  return sanitized;
-}
+async function requestGasJson(params, debugLabel, user) {
+  if (!user) {
+    const error = new Error("missing user");
+    error.userMessage = "로그인이 필요한 기능입니다.";
+    throw error;
+  }
 
-async function requestGasJson(params, debugLabel) {
-  console.log(`[${debugLabel}] proxy request`, {
-    url: HEALTH_ROOM_STATUS_API,
-    params: sanitizeParams(params),
-  });
+  const idToken = await user.getIdToken();
 
   let response;
   try {
     response = await fetch(HEALTH_ROOM_STATUS_API, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(Object.fromEntries(params.entries())),
     });
   } catch (error) {
@@ -82,17 +129,15 @@ async function requestGasJson(params, debugLabel) {
   }
 
   const body = await response.text();
-  console.log(`[${debugLabel}] response`, {
+  console.info(`[${debugLabel}] response`, {
     status: response.status,
     ok: response.ok,
     contentType: response.headers.get("content-type"),
-    body,
   });
 
   if (!response.ok) {
     const error = new Error(`HTTP ${response.status}`);
-    error.userMessage = `보건실 소재 확인 프록시 응답 상태가 ${response.status}입니다. Vercel 함수 로그와 GAS_URL 설정을 확인해 주세요.`;
-    error.responseBody = body;
+    error.userMessage = `보건실 소재 확인 응답 상태가 ${response.status}입니다. 로그인 권한 또는 서버 설정을 확인해 주세요.`;
     console.error(`[${debugLabel}] bad status`, error);
     throw error;
   }
@@ -101,7 +146,6 @@ async function requestGasJson(params, debugLabel) {
   if (trimmed.startsWith("<") || /<html|<!doctype/i.test(trimmed)) {
     const error = new Error("HTML response from proxy");
     error.userMessage = "보건실 소재 확인 프록시가 JSON이 아닌 HTML을 반환했습니다. Vercel 배포 또는 API 경로를 확인해 주세요.";
-    error.responseBody = body;
     console.error(`[${debugLabel}] non-json html response`, error);
     throw error;
   }
@@ -109,8 +153,7 @@ async function requestGasJson(params, debugLabel) {
   try {
     return JSON.parse(body);
   } catch (error) {
-    error.userMessage = "보건실 소재 확인 응답을 JSON으로 해석할 수 없습니다. 응답 body를 콘솔에서 확인해 주세요.";
-    error.responseBody = body;
+    error.userMessage = "보건실 소재 확인 응답을 JSON으로 해석할 수 없습니다. 서버 로그를 확인해 주세요.";
     console.error(`[${debugLabel}] json parse failed`, error);
     throw error;
   }
@@ -120,11 +163,143 @@ function isGasSuccess(json) {
   return json?.success === true || json?.result === "success";
 }
 
-function HealthRoomLocationModal({ onClose }) {
-  const [accessType, setAccessType] = useState("subject");
-  const [password, setPassword] = useState("");
-  const [grade, setGrade] = useState("");
-  const [classNo, setClassNo] = useState("");
+function useStudentCareAuth() {
+  const [state, setState] = useState({
+    user: null,
+    profile: null,
+    assignmentResult: null,
+    loading: true,
+    working: false,
+    message: "",
+  });
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setState((prev) => ({
+        ...prev,
+        user: currentUser,
+        profile: null,
+        assignmentResult: null,
+        loading: Boolean(currentUser),
+        message: currentUser ? "" : prev.message,
+      }));
+
+      if (!currentUser) {
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      try {
+        const blockedMessage = getMicrosoftSchoolDomainBlockMessage(currentUser);
+        if (blockedMessage) {
+          await signOutFirebase();
+          setState((prev) => ({ ...prev, user: null, loading: false, message: blockedMessage }));
+          return;
+        }
+
+        const profile = await ensureUserProfile(currentUser);
+        const teamStaffResult = await ensureTeamStaffAssignment(currentUser, profile);
+        if (teamStaffResult.ok === false) {
+          setState((prev) => ({ ...prev, loading: false, message: teamStaffResult.message }));
+          return;
+        }
+
+        const assignmentResult = await getUserAssignmentResult(
+          currentUser.uid,
+          CURRENT_SCHOOL_YEAR,
+          CURRENT_SEMESTER
+        );
+        setState((prev) => ({ ...prev, profile, assignmentResult, loading: false }));
+      } catch (error) {
+        console.error("[student-care] auth load failed", error);
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          message: "사용자 권한을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        }));
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const signIn = async (provider) => {
+    setState((prev) => ({ ...prev, working: true, message: "" }));
+    try {
+      if (provider === "microsoft") await signInWithMicrosoft();
+      else await signInWithGoogle();
+    } catch (error) {
+      console.error("[student-care] sign in failed", error);
+      const fallback = provider === "microsoft"
+        ? "학교 Teams 계정으로 로그인하지 못했습니다."
+        : "Google 계정으로 로그인하지 못했습니다.";
+      setState((prev) => ({ ...prev, message: getFriendlyAuthErrorMessage(error, fallback) }));
+    } finally {
+      setState((prev) => ({ ...prev, working: false }));
+    }
+  };
+
+  return {
+    ...state,
+    assignment: state.assignmentResult?.assignment || null,
+    signInWithMicrosoft: () => signIn("microsoft"),
+    signInWithGoogle: () => signIn("google"),
+  };
+}
+
+function formatClassLabel(assignment) {
+  if (!assignment?.grade || !assignment?.classNo) return "담임 학급 미등록";
+  return `${assignment.grade}학년 ${assignment.classNo}반`;
+}
+
+function AccessNotice({ authState }) {
+  if (authState.loading) {
+    return (
+      <div className="rounded-2xl bg-white p-5 text-center text-sm font-bold text-[#627083] shadow-sm">
+        로그인 상태와 현재 학기 권한을 확인하는 중입니다.
+      </div>
+    );
+  }
+
+  if (!authState.user) {
+    return (
+      <div className="rounded-2xl bg-white p-5 text-center shadow-sm">
+        <p className="text-base font-black text-[#102047]">로그인이 필요한 기능입니다.</p>
+        <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
+          교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
+        </p>
+        <FirebaseSignInActions
+          isWorking={authState.working}
+          message={authState.message}
+          onGoogleSignIn={authState.signInWithGoogle}
+          onMicrosoftSignIn={authState.signInWithMicrosoft}
+        />
+      </div>
+    );
+  }
+
+  if (authState.assignmentResult?.status === "not-found") {
+    return (
+      <div className="rounded-2xl bg-white p-5 text-center shadow-sm">
+        <p className="text-base font-black text-[#102047]">현재 학년도/학기 이용 권한이 등록되지 않았습니다.</p>
+        <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
+          등록된 Google 계정은 보건실에 현재 학기 이용 권한을 신청할 수 있습니다.
+        </p>
+        <FirebaseAccessRequestAction user={authState.user} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl bg-white p-5 text-center text-sm font-bold text-[#D94F70] shadow-sm">
+      {authState.message || authState.assignmentResult?.message || "학생 건강관리 접근 권한이 없습니다."}
+    </div>
+  );
+}
+
+function HealthRoomLocationModal({ onClose, authState }) {
+  const allowedTabs = useMemo(() => getAllowedAccessTabs(authState.assignment), [authState.assignment]);
+  const [accessType, setAccessType] = useState(() => allowedTabs[0]?.value || "subject");
   const [rows, setRows] = useState([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -134,6 +309,13 @@ function HealthRoomLocationModal({ onClose }) {
 
   useModalLifecycle(onClose);
 
+  useEffect(() => {
+    if (allowedTabs.length > 0 && !allowedTabs.some((tab) => tab.value === accessType)) {
+      setAccessType(allowedTabs[0]?.value || "subject");
+      resetResult();
+    }
+  }, [accessType, allowedTabs]);
+
   const resetResult = () => {
     setRows([]);
     setMessage("");
@@ -142,19 +324,12 @@ function HealthRoomLocationModal({ onClose }) {
 
   const handleTab = (nextType) => {
     setAccessType(nextType);
-    setPassword("");
-    setGrade("");
-    setClassNo("");
     resetResult();
   };
 
   const fetchRows = async () => {
-    if (!password.trim()) {
-      setError("비밀번호를 입력해 주세요.");
-      return;
-    }
-    if (accessType === "homeroom" && (!grade.trim() || !classNo.trim())) {
-      setError("학년과 반을 입력해 주세요.");
+    if (!allowedTabs.length) {
+      setError("보건실 소재 확인 권한이 없습니다.");
       return;
     }
 
@@ -164,13 +339,8 @@ function HealthRoomLocationModal({ onClose }) {
       const params = new URLSearchParams({
         action: "getHealthRoomLocation",
         accessType,
-        password: password.trim(),
       });
-      if (accessType === "homeroom") {
-        params.set("grade", grade.trim());
-        params.set("classNo", classNo.trim());
-      }
-      const json = await requestGasJson(params, "HealthRoom:getHealthRoomLocation");
+      const json = await requestGasJson(params, "HealthRoom:getHealthRoomLocation", authState.user);
       if (isGasSuccess(json)) {
         setRows(Array.isArray(json.items) ? json.items : []);
         setMessage(json.message || (Array.isArray(json.items) && json.items.length ? "" : "조회된 보건실 소재 기록이 없습니다."));
@@ -192,11 +362,8 @@ function HealthRoomLocationModal({ onClose }) {
       const params = new URLSearchParams({
         action: "confirmHealthRoomHomeroom",
         rowId: row.rowId,
-        grade: grade.trim(),
-        classNo: classNo.trim(),
-        password: password.trim(),
       });
-      const json = await requestGasJson(params, "HealthRoom:confirmHealthRoomHomeroom");
+      const json = await requestGasJson(params, "HealthRoom:confirmHealthRoomHomeroom", authState.user);
       if (isGasSuccess(json)) {
         setRows((prev) =>
           prev.map((item) =>
@@ -222,8 +389,9 @@ function HealthRoomLocationModal({ onClose }) {
           학생 개인정보가 포함될 수 있으므로 화면 캡처, 저장, 출력, 재공유를 금합니다.
         </div>
 
-        <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[#F7F9FC] p-1">
-          {ACCESS_TABS.map((tab) => (
+        {allowedTabs.length ? (
+        <div className="grid gap-2 rounded-2xl bg-[#F7F9FC] p-1" style={{ gridTemplateColumns: `repeat(${allowedTabs.length}, minmax(0, 1fr))` }}>
+          {allowedTabs.map((tab) => (
             <button
               key={tab.value}
               type="button"
@@ -238,49 +406,27 @@ function HealthRoomLocationModal({ onClose }) {
             </button>
           ))}
         </div>
+        ) : (
+          <AccessNotice authState={authState} />
+        )}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          {accessType === "homeroom" && (
-            <>
-              <div>
-                <label className="mb-1.5 block text-sm font-bold text-[#263238]">학년</label>
-                <input
-                  className={inputCls}
-                  inputMode="numeric"
-                  value={grade}
-                  onChange={(e) => setGrade(e.target.value)}
-                  placeholder="예: 1"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-bold text-[#263238]">반</label>
-                <input
-                  className={inputCls}
-                  inputMode="numeric"
-                  value={classNo}
-                  onChange={(e) => setClassNo(e.target.value)}
-                  placeholder="예: 3"
-                />
-              </div>
-            </>
-          )}
-          <div className={accessType === "homeroom" ? "sm:col-span-2" : "sm:col-span-2"}>
-            <PasswordField
-              label={accessType === "admin" ? "관리자 비밀번호" : "비밀번호"}
-              value={password}
-              onChange={setPassword}
-              onEnter={fetchRows}
-              error={error}
-            />
+        {accessType === "homeroom" && allowedTabs.length > 0 && (
+          <div className="rounded-2xl bg-[#F7F9FC] p-4 text-sm font-bold text-[#263238]">
+            담임 학급 <span className="ml-2 text-[#1A3B8B]">{formatClassLabel(authState.assignment)}</span>
           </div>
-        </div>
+        )}
 
-        <SubmitButton loading={loading} onClick={fetchRows}>
-          보건실 소재 확인하기
-        </SubmitButton>
+        {allowedTabs.length > 0 && (
+          <SubmitButton loading={loading} onClick={fetchRows}>
+            보건실 소재 확인하기
+          </SubmitButton>
+        )}
 
         {message && (
           <p className="rounded-2xl bg-[#F7F9FC] p-3 text-sm font-bold text-slate-600">{message}</p>
+        )}
+        {error && (
+          <p className="rounded-2xl bg-[#FFF7F7] p-3 text-sm font-bold text-[#B42318]">{error}</p>
         )}
 
         <HealthRoomList
@@ -294,10 +440,7 @@ function HealthRoomLocationModal({ onClose }) {
   );
 }
 
-function MonthlyVisitModal({ onClose }) {
-  const [grade, setGrade] = useState("");
-  const [classNo, setClassNo] = useState("");
-  const [password, setPassword] = useState("");
+function MonthlyVisitModal({ onClose, authState }) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -309,8 +452,12 @@ function MonthlyVisitModal({ onClose }) {
   useModalLifecycle(onClose);
 
   const fetchRecords = async () => {
-    if (!grade.trim() || !classNo.trim() || !password.trim() || !month.trim()) {
-      setError("학년, 반, 비밀번호, 조회 월을 모두 입력해 주세요.");
+    if (!canUseHomeroomScope(authState.assignment)) {
+      setError("담임 학급 월별 조회 권한이 없습니다.");
+      return;
+    }
+    if (!month.trim()) {
+      setError("조회 월을 선택해 주세요.");
       return;
     }
 
@@ -323,18 +470,15 @@ function MonthlyVisitModal({ onClose }) {
     try {
       const params = new URLSearchParams({
         mode: "monthlyVisit",
-        grade: grade.trim(),
-        classNo: classNo.trim(),
         month: month.trim(),
-        password: password.trim(),
       });
-      const json = await requestGasJson(params, "HealthRoom:monthlyVisit");
+      const json = await requestGasJson(params, "HealthRoom:monthlyVisit", authState.user);
       if (isGasSuccess(json)) {
         const nextRecords = Array.isArray(json.records) ? json.records : [];
         setRecords(nextRecords);
         setSummary({
-          grade: json.grade || grade.trim(),
-          classNo: json.classNo || classNo.trim(),
+          grade: json.grade || String(authState.assignment.grade || ""),
+          classNo: json.classNo || String(authState.assignment.classNo || ""),
           month: json.month || month.trim(),
           total: json.summary?.total || nextRecords.length,
           diseaseCount: nextRecords.filter(r => r.result?.includes("질병")).length,
@@ -362,19 +506,14 @@ function MonthlyVisitModal({ onClose }) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-sm font-bold text-[#263238]">학년</label>
-            <input className={inputCls} inputMode="numeric" value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="예: 1" />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-bold text-[#263238]">반</label>
-            <input className={inputCls} inputMode="numeric" value={classNo} onChange={(e) => setClassNo(e.target.value)} placeholder="예: 3" />
+          <div className="rounded-2xl bg-[#F7F9FC] px-4 py-3">
+            <p className="text-xs font-black text-[#1A3B8B]">담임 학급</p>
+            <p className="mt-1 text-sm font-black text-[#263238]">{formatClassLabel(authState.assignment)}</p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-bold text-[#263238]">조회 월</label>
             <input className={inputCls} type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </div>
-          <PasswordField value={password} onChange={setPassword} onEnter={fetchRecords} error={error} />
         </div>
 
         <SubmitButton loading={loading} onClick={fetchRecords}>
@@ -390,6 +529,7 @@ function MonthlyVisitModal({ onClose }) {
           </div>
         )}
         {message && <p className="rounded-2xl bg-[#F7F9FC] p-3 text-sm font-bold text-slate-600">{message}</p>}
+        {error && <p className="rounded-2xl bg-[#FFF7F7] p-3 text-sm font-bold text-[#B42318]">{error}</p>}
 
         <MonthlyVisitList records={records} />
       </div>
@@ -447,8 +587,7 @@ function MonthlyVisitList({ records }) {
   );
 }
 
-function AdminVisitStatsModal({ onClose }) {
-  const [password, setPassword] = useState("");
+function AdminVisitStatsModal({ onClose, authState }) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [stats, setStats] = useState(null);
   const [message, setMessage] = useState("");
@@ -459,8 +598,12 @@ function AdminVisitStatsModal({ onClose }) {
   useModalLifecycle(onClose);
 
   const fetchStats = async () => {
-    if (!password.trim() || !month.trim()) {
-      setError("관리자 비밀번호와 조회 월을 입력해 주세요.");
+    if (!canUseAdminScope(authState.assignment)) {
+      setError("관리자 통계 권한이 없습니다.");
+      return;
+    }
+    if (!month.trim()) {
+      setError("조회 월을 선택해 주세요.");
       return;
     }
 
@@ -473,9 +616,8 @@ function AdminVisitStatsModal({ onClose }) {
       const params = new URLSearchParams({
         mode: "adminVisitStats",
         month: month.trim(),
-        password: password.trim(),
       });
-      const json = await requestGasJson(params, "HealthRoom:adminVisitStats");
+      const json = await requestGasJson(params, "HealthRoom:adminVisitStats", authState.user);
       if (isGasSuccess(json)) {
         setStats({
           month: json.month || month.trim(),
@@ -508,7 +650,6 @@ function AdminVisitStatsModal({ onClose }) {
             <label className="mb-1.5 block text-sm font-bold text-[#263238]">조회 월</label>
             <input className={inputCls} type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </div>
-          <PasswordField label="관리자 비밀번호" value={password} onChange={setPassword} onEnter={fetchStats} error={error} />
         </div>
 
         <SubmitButton loading={loading} onClick={fetchStats}>
@@ -516,6 +657,7 @@ function AdminVisitStatsModal({ onClose }) {
         </SubmitButton>
 
         {message && <p className="rounded-2xl bg-[#F7F9FC] p-3 text-sm font-bold text-slate-600">{message}</p>}
+        {error && <p className="rounded-2xl bg-[#FFF7F7] p-3 text-sm font-bold text-[#B42318]">{error}</p>}
         {stats && <AdminVisitStatsResult stats={stats} />}
       </div>
     </ModalShell>
@@ -638,26 +780,6 @@ function Info({ label, value }) {
   );
 }
 
-function PasswordField({ label = "비밀번호", value, onChange, onEnter, error }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-bold text-[#263238]">
-        {label} <span className="ml-1 text-[#D94F70]">*</span>
-      </label>
-      <input
-        type="password"
-        className={inputCls}
-        placeholder="비밀번호 입력"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") onEnter(); }}
-        autoFocus
-      />
-      {error && <p className="mt-1.5 text-xs font-bold text-[#D94F70]">{error}</p>}
-    </div>
-  );
-}
-
 function SubmitButton({ loading, onClick, children }) {
   return (
     <button
@@ -722,6 +844,7 @@ function isHealthRoomCard(item) {
 }
 
 export default function StudentCareSection({ items }) {
+  const authState = useStudentCareAuth();
   const [activeModal, setActiveModal] = useState(null);
   const healthRoomSource = items.find(isHealthRoomCard);
   const healthRoomCard = {
@@ -733,10 +856,23 @@ export default function StudentCareSection({ items }) {
     buttonText: DEFAULT_HEALTH_ROOM_CARD.buttonText,
     url: "",
   };
+  const canShowMonthlyVisit = canUseHomeroomScope(authState.assignment);
+  const canShowAdminStats = canUseAdminScope(authState.assignment);
+  const canShowHealthRoom =
+    !authState.user ||
+    authState.loading ||
+    authState.assignmentResult?.status === "not-found" ||
+    canUseSubjectScope(authState.assignment) ||
+    canUseHomeroomScope(authState.assignment) ||
+    canUseAdminScope(authState.assignment);
   const visibleCards = [
-    { ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit" },
-    { ...ADMIN_STATS_CARD, modalType: "adminStats" },
-    { ...healthRoomCard, modalType: "healthRoom" },
+    ...(canShowMonthlyVisit ? [{ ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit", status: "담임 권한" }] : []),
+    ...(canShowAdminStats ? [{ ...ADMIN_STATS_CARD, modalType: "adminStats", status: "관리자 권한" }] : []),
+    ...(canShowHealthRoom ? [{
+      ...healthRoomCard,
+      modalType: "healthRoom",
+      status: authState.user ? "권한 확인" : "로그인 필요",
+    }] : []),
   ];
 
   return (
@@ -759,6 +895,7 @@ export default function StudentCareSection({ items }) {
           </div>
         </div>
         <div className="grid gap-3 md:mt-5 md:grid-cols-3 md:gap-4">
+          {!visibleCards.length && <AccessNotice authState={authState} />}
           {visibleCards.map((card) => (
             <AppCard key={card.title} className="student-care-card p-4 md:p-5">
               <div className="flex items-start justify-between gap-3">
@@ -786,13 +923,13 @@ export default function StudentCareSection({ items }) {
       </div>
 
       {activeModal?.type === "monthlyVisit" && (
-        <MonthlyVisitModal onClose={() => setActiveModal(null)} />
+        <MonthlyVisitModal authState={authState} onClose={() => setActiveModal(null)} />
       )}
       {activeModal?.type === "adminStats" && (
-        <AdminVisitStatsModal onClose={() => setActiveModal(null)} />
+        <AdminVisitStatsModal authState={authState} onClose={() => setActiveModal(null)} />
       )}
       {activeModal?.type === "healthRoom" && (
-        <HealthRoomLocationModal onClose={() => setActiveModal(null)} />
+        <HealthRoomLocationModal authState={authState} onClose={() => setActiveModal(null)} />
       )}
     </section>
   );

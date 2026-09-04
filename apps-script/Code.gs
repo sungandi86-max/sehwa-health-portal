@@ -238,8 +238,14 @@ function doGet(e) {
     if (action === "getHealthRoomLocation") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getHealthRoomLocation_(e.parameter || {}), action));
     }
+    if (action === "getHealthRoomLocationByAssignment") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(getHealthRoomLocationByAssignment_(e.parameter || {}), action));
+    }
     if (action === "confirmHealthRoomHomeroom") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(confirmHealthRoomHomeroom_(e.parameter || {}), action));
+    }
+    if (action === "confirmHealthRoomHomeroomByAssignment") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(confirmHealthRoomHomeroomByAssignment_(e.parameter || {}), action));
     }
     if (action === "verifyHealthRoom") {
       return jsonOutput_(healthRoomApiError_("보건실 소재 확인은 앱 내부 조회 화면을 이용해 주세요.", "legacy verifyHealthRoom action"));
@@ -247,8 +253,14 @@ function doGet(e) {
     if (mode === "monthlyVisit") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getMonthlyVisitRecords_(e.parameter || {}), mode));
     }
+    if (mode === "monthlyVisitByAssignment") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(getMonthlyVisitRecordsByAssignment_(e.parameter || {}), mode));
+    }
     if (mode === "adminVisitStats") {
       return jsonOutput_(normalizeHealthRoomApiResponse_(getAdminVisitStats_(e.parameter || {}), mode));
+    }
+    if (mode === "adminVisitStatsByRole") {
+      return jsonOutput_(normalizeHealthRoomApiResponse_(getAdminVisitStatsByRole_(e.parameter || {}), mode));
     }
     if (mode === "portal") return jsonOutput_(getPortalData_());
     return jsonOutput_(getVisitSummaryData_());
@@ -794,6 +806,80 @@ function getHealthRoomLocation_(params) {
   }
 }
 
+function verifyStudentCareProxySecret_(params) {
+  const expected = PropertiesService.getScriptProperties().getProperty("STUDENT_CARE_PROXY_SECRET");
+  const provided = String(params.proxySecret || "");
+  if (!expected) {
+    return { ok: false, message: "학생 건강관리 서버 보호 설정이 필요합니다.", detail: "proxy secret missing" };
+  }
+  if (!provided || provided !== expected) {
+    return { ok: false, message: "학생 건강관리 서버 권한을 확인할 수 없습니다.", detail: "proxy secret mismatch" };
+  }
+  return { ok: true };
+}
+
+function getHealthRoomLocationByAssignment_(params) {
+  ensureHealthRoomStatusSheets();
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  const accessType = String(params.accessType || "").trim();
+  const grade = String(params.grade || "").trim();
+  const classNo = String(params.classNo || "").trim();
+  let success = false;
+
+  if (!secretCheck.ok) {
+    logHealthRoomAccess_(accessType || "firebase-location", grade, classNo, false, secretCheck.detail);
+    return { result: "error", message: secretCheck.message };
+  }
+
+  try {
+    const config = getHealthRoomShareConfig_();
+    if (String(config["기능사용"] || "TRUE").toUpperCase() === "FALSE") {
+      logHealthRoomAccess_(accessType, grade, classNo, false);
+      return { result: "error", message: "현재 보건실 소재 확인 기능을 사용할 수 없습니다." };
+    }
+
+    if (accessType === "subject") {
+      success = true;
+      return {
+        result: "success",
+        accessType,
+        items: readHealthRoomRows_({ accessType, scope: config["교과교사표시범위"] || "today" }),
+      };
+    }
+
+    if (accessType === "homeroom") {
+      if (!grade || !classNo) {
+        logHealthRoomAccess_(accessType, grade, classNo, false);
+        return { result: "error", message: "담임 학급 권한을 확인할 수 없습니다." };
+      }
+      success = true;
+      return {
+        result: "success",
+        accessType,
+        items: readHealthRoomRows_({
+          accessType,
+          grade,
+          classNo,
+          scope: config["담임표시범위"] || "today",
+        }),
+      };
+    }
+
+    if (accessType === "admin") {
+      success = true;
+      return {
+        result: "success",
+        accessType,
+        items: readHealthRoomRows_({ accessType, scope: "all" }),
+      };
+    }
+
+    return { result: "error", message: "접근 유형을 확인할 수 없습니다." };
+  } finally {
+    if (success) logHealthRoomAccess_(accessType, grade, classNo, true);
+  }
+}
+
 function confirmHealthRoomHomeroom_(params) {
   ensureHealthRoomStatusSheets();
   const rowId = Number(params.rowId || 0);
@@ -829,6 +915,43 @@ function confirmHealthRoomHomeroom_(params) {
 
   sheet.getRange(rowId, 11).setValue(true);
   logHealthRoomAccess_("homeroom-confirm", grade, classNo, true);
+  return { result: "success" };
+}
+
+function confirmHealthRoomHomeroomByAssignment_(params) {
+  ensureHealthRoomStatusSheets();
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  const rowId = Number(params.rowId || 0);
+  const grade = String(params.grade || "").trim();
+  const classNo = String(params.classNo || "").trim();
+
+  if (!secretCheck.ok) {
+    logHealthRoomAccess_("homeroom-confirm-firebase", grade, classNo, false, secretCheck.detail);
+    return { result: "error", message: secretCheck.message };
+  }
+  if (!rowId || rowId < 4) {
+    logHealthRoomAccess_("homeroom-confirm-firebase", grade, classNo, false);
+    return { result: "error", message: "확인할 기록을 찾을 수 없습니다." };
+  }
+  if (!grade || !classNo) {
+    logHealthRoomAccess_("homeroom-confirm-firebase", grade, classNo, false);
+    return { result: "error", message: "담임 학급 권한을 확인할 수 없습니다." };
+  }
+
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet || rowId > sheet.getLastRow()) {
+    logHealthRoomAccess_("homeroom-confirm-firebase", grade, classNo, false);
+    return { result: "error", message: "원본 기록을 찾을 수 없습니다." };
+  }
+
+  const row = sheet.getRange(rowId, 1, 1, 13).getDisplayValues()[0];
+  if (String(row[2]).trim() !== grade || String(row[3]).trim() !== classNo) {
+    logHealthRoomAccess_("homeroom-confirm-firebase", grade, classNo, false);
+    return { result: "error", message: "해당 학급 기록만 확인할 수 있습니다." };
+  }
+
+  sheet.getRange(rowId, 11).setValue(true);
+  logHealthRoomAccess_("homeroom-confirm-firebase", grade, classNo, true);
   return { result: "success" };
 }
 
@@ -901,6 +1024,87 @@ function getMonthlyVisitRecords_(params) {
   });
 
   logHealthRoomAccess_("monthly-visit", grade, classNo, true);
+  return {
+    result: "success",
+    grade: grade,
+    classNo: classNo,
+    month: month,
+    summary: {
+      total: records.length,
+      resultCount: resultCount,
+      unchecked: unchecked
+    },
+    records: records
+  };
+}
+
+function getMonthlyVisitRecordsByAssignment_(params) {
+  ensureHealthRoomStatusSheets();
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  const grade = String(params.grade || "").trim();
+  const classNo = String(params.classNo || "").trim();
+  const month = String(params.month || "").trim();
+
+  if (!secretCheck.ok) {
+    logHealthRoomAccess_("monthly-visit-firebase", grade, classNo, false, secretCheck.detail);
+    return { result: "error", message: secretCheck.message };
+  }
+  if (!grade || !classNo || !month) {
+    logHealthRoomAccess_("monthly-visit-firebase", grade, classNo, false, "missing parameter");
+    return { result: "error", message: "담임 학급 권한과 조회 월을 확인해 주세요." };
+  }
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    logHealthRoomAccess_("monthly-visit-firebase", grade, classNo, false, "invalid month");
+    return { result: "error", message: "조회 월 형식이 올바르지 않습니다." };
+  }
+
+  return readMonthlyVisitRecordsForClass_(grade, classNo, month, "monthly-visit-firebase");
+}
+
+function readMonthlyVisitRecordsForClass_(grade, classNo, month, logLabel) {
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet) {
+    logHealthRoomAccess_(logLabel, grade, classNo, false, "visit sheet missing");
+    return { result: "error", message: SHEET_NAMES.visit + " 탭을 찾을 수 없습니다." };
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const records = [];
+  let resultCount = 0;
+  let unchecked = 0;
+
+  for (let i = 3; i < values.length; i++) {
+    const row = values[i];
+    const rowDate = normalizeDateText_(row[0]);
+    const rowGrade = String(row[2] || "").trim();
+    const rowClass = String(row[3] || "").trim();
+    if (!rowDate || rowDate.slice(0, 7) !== month) continue;
+    if (rowGrade !== grade || rowClass !== classNo) continue;
+
+    const result = String(row[12] || "").trim();
+    const teacherChecked = isTruthy_(row[10]) ? "확인" : "미확인";
+    if (result) resultCount++;
+    if (teacherChecked !== "확인") unchecked++;
+
+    records.push({
+      date: formatMonthlyVisitDate_(rowDate, row[0]),
+      number: String(row[4] || "").trim(),
+      name: maskStudentName_(row[5]),
+      inTime: String(row[6] || "").trim(),
+      outTime: String(row[7] || "").trim(),
+      stay: String(row[11] || "").trim(),
+      result: result,
+      teacherChecked: teacherChecked
+    });
+  }
+
+  records.sort(function(a, b) {
+    const dateCompare = String(a.date || "").localeCompare(String(b.date || ""));
+    if (dateCompare !== 0) return dateCompare;
+    return Number(a.number || 0) - Number(b.number || 0);
+  });
+
+  logHealthRoomAccess_(logLabel, grade, classNo, true);
   return {
     result: "success",
     grade: grade,
@@ -1014,6 +1218,102 @@ function getAdminVisitStats_(params) {
     .map(function(key) { return classMap[key]; });
 
   logHealthRoomAccess_("admin-stats", "", "", true);
+  return {
+    result: "success",
+    month: month,
+    summary: summary,
+    gradeStats: gradeStats,
+    classStats: classStats
+  };
+}
+
+function getAdminVisitStatsByRole_(params) {
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  const month = String(params.month || "").trim();
+
+  if (!secretCheck.ok) {
+    logHealthRoomAccess_("admin-stats-firebase", "", "", false, secretCheck.detail);
+    return { result: "error", message: secretCheck.message };
+  }
+  if (!month) {
+    logHealthRoomAccess_("admin-stats-firebase", "", "", false, "missing parameter");
+    return { result: "error", message: "조회 월을 입력해 주세요." };
+  }
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    logHealthRoomAccess_("admin-stats-firebase", "", "", false, "invalid month");
+    return { result: "error", message: "조회 월 형식이 올바르지 않습니다." };
+  }
+
+  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.visit);
+  if (!sheet) {
+    logHealthRoomAccess_("admin-stats-firebase", "", "", false, "visit sheet missing");
+    return { result: "error", message: SHEET_NAMES.visit + " 탭을 찾을 수 없습니다." };
+  }
+
+  const values = sheet.getDataRange().getDisplayValues();
+  const summary = {
+    total: 0,
+    diseaseCount: 0,
+    periodCount: 0,
+    noResultCount: 0,
+    uncheckedCount: 0
+  };
+  const gradeMap = {};
+  const classMap = {};
+
+  for (let i = 3; i < values.length; i++) {
+    const row = values[i];
+    const rowDate = normalizeDateText_(row[0]);
+    if (!rowDate || rowDate.slice(0, 7) !== month) continue;
+
+    const grade = String(row[2] || "").trim();
+    const classNo = String(row[3] || "").trim();
+    const result = String(row[12] || "").trim();
+    const isChecked = isTruthy_(row[10]);
+    if (!grade || !classNo) continue;
+
+    summary.total++;
+    if (result.indexOf("질병결과") >= 0) summary.diseaseCount++;
+    else if (result.indexOf("생리결과") >= 0) summary.periodCount++;
+    else summary.noResultCount++;
+    if (!isChecked) summary.uncheckedCount++;
+
+    if (!gradeMap[grade]) gradeMap[grade] = { grade: grade, total: 0 };
+    gradeMap[grade].total++;
+
+    const classKey = grade + "-" + classNo;
+    if (!classMap[classKey]) {
+      classMap[classKey] = {
+        grade: grade,
+        classNo: classNo,
+        total: 0,
+        diseaseCount: 0,
+        periodCount: 0,
+        noResultCount: 0,
+        uncheckedCount: 0
+      };
+    }
+    classMap[classKey].total++;
+    if (result.indexOf("질병결과") >= 0) classMap[classKey].diseaseCount++;
+    else if (result.indexOf("생리결과") >= 0) classMap[classKey].periodCount++;
+    else classMap[classKey].noResultCount++;
+    if (!isChecked) classMap[classKey].uncheckedCount++;
+  }
+
+  const gradeStats = Object.keys(gradeMap)
+    .sort(compareNumericText_)
+    .map(function(key) { return gradeMap[key]; });
+  const classStats = Object.keys(classMap)
+    .sort(function(a, b) {
+      const partsA = a.split("-");
+      const partsB = b.split("-");
+      const gradeCompare = compareNumericText_(partsA[0], partsB[0]);
+      if (gradeCompare !== 0) return gradeCompare;
+      return compareNumericText_(partsA[1], partsB[1]);
+    })
+    .map(function(key) { return classMap[key]; });
+
+  logHealthRoomAccess_("admin-stats-firebase", "", "", true);
   return {
     result: "success",
     month: month,

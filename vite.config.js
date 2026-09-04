@@ -1,7 +1,8 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import accessRequestsHandler from './api/firebase/access-requests.js'
 import ensureTeamStaffHandler from './api/firebase/ensure-team-staff.js'
+import healthRoomStatusHandler from './api/health-room-status.js'
 import submitHandler from './api/submit.js'
 
 function createVercelLikeResponse(res) {
@@ -23,7 +24,15 @@ function createVercelLikeResponse(res) {
   }
 }
 
-function viteEnvDevCompatibility() {
+function viteEnvDevCompatibility(mode) {
+  const env = loadEnv(mode, process.cwd(), '')
+
+  Object.entries(env).forEach(([key, value]) => {
+    if (process.env[key] === undefined) {
+      process.env[key] = value
+    }
+  })
+
   return {
     name: 'vite-env-dev-compatibility',
     apply: 'serve',
@@ -33,6 +42,11 @@ function viteEnvDevCompatibility() {
 
         if (pathname === '/api/submit') {
           await submitHandler(req, createVercelLikeResponse(res))
+          return
+        }
+
+        if (pathname === '/api/health-room-status') {
+          await healthRoomStatusHandler(req, createVercelLikeResponse(res))
           return
         }
 
@@ -65,6 +79,6 @@ function viteEnvDevCompatibility() {
   }
 }
 
-export default defineConfig({
-  plugins: [viteEnvDevCompatibility(), react()],
-})
+export default defineConfig(({ mode }) => ({
+  plugins: [viteEnvDevCompatibility(mode), react()],
+}))
