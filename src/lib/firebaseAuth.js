@@ -169,6 +169,12 @@ export function takeRedirectRoute() {
   return isSafeInternalRoute(route) ? route : "";
 }
 
+export function hasPendingRedirectRoute() {
+  if (!hasBrowserWindow()) return false;
+
+  return isSafeInternalRoute(getSessionItem(REDIRECT_ROUTE_KEY));
+}
+
 export function consumeRedirectAuthMessage() {
   if (!hasBrowserWindow()) return "";
 
@@ -245,7 +251,6 @@ export async function handleAuthRedirectResult() {
   const route = takeRedirectRoute();
 
   try {
-    await ensureAuthLocalPersistence();
     const result = await getRedirectResult(auth);
     if (result?.user) {
       const blockedMessage = getMicrosoftSchoolDomainBlockMessage(result.user);
