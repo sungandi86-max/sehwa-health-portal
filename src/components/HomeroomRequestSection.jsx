@@ -5,7 +5,6 @@ export default function HomeroomRequestSection() {
   return (
     <section id="homeroom" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
-        eyebrow="HOMEROOM"
         title="담임 협조 요청"
         description="담임 선생님들이 확인해야 할 회수·전달·지도 항목을 정리했습니다."
       />

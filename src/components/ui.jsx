@@ -19,8 +19,8 @@ export function Badge({ children, type = "blue" }) {
 export function SectionTitle({ eyebrow, title, description }) {
   return (
     <div className="mb-4">
-      {eyebrow && <p className="mb-1.5 text-xs font-semibold text-[#08754B]">{eyebrow}</p>}
-      <h2 className="text-xl font-bold tracking-tight text-[#102047] md:text-2xl">{title}</h2>
+      {eyebrow && <p className="mb-1.5 text-xs font-semibold text-[#0D4EA6]">{eyebrow}</p>}
+      <h2 className="text-xl font-bold text-[#102047] md:text-[1.45rem]">{title}</h2>
       {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-[#627083]">{description}</p>}
     </div>
   );
@@ -84,7 +84,7 @@ export function PrimaryButton({ children, url, scrollTarget }) {
 
   if (!children || children === "") return null;
 
-  const btnCls = "mt-4 inline-block w-full rounded-[10px] bg-[#102047] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
+  const btnCls = "mt-4 inline-block w-full rounded-[10px] bg-[#0D4EA6] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
 
   // 1) 명시적 scrollTarget → 해당 페이지로 이동
   if (scrollTarget) {

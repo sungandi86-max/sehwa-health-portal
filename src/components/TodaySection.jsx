@@ -4,7 +4,6 @@ export default function TodaySection({ items, isLoading = false, loadFailed = fa
   return (
     <section id="today" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
-        eyebrow="TODAY"
         title="오늘의 보건실"
         description="오늘 또는 이번 주 교직원이 확인해야 할 보건 업무를 모았습니다."
       />

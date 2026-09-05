@@ -16,7 +16,6 @@ export default function FAQSection({ items, isLoading = false, loadFailed = fals
   return (
     <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
-        eyebrow="FAQ"
         title="자주 묻는 질문"
         description="교직원이 자주 확인하는 질문을 정리했습니다."
       />
@@ -30,7 +29,7 @@ export default function FAQSection({ items, isLoading = false, loadFailed = fals
               setQuery(event.target.value);
               setOpenIndex(0);
             }}
-            className="min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 text-sm font-semibold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-2 focus:ring-[#20A982]/10"
+            className="min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 text-sm font-semibold text-[#102047] outline-none transition focus:border-[#0D4EA6] focus:ring-2 focus:ring-[#0D4EA6]/10"
             placeholder="결핵, 채용검진, 감염병, 보건실, 인바디 등으로 검색해보세요."
           />
         </label>
@@ -57,7 +56,7 @@ export default function FAQSection({ items, isLoading = false, loadFailed = fals
                 className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-[#F8FAFA]"
               >
                 <span className="text-sm font-bold text-[#102047]">Q. {item.question}</span>
-                <span className="text-lg font-semibold text-[#08754B]">{openIndex === idx ? "-" : "+"}</span>
+                <span className="text-lg font-semibold text-[#0D4EA6]">{openIndex === idx ? "-" : "+"}</span>
               </button>
               {openIndex === idx && (
                 <div className="border-t border-[#E8F0EE] bg-[#F8FAFA] px-4 py-3 text-sm leading-7 text-[#627083]">

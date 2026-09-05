@@ -4,7 +4,6 @@ export default function EducationSection({ items, isLoading = false, loadFailed 
   return (
     <section id="education" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
-        eyebrow="EDUCATION"
         title="교육 자료실"
         description="응급처치교육, 성교육, 장애인식 개선교육, 약물 오남용 예방교육 링크를 모아둔 공간입니다."
       />
@@ -57,7 +56,7 @@ export default function EducationSection({ items, isLoading = false, loadFailed 
             </div>
 
             {!item.buttonText && item.teacherGuide && (
-              <div className="mt-3 rounded-[10px] border border-[#BFEBDC] bg-[#F4FBF8] p-3 text-sm leading-6 text-[#08754B]">
+              <div className="mt-3 rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm leading-6 text-[#3154A3]">
                 <p className="mb-1 font-semibold">담임 선생님께</p>
                 <p>{item.teacherGuide}</p>
                 {item.confirmation && (

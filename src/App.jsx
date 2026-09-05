@@ -84,7 +84,7 @@ async function fetchPortalData(signal, scope = "") {
 // ── 스켈레톤 UI ──────────────────────────────────────────────────
 function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-[24px] border border-slate-100 bg-white p-5 shadow-sm">
+    <div className="animate-pulse rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-none">
       <div className="mb-3 h-4 w-16 rounded-full bg-slate-200" />
       <div className="h-5 w-3/4 rounded-lg bg-slate-200" />
       <div className="mt-3 space-y-2">
@@ -92,20 +92,20 @@ function SkeletonCard() {
         <div className="h-3 w-5/6 rounded bg-slate-100" />
         <div className="h-3 w-4/6 rounded bg-slate-100" />
       </div>
-      <div className="mt-4 h-10 w-32 rounded-2xl bg-slate-200" />
+      <div className="mt-4 h-10 w-32 rounded-[10px] bg-slate-200" />
     </div>
   );
 }
 
 function LoadingSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-10 lg:max-w-[1280px]">
+    <div className="mx-auto w-full max-w-[1280px] px-3 py-6 sm:px-4">
       <div className="mb-5 animate-pulse">
         <div className="mb-2 h-3 w-20 rounded bg-slate-200" />
         <div className="h-7 w-48 rounded-lg bg-slate-200" />
         <div className="mt-2 h-4 w-96 max-w-full rounded bg-slate-100" />
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
       </div>
     </div>
@@ -194,7 +194,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <main className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#F7F9FC] font-sans text-[#263238]">
+      <main className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#F8FAFA] font-sans text-[#102047]">
         <Suspense fallback={null}>
           <FirebaseAuthRedirectHandler />
           <Header />

@@ -21,7 +21,6 @@ export default function ResourceSection({ items, loadFailed, isLoading = false, 
   return (
     <section id="resources" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
-        eyebrow="INFO & EVENTS"
         title="건강정보/이벤트"
         description="보건 관련 안내문, 참고 자료 링크, 보건실 이벤트를 모아두는 공간입니다."
       />
