@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, SectionTitle, isValidUrl } from "./ui.jsx";
+import { SectionTitle, isValidUrl } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
 // "자료실 열기" 버튼은 내부 resources 섹션으로 이동
@@ -9,8 +9,30 @@ const INTERNAL_BUTTONS = {
   "자료실로 이동": "resources",
 };
 
-const btnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] bg-[#102047] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
+const btnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] bg-[#0D4EA6] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
 const secondaryBtnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#C9DFFF] bg-white px-4 py-2.5 text-center text-sm font-semibold text-[#102047] transition hover:border-[#9DB7F0] hover:bg-[#F6FAFF] md:w-auto";
+
+function getStatusChipClass(status) {
+  const text = String(status || "").trim();
+  if (text.includes("확인") || text.includes("예정") || text.includes("준비")) {
+    return "border-[#FDE68A] bg-[#FFFBEB] text-[#92400E]";
+  }
+  if (text.includes("완료")) {
+    return "border-[#BFEBDC] bg-[#F0FBF7] text-[#08754B]";
+  }
+  if (text.includes("중") || text.includes("자료")) {
+    return "border-[#C8D8FF] bg-[#EEF4FF] text-[#3154A3]";
+  }
+  return "border-[#DDEAE7] bg-[#F8FAFA] text-[#627083]";
+}
+
+function StatusChip({ children }) {
+  return (
+    <span className={`inline-flex shrink-0 items-center rounded-[8px] border px-2.5 py-1 text-xs font-semibold ${getStatusChipClass(children)}`}>
+      {children}
+    </span>
+  );
+}
 
 function parseDateBoundary(value, boundary) {
   const text = String(value || "").trim();
@@ -67,7 +89,7 @@ function CheckupModal({ modal, onClose }) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-[16px] bg-white p-5 shadow-xl sm:max-w-3xl sm:rounded-[16px] sm:p-6">
+      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-[16px] bg-white p-5 shadow-sm sm:max-w-3xl sm:rounded-[16px] sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <h3 className="text-lg font-bold text-[#102047]">{modal.title}</h3>
           <button
@@ -166,15 +188,9 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
   return (
     <section id="checkup" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
-        eyebrow="CHECKUP"
         title="검진·검사 안내"
         description="1학년 건강검진, 2·3학년 결핵검진·소변검사, 교직원 결핵검진 안내를 모아둔 영역입니다."
       />
-      {fallbackUsed && (
-        <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-          검진·검사 안내를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
-        </div>
-      )}
 
       <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
         {isLoading && (
@@ -199,22 +215,28 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
           const hasPrimaryModalAction =
             effectiveDisplayMode === "pending" ||
             (effectiveDisplayMode === "image" && isValidUrl(item.imageUrl));
+          const statusText = item.operatingStatus || item.status;
           return (
-            <article key={item.title} className="border-b border-[#E8F0EE] px-4 py-4 last:border-b-0">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <article key={item.title} className="border-b border-[#E8F0EE] px-3.5 py-3.5 last:border-b-0 md:px-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-bold text-[#102047]">{item.title}</h3>
-                    <Badge type="blue">{item.operatingStatus || item.status}</Badge>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                    <h3 className="text-base font-bold leading-6 text-[#102047]">{item.title}</h3>
+                    <StatusChip>{statusText}</StatusChip>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-[#627083]">{item.description}</p>
-                  <p className="mt-2 text-sm font-semibold text-[#102047]">대상 · {item.target}</p>
+                  <p className="mt-1.5 text-sm font-semibold text-[#102047]">대상 · {item.target}</p>
+                  <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#627083]">{item.description}</p>
                   {!!(item.details || []).length && (
-                    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-[#627083]">
-                      {(item.details || []).map((detail, i) => (
-                        <li key={i}>{detail}</li>
-                      ))}
-                    </ul>
+                    <details className="mt-2 text-xs leading-5 text-[#627083]">
+                      <summary className="cursor-pointer font-semibold text-[#3154A3]">
+                        세부 확인사항 보기
+                      </summary>
+                      <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                        {(item.details || []).map((detail, i) => (
+                          <li key={i}>{detail}</li>
+                        ))}
+                      </ul>
+                    </details>
                   )}
                 </div>
                 <div className="flex shrink-0 flex-col gap-2 sm:flex-row md:justify-end">
@@ -241,14 +263,14 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
 
         {/* 교직원 결핵검진 유형 선택 카드 — 사용 TRUE이고 접수기간 안일 때만 표시 */}
         {!isLoading && !loadFailed && shouldShowTbRegistrationCard && (
-          <article className="border-b border-[#E8F0EE] px-4 py-4 last:border-b-0">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <article className="border-b border-[#E8F0EE] px-3.5 py-3.5 last:border-b-0 md:px-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base font-bold text-[#102047]">교직원 결핵검진 유형 선택</h3>
-                  <Badge type="pink">신청 접수 중</Badge>
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                  <h3 className="text-base font-bold leading-6 text-[#102047]">교직원 결핵검진 유형 선택</h3>
+                  <StatusChip>신청 접수 중</StatusChip>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-[#627083]">
+                <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#627083]">
                   학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
                 </p>
               </div>
