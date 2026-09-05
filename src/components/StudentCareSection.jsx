@@ -313,7 +313,6 @@ function HealthRoomLocationModal({ onClose, authState }) {
     setLoading(true);
     resetResult();
     try {
-      let fallbackMessage = "";
       try {
         const presence = await getPublicHealthRoomPresence();
         if (presence.stale) {
@@ -327,8 +326,6 @@ function HealthRoomLocationModal({ onClose, authState }) {
           code: projectionError?.code || "",
           message: projectionError?.message || "unknown",
         });
-        fallbackMessage = "최신 조회 정보를 불러오지 못해 기존 방식으로 확인했습니다.";
-        setMessage(fallbackMessage);
       }
 
       const params = new URLSearchParams({
@@ -338,7 +335,7 @@ function HealthRoomLocationModal({ onClose, authState }) {
       const json = await requestGasJson(params, "HealthRoom:getHealthRoomLocation", authState.user);
       if (isGasSuccess(json)) {
         setRows(Array.isArray(json.items) ? json.items : []);
-        setMessage(fallbackMessage || json.message || (Array.isArray(json.items) && json.items.length ? "" : "조회된 보건실 소재 기록이 없습니다."));
+        setMessage(json.message || (Array.isArray(json.items) && json.items.length ? "" : "조회된 보건실 소재 기록이 없습니다."));
       } else {
         setError(json.message || json.debug || "조회할 수 없습니다.");
       }
@@ -419,7 +416,6 @@ function MonthlyVisitModal({ onClose, authState }) {
     setSummary(null);
 
     try {
-      let fallbackMessage = "";
       const queryAssignment = {
         grade: selectedGrade,
         classNo: selectedClassNo,
@@ -450,8 +446,6 @@ function MonthlyVisitModal({ onClose, authState }) {
           code: projectionError?.code || "",
           message: projectionError?.message || "unknown",
         });
-        fallbackMessage = "최신 조회 정보를 불러오지 못해 기존 방식으로 확인했습니다.";
-        setMessage(fallbackMessage);
       }
 
       const params = new URLSearchParams({
@@ -473,7 +467,7 @@ function MonthlyVisitModal({ onClose, authState }) {
           periodCount:  nextRecords.filter(r => r.result?.includes("생리")).length,
           noResultCount: nextRecords.filter(r => !r.result || r.result === "-").length,
         });
-        setMessage(fallbackMessage || (nextRecords.length ? "" : "조회된 월별 보건실 입실 기록이 없습니다."));
+        setMessage(nextRecords.length ? "" : "조회된 월별 보건실 입실 기록이 없습니다.");
       } else {
         setError(json.message || json.debug || "월별 입실 기록을 조회할 수 없습니다.");
       }
