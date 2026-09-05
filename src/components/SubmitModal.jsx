@@ -1,4 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
+import { auth } from "../lib/firebase.js";
+import {
+  getFriendlyAuthErrorMessage,
+  getMicrosoftSchoolDomainBlockMessage,
+  signInWithGoogle,
+  signInWithMicrosoft,
+  signOutFirebase,
+} from "../lib/firebaseAuth.js";
+import { getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
 const SCRIPT_URL = "/api/submit";
 
 const FOLDER_IDS = {
@@ -797,15 +808,90 @@ const INBODY_TIME_SLOTS = [
 ];
 
 function InbodyRegistrationForm({ onSubmit, submitting }) {
-  const [form, setForm] = useState({ name: "", dept: "", preferredDate: "", preferredTime: "" });
+  const [identity, setIdentity] = useState(null);
+  const [identityStatus, setIdentityStatus] = useState("loading");
+  const [identityMessage, setIdentityMessage] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+  const [form, setForm] = useState({ preferredDate: "", preferredTime: "" });
   const [errors, setErrors] = useState({});
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
+  useEffect(() => {
+    let ignore = false;
+
+    const loadIdentity = async (currentUser) => {
+      if (!currentUser) {
+        setIdentity(null);
+        setIdentityStatus("signed-out");
+        setIdentityMessage("");
+        return;
+      }
+
+      setIdentityStatus("loading");
+      setIdentityMessage("");
+
+      try {
+        const blockedMessage = getMicrosoftSchoolDomainBlockMessage(currentUser);
+        if (blockedMessage) {
+          await signOutFirebase();
+          if (!ignore) {
+            setIdentity(null);
+            setIdentityStatus("signed-out");
+            setIdentityMessage(blockedMessage);
+          }
+          return;
+        }
+
+        const nextIdentity = await getAuthenticatedStaffIdentity();
+        if (!ignore) {
+          setIdentity(nextIdentity);
+          setIdentityStatus("ready");
+          setIdentityMessage("");
+        }
+      } catch (error) {
+        if (!ignore) {
+          setIdentity(null);
+          setIdentityStatus(error?.status === 401 ? "signed-out" : "blocked");
+          setIdentityMessage(error?.message || "교직원 정보를 불러오지 못했습니다.");
+        }
+      }
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, loadIdentity);
+    return () => {
+      ignore = true;
+      unsubscribe();
+    };
+  }, []);
+
+  const handleMicrosoftSignIn = async () => {
+    setSigningIn(true);
+    setIdentityMessage("");
+    try {
+      await signInWithMicrosoft();
+    } catch (error) {
+      setIdentityMessage(getFriendlyAuthErrorMessage(error, "Microsoft Teams 로그인에 실패했습니다."));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setSigningIn(true);
+    setIdentityMessage("");
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      setIdentityMessage(getFriendlyAuthErrorMessage(error, "Google 계정으로 로그인하지 못했습니다."));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   const validate = () => {
     const e = {};
-    if (!form.name.trim()) e.name = "성명을 입력해주세요.";
-    if (!form.dept) e.dept = "소속/부서를 선택해주세요.";
+    if (!identity?.name || !identity?.department) e.identity = "교직원 정보가 연결되지 않아 신청할 수 없습니다. 관리자에게 문의해 주세요.";
     if (!form.preferredDate) e.preferredDate = "희망 날짜를 선택해주세요.";
     if (!form.preferredTime) e.preferredTime = "희망 시간대를 선택해주세요.";
     return e;
@@ -817,9 +903,15 @@ function InbodyRegistrationForm({ onSubmit, submitting }) {
     if (Object.keys(e).length > 0) return;
 
     await onSubmit({
+      type: "inbody",
       sheetName: "응답_인바디측정신청",
       folderId: null,
-      fields: { name: form.name, dept: form.dept, preferredDate: form.preferredDate, preferredTime: form.preferredTime },
+      fields: {
+        name: identity.name,
+        dept: identity.department,
+        preferredDate: form.preferredDate,
+        preferredTime: form.preferredTime,
+      },
       fileName: null,
       fileBase64: null,
       fileMimeType: null,
@@ -828,43 +920,74 @@ function InbodyRegistrationForm({ onSubmit, submitting }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+      <div className="rounded-[10px] border border-[#C8D8FF] bg-[#F5F8FF] px-3.5 py-3 text-sm leading-6 text-[#3154A3]">
         매월 보건실에서 운영하는 인바디 체성분 측정 신청입니다.
       </div>
-      <Field label="성명" required>
-        <input className={inputCls} placeholder="홍길동" value={form.name} onChange={set("name")} />
-        {errors.name && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.name}</p>}
-      </Field>
-      <Field label="소속/부서" required>
-        <select className={selectCls} value={form.dept} onChange={set("dept")}>
-          <option value="">선택해주세요</option>
-          {DEPT_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
-      </Field>
-      <Field label="희망 날짜" required>
-        <input type="date" className={inputCls} value={form.preferredDate} onChange={set("preferredDate")} />
-        {errors.preferredDate && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.preferredDate}</p>}
-      </Field>
-      <Field label="희망 시간대" required>
-        <div className="space-y-2">
-          {INBODY_TIME_SLOTS.map((slot) => (
-            <label key={slot} className="flex cursor-pointer items-center gap-3">
-              <input
-                type="radio"
-                name="preferredTime"
-                value={slot}
-                checked={form.preferredTime === slot}
-                onChange={set("preferredTime")}
-                className="h-4 w-4 accent-[#1A3B8B]"
-              />
-              <span className="text-sm text-[#263238]">{slot}</span>
-            </label>
-          ))}
+      {identityStatus === "loading" && (
+        <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3.5 py-3 text-sm font-semibold text-[#627083]">
+          로그인된 교직원 정보를 확인하는 중입니다.
         </div>
-        {errors.preferredTime && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.preferredTime}</p>}
-      </Field>
-      <SubmitButton onClick={handleSubmit} submitting={submitting} />
+      )}
+      {identityStatus === "signed-out" && (
+        <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3.5 py-3">
+          <p className="text-sm font-semibold text-[#102047]">인바디 측정 신청은 교직원 로그인 후 이용할 수 있습니다.</p>
+          <FirebaseSignInActions
+            compact
+            isWorking={signingIn}
+            message={identityMessage}
+            onGoogleSignIn={handleGoogleSignIn}
+            onMicrosoftSignIn={handleMicrosoftSignIn}
+          />
+        </div>
+      )}
+      {identityStatus === "blocked" && (
+        <div className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3.5 py-3 text-sm font-semibold leading-6 text-[#B42318]">
+          {identityMessage || "교직원 정보가 연결되지 않아 신청할 수 없습니다. 관리자에게 문의해 주세요."}
+        </div>
+      )}
+      {identityStatus === "ready" && (
+        <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3.5 py-3">
+          <p className="text-xs font-semibold text-[#627083]">신청자 정보</p>
+          <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-semibold text-[#627083]">성명</dt>
+              <dd className="mt-0.5 text-sm font-bold text-[#102047]">{identity.name}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold text-[#627083]">소속/부서</dt>
+              <dd className="mt-0.5 text-sm font-bold text-[#102047]">{identity.department}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
+      {identityStatus === "ready" && (
+        <>
+          {errors.identity && <p className="text-xs font-bold text-[#D94F70]">{errors.identity}</p>}
+          <Field label="희망 날짜" required>
+            <input type="date" className={inputCls} value={form.preferredDate} onChange={set("preferredDate")} />
+            {errors.preferredDate && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.preferredDate}</p>}
+          </Field>
+          <Field label="희망 시간대" required>
+            <div className="space-y-2">
+              {INBODY_TIME_SLOTS.map((slot) => (
+                <label key={slot} className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="radio"
+                    name="preferredTime"
+                    value={slot}
+                    checked={form.preferredTime === slot}
+                    onChange={set("preferredTime")}
+                    className="h-4 w-4 accent-[#1A3B8B]"
+                  />
+                  <span className="text-sm text-[#263238]">{slot}</span>
+                </label>
+              ))}
+            </div>
+            {errors.preferredTime && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.preferredTime}</p>}
+          </Field>
+          <SubmitButton onClick={handleSubmit} submitting={submitting} />
+        </>
+      )}
     </div>
   );
 }
