@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { studentCareIntro } from "../data/fallbackData.js";
@@ -12,7 +12,6 @@ import {
 } from "../lib/firebaseAuth.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 import {
-  getHomeroomHealthRoomPresence,
   getHomeroomMonthlyVisitRecords,
   getPublicHealthRoomPresence,
 } from "../lib/studentCarePresence.js";
@@ -32,17 +31,9 @@ const HEALTH_ROOM_BUTTON_LEGACY = "蹂닿굔???낆떎?꾪솴 ?닿린";
 const HEALTH_ROOM_STATUS_API = "/api/health-room-status";
 
 const MONTHLY_VISIT_CARD = {
-  title: "담임용 월별 보건실 입실 확인",
-  description: "월말 출결 처리를 위해 우리 반 학생의 보건실 입실 기록을 월별로 확인합니다.",
+  title: "학급별 월별 입실현황 조회",
+  description: "담임은 자기 학급, 보건교사는 학급을 선택해 월별 이용 현황을 확인합니다.",
   privacyNotice: "증상 및 처치 내용은 표시하지 않고, 입실·복귀 시각과 결과 처리 여부만 확인할 수 있습니다.",
-  buttonText: "월별 입실 기록 조회하기",
-  status: "권한 필요",
-};
-
-const ADMIN_MONTHLY_VISIT_CARD = {
-  title: "월별 입실현황 조회",
-  description: "월별 보건실 이용 현황을 확인합니다.",
-  privacyNotice: "학생별 증상 및 처치 내용은 표시하지 않고, 월별 통계만 확인할 수 있습니다.",
   buttonText: "조회하기",
   status: "권한 필요",
 };
@@ -57,19 +48,15 @@ const ADMIN_STATS_CARD = {
 
 const DEFAULT_HEALTH_ROOM_CARD = {
   title: "보건실 소재 확인",
-  description:
-    "수업 중 보건실을 이용 중인 학생의 소재와 복귀 여부를 확인할 수 있습니다. 학생 건강정보, 증상, 처치내용은 표시하지 않습니다.",
+  description: "수업 중 학생의 현재 소재와 복귀 여부를 확인합니다.",
   privacyNotice: "권한 있는 교직원에게만 최소정보를 제한적으로 표시합니다.",
   buttonText: HEALTH_ROOM_BUTTON,
   status: "권한 필요",
   url: "",
 };
 
-const ACCESS_TABS = [
-  { value: "subject", label: "교과교사용" },
-  { value: "homeroom", label: "담임교사용" },
-  { value: "admin", label: "보건교사용" },
-];
+const GRADE_OPTIONS = ["1", "2", "3"];
+const CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1));
 
 function hasActiveAssignment(assignment) {
   return assignment?.active === true;
@@ -95,15 +82,6 @@ function canUseHomeroomScope(assignment) {
 
 function canUseAdminScope(assignment) {
   return hasActiveAssignment(assignment) && (isHealthTeacher(assignment) || isAdmin(assignment));
-}
-
-function getAllowedAccessTabs(assignment) {
-  return ACCESS_TABS.filter((tab) => {
-    if (tab.value === "subject") return canUseSubjectScope(assignment);
-    if (tab.value === "homeroom") return canUseHomeroomScope(assignment);
-    if (tab.value === "admin") return canUseAdminScope(assignment);
-    return false;
-  });
 }
 
 function getGasErrorMessage(error, fallback) {
@@ -311,23 +289,14 @@ function AccessNotice({ authState }) {
 }
 
 function HealthRoomLocationModal({ onClose, authState }) {
-  const allowedTabs = useMemo(() => getAllowedAccessTabs(authState.assignment), [authState.assignment]);
-  const [accessType, setAccessType] = useState(() => allowedTabs[0]?.value || "subject");
   const [rows, setRows] = useState([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [checkingId, setCheckingId] = useState("");
   const overlayRef = useRef(null);
+  const canUseLocation = canUseSubjectScope(authState.assignment);
 
   useModalLifecycle(onClose);
-
-  useEffect(() => {
-    if (allowedTabs.length > 0 && !allowedTabs.some((tab) => tab.value === accessType)) {
-      setAccessType(allowedTabs[0]?.value || "subject");
-      resetResult();
-    }
-  }, [accessType, allowedTabs]);
 
   const resetResult = () => {
     setRows([]);
@@ -335,13 +304,8 @@ function HealthRoomLocationModal({ onClose, authState }) {
     setError("");
   };
 
-  const handleTab = (nextType) => {
-    setAccessType(nextType);
-    resetResult();
-  };
-
   const fetchRows = async () => {
-    if (!allowedTabs.length) {
+    if (!canUseLocation) {
       setError("보건실 소재 확인 권한이 없습니다.");
       return;
     }
@@ -350,30 +314,26 @@ function HealthRoomLocationModal({ onClose, authState }) {
     resetResult();
     try {
       let fallbackMessage = "";
-      if (accessType === "subject" || accessType === "homeroom") {
-        try {
-          const presence = accessType === "homeroom"
-            ? await getHomeroomHealthRoomPresence({ assignment: authState.assignment })
-            : await getPublicHealthRoomPresence();
-          if (presence.stale) {
-            throw new Error(`stale ${accessType} presence projection`);
-          }
-          setRows(presence.rows);
-          setMessage(presence.rows.length ? "" : "조회된 보건실 소재 기록이 없습니다.");
-          return;
-        } catch (projectionError) {
-          console.warn("[HealthRoom:getHealthRoomLocation] Firestore projection fallback", {
-            code: projectionError?.code || "",
-            message: projectionError?.message || "unknown",
-          });
-          fallbackMessage = "최신 조회 정보를 불러오지 못해 기존 방식으로 확인했습니다.";
-          setMessage(fallbackMessage);
+      try {
+        const presence = await getPublicHealthRoomPresence();
+        if (presence.stale) {
+          throw new Error("stale subject presence projection");
         }
+        setRows(presence.rows);
+        setMessage(presence.rows.length ? "" : "조회된 보건실 소재 기록이 없습니다.");
+        return;
+      } catch (projectionError) {
+        console.warn("[HealthRoom:getHealthRoomLocation] Firestore projection fallback", {
+          code: projectionError?.code || "",
+          message: projectionError?.message || "unknown",
+        });
+        fallbackMessage = "최신 조회 정보를 불러오지 못해 기존 방식으로 확인했습니다.";
+        setMessage(fallbackMessage);
       }
 
       const params = new URLSearchParams({
         action: "getHealthRoomLocation",
-        accessType,
+        accessType: "subject",
       });
       const json = await requestGasJson(params, "HealthRoom:getHealthRoomLocation", authState.user);
       if (isGasSuccess(json)) {
@@ -390,71 +350,20 @@ function HealthRoomLocationModal({ onClose, authState }) {
     }
   };
 
-  const confirmHomeroom = async (row) => {
-    setCheckingId(row.rowId);
-    setError("");
-    try {
-      const params = new URLSearchParams({
-        action: "confirmHealthRoomHomeroom",
-        rowId: row.rowId,
-      });
-      const json = await requestGasJson(params, "HealthRoom:confirmHealthRoomHomeroom", authState.user);
-      if (isGasSuccess(json)) {
-        setRows((prev) =>
-          prev.map((item) =>
-            item.rowId === row.rowId ? { ...item, homeroomConfirmed: true } : item
-          )
-        );
-      } else {
-        setError(json.message || json.debug || "담임 확인을 기록할 수 없습니다.");
-      }
-    } catch (error) {
-      console.error("[HealthRoom:confirmHealthRoomHomeroom] error", error);
-      setError(getGasErrorMessage(error, "담임 확인 기록 중 오류가 발생했습니다."));
-    } finally {
-      setCheckingId("");
-    }
-  };
-
   return (
     <ModalShell overlayRef={overlayRef} onClose={onClose} title="보건실 소재 확인">
       <div className="space-y-5">
-        <div className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm leading-6 text-[#3154A3]">
-          이 화면은 수업 중 학생 소재 확인 및 담임 출결 참고를 위한 제한 열람 화면입니다.
-          학생 개인정보가 포함될 수 있으므로 화면 캡처, 저장, 출력, 재공유를 금합니다.
+        <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm leading-6 text-[#627083]">
+          수업 중 보건실 이용 학생의 현재 소재와 복귀 여부만 확인합니다.
+          화면 캡처, 저장, 출력, 재공유를 금합니다.
         </div>
 
-        {allowedTabs.length ? (
-        <div className="grid gap-1 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-1" style={{ gridTemplateColumns: `repeat(${allowedTabs.length}, minmax(0, 1fr))` }}>
-          {allowedTabs.map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => handleTab(tab.value)}
-              className={`rounded-[8px] px-2 py-2 text-xs font-semibold transition sm:text-sm ${
-                accessType === tab.value
-                  ? "bg-white text-[#102047]"
-                  : "text-[#627083] hover:text-[#102047]"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        ) : (
-          <AccessNotice authState={authState} />
-        )}
-
-        {accessType === "homeroom" && allowedTabs.length > 0 && (
-          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#102047]">
-            담임 학급 <span className="ml-2 text-[#1A3B8B]">{formatClassLabel(authState.assignment)}</span>
-          </div>
-        )}
-
-        {allowedTabs.length > 0 && (
+        {canUseLocation ? (
           <SubmitButton loading={loading} onClick={fetchRows}>
             보건실 소재 확인하기
           </SubmitButton>
+        ) : (
+          <AccessNotice authState={authState} />
         )}
 
         {message && (
@@ -465,10 +374,8 @@ function HealthRoomLocationModal({ onClose, authState }) {
         )}
 
         <HealthRoomList
-          accessType={accessType}
+          accessType="subject"
           rows={rows}
-          checkingId={checkingId}
-          onConfirm={confirmHomeroom}
         />
       </div>
     </ModalShell>
@@ -476,7 +383,10 @@ function HealthRoomLocationModal({ onClose, authState }) {
 }
 
 function MonthlyVisitModal({ onClose, authState }) {
+  const isAdminLookup = canUseAdminScope(authState.assignment);
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [grade, setGrade] = useState(() => String(authState.assignment?.grade || ""));
+  const [classNo, setClassNo] = useState(() => String(authState.assignment?.classNo || ""));
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
   const [message, setMessage] = useState("");
@@ -487,8 +397,14 @@ function MonthlyVisitModal({ onClose, authState }) {
   useModalLifecycle(onClose);
 
   const fetchRecords = async () => {
-    if (!canUseHomeroomScope(authState.assignment)) {
-      setError("담임 학급 월별 조회 권한이 없습니다.");
+    if (!canUseHomeroomScope(authState.assignment) && !isAdminLookup) {
+      setError("학급별 월별 조회 권한이 없습니다.");
+      return;
+    }
+    const selectedGrade = isAdminLookup ? grade.trim() : String(authState.assignment.grade || "");
+    const selectedClassNo = isAdminLookup ? classNo.trim() : String(authState.assignment.classNo || "");
+    if (!selectedGrade || !selectedClassNo) {
+      setError("조회할 학년과 반을 선택해 주세요.");
       return;
     }
     if (!month.trim()) {
@@ -504,9 +420,13 @@ function MonthlyVisitModal({ onClose, authState }) {
 
     try {
       let fallbackMessage = "";
+      const queryAssignment = {
+        grade: selectedGrade,
+        classNo: selectedClassNo,
+      };
       try {
         const projection = await getHomeroomMonthlyVisitRecords({
-          assignment: authState.assignment,
+          assignment: queryAssignment,
           month: month.trim(),
         });
         if (projection.stale) {
@@ -515,8 +435,8 @@ function MonthlyVisitModal({ onClose, authState }) {
         const nextRecords = projection.records;
         setRecords(nextRecords);
         setSummary({
-          grade: String(authState.assignment.grade || ""),
-          classNo: String(authState.assignment.classNo || ""),
+          grade: selectedGrade,
+          classNo: selectedClassNo,
           month: projection.month || month.trim(),
           total: projection.summary.total,
           diseaseCount: nextRecords.filter(r => r.result?.includes("질병")).length,
@@ -537,14 +457,16 @@ function MonthlyVisitModal({ onClose, authState }) {
       const params = new URLSearchParams({
         mode: "monthlyVisit",
         month: month.trim(),
+        grade: selectedGrade,
+        classNo: selectedClassNo,
       });
       const json = await requestGasJson(params, "HealthRoom:monthlyVisit", authState.user);
       if (isGasSuccess(json)) {
         const nextRecords = Array.isArray(json.records) ? json.records : [];
         setRecords(nextRecords);
         setSummary({
-          grade: json.grade || String(authState.assignment.grade || ""),
-          classNo: json.classNo || String(authState.assignment.classNo || ""),
+          grade: json.grade || selectedGrade,
+          classNo: json.classNo || selectedClassNo,
           month: json.month || month.trim(),
           total: json.summary?.total || nextRecords.length,
           diseaseCount: nextRecords.filter(r => r.result?.includes("질병")).length,
@@ -564,18 +486,41 @@ function MonthlyVisitModal({ onClose, authState }) {
   };
 
   return (
-    <ModalShell overlayRef={overlayRef} onClose={onClose} title="담임용 월별 보건실 입실 확인">
+    <ModalShell overlayRef={overlayRef} onClose={onClose} title="학급별 월별 입실현황 조회">
       <div className="space-y-5">
-        <div className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm leading-6 text-[#3154A3]">
-          이 화면은 담임교사의 월별 출결 확인을 위한 조회 화면입니다.
-          증상 및 처치 내용은 표시하지 않으며, 입실·복귀 시각과 결과 처리 여부만 확인할 수 있습니다.
+        <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm leading-6 text-[#627083]">
+          담임은 자기 학급, 보건교사는 선택한 학급의 월별 입실현황을 확인합니다.
+          증상 및 처치 내용은 표시하지 않습니다.
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5">
-            <p className="text-xs font-semibold text-[#08754B]">담임 학급</p>
-            <p className="mt-1 text-sm font-semibold text-[#102047]">{formatClassLabel(authState.assignment)}</p>
-          </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {isAdminLookup ? (
+            <>
+              <div>
+                <label className="mb-1.5 block text-sm font-bold text-[#263238]">학년</label>
+                <select className={inputCls} value={grade} onChange={(e) => setGrade(e.target.value)}>
+                  <option value="">선택</option>
+                  {GRADE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}학년</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-bold text-[#263238]">반</label>
+                <select className={inputCls} value={classNo} onChange={(e) => setClassNo(e.target.value)}>
+                  <option value="">선택</option>
+                  {CLASS_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}반</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 sm:col-span-2">
+              <p className="text-xs font-semibold text-[#08754B]">담임 학급</p>
+              <p className="mt-1 text-sm font-semibold text-[#102047]">{formatClassLabel(authState.assignment)}</p>
+            </div>
+          )}
           <div>
             <label className="mb-1.5 block text-sm font-bold text-[#263238]">조회 월</label>
             <input className={inputCls} type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
@@ -583,7 +528,7 @@ function MonthlyVisitModal({ onClose, authState }) {
         </div>
 
         <SubmitButton loading={loading} onClick={fetchRecords}>
-          월별 입실 기록 조회하기
+          조회하기
         </SubmitButton>
 
         {summary && (
@@ -653,28 +598,13 @@ function MonthlyVisitList({ records }) {
   );
 }
 
-function AdminVisitStatsModal({ onClose, authState, variant = "stats" }) {
+function AdminVisitStatsModal({ onClose, authState }) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [stats, setStats] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const overlayRef = useRef(null);
-  const isMonthlyOverview = variant === "monthlyOverview";
-  const modalTitle = isMonthlyOverview ? "월별 입실현황 조회" : "관리자용 보건실 입실 통계";
-  const introText = isMonthlyOverview
-    ? "이 화면은 학교 전체 월별 보건실 이용 현황을 관리자 권한으로 확인하는 화면입니다. 학생별 증상 및 처치 내용은 표시하지 않습니다."
-    : "이 화면은 학교 전체 보건실 이용 현황을 통계로 확인하는 관리자용 화면입니다. 학생별 증상 및 처치 내용은 표시하지 않습니다.";
-  const submitLabel = isMonthlyOverview ? "조회하기" : "통계 조회하기";
-  const emptyMessage = isMonthlyOverview
-    ? "조회된 월별 보건실 입실현황이 없습니다."
-    : "조회된 보건실 입실 통계가 없습니다.";
-  const errorMessage = isMonthlyOverview
-    ? "월별 입실현황을 조회할 수 없습니다."
-    : "관리자 통계를 조회할 수 없습니다.";
-  const fallbackErrorMessage = isMonthlyOverview
-    ? "월별 입실현황 조회 중 오류가 발생했습니다."
-    : "관리자 통계 조회 중 오류가 발생했습니다.";
 
   useModalLifecycle(onClose);
 
@@ -706,23 +636,24 @@ function AdminVisitStatsModal({ onClose, authState, variant = "stats" }) {
           gradeStats: Array.isArray(json.gradeStats) ? json.gradeStats : [],
           classStats: Array.isArray(json.classStats) ? json.classStats : [],
         });
-        setMessage(json.summary?.total ? "" : emptyMessage);
+        setMessage(json.summary?.total ? "" : "조회된 보건실 입실 통계가 없습니다.");
       } else {
-        setError(json.message || json.debug || errorMessage);
+        setError(json.message || json.debug || "관리자 통계를 조회할 수 없습니다.");
       }
     } catch (error) {
       console.error("[HealthRoom:adminVisitStats] error", error);
-      setError(getGasErrorMessage(error, fallbackErrorMessage));
+      setError(getGasErrorMessage(error, "관리자 통계 조회 중 오류가 발생했습니다."));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ModalShell overlayRef={overlayRef} onClose={onClose} title={modalTitle}>
+    <ModalShell overlayRef={overlayRef} onClose={onClose} title="관리자용 보건실 입실 통계">
       <div className="space-y-5">
         <div className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm leading-6 text-[#3154A3]">
-          {introText}
+          이 화면은 학교 전체 보건실 이용 현황을 통계로 확인하는 관리자용 화면입니다.
+          학생별 증상 및 처치 내용은 표시하지 않습니다.
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -733,7 +664,7 @@ function AdminVisitStatsModal({ onClose, authState, variant = "stats" }) {
         </div>
 
         <SubmitButton loading={loading} onClick={fetchStats}>
-          {submitLabel}
+          통계 조회하기
         </SubmitButton>
 
         {message && <p className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#627083]">{message}</p>}
@@ -938,20 +869,14 @@ export default function StudentCareSection({ items }) {
   };
   const canShowAdminTools = canUseAdminScope(authState.assignment);
   const canShowHomeroomMonthly = !canShowAdminTools && canUseHomeroomScope(authState.assignment);
-  const canShowStaffHealthRoom =
-    hasActiveAssignment(authState.assignment) &&
-    isStaff(authState.assignment) &&
-    !isHomeroom(authState.assignment) &&
-    !canShowAdminTools;
   const canShowHealthRoom =
     !authState.user ||
     authState.loading ||
     authState.assignmentResult?.status === "not-found" ||
-    canShowAdminTools ||
-    canShowStaffHealthRoom;
+    canUseSubjectScope(authState.assignment);
   const visibleCards = [
     ...(canShowHomeroomMonthly ? [{ ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit", status: "담임 권한" }] : []),
-    ...(canShowAdminTools ? [{ ...ADMIN_MONTHLY_VISIT_CARD, modalType: "adminMonthlyVisit", status: "관리자 권한" }] : []),
+    ...(canShowAdminTools ? [{ ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit", status: "관리자 권한" }] : []),
     ...(canShowAdminTools ? [{ ...ADMIN_STATS_CARD, modalType: "adminStats", status: "관리자 권한" }] : []),
     ...(canShowHealthRoom ? [{
       ...healthRoomCard,
@@ -1014,13 +939,6 @@ export default function StudentCareSection({ items }) {
       )}
       {activeModal?.type === "adminStats" && (
         <AdminVisitStatsModal authState={authState} onClose={() => setActiveModal(null)} />
-      )}
-      {activeModal?.type === "adminMonthlyVisit" && (
-        <AdminVisitStatsModal
-          authState={authState}
-          variant="monthlyOverview"
-          onClose={() => setActiveModal(null)}
-        />
       )}
       {activeModal?.type === "healthRoom" && (
         <HealthRoomLocationModal authState={authState} onClose={() => setActiveModal(null)} />

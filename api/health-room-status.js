@@ -220,13 +220,35 @@ function buildAuthorizedStudentCareParams(params, assignment) {
   }
 
   if (mode === "monthlyVisit") {
-    if (!isHomeroomAssignment(assignment)) {
-      return { ok: false, status: 403, message: "담임 학급 월별 조회 권한이 없습니다." };
+    if (isHomeroomAssignment(assignment)) {
+      nextParams.set("mode", "monthlyVisitByAssignment");
+      nextParams.set("month", String(params.month || ""));
+      nextParams.set("grade", String(assignment.grade));
+      nextParams.set("classNo", String(assignment.classNo));
+      return { ok: true, params: nextParams };
     }
+
+    if (!isAdminAssignment(assignment)) {
+      return { ok: false, status: 403, message: "학급별 월별 조회 권한이 없습니다." };
+    }
+
+    const grade = Number(params.grade);
+    const classNo = Number(params.classNo);
+    if (
+      !Number.isInteger(grade) ||
+      grade < 1 ||
+      grade > 3 ||
+      !Number.isInteger(classNo) ||
+      classNo < 1 ||
+      classNo > 12
+    ) {
+      return { ok: false, status: 400, message: "조회할 학년과 반을 선택해 주세요." };
+    }
+
     nextParams.set("mode", "monthlyVisitByAssignment");
     nextParams.set("month", String(params.month || ""));
-    nextParams.set("grade", String(assignment.grade));
-    nextParams.set("classNo", String(assignment.classNo));
+    nextParams.set("grade", String(grade));
+    nextParams.set("classNo", String(classNo));
     return { ok: true, params: nextParams };
   }
 
