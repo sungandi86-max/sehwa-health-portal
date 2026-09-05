@@ -1,6 +1,6 @@
 import { auth } from "./firebase.js";
 
-const STAFF_IDENTITY_API_PATH = "/api/firebase/staff-identity";
+const STAFF_IDENTITY_API_PATH = "/api/firebase/staff-directory?resource=staff-identity";
 
 export async function getAuthenticatedStaffIdentity() {
   const currentUser = auth.currentUser;
