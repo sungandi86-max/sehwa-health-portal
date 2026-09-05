@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Footer from "./components/Footer.jsx";
 import FirebaseAuthRedirectHandler from "./components/FirebaseAuthRedirectHandler.jsx";
@@ -148,6 +148,10 @@ export default function App() {
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(!shouldSkipPortalPreload);
+  const [isAuthRedirectReady, setIsAuthRedirectReady] = useState(false);
+  const handleAuthRedirectReady = useCallback(() => {
+    setIsAuthRedirectReady(true);
+  }, []);
 
   useEffect(() => {
     if (shouldSkipPortalPreload) return;
@@ -195,13 +199,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <main className="flex min-h-screen w-full flex-col overflow-x-hidden bg-[#F8FAFA] font-sans text-[#102047]">
+        <FirebaseAuthRedirectHandler onReady={handleAuthRedirectReady} />
         <Suspense fallback={null}>
-          <FirebaseAuthRedirectHandler />
           <Header />
         </Suspense>
 
         <div className="flex-1">
-          {isLoading ? (
+          {isLoading || !isAuthRedirectReady ? (
             <LoadingSkeleton />
           ) : (
             <Suspense fallback={<LoadingSkeleton />}>

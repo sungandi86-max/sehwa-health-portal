@@ -4,11 +4,14 @@ import { handleAuthRedirectResult } from "../lib/firebaseAuth.js";
 
 let hasHandledRedirectResult = false;
 
-export default function FirebaseAuthRedirectHandler() {
+export default function FirebaseAuthRedirectHandler({ onReady }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (hasHandledRedirectResult) return;
+    if (hasHandledRedirectResult) {
+      onReady?.();
+      return;
+    }
     hasHandledRedirectResult = true;
 
     let isMounted = true;
@@ -20,12 +23,15 @@ export default function FirebaseAuthRedirectHandler() {
       })
       .catch((error) => {
         console.error("[firebase-auth] redirect result handling failed", error);
+      })
+      .finally(() => {
+        if (isMounted) onReady?.();
       });
 
     return () => {
       isMounted = false;
     };
-  }, [navigate]);
+  }, [navigate, onReady]);
 
   return null;
 }

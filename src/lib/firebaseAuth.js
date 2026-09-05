@@ -1,4 +1,11 @@
-import { getRedirectResult, signInWithPopup, signInWithRedirect, signOut } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  getRedirectResult,
+  setPersistence,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+} from "firebase/auth";
 import { auth, googleProvider, microsoftProvider } from "./firebase.js";
 
 const SCHOOL_MICROSOFT_DOMAIN = "@sehwa-gs.hs.kr";
@@ -11,6 +18,8 @@ const PROVIDER_IDS = {
   google: "google.com",
   microsoft: "microsoft.com",
 };
+
+let authPersistencePromise = null;
 
 class FirebaseAuthPolicyError extends Error {
   constructor(message, code) {
@@ -108,6 +117,19 @@ function removeSessionItem(key) {
   }
 }
 
+export function ensureAuthLocalPersistence() {
+  if (!hasBrowserWindow()) return Promise.resolve();
+
+  if (!authPersistencePromise) {
+    authPersistencePromise = setPersistence(auth, browserLocalPersistence).catch((error) => {
+      authPersistencePromise = null;
+      throw error;
+    });
+  }
+
+  return authPersistencePromise;
+}
+
 export function shouldUseRedirectSignIn() {
   return isStandalonePwa() || (isCoarseTouchDevice() && isMobileLikeViewport());
 }
@@ -163,6 +185,8 @@ function publishRedirectAuthMessage(message) {
 }
 
 async function startFederatedLogin(provider) {
+  await ensureAuthLocalPersistence();
+
   if (shouldUseRedirectSignIn()) {
     saveRedirectRoute();
     return signInWithRedirect(auth, provider);
@@ -221,6 +245,7 @@ export async function handleAuthRedirectResult() {
   const route = takeRedirectRoute();
 
   try {
+    await ensureAuthLocalPersistence();
     const result = await getRedirectResult(auth);
     if (result?.user) {
       const blockedMessage = getMicrosoftSchoolDomainBlockMessage(result.user);
