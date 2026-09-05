@@ -79,12 +79,12 @@ function formatAccountState(user) {
 
 function RoleBadges({ roles }) {
   const labels = getRoleLabels(roles);
-  if (!labels.length) return <span className="rounded-full bg-[#FFF7F7] px-3 py-1 text-xs font-black text-[#B42318]">권한 미등록</span>;
+  if (!labels.length) return <span className="rounded-[8px] border border-[#F6D8D8] bg-[#FFF7F7] px-2 py-1 text-xs font-semibold text-[#B42318]">권한 미등록</span>;
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {labels.map((label) => (
-        <span key={label} className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+        <span key={label} className="rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2 py-1 text-xs font-semibold text-[#08754B]">
           {label}
         </span>
       ))}
@@ -97,7 +97,7 @@ function StateMessage({ state, emptyMessage }) {
     return (
       <div className="space-y-3">
         {[0, 1, 2].map((item) => (
-          <div key={item} className="h-36 animate-pulse rounded-[26px] border border-[#DDEAE7] bg-white/80" />
+          <div key={item} className="h-28 animate-pulse rounded-[12px] border border-[#DDEAE7] bg-white/80" />
         ))}
       </div>
     );
@@ -105,7 +105,7 @@ function StateMessage({ state, emptyMessage }) {
 
   if (state.status === "permission-denied" || state.status === "error") {
     return (
-      <p className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-black text-[#B42318]">
+      <p className="rounded-[12px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-sm font-semibold text-[#B42318]">
         {state.message}
       </p>
     );
@@ -113,7 +113,7 @@ function StateMessage({ state, emptyMessage }) {
 
   if (state.status === "empty") {
     return (
-      <p className="rounded-[26px] border border-[#DDEAE7] bg-[#F7FBF9] p-5 text-sm font-black text-[#627083]">
+      <p className="rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-4 text-sm font-semibold text-[#627083]">
         {emptyMessage}
       </p>
     );
@@ -209,7 +209,7 @@ function StaffIdLinkPanel({
 
   if (user.assignment?.staffId) {
     return (
-      <p className="mt-3 rounded-[14px] border border-[#DDEAE7] bg-white px-3 py-2 text-[12px] font-semibold text-[#08754B]">
+      <p className="mt-2 rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2 py-1.5 text-[12px] font-semibold text-[#08754B]">
         연결됨 · {user.assignment.staffId}
       </p>
     );
@@ -217,17 +217,17 @@ function StaffIdLinkPanel({
 
   if (!needsStaffIdLink(user)) {
     return (
-      <p className="mt-3 rounded-[14px] border border-[#DDEAE7] bg-white px-3 py-2 text-[12px] font-semibold text-[#627083]">
+      <p className="mt-2 rounded-[8px] border border-[#DDEAE7] bg-white px-2 py-1.5 text-[12px] font-semibold text-[#627083]">
         활성 권한 등록 후 연결 가능
       </p>
     );
   }
 
   return (
-    <div className="mt-3 rounded-[16px] border border-[#DDEAE7] bg-white p-3">
+    <div className="mt-2 rounded-[10px] border border-[#DDEAE7] bg-white p-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[12px] font-bold text-[#B42318]">교직원ID 연결 필요</p>
+          <p className="text-[12px] font-semibold text-[#B42318]">교직원ID 연결 필요</p>
           {suggestionStaffId && (
             <p className="mt-1 text-[12px] font-medium text-[#08754B]">추천 · {suggestionStaffId}</p>
           )}
@@ -240,7 +240,7 @@ function StaffIdLinkPanel({
             if (!selectedStaffId && suggestionStaffId) setSelectedStaffId(suggestionStaffId);
           }}
           disabled={isPending || directoryState.status === "loading"}
-          className="min-h-10 rounded-[10px] border border-[#BFEBDC] bg-[#F0FBF7] px-3 py-2 text-[12px] font-bold text-[#08754B] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-10 rounded-[10px] border border-[#BFEBDC] bg-white px-3 py-2 text-[12px] font-semibold text-[#08754B] transition hover:bg-[#F0FBF7] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isOpen ? "연결 닫기" : "교직원 연결"}
         </button>
@@ -249,7 +249,7 @@ function StaffIdLinkPanel({
       {isOpen && (
         <div className="mt-3 space-y-3">
           {directoryState.status === "error" && (
-            <p className="rounded-[12px] bg-[#FFF7F7] px-3 py-2 text-[12px] font-bold text-[#B42318]">
+            <p className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-[12px] font-semibold text-[#B42318]">
               {directoryState.message}
             </p>
           )}
@@ -259,7 +259,7 @@ function StaffIdLinkPanel({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="이름, 교직원ID, 부서, 직책 검색"
-                className="min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-[#F7FBF9] px-3 text-[13px] font-semibold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+                className="min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
               />
               <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                 {filteredDirectory.map((item) => {
@@ -268,7 +268,7 @@ function StaffIdLinkPanel({
                   return (
                     <label
                       key={item.staffId}
-                      className={`flex cursor-pointer items-start gap-3 rounded-[12px] border px-3 py-2 text-[12px] transition ${
+                      className={`flex cursor-pointer items-start gap-3 rounded-[10px] border px-3 py-2 text-[12px] transition ${
                         isSelected ? "border-[#20A982] bg-[#F0FBF7]" : "border-[#DDEAE7] bg-white"
                       }`}
                     >
@@ -283,7 +283,7 @@ function StaffIdLinkPanel({
                         <span className="block break-keep font-bold text-[#102047]">
                           {staffDirectoryLabel(item)}
                           {item.staffId === suggestionStaffId && (
-                            <span className="ml-2 rounded-full bg-[#20A982] px-2 py-0.5 text-[11px] font-bold text-white">
+                            <span className="ml-2 rounded-[8px] bg-[#20A982] px-2 py-0.5 text-[11px] font-semibold text-white">
                               추천
                             </span>
                           )}
@@ -298,13 +298,13 @@ function StaffIdLinkPanel({
                   );
                 })}
                 {filteredDirectory.length === 0 && (
-                  <p className="rounded-[12px] bg-[#F7FBF9] px-3 py-2 text-[12px] font-semibold text-[#627083]">
+                  <p className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-[12px] font-semibold text-[#627083]">
                     검색 결과가 없습니다.
                   </p>
                 )}
               </div>
               {localMessage && (
-                <p className="rounded-[12px] bg-[#FFF7F7] px-3 py-2 text-[12px] font-bold text-[#B42318]">
+                <p className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-[12px] font-semibold text-[#B42318]">
                   {localMessage}
                 </p>
               )}
@@ -313,7 +313,7 @@ function StaffIdLinkPanel({
                   type="button"
                   onClick={handleSubmit}
                   disabled={isPending || !selectedItem}
-                  className="min-h-10 rounded-[10px] bg-[#20A982] px-4 py-2 text-[12px] font-bold text-white transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-10 rounded-[10px] bg-[#20A982] px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-[#08754B] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isPending ? "연결 중..." : "연결 저장"}
                 </button>
@@ -392,25 +392,27 @@ function UserAssignmentCard({
   };
 
   return (
-    <article className="rounded-[28px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.06)]">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-4">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-3 py-1 text-xs font-black ${user.active ? "bg-[#F0FBF7] text-[#08754B]" : "bg-[#FFF7F7] text-[#B42318]"}`}>
+            <span className={`rounded-[8px] border px-2 py-1 text-xs font-semibold ${user.active ? "border-[#BFEBDC] bg-[#F0FBF7] text-[#08754B]" : "border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]"}`}>
               계정 {user.active ? "활성" : "비활성"}
             </span>
-            <span className={`rounded-full px-3 py-1 text-xs font-black ${assignment?.active === true ? "bg-[#EEF4FF] text-[#3154A3]" : "bg-[#FFF7F7] text-[#B42318]"}`}>
+            <span className={`rounded-[8px] border px-2 py-1 text-xs font-semibold ${assignment?.active === true ? "border-[#C8D8FF] bg-[#EEF4FF] text-[#3154A3]" : "border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]"}`}>
               권한 {assignment ? (assignment.active === true ? "활성" : "비활성") : "미등록"}
             </span>
             {isSelf && (
-              <span className="rounded-full bg-[#F8F3FF] px-3 py-1 text-xs font-black text-[#6A3BC2]">
+              <span className="rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2 py-1 text-xs font-semibold text-[#627083]">
                 현재 로그인
               </span>
             )}
           </div>
-          <h2 className="mt-4 break-keep text-lg font-black text-[#102047]">{user.displayName || "이름 미등록"}</h2>
-          <p className="mt-1 break-all text-sm font-bold text-[#627083]">{user.email || "이메일 없음"}</p>
-          <div className="mt-4">
+          <div className="mt-3 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
+            <h2 className="break-keep text-base font-semibold text-[#102047]">{user.displayName || "이름 미등록"}</h2>
+            <p className="break-all text-sm font-medium text-[#627083]">{user.email || "이메일 없음"}</p>
+          </div>
+          <div className="mt-2">
             <RoleBadges roles={assignment?.roles} />
           </div>
         </div>
@@ -419,20 +421,20 @@ function UserAssignmentCard({
           type="button"
           onClick={() => setIsEditing((value) => !value)}
           disabled={isPending}
-          className="min-h-11 rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 py-2 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-semibold text-[#102047] transition hover:bg-[#F3F8F6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isEditing ? "닫기" : assignment ? "편집" : "권한 등록"}
         </button>
       </div>
 
       {!isEditing && (
-        <dl className="mt-5 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-4">
+        <dl className="mt-3 grid gap-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 sm:grid-cols-4">
           <div>
-            <dt className="text-xs font-black text-[#102047]">보직/업무</dt>
+            <dt className="text-xs font-semibold text-[#102047]">보직/업무</dt>
             <dd className="mt-1 text-sm font-medium text-[#627083]">{assignment?.position || "미등록"}</dd>
           </div>
           <div>
-            <dt className="text-xs font-black text-[#102047]">담임 학급</dt>
+            <dt className="text-xs font-semibold text-[#102047]">담임 학급</dt>
             <dd className="mt-1 text-sm font-medium text-[#627083]">
               {assignment?.roles?.includes("homeroom") && assignment?.grade && assignment?.classNo
                 ? `${assignment.grade}학년 ${assignment.classNo}반`
@@ -440,13 +442,13 @@ function UserAssignmentCard({
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-black text-[#102047]">교직원ID</dt>
+            <dt className="text-xs font-semibold text-[#102047]">교직원ID</dt>
             <dd className="mt-1 text-sm font-medium text-[#627083]">
               {assignment?.staffId ? `연결됨 · ${assignment.staffId}` : assignment ? "연결 필요" : "미등록"}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-black text-[#102047]">계정 상태</dt>
+            <dt className="text-xs font-semibold text-[#102047]">계정 상태</dt>
             <dd className="mt-1 text-sm font-medium text-[#627083]">{formatAccountState(user)}</dd>
           </div>
         </dl>
@@ -479,12 +481,12 @@ function UserAssignmentCard({
       )}
 
       {isEditing && (
-        <div className="mt-5 space-y-5 rounded-[24px] bg-[#F7FBF9] p-4">
+        <div className="mt-4 space-y-4 rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-4">
           <div>
-            <p className="text-xs font-black text-[#102047]">역할</p>
+            <p className="text-xs font-semibold text-[#102047]">역할</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {ASSIGNMENT_ROLES.map((role) => (
-                <label key={role} className="flex min-h-11 items-center gap-3 rounded-2xl bg-white px-4 py-2 text-sm font-black text-[#102047]">
+                <label key={role} className="flex min-h-10 items-center gap-3 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm font-semibold text-[#102047]">
                   <input
                     type="checkbox"
                     checked={draft.roles.includes(role)}
@@ -497,20 +499,20 @@ function UserAssignmentCard({
               ))}
             </div>
             {isSelf && (
-              <p className="mt-3 rounded-2xl bg-[#EEF4FF] px-4 py-3 text-xs font-bold leading-5 text-[#3154A3]">
+              <p className="mt-3 rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] px-3 py-2 text-xs font-semibold leading-5 text-[#3154A3]">
                 현재 로그인한 보건교사 권한은 이 화면에서 해제할 수 없습니다.
               </p>
             )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm font-black text-[#102047]">
+            <label className="text-sm font-semibold text-[#102047]">
               학년
               <select
                 value={draft.grade}
                 onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, grade: event.target.value }))}
                 disabled={!hasHomeroomRole || isPending}
-                className="mt-2 min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:opacity-50"
+                className="mt-2 min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:opacity-50"
               >
                 <option value="">선택</option>
                 {GRADE_OPTIONS.map((grade) => (
@@ -518,13 +520,13 @@ function UserAssignmentCard({
                 ))}
               </select>
             </label>
-            <label className="text-sm font-black text-[#102047]">
+            <label className="text-sm font-semibold text-[#102047]">
               반
               <select
                 value={draft.classNo}
                 onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, classNo: event.target.value }))}
                 disabled={!hasHomeroomRole || isPending}
-                className="mt-2 min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:opacity-50"
+                className="mt-2 min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:opacity-50"
               >
                 <option value="">선택</option>
                 {CLASS_OPTIONS.map((classNo) => (
@@ -534,18 +536,18 @@ function UserAssignmentCard({
             </label>
           </div>
 
-          <label className="block text-sm font-black text-[#102047]">
+          <label className="block text-sm font-semibold text-[#102047]">
             보직/업무
             <input
               value={draft.position}
               onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, position: event.target.value }))}
               disabled={isPending}
               placeholder="예: 보건교사, 2학년 3반 담임, 생활안전부장"
-              className="mt-2 min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:opacity-50"
+              className="mt-2 min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:opacity-50"
             />
           </label>
 
-          <label className="flex min-h-12 items-center gap-3 rounded-2xl bg-white px-4 py-2 text-sm font-black text-[#102047]">
+          <label className="flex min-h-10 items-center gap-3 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm font-semibold text-[#102047]">
             <input
               type="checkbox"
               checked={draft.active}
@@ -556,14 +558,14 @@ function UserAssignmentCard({
             이번 학기 권한 활성
           </label>
 
-          {localMessage && <p className="rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-black text-[#B42318]">{localMessage}</p>}
+          {localMessage && <p className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-sm font-semibold text-[#B42318]">{localMessage}</p>}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={() => setIsEditing(false)}
               disabled={isPending}
-              className="min-h-11 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-semibold text-[#102047] transition hover:bg-[#F3F8F6] disabled:cursor-not-allowed disabled:opacity-50"
             >
               취소
             </button>
@@ -571,7 +573,7 @@ function UserAssignmentCard({
               type="button"
               onClick={handleSave}
               disabled={isPending}
-              className="min-h-11 rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-10 rounded-[10px] bg-[#20A982] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#08754B] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isPending ? "저장 중..." : "저장"}
             </button>
@@ -619,11 +621,11 @@ function CopyTermPanel({ schoolYear, semester, onCopied }) {
   };
 
   return (
-    <section className="rounded-[30px] border border-[#DDEAE7] bg-[#F0FBF7] p-5 shadow-[0_18px_48px_rgba(16,32,71,0.05)] sm:p-6">
+    <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 sm:p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#08754B]">Next term</p>
-          <h2 className="mt-2 text-xl font-black text-[#102047]">다음 학기 권한 준비</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#08754B]">Next term</p>
+          <h2 className="mt-1 text-lg font-semibold text-[#102047]">다음 학기 권한 준비</h2>
           <p className="mt-2 text-sm font-medium leading-6 text-[#31584C]">
             {schoolYear}학년도 {semester}학기 권한을 {nextTerm.schoolYear}학년도 {nextTerm.semester}학기로 복사합니다.
           </p>
@@ -632,14 +634,14 @@ function CopyTermPanel({ schoolYear, semester, onCopied }) {
           type="button"
           onClick={handlePreview}
           disabled={state.status === "loading"}
-          className="min-h-11 rounded-2xl border border-[#BFEBDC] bg-white px-4 py-2 text-sm font-black text-[#08754B] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-10 rounded-[10px] border border-[#BFEBDC] bg-white px-4 py-2 text-sm font-semibold text-[#08754B] transition hover:bg-[#F0FBF7] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           dry-run 미리보기
         </button>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        <label className="flex min-h-12 items-center gap-3 rounded-2xl bg-white px-4 py-2 text-sm font-black text-[#102047]">
+        <label className="flex min-h-10 items-center gap-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-sm font-semibold text-[#102047]">
           <input
             type="checkbox"
             checked={options.copyRoles}
@@ -648,7 +650,7 @@ function CopyTermPanel({ schoolYear, semester, onCopied }) {
           />
           역할 복사
         </label>
-        <label className="flex min-h-12 items-center gap-3 rounded-2xl bg-white px-4 py-2 text-sm font-black text-[#102047]">
+        <label className="flex min-h-10 items-center gap-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-sm font-semibold text-[#102047]">
           <input
             type="checkbox"
             checked={options.copyPosition}
@@ -657,7 +659,7 @@ function CopyTermPanel({ schoolYear, semester, onCopied }) {
           />
           보직 복사
         </label>
-        <label className="flex min-h-12 items-center gap-3 rounded-2xl bg-white px-4 py-2 text-sm font-black text-[#102047]">
+        <label className="flex min-h-10 items-center gap-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-sm font-semibold text-[#102047]">
           <input
             type="checkbox"
             checked={options.copyHomeroom}
@@ -669,34 +671,34 @@ function CopyTermPanel({ schoolYear, semester, onCopied }) {
       </div>
 
       {!options.copyHomeroom && (
-        <p className="mt-3 rounded-2xl bg-white/85 px-4 py-3 text-xs font-bold leading-5 text-[#31584C]">
+        <p className="mt-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-xs font-semibold leading-5 text-[#31584C]">
           담임 학급 복사가 꺼져 있으면 다음 학기 문서에는 homeroom 역할과 학년·반을 넣지 않습니다.
         </p>
       )}
 
       {preview && (
         <dl className="mt-5 grid gap-3 sm:grid-cols-4">
-          <div className="rounded-2xl bg-white px-4 py-3">
-            <dt className="text-xs font-black text-[#627083]">대상</dt>
-            <dd className="mt-1 text-xl font-black text-[#102047]">{preview.sourceCount ?? "-"}</dd>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+            <dt className="text-xs font-semibold text-[#627083]">대상</dt>
+            <dd className="mt-1 text-lg font-semibold text-[#102047]">{preview.sourceCount ?? "-"}</dd>
           </div>
-          <div className="rounded-2xl bg-white px-4 py-3">
-            <dt className="text-xs font-black text-[#627083]">생성 예정</dt>
-            <dd className="mt-1 text-xl font-black text-[#20A982]">{preview.createCount}</dd>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+            <dt className="text-xs font-semibold text-[#627083]">생성 예정</dt>
+            <dd className="mt-1 text-lg font-semibold text-[#20A982]">{preview.createCount}</dd>
           </div>
-          <div className="rounded-2xl bg-white px-4 py-3">
-            <dt className="text-xs font-black text-[#627083]">이미 존재</dt>
-            <dd className="mt-1 text-xl font-black text-[#3154A3]">{preview.existingCount}</dd>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+            <dt className="text-xs font-semibold text-[#627083]">이미 존재</dt>
+            <dd className="mt-1 text-lg font-semibold text-[#3154A3]">{preview.existingCount}</dd>
           </div>
-          <div className="rounded-2xl bg-white px-4 py-3">
-            <dt className="text-xs font-black text-[#627083]">건너뜀</dt>
-            <dd className="mt-1 text-xl font-black text-[#B42318]">{preview.skipCount}</dd>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+            <dt className="text-xs font-semibold text-[#627083]">건너뜀</dt>
+            <dd className="mt-1 text-lg font-semibold text-[#B42318]">{preview.skipCount}</dd>
           </div>
         </dl>
       )}
 
       {state.message && (
-        <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-black ${state.status === "error" || state.status === "permission-denied" ? "bg-[#FFF7F7] text-[#B42318]" : "bg-white/85 text-[#08754B]"}`}>
+        <p className={`mt-4 rounded-[10px] border px-3 py-2 text-sm font-semibold ${state.status === "error" || state.status === "permission-denied" ? "border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]" : "border-[#BFEBDC] bg-[#F0FBF7] text-[#08754B]"}`}>
           {state.message}
         </p>
       )}
@@ -705,7 +707,7 @@ function CopyTermPanel({ schoolYear, semester, onCopied }) {
         type="button"
         onClick={handleApply}
         disabled={!preview || state.status === "loading" || preview.createCount === 0}
-        className="mt-5 min-h-12 w-full rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        className="mt-5 min-h-10 w-full rounded-[10px] bg-[#20A982] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#08754B] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
       >
         현재 권한 복사
       </button>
@@ -905,38 +907,38 @@ function FirebaseUserAdminContent({ user, displayName }) {
       description="사용자 계정 정보와 학년도·학기별 역할, 담임 학급, 보직 권한을 분리해서 관리합니다."
       displayName={displayName}
     >
-      <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
+      <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 sm:p-5">
         <div className="grid gap-4 lg:grid-cols-[220px_160px_1fr]">
-          <label className="text-sm font-black text-[#102047]">
+          <label className="text-sm font-semibold text-[#102047]">
             학년도
             <select
               value={schoolYear}
               onChange={(event) => setSchoolYear(Number(event.target.value))}
-              className="mt-2 min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+              className="mt-2 min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
             >
               {yearOptions.map((year) => (
                 <option key={year} value={year}>{year}학년도</option>
               ))}
             </select>
           </label>
-          <label className="text-sm font-black text-[#102047]">
+          <label className="text-sm font-semibold text-[#102047]">
             학기
             <select
               value={semester}
               onChange={(event) => setSemester(Number(event.target.value))}
-              className="mt-2 min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+              className="mt-2 min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
             >
               <option value={1}>1학기</option>
               <option value={2}>2학기</option>
             </select>
           </label>
-          <label className="text-sm font-black text-[#102047]">
+          <label className="text-sm font-semibold text-[#102047]">
             검색
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="이름, 이메일, 보직 검색"
-              className="mt-2 min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 text-sm font-bold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+              className="mt-2 min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
             />
           </label>
         </div>
@@ -947,8 +949,8 @@ function FirebaseUserAdminContent({ user, displayName }) {
               key={filterKey}
               type="button"
               onClick={() => setFilter(filterKey)}
-              className={`min-h-10 rounded-2xl px-4 py-2 text-xs font-black transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
-                filter === filterKey ? "bg-[#20A982] text-white shadow-[0_10px_24px_rgba(32,169,130,0.18)]" : "bg-[#F7FBF9] text-[#627083]"
+              className={`min-h-10 rounded-[10px] border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
+                filter === filterKey ? "border-[#20A982] bg-[#20A982] text-white" : "border-[#DDEAE7] bg-white text-[#627083] hover:bg-[#F3F8F6]"
               }`}
             >
               {FILTER_LABELS[filterKey]}
@@ -957,31 +959,31 @@ function FirebaseUserAdminContent({ user, displayName }) {
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl bg-[#F7FBF9] px-4 py-3">
-            <p className="text-xs font-black text-[#627083]">전체 사용자</p>
-            <p className="mt-1 text-2xl font-black text-[#102047]">{users.length}</p>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+            <p className="text-xs font-semibold text-[#627083]">전체 사용자</p>
+            <p className="mt-1 text-lg font-semibold text-[#102047]">{users.length}</p>
           </div>
-          <div className="rounded-2xl bg-[#F7FBF9] px-4 py-3">
-            <p className="text-xs font-black text-[#627083]">권한 등록</p>
-            <p className="mt-1 text-2xl font-black text-[#20A982]">{users.filter((userItem) => userItem.assignment).length}</p>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+            <p className="text-xs font-semibold text-[#627083]">권한 등록</p>
+            <p className="mt-1 text-lg font-semibold text-[#20A982]">{users.filter((userItem) => userItem.assignment).length}</p>
           </div>
-          <div className="rounded-2xl bg-[#F7FBF9] px-4 py-3">
-            <p className="text-xs font-black text-[#627083]">현재 표시</p>
-            <p className="mt-1 text-2xl font-black text-[#3154A3]">{visibleUsers.length}</p>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+            <p className="text-xs font-semibold text-[#627083]">현재 표시</p>
+            <p className="mt-1 text-lg font-semibold text-[#3154A3]">{visibleUsers.length}</p>
           </div>
-          <div className="rounded-2xl bg-[#FFF7F7] px-4 py-3">
-            <p className="text-xs font-black text-[#627083]">교직원ID 연결 필요</p>
-            <p className="mt-1 text-2xl font-black text-[#B42318]">{needsStaffIdCount}</p>
+          <div className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2">
+            <p className="text-xs font-semibold text-[#627083]">교직원ID 연결 필요</p>
+            <p className="mt-1 text-lg font-semibold text-[#B42318]">{needsStaffIdCount}</p>
           </div>
         </div>
 
-        <p className="mt-4 rounded-2xl bg-[#F7FBF9] px-4 py-3 text-xs font-bold leading-5 text-[#627083]">
+        <p className="mt-4 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-xs font-semibold leading-5 text-[#627083]">
           교직원ID는 Google Sheet 교직원명단을 읽어 선택하며, 저장 시 현재 권한 문서에 staffId만 연결합니다.
           {directoryState.status === "success" ? ` 교직원명단 ${staffDirectory.length}건 로드됨` : ""}
         </p>
 
         {actionState.message && (
-          <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-black ${actionState.status === "success" ? "bg-[#F0FBF7] text-[#08754B]" : actionState.status === "loading" ? "bg-[#EEF4FF] text-[#3154A3]" : "bg-[#FFF7F7] text-[#B42318]"}`}>
+          <p className={`mt-4 rounded-[10px] border px-3 py-2 text-sm font-semibold ${actionState.status === "success" ? "border-[#BFEBDC] bg-[#F0FBF7] text-[#08754B]" : actionState.status === "loading" ? "border-[#C8D8FF] bg-[#EEF4FF] text-[#3154A3]" : "border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]"}`}>
             {actionState.message}
           </p>
         )}

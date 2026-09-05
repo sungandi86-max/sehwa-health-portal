@@ -61,10 +61,10 @@ export default function FirebaseUserDangerActions({
   };
 
   return (
-    <div className="mt-3 rounded-[16px] border border-[#F6D8D8] bg-[#FFF7F7] p-3">
+    <div className="mt-2 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[12px] font-bold text-[#B42318]">위험 작업</p>
+          <p className="text-[12px] font-semibold text-[#102047]">계정 관리</p>
           <p className="mt-1 text-[12px] font-medium text-[#627083]">
             기존 제출·기록은 삭제하지 않고 계정 접근만 관리합니다.
           </p>
@@ -76,7 +76,7 @@ export default function FirebaseUserDangerActions({
             setLocalMessage("");
           }}
           disabled={isPending}
-          className="min-h-10 rounded-[10px] border border-[#F6D8D8] bg-white px-3 py-2 text-[12px] font-bold text-[#B42318] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#B42318]/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-[12px] font-semibold text-[#102047] transition hover:bg-[#F3F8F6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isOpen ? "닫기" : "계정 관리"}
         </button>
@@ -85,12 +85,12 @@ export default function FirebaseUserDangerActions({
       {isOpen && (
         <div className="mt-3 space-y-3">
           {isSelf && (
-            <p className="rounded-[12px] bg-white px-3 py-2 text-[12px] font-bold text-[#B42318]">
+            <p className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-[12px] font-semibold text-[#B42318]">
               현재 로그인한 자기 자신 계정은 비활성화하거나 완전 삭제할 수 없습니다.
             </p>
           )}
 
-          <div className="rounded-[12px] border border-[#F6D8D8] bg-white p-3">
+          <div className="rounded-[10px] border border-[#F6D8D8] bg-white p-3">
             <p className="text-[12px] font-bold text-[#102047]">계정 비활성화</p>
             <p className="mt-1 text-[12px] font-medium leading-5 text-[#627083]">
               Firebase Auth 계정과 과거 기록은 유지하고, users 및 현재 학기 권한을 비활성화합니다.
@@ -99,13 +99,13 @@ export default function FirebaseUserDangerActions({
               type="button"
               onClick={handleDeactivate}
               disabled={isPending || isSelf || (user.active === false && user.assignment?.active === false)}
-              className="mt-3 min-h-10 rounded-[10px] border border-[#F6D8D8] bg-white px-3 py-2 text-[12px] font-bold text-[#B42318] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#B42318]/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 min-h-10 rounded-[10px] border border-[#F6D8D8] bg-white px-3 py-2 text-[12px] font-semibold text-[#B42318] transition hover:bg-[#FFF7F7] focus:outline-none focus:ring-4 focus:ring-[#B42318]/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isPending ? "처리 중..." : "비활성화"}
             </button>
           </div>
 
-          <div className="rounded-[12px] border border-[#F6D8D8] bg-white p-3">
+          <div className="rounded-[10px] border border-[#F6D8D8] bg-white p-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-[12px] font-bold text-[#102047]">완전 삭제</p>
@@ -117,15 +117,15 @@ export default function FirebaseUserDangerActions({
                 type="button"
                 onClick={handleCheck}
                 disabled={isPending}
-                className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-[#F7FBF9] px-3 py-2 text-[12px] font-bold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-[12px] font-semibold text-[#102047] transition hover:bg-[#F3F8F6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 삭제 가능 여부 확인
               </button>
             </div>
 
             {deletionCheck && (
-              <div className={`mt-3 rounded-[12px] px-3 py-2 text-[12px] font-bold ${
-                deletionCheck.canDelete ? "bg-[#F0FBF7] text-[#08754B]" : "bg-[#FFF7F7] text-[#B42318]"
+              <div className={`mt-3 rounded-[10px] border px-3 py-2 text-[12px] font-semibold ${
+                deletionCheck.canDelete ? "border-[#BFEBDC] bg-[#F0FBF7] text-[#08754B]" : "border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]"
               }`}>
                 <p>{deletionCheck.message}</p>
                 <dl className="mt-2 grid gap-1 text-[#627083] sm:grid-cols-2">
@@ -147,7 +147,7 @@ export default function FirebaseUserDangerActions({
                     value={confirmText}
                     onChange={(event) => setConfirmText(event.target.value)}
                     placeholder="삭제"
-                    className="mt-2 min-h-10 w-full rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 text-[13px] font-semibold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#B42318]/10"
+                    className="mt-2 min-h-10 w-full rounded-[10px] border border-[#F6D8D8] bg-white px-3 text-[13px] font-semibold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#B42318]/10"
                   />
                 </label>
                 <button
@@ -163,7 +163,7 @@ export default function FirebaseUserDangerActions({
           </div>
 
           {localMessage && (
-            <p className="rounded-[12px] bg-white px-3 py-2 text-[12px] font-bold text-[#B42318]">
+            <p className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-[12px] font-semibold text-[#B42318]">
               {localMessage}
             </p>
           )}
