@@ -108,7 +108,7 @@ function FirebaseAdminInfectionsContent({ user, displayName }) {
     >
       <SummaryRow items={summary} />
 
-      <section className="rounded-[16px] border border-[#DDEAE7] bg-white/95 p-4">
+      <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
         <InfectionCaseFilters
           caseStatus={caseStatus}
           classNo={classNo}
@@ -124,12 +124,12 @@ function FirebaseAdminInfectionsContent({ user, displayName }) {
 
         {actionState.message && (
           <p
-            className={`mt-3 rounded-[10px] px-3 py-2 text-sm font-semibold ${
+            className={`mt-3 rounded-[8px] border px-3 py-2 text-sm font-semibold ${
               actionState.status === "success"
-                ? "bg-[#F0FBF7] text-[#08754B]"
+                ? "border-[#BFEBDC] bg-[#F0FBF7] text-[#08754B]"
                 : actionState.status === "loading"
-                ? "bg-[#EEF4FF] text-[#3154A3]"
-                : "bg-[#FFF7F7] text-[#B42318]"
+                ? "border-[#C8D8FF] bg-[#EEF4FF] text-[#3154A3]"
+                : "border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]"
             }`}
           >
             {actionState.message}
@@ -165,13 +165,13 @@ function FirebaseAdminInfectionsContent({ user, displayName }) {
       <div className="flex flex-wrap gap-2">
         <Link
           to="/firebase-admin/submissions?tab=infection"
-          className="inline-flex min-h-10 items-center rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+          className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#102047] transition hover:border-[#20A982] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
         >
           기존 제출관리 tab
         </Link>
         <Link
           to="/firebase-dashboard"
-          className="inline-flex min-h-10 items-center rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+          className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#102047] transition hover:border-[#20A982] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
         >
           대시보드로
         </Link>

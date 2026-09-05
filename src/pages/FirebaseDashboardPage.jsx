@@ -40,7 +40,7 @@ function RoleBadges({ roles }) {
   const roleLabels = getRoleLabels(roles);
 
   if (!roleLabels.length) {
-    return <span className="text-sm font-bold text-[#6B7684]">역할 미등록</span>;
+    return <span className="text-sm font-semibold text-[#6B7684]">역할 미등록</span>;
   }
 
   return (
@@ -48,7 +48,7 @@ function RoleBadges({ roles }) {
       {roleLabels.map((roleLabel) => (
         <span
           key={roleLabel}
-          className="rounded-full border border-[#BFEBDC] bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]"
+          className="rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]"
         >
           {roleLabel}
         </span>
@@ -59,9 +59,9 @@ function RoleBadges({ roles }) {
 
 function AccessMessage({ title, description, action }) {
   return (
-    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
-      <div className="mx-auto max-w-xl rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 text-center shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
-        <h1 className="mt-5 text-2xl font-black tracking-[-0.02em] text-[#102047]">{title}</h1>
+    <section className="firebase-v2-surface min-h-full bg-[#F8FAFA] px-4 py-8 text-[#102047] sm:px-6 sm:py-10">
+      <div className="mx-auto max-w-xl rounded-[12px] border border-[#DDEAE7] bg-white p-5 text-center shadow-[var(--shh-soft-shadow)] sm:p-6">
+        <h1 className="text-xl font-bold text-[#102047]">{title}</h1>
         <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">{description}</p>
         {action}
       </div>
@@ -70,23 +70,23 @@ function AccessMessage({ title, description, action }) {
 }
 
 function announcementBadgeClassName(badgeType) {
-  if (badgeType === "pink") return "rounded-full bg-[#FFF1F7] px-3 py-1 text-xs font-black text-[#C02E6F]";
-  if (badgeType === "green") return "rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]";
-  if (badgeType === "blue") return "rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]";
-  return "rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]";
+  if (badgeType === "pink") return "rounded-[8px] border border-[#F6D8D8] bg-[#FFF7F7] px-2.5 py-1 text-xs font-semibold text-[#B42318]";
+  if (badgeType === "green") return "rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]";
+  if (badgeType === "blue") return "rounded-[8px] border border-[#C8D8FF] bg-[#EEF4FF] px-2.5 py-1 text-xs font-semibold text-[#3154A3]";
+  return "rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]";
 }
 
 function SummarySkeleton() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
       {[0, 1, 2, 3].map((item) => (
         <article
           key={item}
-          className="h-32 animate-pulse rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]"
+          className="h-24 animate-pulse rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]"
         >
-          <div className="h-4 w-24 rounded-full bg-[#E8F2EF]" />
-          <div className="mt-5 h-8 w-14 rounded-xl bg-[#DFF8EF]" />
-          <div className="mt-4 h-3 w-28 rounded-full bg-[#EEF4FF]" />
+          <div className="h-4 w-24 rounded-[6px] bg-[#E8F2EF]" />
+          <div className="mt-4 h-7 w-14 rounded-[8px] bg-[#DFF8EF]" />
+          <div className="mt-3 h-3 w-28 rounded-[6px] bg-[#EEF4FF]" />
         </article>
       ))}
     </div>
@@ -351,7 +351,7 @@ export default function FirebaseDashboardPage() {
             type="button"
             onClick={handleSignOut}
             disabled={isWorking}
-            className="mt-6 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-semibold text-[#102047] transition hover:border-[#20A982] disabled:cursor-not-allowed disabled:opacity-50"
           >
             로그아웃
           </button>
@@ -370,7 +370,7 @@ export default function FirebaseDashboardPage() {
             type="button"
             onClick={handleSignOut}
             disabled={isWorking}
-            className="mt-6 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-semibold text-[#102047] transition hover:border-[#20A982] disabled:cursor-not-allowed disabled:opacity-50"
           >
             로그아웃
           </button>
@@ -380,38 +380,36 @@ export default function FirebaseDashboardPage() {
   }
 
   return (
-    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-4 text-[#102047] sm:px-6 sm:py-6">
-      <div className="mx-auto w-full max-w-6xl space-y-4">
-        <header className="rounded-[32px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+    <section className="firebase-v2-surface min-h-full bg-[#F8FAFA] px-3 py-4 text-[#102047] sm:px-5 sm:py-5">
+      <div className="mx-auto w-full max-w-6xl space-y-3">
+        <header className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#20A982]">
-                온라인 보건실
-              </p>
-              <h1 className="mt-3 text-3xl font-black tracking-[-0.02em] text-[#102047] sm:text-4xl">
+              <p className="text-xs font-semibold text-[#20A982]">보건교사 대시보드</p>
+              <h1 className="mt-1 text-2xl font-bold text-[#102047] sm:text-[1.7rem]">
                 온라인 보건실
               </h1>
-              <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">
+              <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
                 {displayName} 선생님, 오늘 확인할 보건 업무를 차분하게 점검하세요.
               </p>
             </div>
 
-            <div className="rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-4 sm:min-w-64">
+            <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F3F8F6] p-3 sm:min-w-64">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-black text-[#102047]">{displayName}</p>
-                  <p className="mt-1 text-xs font-bold text-[#20A982]">보건교사</p>
+                  <p className="text-sm font-semibold text-[#102047]">{displayName}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#20A982]">보건교사</p>
                 </div>
                 <button
                   type="button"
                   onClick={handleSignOut}
                   disabled={isWorking}
-                  className="min-h-11 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-xs font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#20A982] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   로그아웃
                 </button>
               </div>
-              <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#102047]">
+              <p className="mt-3 rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm font-semibold text-[#102047]">
                 {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
               </p>
             </div>
@@ -419,28 +417,28 @@ export default function FirebaseDashboardPage() {
         </header>
 
         <section aria-label="오늘의 요약">
-          <h2 className="mb-3 px-1 text-lg font-black text-[#102047]">오늘의 요약</h2>
+          <h2 className="mb-2 px-1 text-[16px] font-semibold text-[#102047]">오늘의 요약</h2>
           {summaryState.status === "loading" && <SummarySkeleton />}
 
           {(summaryState.status === "permission-denied" ||
             summaryState.status === "index-required" ||
             summaryState.status === "error") && (
-            <div className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 shadow-[0_14px_36px_rgba(16,32,71,0.04)]">
-              <p className="text-sm font-black text-[#B42318]">{summaryState.message}</p>
+            <div className="rounded-[12px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 shadow-[var(--shh-soft-shadow)]">
+              <p className="text-sm font-semibold text-[#B42318]">{summaryState.message}</p>
             </div>
           )}
 
           {summaryState.status === "success" && dashboardSummary && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {dashboardSummary.cards.map((item) => {
                 const summaryLink = item.href || SUMMARY_LINKS[item.label];
                 const content = (
                   <>
-                    <p className="text-sm font-black text-[#102047]">{item.label}</p>
-                    <p className="mt-3 text-3xl font-black text-[#20A982]">{item.value}</p>
-                    <p className="mt-2 text-xs font-bold text-[#8A96A8]">{item.note}</p>
+                    <p className="text-sm font-semibold text-[#102047]">{item.label}</p>
+                    <p className="mt-2 text-2xl font-bold text-[#20A982]">{item.value}</p>
+                    <p className="mt-1.5 text-xs font-semibold text-[#8A96A8]">{item.note}</p>
                     {item.metrics && (
-                      <dl className="mt-4 grid gap-2 text-xs font-bold text-[#627083]">
+                      <dl className="mt-3 grid gap-1.5 text-xs font-semibold text-[#627083]">
                         {item.metrics.map((metric) => (
                           <div key={metric.label} className="flex items-center justify-between gap-3">
                             <dt>{metric.label}</dt>
@@ -452,7 +450,7 @@ export default function FirebaseDashboardPage() {
                       </dl>
                     )}
                     {summaryLink && (
-                      <span className="mt-4 inline-flex text-xs font-black text-[#08754B]">
+                      <span className="mt-3 inline-flex text-xs font-semibold text-[#08754B]">
                         관리 화면 열기
                       </span>
                     )}
@@ -463,14 +461,14 @@ export default function FirebaseDashboardPage() {
                   <Link
                     key={item.label}
                     to={summaryLink}
-                    className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)] transition hover:-translate-y-[1px] hover:shadow-[0_18px_42px_rgba(16,32,71,0.08)] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+                    className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)] transition hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
                   >
                     {content}
                   </Link>
                 ) : (
                   <article
                     key={item.label}
-                    className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]"
+                    className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]"
                   >
                     {content}
                   </article>
@@ -480,28 +478,26 @@ export default function FirebaseDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
+        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">
-                Recent submissions
-              </p>
-              <h2 className="mt-2 text-xl font-black text-[#102047]">최근 제출</h2>
+              <p className="text-xs font-semibold text-[#20A982]">제출 확인</p>
+              <h2 className="mt-1 text-lg font-bold text-[#102047]">최근 제출</h2>
             </div>
             <Link
               to="/firebase-admin/submissions"
-              className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+              className="w-fit rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B] transition hover:border-[#20A982] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
             >
               관리 화면
             </Link>
           </div>
 
           {summaryState.status === "loading" && (
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-2">
               {[0, 1, 2].map((item) => (
                 <div
                   key={item}
-                  className="h-20 animate-pulse rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9]"
+                  className="h-16 animate-pulse rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6]"
                 />
               ))}
             </div>
@@ -510,34 +506,34 @@ export default function FirebaseDashboardPage() {
           {(summaryState.status === "permission-denied" ||
             summaryState.status === "index-required" ||
             summaryState.status === "error") && (
-            <div className="mt-5 rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-5">
-              <p className="text-sm font-black text-[#B42318]">{summaryState.message}</p>
+            <div className="mt-4 rounded-[12px] border border-[#F6D8D8] bg-[#FFF7F7] p-4">
+              <p className="text-sm font-semibold text-[#B42318]">{summaryState.message}</p>
             </div>
           )}
 
           {summaryState.status === "success" && dashboardSummary?.recentSubmissions.length === 0 && (
-            <div className="mt-5 rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-5">
-              <p className="text-sm font-black text-[#627083]">최근 제출 내역이 없습니다.</p>
+            <div className="mt-4 rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6] p-4">
+              <p className="text-sm font-semibold text-[#627083]">최근 제출 내역이 없습니다.</p>
             </div>
           )}
 
           {summaryState.status === "success" && dashboardSummary?.recentSubmissions.length > 0 && (
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-2">
               {dashboardSummary.recentSubmissions.map((submission) => (
                 <article
                   key={`${submission.source}-${submission.id}`}
-                  className="flex flex-col gap-3 rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-4 shadow-[0_12px_30px_rgba(16,32,71,0.04)] sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+                      <span className="rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]">
                         {submission.typeLabel}
                       </span>
-                      <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">
+                      <span className="rounded-[8px] border border-[#C8D8FF] bg-[#EEF4FF] px-2.5 py-1 text-xs font-semibold text-[#3154A3]">
                         {submission.statusLabel}
                       </span>
                     </div>
-                    <p className="mt-3 break-keep text-sm font-black leading-6 text-[#102047]">
+                    <p className="mt-2 break-keep text-sm font-semibold leading-6 text-[#102047]">
                       {submission.detail}
                     </p>
                   </div>
@@ -548,48 +544,46 @@ export default function FirebaseDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
+        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">
-                Announcements
-              </p>
-              <h2 className="mt-2 text-xl font-black text-[#102047]">진행 중인 안내</h2>
+              <p className="text-xs font-semibold text-[#20A982]">보건실 안내</p>
+              <h2 className="mt-1 text-lg font-bold text-[#102047]">진행 중인 안내</h2>
             </div>
-            <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+            <span className="w-fit rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]">
               {announcements.length}건
             </span>
           </div>
 
           {announcementsState.status === "loading" && (
-            <div className="mt-5 space-y-2">
+            <div className="mt-4 space-y-2">
               {[0, 1].map((item) => (
                 <div
                   key={item}
-                  className="h-36 animate-pulse rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9]"
+                  className="h-28 animate-pulse rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6]"
                 />
               ))}
             </div>
           )}
 
           {(announcementsState.status === "permission-denied" || announcementsState.status === "error") && (
-            <div className="mt-5 rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-5">
-              <p className="text-sm font-black text-[#9F2525]">{announcementsState.message}</p>
+            <div className="mt-4 rounded-[12px] border border-[#F6D8D8] bg-[#FFF7F7] p-4">
+              <p className="text-sm font-semibold text-[#9F2525]">{announcementsState.message}</p>
             </div>
           )}
 
           {announcementsState.status === "success" && announcements.length === 0 && (
-            <div className="mt-5 rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-5">
-              <p className="text-sm font-black text-[#627083]">현재 진행 중인 보건실 안내가 없습니다.</p>
+            <div className="mt-4 rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6] p-4">
+              <p className="text-sm font-semibold text-[#627083]">현재 진행 중인 보건실 안내가 없습니다.</p>
             </div>
           )}
 
           {announcementsState.status === "success" && announcements.length > 0 && (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {announcements.map((announcement) => (
                 <article
                   key={announcement.id}
-                  className="rounded-[16px] border border-[#DDEAE7] bg-[#FAFDFC] p-3"
+                  className="rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] p-3"
                 >
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
@@ -602,7 +596,7 @@ export default function FirebaseDashboardPage() {
                         )}
                         <span>{announcement.dateLabel || formatAnnouncementEndDate(announcement)}</span>
                       </div>
-                      <h3 className="mt-2 text-base font-bold leading-6 text-[#102047]">
+                      <h3 className="mt-2 text-[15px] font-semibold leading-6 text-[#102047]">
                         {announcement.title || "제목 없는 안내"}
                       </h3>
                       {announcement.description && (
@@ -616,14 +610,14 @@ export default function FirebaseDashboardPage() {
                         href={announcement.linkUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-10 shrink-0 items-center rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white transition hover:-translate-y-[1px] hover:bg-[#178C6C]"
+                        className="inline-flex min-h-10 shrink-0 items-center rounded-[9px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#178C6C]"
                       >
                         {announcement.linkLabel || "링크 열기"}
                       </a>
                     )}
                   </div>
                   {announcement.actionText && (
-                    <p className="mt-2 rounded-[10px] bg-white px-3 py-2 text-xs font-semibold text-[#08754B]">
+                    <p className="mt-2 rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#08754B]">
                       {announcement.actionText}
                     </p>
                   )}
@@ -633,15 +627,15 @@ export default function FirebaseDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
+        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">Quick menu</p>
-              <h2 className="mt-2 text-xl font-black text-[#102047]">빠른 메뉴</h2>
+              <p className="text-xs font-semibold text-[#20A982]">관리 바로가기</p>
+              <h2 className="mt-1 text-lg font-bold text-[#102047]">빠른 메뉴</h2>
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {QUICK_MENUS.map((menu) => {
               const statusText =
                 menu.href === "/firebase-admin/access-requests" && typeof pendingAccessCount === "number"
@@ -649,10 +643,10 @@ export default function FirebaseDashboardPage() {
                   : menu.status;
               const content = (
                 <>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#8A96A8]">
+                <span className="rounded-[8px] border border-[#DDEAE7] bg-white px-2.5 py-1 text-xs font-semibold text-[#8A96A8]">
                   {statusText}
                 </span>
-                <span className="mt-3 block text-base font-bold text-[#102047]">{menu.title}</span>
+                <span className="mt-2 block text-[15px] font-semibold text-[#102047]">{menu.title}</span>
                 <span className="mt-1 block truncate text-sm font-medium leading-5 text-[#627083]">{menu.description}</span>
                 </>
               );
@@ -661,7 +655,7 @@ export default function FirebaseDashboardPage() {
                 <Link
                   key={menu.title}
                   to={menu.href}
-                  className="min-h-28 rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-5 text-left transition hover:-translate-y-[1px] hover:shadow-[0_14px_30px_rgba(16,32,71,0.07)] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+                  className="min-h-24 rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] p-3 text-left transition hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
                 >
                   {content}
                 </Link>
@@ -670,7 +664,7 @@ export default function FirebaseDashboardPage() {
                   key={menu.title}
                   type="button"
                   disabled
-                  className="min-h-28 cursor-not-allowed rounded-[24px] border border-[#DDEAE7] bg-[#FAFDFC] p-5 text-left opacity-80"
+                  className="min-h-24 cursor-not-allowed rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] p-3 text-left opacity-80"
                 >
                   {content}
                 </button>
@@ -679,11 +673,11 @@ export default function FirebaseDashboardPage() {
           </div>
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
-          <article className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">Term access</p>
-            <h2 className="mt-2 text-xl font-black text-[#102047]">이번 학기 권한</h2>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <section className="grid gap-3 lg:grid-cols-[1fr_320px]">
+          <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
+            <p className="text-xs font-semibold text-[#20A982]">권한 정보</p>
+            <h2 className="mt-1 text-lg font-bold text-[#102047]">이번 학기 권한</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-xs font-bold text-[#7B8797]">역할</p>
                 <div className="mt-2">
@@ -692,31 +686,31 @@ export default function FirebaseDashboardPage() {
               </div>
               <div>
                 <p className="text-xs font-bold text-[#7B8797]">보직</p>
-                <p className="mt-2 text-sm font-black text-[#102047]">{assignment.position || "보직 미등록"}</p>
+                <p className="mt-2 text-sm font-semibold text-[#102047]">{assignment.position || "보직 미등록"}</p>
               </div>
               <div>
                 <p className="text-xs font-bold text-[#7B8797]">상태</p>
-                <p className="mt-2 text-sm font-black text-[#102047]">
+                <p className="mt-2 text-sm font-semibold text-[#102047]">
                   {assignment.active === true ? "활성" : "비활성"}
                 </p>
               </div>
               <div>
                 <p className="text-xs font-bold text-[#7B8797]">학기</p>
-                <p className="mt-2 text-sm font-black text-[#102047]">
+                <p className="mt-2 text-sm font-semibold text-[#102047]">
                   {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
                 </p>
               </div>
             </div>
           </article>
 
-          <article className="rounded-[30px] border border-[#DDEAE7] bg-[#F0FBF7] p-5 sm:p-6">
-            <p className="text-sm font-black text-[#08754B]">권한 관리</p>
+          <article className="rounded-[12px] border border-[#BFEBDC] bg-[#F0FBF7] p-4">
+            <p className="text-sm font-semibold text-[#08754B]">권한 관리</p>
             <p className="mt-3 text-sm font-medium leading-6 text-[#31584C]">
               교직원 목록, 역할 지정, 담임 학년·반, 활성 상태, 학년도/학기 선택은 권한 관리 화면에서 처리합니다.
             </p>
             <Link
               to="/firebase-admin/users"
-              className="mt-5 inline-flex min-h-11 items-center rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+              className="mt-4 inline-flex min-h-10 items-center rounded-[9px] bg-[#20A982] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#08754B] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
             >
               교직원 권한 관리
             </Link>
