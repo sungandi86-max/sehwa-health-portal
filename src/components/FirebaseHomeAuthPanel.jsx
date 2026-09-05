@@ -33,9 +33,9 @@ function RoleSummary({ assignment }) {
   if (!labels.length) return <span className="text-sm font-semibold text-[#627083]">역할 미등록</span>;
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-1.5">
       {labels.map((label) => (
-        <span key={label} className="rounded-full border border-[#BFEBDC] bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
+        <span key={label} className="rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]">
           {label}
         </span>
       ))}
@@ -138,14 +138,14 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
   };
 
   return (
-    <div className={`rounded-[14px] border border-[#DDEAE7] bg-[#F7FBF9] p-3 text-[#102047] ${className}`}>
+    <div className={`rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6] p-3 text-[#102047] ${className}`}>
       <p className="text-[11px] font-semibold text-[#20A982]">교직원 로그인</p>
       <p className="mt-1 text-xs font-medium leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
         교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
       </p>
 
       {status === "loading" && (
-        <p className="mt-3 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#627083]">
+        <p className="mt-3 rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#627083]">
           로그인 상태 확인 중
         </p>
       )}
@@ -171,7 +171,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
               type="button"
               onClick={handleSignOut}
               disabled={isWorking}
-              className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] disabled:cursor-not-allowed disabled:opacity-50"
             >
               로그아웃
             </button>
@@ -185,14 +185,14 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
               to="/firebase-submissions"
-              className="inline-flex min-h-10 items-center rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white"
+              className="inline-flex min-h-10 items-center rounded-[9px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white"
             >
               제출·보고 센터
             </Link>
             {canOpenMyStatus && (
               <Link
                 to="/my-submission-status"
-                className="inline-flex min-h-10 items-center rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
+                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
               >
                 나의 제출·이수 현황
               </Link>
@@ -200,7 +200,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
             {canOpenDashboard && (
               <Link
                 to="/firebase-dashboard"
-                className="inline-flex min-h-10 items-center rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
+                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
               >
                 대시보드
               </Link>
@@ -208,7 +208,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
           </div>
           {assignmentResult?.status === "not-found" && <FirebaseAccessRequestAction user={user} />}
           {message && (
-            <p className="mt-3 rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-xs font-semibold text-[#B42318]">
+            <p className="mt-3 rounded-[8px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-xs font-semibold text-[#B42318]">
               {message}
             </p>
           )}

@@ -3,7 +3,7 @@ import { SchoolEmblem } from "./ui.jsx";
 export default function HeroSection({ config, action }) {
   return (
     <section id="home" className="mx-auto w-full max-w-6xl px-3 pb-2 pt-2 sm:px-4 lg:max-w-[1280px]">
-      <div className="rounded-[18px] border border-[#DDEAE7] bg-white/95 p-3 text-[#102047] sm:p-4 lg:p-5">
+      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 text-[#102047] shadow-[var(--shh-soft-shadow)] sm:p-4 lg:p-4">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center xl:grid-cols-[minmax(0,1fr)_390px]">
           <div className="min-w-0">
             <div className="hidden items-center gap-2.5 sm:flex">
@@ -11,7 +11,7 @@ export default function HeroSection({ config, action }) {
               <span className="text-[11px] font-semibold text-[#20A982]">교직원 공유용 보건업무 포털</span>
             </div>
             <h1
-              className="max-w-[640px] text-[1.75rem] font-bold leading-tight text-[#102047] sm:mt-2 sm:text-[2rem]"
+              className="max-w-[640px] text-[1.65rem] font-bold leading-tight text-[#102047] sm:mt-2 sm:text-[1.9rem]"
               style={{
                 wordBreak: "keep-all",
                 overflowWrap: "normal",
@@ -27,10 +27,10 @@ export default function HeroSection({ config, action }) {
               {config.subtitle}
             </p>
             <div className="mt-3 flex flex-col gap-1.5 text-[11px] font-semibold leading-5 sm:flex-row sm:flex-wrap sm:gap-2 sm:text-xs">
-              <span className="line-clamp-2 rounded-[9px] border border-[#DDEAE7] bg-[#F7FBF9] px-2.5 py-1 text-[#08754B]" style={{ wordBreak: "keep-all" }}>
+              <span className="line-clamp-2 rounded-[8px] border border-[#DDEAE7] bg-[#F3F8F6] px-2.5 py-1 text-[#08754B]" style={{ wordBreak: "keep-all" }}>
                 {config.privacyNotice}
               </span>
-              <span className="line-clamp-2 rounded-[9px] border border-[#DDEAE7] bg-[#F7FBF9] px-2.5 py-1 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+              <span className="line-clamp-2 rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-[#627083]" style={{ wordBreak: "keep-all" }}>
                 {config.managerNote}
               </span>
             </div>

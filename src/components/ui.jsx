@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 // Badge component
 export function Badge({ children, type = "blue" }) {
   const styles = {
-    pink: "bg-[#FDEAF0] text-[#D94F70] border-[#F7C9D6]",
-    green: "bg-[#E8F6EE] text-[#2E7D32] border-[#BFE6CB]",
-    blue: "bg-[#EAF3FF] text-[#1A3B8B] border-[#C9DFFF]",
-    gray: "bg-slate-100 text-slate-600 border-slate-200"
+    pink: "bg-[#FFF7F7] text-[#B42318] border-[#F6D8D8]",
+    green: "bg-[#F0FBF7] text-[#08754B] border-[#BFEBDC]",
+    blue: "bg-[#EEF4FF] text-[#3154A3] border-[#C8D8FF]",
+    gray: "bg-[#F8FAFA] text-[#627083] border-[#DDEAE7]"
   };
   return (
-    <span className={`inline-flex shrink-0 whitespace-nowrap items-center rounded-full border px-3 py-1 text-xs font-bold ${styles[type] || styles.gray}`}>
+    <span className={`inline-flex shrink-0 whitespace-nowrap items-center rounded-[8px] border px-2.5 py-1 text-xs font-semibold ${styles[type] || styles.gray}`}>
       {children}
     </span>
   );
@@ -18,10 +18,10 @@ export function Badge({ children, type = "blue" }) {
 // SectionTitle component
 export function SectionTitle({ eyebrow, title, description }) {
   return (
-    <div className="mb-5">
-      {eyebrow && <p className="mb-2 text-sm font-bold text-[#D94F70]">{eyebrow}</p>}
-      <h2 className="text-2xl font-extrabold tracking-tight text-[#1A3B8B] md:text-3xl">{title}</h2>
-      {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 md:text-base">{description}</p>}
+    <div className="mb-4">
+      {eyebrow && <p className="mb-1.5 text-xs font-semibold text-[#08754B]">{eyebrow}</p>}
+      <h2 className="text-xl font-bold tracking-tight text-[#102047] md:text-2xl">{title}</h2>
+      {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-[#627083]">{description}</p>}
     </div>
   );
 }
@@ -29,7 +29,7 @@ export function SectionTitle({ eyebrow, title, description }) {
 // AppCard component
 export function AppCard({ children, className = "" }) {
   return (
-    <div className={`min-w-0 rounded-[24px] border border-slate-100 bg-white p-5 shadow-sm ${className}`}>
+    <div className={`min-w-0 rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)] ${className}`}>
       {children}
     </div>
   );
@@ -84,7 +84,7 @@ export function PrimaryButton({ children, url, scrollTarget }) {
 
   if (!children || children === "") return null;
 
-  const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
+  const btnCls = "mt-4 inline-block w-full rounded-[10px] bg-[#102047] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
 
   // 1) 명시적 scrollTarget → 해당 페이지로 이동
   if (scrollTarget) {
@@ -126,9 +126,9 @@ export function PrimaryButton({ children, url, scrollTarget }) {
 
 // SchoolEmblem SVG
 export function SchoolEmblem({ size = "md" }) {
-  const sizeClass = size === "lg" ? "h-28 w-28" : "h-11 w-11";
+  const sizeClass = size === "lg" ? "h-24 w-24" : "h-10 w-10";
   return (
-    <div className={`${sizeClass} shrink-0 overflow-hidden rounded-full bg-white shadow-sm`} aria-label="세화여고 교표">
+    <div className={`${sizeClass} shrink-0 overflow-hidden rounded-full border border-[#DDEAE7] bg-white`} aria-label="세화여고 교표">
       <svg viewBox="0 0 100 100" className="h-full w-full" role="img">
         <circle cx="50" cy="50" r="49" fill="#0D4EA6" />
         <circle cx="50" cy="50" r="42" fill="none" stroke="white" strokeWidth="3.5" />

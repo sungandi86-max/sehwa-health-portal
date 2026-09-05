@@ -71,7 +71,7 @@ export default function Header() {
   const staffEntryLabel = currentUser ? "제출·보고" : "교직원 로그인";
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[rgba(120,140,180,0.14)] bg-white/78 shadow-[0_10px_30px_rgba(30,41,59,0.04)] backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-[#DDEAE7] bg-white/92 shadow-[var(--shh-soft-shadow)] backdrop-blur">
       <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-2.5">
         <button
           onClick={() => navigate("/")}
@@ -81,7 +81,7 @@ export default function Header() {
         >
           <SchoolEmblem />
           <div className="min-w-0 pt-0.5">
-            <p className="truncate text-xs font-black leading-[1.15] text-[#1A3B8B] sm:text-sm md:text-[0.95rem]">
+            <p className="truncate text-xs font-bold leading-[1.15] text-[#102047] sm:text-sm md:text-[0.95rem]">
               세화여자고등학교 온라인 보건실
             </p>
             <p className="mt-0.5 hidden text-[0.7rem] font-semibold leading-4 text-slate-500 md:block">
@@ -96,7 +96,7 @@ export default function Header() {
             <button
               key={item.id}
               onClick={() => navigate(target)}
-              className={`rounded-full px-2.5 py-1.5 text-xs font-bold transition ${
+              className={`rounded-[9px] px-2.5 py-1.5 text-xs font-semibold transition ${
                 isOperationalEntry ? "min-h-10" : ""
               } ${
                 location.pathname === target
@@ -113,7 +113,7 @@ export default function Header() {
           {isOperationalEntry && (
             <button
               onClick={() => navigate("/firebase-submissions")}
-              className="min-h-10 rounded-full bg-[#20A982] px-3 py-1.5 text-xs font-bold text-white shadow-[0_10px_24px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] sm:px-3.5"
+              className="min-h-10 rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#178C6C] sm:px-3.5"
             >
               {staffEntryLabel}
             </button>
@@ -121,10 +121,10 @@ export default function Header() {
           {(!isOperationalEntry || canOpenAdmin) && (
             <button
               onClick={() => navigate(isOperationalEntry ? "/firebase-dashboard" : "/admin")}
-              className={`min-h-10 rounded-full px-3 py-1.5 text-xs font-bold transition hover:-translate-y-[1px] sm:px-3.5 ${
+              className={`min-h-10 rounded-[10px] px-3 py-1.5 text-xs font-semibold transition sm:px-3.5 ${
                 isOperationalEntry
                   ? "border border-[#DDEAE7] bg-white text-[#102047]"
-                  : "bg-[var(--shh-primary)] text-white shadow-[0_10px_24px_rgba(24,59,143,0.22)] hover:shadow-[0_14px_30px_rgba(24,59,143,0.28)]"
+                  : "bg-[var(--shh-primary)] text-white"
               }`}
             >
               {isOperationalEntry ? "관리자 화면" : "관리자 로그인"}
