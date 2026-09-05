@@ -29,7 +29,7 @@ export function SectionTitle({ eyebrow, title, description }) {
 // AppCard component
 export function AppCard({ children, className = "" }) {
   return (
-    <div className={`min-w-0 rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)] ${className}`}>
+    <div className={`min-w-0 rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-none ${className}`}>
       {children}
     </div>
   );

@@ -22,10 +22,10 @@ import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
 import { AppCard, Badge, SectionTitle } from "./ui.jsx";
 
 const inputCls =
-  "w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10 placeholder:text-slate-400";
+  "w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2.5 text-sm text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-2 focus:ring-[#20A982]/10 placeholder:text-[#8A97A8]";
 
 const btnCls =
-  "mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:mt-4 md:w-auto";
+  "mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#102047] bg-[#102047] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:mt-0 md:w-auto";
 
 const HEALTH_ROOM_BUTTON = "보건실 소재 확인하기";
 const HEALTH_ROOM_BUTTON_LEGACY = "蹂닿굔???낆떎?꾪솴 ?닿린";
@@ -260,7 +260,7 @@ function formatClassLabel(assignment) {
 function AccessNotice({ authState }) {
   if (authState.loading) {
     return (
-      <div className="rounded-2xl bg-white p-5 text-center text-sm font-bold text-[#627083] shadow-sm">
+      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 text-center text-sm font-semibold text-[#627083]">
         로그인 상태와 현재 학기 권한을 확인하는 중입니다.
       </div>
     );
@@ -268,8 +268,8 @@ function AccessNotice({ authState }) {
 
   if (!authState.user) {
     return (
-      <div className="rounded-2xl bg-white p-5 text-center shadow-sm">
-        <p className="text-base font-black text-[#102047]">로그인이 필요한 기능입니다.</p>
+      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 text-center">
+        <p className="text-base font-semibold text-[#102047]">로그인이 필요한 기능입니다.</p>
         <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
           교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
         </p>
@@ -285,8 +285,8 @@ function AccessNotice({ authState }) {
 
   if (authState.assignmentResult?.status === "not-found") {
     return (
-      <div className="rounded-2xl bg-white p-5 text-center shadow-sm">
-        <p className="text-base font-black text-[#102047]">현재 학년도/학기 이용 권한이 등록되지 않았습니다.</p>
+      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 text-center">
+        <p className="text-base font-semibold text-[#102047]">현재 학년도/학기 이용 권한이 등록되지 않았습니다.</p>
         <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
           등록된 Google 계정은 보건실에 현재 학기 이용 권한을 신청할 수 있습니다.
         </p>
@@ -296,7 +296,7 @@ function AccessNotice({ authState }) {
   }
 
   return (
-    <div className="rounded-2xl bg-white p-5 text-center text-sm font-bold text-[#D94F70] shadow-sm">
+    <div className="rounded-[12px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-center text-sm font-semibold text-[#B42318]">
       {authState.message || authState.assignmentResult?.message || "학생 건강관리 접근 권한이 없습니다."}
     </div>
   );
@@ -411,22 +411,22 @@ function HealthRoomLocationModal({ onClose, authState }) {
   return (
     <ModalShell overlayRef={overlayRef} onClose={onClose} title="보건실 소재 확인">
       <div className="space-y-5">
-        <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        <div className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm leading-6 text-[#3154A3]">
           이 화면은 수업 중 학생 소재 확인 및 담임 출결 참고를 위한 제한 열람 화면입니다.
           학생 개인정보가 포함될 수 있으므로 화면 캡처, 저장, 출력, 재공유를 금합니다.
         </div>
 
         {allowedTabs.length ? (
-        <div className="grid gap-2 rounded-2xl bg-[#F7F9FC] p-1" style={{ gridTemplateColumns: `repeat(${allowedTabs.length}, minmax(0, 1fr))` }}>
+        <div className="grid gap-1 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-1" style={{ gridTemplateColumns: `repeat(${allowedTabs.length}, minmax(0, 1fr))` }}>
           {allowedTabs.map((tab) => (
             <button
               key={tab.value}
               type="button"
               onClick={() => handleTab(tab.value)}
-              className={`rounded-xl px-2 py-2 text-xs font-black transition sm:text-sm ${
+              className={`rounded-[8px] px-2 py-2 text-xs font-semibold transition sm:text-sm ${
                 accessType === tab.value
-                  ? "bg-white text-[#1A3B8B] shadow-sm"
-                  : "text-slate-500 hover:text-[#1A3B8B]"
+                  ? "bg-white text-[#102047]"
+                  : "text-[#627083] hover:text-[#102047]"
               }`}
             >
               {tab.label}
@@ -438,7 +438,7 @@ function HealthRoomLocationModal({ onClose, authState }) {
         )}
 
         {accessType === "homeroom" && allowedTabs.length > 0 && (
-          <div className="rounded-2xl bg-[#F7F9FC] p-4 text-sm font-bold text-[#263238]">
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#102047]">
             담임 학급 <span className="ml-2 text-[#1A3B8B]">{formatClassLabel(authState.assignment)}</span>
           </div>
         )}
@@ -450,10 +450,10 @@ function HealthRoomLocationModal({ onClose, authState }) {
         )}
 
         {message && (
-          <p className="rounded-2xl bg-[#F7F9FC] p-3 text-sm font-bold text-slate-600">{message}</p>
+          <p className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#627083]">{message}</p>
         )}
         {error && (
-          <p className="rounded-2xl bg-[#FFF7F7] p-3 text-sm font-bold text-[#B42318]">{error}</p>
+          <p className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] p-3 text-sm font-semibold text-[#B42318]">{error}</p>
         )}
 
         <HealthRoomList
@@ -558,15 +558,15 @@ function MonthlyVisitModal({ onClose, authState }) {
   return (
     <ModalShell overlayRef={overlayRef} onClose={onClose} title="담임용 월별 보건실 입실 확인">
       <div className="space-y-5">
-        <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        <div className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm leading-6 text-[#3154A3]">
           이 화면은 담임교사의 월별 출결 확인을 위한 조회 화면입니다.
           증상 및 처치 내용은 표시하지 않으며, 입실·복귀 시각과 결과 처리 여부만 확인할 수 있습니다.
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl bg-[#F7F9FC] px-4 py-3">
-            <p className="text-xs font-black text-[#1A3B8B]">담임 학급</p>
-            <p className="mt-1 text-sm font-black text-[#263238]">{formatClassLabel(authState.assignment)}</p>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5">
+            <p className="text-xs font-semibold text-[#08754B]">담임 학급</p>
+            <p className="mt-1 text-sm font-semibold text-[#102047]">{formatClassLabel(authState.assignment)}</p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-bold text-[#263238]">조회 월</label>
@@ -579,15 +579,15 @@ function MonthlyVisitModal({ onClose, authState }) {
         </SubmitButton>
 
         {summary && (
-          <div className="rounded-2xl bg-[#F7F9FC] p-4 text-sm font-bold text-slate-700">
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#627083]">
             {formatMonthlySummaryTitle(summary.month, summary.grade, summary.classNo)}
             <div className="mt-1 text-[#1A3B8B]">
               총 {summary.total}건 / 질병결과 {summary.diseaseCount}건 / 생리결과 {summary.periodCount}건 / 결과처리없음 {summary.noResultCount}건
             </div>
           </div>
         )}
-        {message && <p className="rounded-2xl bg-[#F7F9FC] p-3 text-sm font-bold text-slate-600">{message}</p>}
-        {error && <p className="rounded-2xl bg-[#FFF7F7] p-3 text-sm font-bold text-[#B42318]">{error}</p>}
+        {message && <p className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#627083]">{message}</p>}
+        {error && <p className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] p-3 text-sm font-semibold text-[#B42318]">{error}</p>}
 
         <MonthlyVisitList records={records} />
       </div>
@@ -611,7 +611,7 @@ function ResultBadge({ result }) {
 function MonthlyVisitList({ records }) {
   if (!records.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-center text-sm text-slate-500">
+      <div className="rounded-[12px] border border-dashed border-[#DDEAE7] bg-white p-5 text-center text-sm text-[#627083]">
         조회 결과가 여기에 표시됩니다.
       </div>
     );
@@ -620,10 +620,10 @@ function MonthlyVisitList({ records }) {
   return (
     <div className="space-y-3">
       {records.map((record, index) => (
-        <div key={`${record.date}-${record.number}-${record.inTime}-${index}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+        <div key={`${record.date}-${record.number}-${record.inTime}-${index}`} className="rounded-[12px] border border-[#DDEAE7] bg-white p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-base font-black text-[#263238]">
+              <p className="text-base font-semibold text-[#102047]">
                 {record.number}번 · {record.name}
               </p>
               <p className="mt-1 text-xs font-bold text-slate-400">{record.date}</p>
@@ -634,8 +634,8 @@ function MonthlyVisitList({ records }) {
             <Info label="입실 시각" value={record.inTime || "-"} />
             <Info label="복귀 시각" value={record.outTime || "-"} />
             <Info label="체류시간" value={record.stay || "-"} />
-            <div className="rounded-xl bg-[#F7F9FC] px-3 py-2 flex items-center gap-2">
-              <span className="text-xs font-black text-[#1A3B8B]">결과 처리</span>
+            <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 flex items-center gap-2">
+              <span className="text-xs font-semibold text-[#08754B]">결과 처리</span>
               <ResultBadge result={record.result} />
             </div>
           </div>
@@ -698,7 +698,7 @@ function AdminVisitStatsModal({ onClose, authState }) {
   return (
     <ModalShell overlayRef={overlayRef} onClose={onClose} title="관리자용 보건실 입실 통계">
       <div className="space-y-5">
-        <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        <div className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm leading-6 text-[#3154A3]">
           이 화면은 학교 전체 보건실 이용 현황을 통계로 확인하는 관리자용 화면입니다.
           학생별 증상 및 처치 내용은 표시하지 않습니다.
         </div>
@@ -714,8 +714,8 @@ function AdminVisitStatsModal({ onClose, authState }) {
           통계 조회하기
         </SubmitButton>
 
-        {message && <p className="rounded-2xl bg-[#F7F9FC] p-3 text-sm font-bold text-slate-600">{message}</p>}
-        {error && <p className="rounded-2xl bg-[#FFF7F7] p-3 text-sm font-bold text-[#B42318]">{error}</p>}
+        {message && <p className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#627083]">{message}</p>}
+        {error && <p className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] p-3 text-sm font-semibold text-[#B42318]">{error}</p>}
         {stats && <AdminVisitStatsResult stats={stats} />}
       </div>
     </ModalShell>
@@ -726,7 +726,7 @@ function AdminVisitStatsResult({ stats }) {
   const summary = stats.summary || {};
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl bg-[#F7F9FC] p-4 text-sm font-bold text-slate-700">
+      <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#627083]">
         {formatAdminStatsTitle(stats.month)}
         <div className="mt-1 text-[#1A3B8B]">
           전체 {summary.total || 0}건 / 질병결과 {summary.diseaseCount || 0}건 / 생리결과 {summary.periodCount || 0}건 / 결과처리 없음 {summary.noResultCount || 0}건 / 담임 미확인 {summary.uncheckedCount || 0}건
@@ -734,23 +734,23 @@ function AdminVisitStatsResult({ stats }) {
       </div>
 
       <div>
-        <h4 className="mb-2 text-sm font-black text-[#263238]">학년별 통계</h4>
+        <h4 className="mb-2 text-sm font-semibold text-[#102047]">학년별 통계</h4>
         <div className="grid gap-2 sm:grid-cols-3">
           {stats.gradeStats.map((item) => (
-            <div key={item.grade} className="rounded-2xl bg-white p-4 text-sm font-bold text-slate-700 shadow-sm">
+            <div key={item.grade} className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 text-sm font-semibold text-[#627083]">
               <span className="text-[#1A3B8B]">{item.grade}학년</span>
-              <div className="mt-1 text-lg font-black text-[#263238]">{item.total || 0}건</div>
+              <div className="mt-1 text-lg font-bold text-[#102047]">{item.total || 0}건</div>
             </div>
           ))}
         </div>
       </div>
 
       <div>
-        <h4 className="mb-2 text-sm font-black text-[#263238]">반별 통계</h4>
+        <h4 className="mb-2 text-sm font-semibold text-[#102047]">반별 통계</h4>
         <div className="space-y-2">
           {stats.classStats.map((item) => (
-            <div key={`${item.grade}-${item.classNo}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-              <div className="font-black text-[#263238]">{item.grade}학년 {item.classNo}반</div>
+            <div key={`${item.grade}-${item.classNo}`} className="rounded-[12px] border border-[#DDEAE7] bg-white p-3">
+              <div className="font-semibold text-[#102047]">{item.grade}학년 {item.classNo}반</div>
               <div className="mt-2 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
                 <Info label="총 입실" value={`${item.total || 0}건`} />
                 <Info label="질병결과" value={`${item.diseaseCount || 0}건`} />
@@ -775,7 +775,7 @@ function formatAdminStatsTitle(month) {
 function HealthRoomList({ accessType, rows, checkingId, onConfirm }) {
   if (!rows.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-center text-sm text-slate-500">
+      <div className="rounded-[12px] border border-dashed border-[#DDEAE7] bg-white p-4 text-center text-sm text-[#627083]">
         조회 결과가 여기에 표시됩니다.
       </div>
     );
@@ -784,10 +784,10 @@ function HealthRoomList({ accessType, rows, checkingId, onConfirm }) {
   return (
     <div className="space-y-3">
       {rows.map((row) => (
-        <div key={row.rowId || `${row.studentNo}-${row.enteredAt}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+        <div key={row.rowId || `${row.studentNo}-${row.enteredAt}`} className="rounded-[12px] border border-[#DDEAE7] bg-white p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-base font-black text-[#263238]">
+              <p className="text-base font-semibold text-[#102047]">
                 {row.studentNo} · {row.maskedName}
               </p>
               {row.date && <p className="mt-1 text-xs font-bold text-slate-400">{row.date}</p>}
@@ -810,7 +810,7 @@ function HealthRoomList({ accessType, rows, checkingId, onConfirm }) {
               type="button"
               disabled={row.homeroomConfirmed || checkingId === row.rowId}
               onClick={() => onConfirm(row)}
-              className={`mt-3 rounded-2xl px-4 py-2 text-xs font-black transition ${
+              className={`mt-3 rounded-[10px] px-4 py-2 text-xs font-semibold transition ${
                 row.homeroomConfirmed
                   ? "cursor-not-allowed bg-[#E8F6EE] text-[#2E7D32]"
                   : "bg-[#EAF3FF] text-[#1A3B8B] hover:bg-[#DDEBFF]"
@@ -831,9 +831,9 @@ function HealthRoomList({ accessType, rows, checkingId, onConfirm }) {
 
 function Info({ label, value }) {
   return (
-    <div className="rounded-xl bg-[#F7F9FC] px-3 py-2">
-      <span className="mr-2 text-xs font-black text-[#1A3B8B]">{label}</span>
-      <span className="font-bold text-slate-700">{value}</span>
+    <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+      <span className="mr-2 text-xs font-semibold text-[#08754B]">{label}</span>
+      <span className="font-semibold text-[#102047]">{value}</span>
     </div>
   );
 }
@@ -844,10 +844,10 @@ function SubmitButton({ loading, onClick, children }) {
       type="button"
       onClick={onClick}
       disabled={loading}
-      className={`w-full rounded-2xl px-5 py-4 text-sm font-black text-white shadow-sm transition ${
+      className={`w-full rounded-[10px] px-4 py-2.5 text-sm font-semibold text-white transition ${
         loading
           ? "cursor-not-allowed bg-slate-300"
-          : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md active:translate-y-0"
+          : "bg-[#102047] hover:bg-[#183B8F]"
       }`}
     >
       {loading ? "확인 중..." : children}
@@ -862,18 +862,18 @@ function ModalShell({ overlayRef, onClose, title, children }) {
       className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
-      <div className="relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[32px] bg-white shadow-2xl sm:rounded-[32px]">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-5">
-          <p className="text-xl font-black text-[#1A3B8B]">{title}</p>
+      <div className="relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[18px] bg-white shadow-xl sm:rounded-[18px]">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#DDEAE7] px-5 py-4">
+          <p className="text-lg font-semibold text-[#102047]">{title}</p>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+            className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#F8FAFA] text-[#627083] hover:bg-[#EEF4FF]"
             aria-label="닫기"
           >
             ×
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
       </div>
     </div>
   );
@@ -934,48 +934,50 @@ export default function StudentCareSection({ items }) {
   ];
 
   return (
-    <section id="studentCare" className="mx-auto max-w-6xl scroll-mt-24 px-3 py-5 sm:px-4 md:py-10">
-      <div className="overflow-hidden rounded-3xl bg-[#EAF3FF] p-4 md:rounded-[32px] md:p-8">
+    <section id="studentCare" className="mx-auto max-w-6xl scroll-mt-24 px-3 py-5 sm:px-4 md:py-8">
+      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 md:p-5">
         <SectionTitle
-          eyebrow="PRIVATE LINK"
+          eyebrow="STUDENT CARE"
           title={studentCareIntro.title}
           description={studentCareIntro.description}
         />
-        <div className="mb-3 rounded-xl bg-white/80 px-3 py-2.5 text-xs font-semibold leading-5 text-[#1A3B8B] md:hidden" style={{ wordBreak: "keep-all" }}>
-          🔐 학생 개인정보와 건강정보는 권한 있는 교직원에게만 최소한으로 표시합니다.
+        <div className="mb-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 text-xs font-semibold leading-5 text-[#627083] md:hidden" style={{ wordBreak: "keep-all" }}>
+          학생 개인정보와 건강정보는 권한 있는 교직원에게만 최소한으로 표시합니다.
         </div>
-        <div className="hidden gap-4 md:grid md:grid-cols-2">
-          <div className="rounded-2xl bg-white p-5 text-sm leading-7 text-[#1A3B8B] shadow-sm">
-            🔐 {studentCareIntro.privacyNotice}
+        <div className="hidden gap-3 md:grid md:grid-cols-2">
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm leading-6 text-[#102047]">
+            {studentCareIntro.privacyNotice}
           </div>
-          <div className="rounded-2xl bg-white p-5 text-sm leading-7 text-slate-600">
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-white p-3 text-sm leading-6 text-[#627083]">
             {studentCareIntro.guide}
           </div>
         </div>
-        <div className="grid gap-3 md:mt-5 md:grid-cols-3 md:gap-4">
+        <div className="mt-4 overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
           {!visibleCards.length && <AccessNotice authState={authState} />}
-          {visibleCards.map((card) => (
-            <AppCard key={card.title} className="student-care-card p-4 md:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-base font-extrabold leading-6 text-[#263238] md:text-lg">{card.title}</h3>
-                <span className="inline-flex shrink-0 whitespace-nowrap rounded-full border border-[#C9DFFF] bg-[#EAF3FF] px-2 py-0.5 text-[10px] font-bold text-[#1A3B8B] md:hidden">
-                  {card.status}
-                </span>
-                <span className="hidden md:inline-flex">
-                  <Badge type="blue">{card.status}</Badge>
-                </span>
+          {visibleCards.map((card, index) => (
+            <div key={card.title} className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center ${index > 0 ? "border-t border-[#DDEAE7]" : ""}`}>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-[15px] font-semibold leading-6 text-[#102047] md:text-base">{card.title}</h3>
+                  <span className="inline-flex shrink-0 whitespace-nowrap rounded-[8px] border border-[#C8D8FF] bg-[#EEF4FF] px-2 py-0.5 text-[11px] font-semibold text-[#3154A3] md:hidden">
+                    {card.status}
+                  </span>
+                  <span className="hidden md:inline-flex">
+                    <Badge type="blue">{card.status}</Badge>
+                  </span>
+                </div>
+                <p className="student-care-card-description mt-1 text-sm leading-6 text-[#627083]">{card.description}</p>
+                <p className="mt-1 text-xs leading-5 text-[#627083]">
+                  {card.privacyNotice}
+                </p>
               </div>
-              <p className="student-care-card-description mt-2 text-sm leading-5 text-slate-600 md:mt-3 md:leading-6">{card.description}</p>
-              <p className="mt-3 hidden rounded-2xl bg-[#F7F9FC] p-3 text-sm text-slate-600 md:block">
-                {card.privacyNotice}
-              </p>
               <button
                 onClick={() => setActiveModal({ type: card.modalType })}
                 className={btnCls}
               >
                 {card.buttonText}
               </button>
-            </AppCard>
+            </div>
           ))}
         </div>
       </div>

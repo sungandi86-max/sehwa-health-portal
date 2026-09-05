@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { uploadIntro } from "../data/fallbackData.js";
-import { AppCard, Badge, SafeText } from "./ui.jsx";
+import { Badge, SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
 const INFECTION_REPORT_CARD = {
@@ -80,6 +80,18 @@ const SUBMIT_TYPE_CONFIG = {
 const SUBMIT_TYPE_ORDER = ["cpr", "tb_registration", "student_tb_reply", "tb", "recruit", "infection", "other"];
 const VALID_MODAL_TYPES = new Set(SUBMIT_TYPE_ORDER);
 
+const SUBMIT_GROUP_LABELS = {
+  staff: "교직원 제출",
+  homeroom: "학생·담임 제출",
+  other: "기타 제출",
+};
+
+function getSubmitGroup(type) {
+  if (["cpr", "tb_registration", "tb", "recruit"].includes(type)) return "staff";
+  if (["infection", "student_tb_reply"].includes(type)) return "homeroom";
+  return "other";
+}
+
 function normalizeSubmitValue(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -136,6 +148,15 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
   const uploadItems = publicMode && publicType === "tbreply"
     ? (publicItems.length ? publicItems : [TB_REPLY_PUBLIC_CARD])
     : allItems;
+  const groupedItems = uploadItems.reduce((groups, item) => {
+    const submitType = resolveSubmitCardType(item);
+    const group = publicMode ? "homeroom" : getSubmitGroup(submitType);
+    const nextItem = submitType === "infection" ? { ...item, ...INFECTION_REPORT_CARD } : item;
+    return {
+      ...groups,
+      [group]: [...(groups[group] || []), { item: nextItem, submitType }],
+    };
+  }, {});
 
   useEffect(() => {
     if (!publicMode || publicType !== "tbreply") return;
@@ -144,116 +165,97 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
 
   return (
     <>
-      <section id="upload" className={`mx-auto max-w-6xl scroll-mt-24 px-4 ${publicMode ? "py-6" : "py-10"}`}>
-        <div className={`rounded-[32px] bg-[#1A3B8B] p-6 text-white shadow-sm md:p-8 ${publicMode ? "mb-5" : ""}`}>
-          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+      <section id="upload" className={`mx-auto max-w-6xl scroll-mt-24 px-4 ${publicMode ? "py-5" : "py-8"}`}>
+        <div className={`rounded-[12px] border border-[#DDEAE7] bg-white p-4 md:p-5 ${publicMode ? "mb-4" : ""}`}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="mb-2 text-sm font-bold text-[#BFE6CB]">
+              <p className="mb-1.5 text-xs font-semibold text-[#08754B]">
                 {publicMode ? "SUBMISSION" : "UPLOAD CENTER"}
               </p>
-              <h2 className="text-2xl font-black md:text-3xl">
+              <h2 className="text-xl font-bold text-[#102047] md:text-2xl">
                 {publicMode ? "결핵검진 진료회신 제출" : uploadIntro.title}
               </h2>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-50 md:text-base">
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#627083]">
                 {publicMode
                   ? "학생이 제출한 진료회신란 또는 진료확인서를 업로드하는 전용 페이지입니다."
                   : uploadIntro.description}
               </p>
             </div>
-            {!publicMode && <div className="rounded-2xl bg-white/10 p-4 text-sm leading-6 text-blue-50 md:max-w-sm">
+            {!publicMode && <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-xs leading-5 text-[#627083] md:max-w-sm">
               {uploadIntro.notice}
             </div>}
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
-          {uploadItems.map((item) => {
-            const submitType = resolveSubmitCardType(item);
-            const displayItem = submitType === "infection" ? { ...item, ...INFECTION_REPORT_CARD } : item;
-            const handleClick = () => (
-              submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
-            );
-            return (
-              <AppCard
-                key={displayItem.id || `${submitType}-${displayItem.title}`}
-                className={displayItem.highlight ? "border-[#D94F70]/30 ring-2 ring-[#FDEAF0]" : ""}
-              >
-                <div className="mb-4">
-                  <div className="mb-3 flex justify-start">
-                    <Badge
-                      type={
-                        item.uploadType === "request"
-                          ? "blue"
-                          : displayItem.highlight
-                          ? "pink"
-                          : "gray"
-                      }
+        <div className="mt-4 space-y-5">
+          {Object.entries(groupedItems).map(([group, entries]) => (
+            <div key={group}>
+              {!publicMode && (
+                <h3 className="mb-2 text-sm font-semibold text-[#102047]">
+                  {SUBMIT_GROUP_LABELS[group] || SUBMIT_GROUP_LABELS.other}
+                </h3>
+              )}
+              <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
+                {entries.map(({ item: displayItem, submitType }, index) => {
+                  const handleClick = () => (
+                    submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
+                  );
+                  return (
+                    <div
+                      key={displayItem.id || `${submitType}-${displayItem.title}`}
+                      className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_180px] md:items-center ${
+                        index > 0 ? "border-t border-[#DDEAE7]" : ""
+                      } ${displayItem.highlight ? "bg-[#FFFBFC]" : ""}`}
                     >
-                      {displayItem.status}
-                    </Badge>
-                  </div>
-                  <h3
-                    className="text-xl font-extrabold leading-8 text-[#263238] md:text-2xl md:leading-9"
-                    style={{
-                      wordBreak: "keep-all",
-                      overflowWrap: "normal",
-                      letterSpacing: "-0.02em",
-                    }}
-                  >
-                    {(displayItem.titleLines || [displayItem.title]).map((line, i) => (
-                      <span key={i} className="block whitespace-nowrap">
-                        {line}
-                      </span>
-                    ))}
-                  </h3>
-                  <p
-                    className="mt-2 text-sm leading-7 text-slate-600"
-                    style={{ wordBreak: "keep-all", overflowWrap: "normal" }}
-                  >
-                    {displayItem.description}
-                  </p>
-                </div>
-
-                <div className="grid gap-3 rounded-2xl bg-[#F7F9FC] p-4 text-sm text-slate-700">
-                  <div className="grid grid-cols-[44px_1fr] gap-2">
-                    <b>대상</b>
-                    <SafeText>{displayItem.target}</SafeText>
-                  </div>
-                  <div className="grid grid-cols-[44px_1fr] gap-2">
-                    <b>자료</b>
-                    <SafeText>{displayItem.documentType}</SafeText>
-                  </div>
-                  <div className="grid grid-cols-[44px_1fr] gap-2">
-                    <b>마감</b>
-                    <SafeText>{displayItem.deadline}</SafeText>
-                  </div>
-                </div>
-
-                <p
-                  className={`mt-4 whitespace-pre-line rounded-2xl p-4 text-sm leading-7 ${
-                    displayItem.uploadType === "request"
-                      ? "bg-[#EAF3FF] text-[#1A3B8B]"
-                      : "bg-[#DFF4EC] text-[#1B5E20]"
-                  }`}
-                >
-                  <SafeText>{displayItem.fileGuide}</SafeText>
-                </p>
-
-                {displayItem.buttonText && (
-                  <button
-                    onClick={handleClick}
-                    className="mt-4 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md"
-                  >
-                    {displayItem.buttonText}
-                  </button>
-                )}
-              </AppCard>
-            );
-          })}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            type={
+                              displayItem.uploadType === "request"
+                                ? "blue"
+                                : displayItem.highlight
+                                ? "pink"
+                                : "gray"
+                            }
+                          >
+                            {displayItem.status}
+                          </Badge>
+                          <h4 className="text-[15px] font-semibold leading-6 text-[#102047]">
+                            {displayItem.title}
+                          </h4>
+                        </div>
+                        <p className="mt-1 text-sm leading-6 text-[#627083]">
+                          <SafeText>{displayItem.description}</SafeText>
+                        </p>
+                        <dl className="mt-2 grid gap-x-4 gap-y-1 text-xs text-[#627083] sm:grid-cols-3">
+                          <div><dt className="inline font-semibold text-[#102047]">대상 </dt><dd className="inline"><SafeText>{displayItem.target}</SafeText></dd></div>
+                          <div><dt className="inline font-semibold text-[#102047]">자료 </dt><dd className="inline"><SafeText>{displayItem.documentType}</SafeText></dd></div>
+                          <div><dt className="inline font-semibold text-[#102047]">마감 </dt><dd className="inline"><SafeText>{displayItem.deadline}</SafeText></dd></div>
+                        </dl>
+                        {displayItem.fileGuide && (
+                          <p className="mt-2 whitespace-pre-line text-xs leading-5 text-[#627083]">
+                            <SafeText>{displayItem.fileGuide}</SafeText>
+                          </p>
+                        )}
+                      </div>
+                      {displayItem.buttonText && (
+                        <button
+                          onClick={handleClick}
+                          className="inline-flex min-h-10 items-center justify-center rounded-[10px] border border-[#102047] bg-[#102047] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#183B8F]"
+                        >
+                          {displayItem.buttonText}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         {!publicMode && (
-          <p className="mt-4 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-500 shadow-sm">
+          <p className="mt-4 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-3 text-sm leading-6 text-[#627083]">
             {uploadIntro.subNotice}
           </p>
         )}
