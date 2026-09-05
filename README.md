@@ -4,6 +4,17 @@
 
 ---
 
+## UI/디자인 작업 전 필수 문서
+
+디자인 리팩터링 전에는 먼저 아래 문서를 확인합니다.
+
+- [UI/메뉴/권한 변경 불변 원칙](docs/PORTAL_UI_GOVERNANCE.md)
+- [BOGUNON 디자인 시스템](DESIGN.md)
+
+디자인 작업은 spacing, typography, radius, color, density 같은 표현을 정리하는 작업이며, 메뉴 의미, route, 권한, 데이터 범위, API/query, legacy fallback을 임의로 바꾸지 않습니다.
+
+---
+
 ## 🚀 로컬 실행
 
 ```bash

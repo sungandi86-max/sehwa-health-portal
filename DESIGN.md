@@ -8,6 +8,8 @@ The preferred atmosphere is quiet and work-focused: white surfaces, a soft mint 
 
 ## 2. Scope And Protection
 
+UI/메뉴/권한 변경 불변 원칙은 [docs/PORTAL_UI_GOVERNANCE.md](docs/PORTAL_UI_GOVERNANCE.md)를 우선 적용한다. 디자인 리팩터링은 기능 변경이 아니며, BOGUNON 스타일 조정 중에도 기존 메뉴 의미, route, 권한, 데이터 범위, API/query, 사용자 동선을 임의 변경하지 않는다.
+
 This document applies first to Firebase v2 and newly built operational surfaces. The existing v1 public Online Health Office, Google Sheets, Apps Script, and legacy submission flows keep their current design and behavior unless a future task explicitly requests a redesign.
 
 Design changes must not silently change product structure. In particular, design work does not change menu count, menu names, routes, permissions, data models, or operational information architecture.
