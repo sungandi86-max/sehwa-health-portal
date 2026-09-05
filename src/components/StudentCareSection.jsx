@@ -653,13 +653,28 @@ function MonthlyVisitList({ records }) {
   );
 }
 
-function AdminVisitStatsModal({ onClose, authState }) {
+function AdminVisitStatsModal({ onClose, authState, variant = "stats" }) {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [stats, setStats] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const overlayRef = useRef(null);
+  const isMonthlyOverview = variant === "monthlyOverview";
+  const modalTitle = isMonthlyOverview ? "월별 입실현황 조회" : "관리자용 보건실 입실 통계";
+  const introText = isMonthlyOverview
+    ? "이 화면은 학교 전체 월별 보건실 이용 현황을 관리자 권한으로 확인하는 화면입니다. 학생별 증상 및 처치 내용은 표시하지 않습니다."
+    : "이 화면은 학교 전체 보건실 이용 현황을 통계로 확인하는 관리자용 화면입니다. 학생별 증상 및 처치 내용은 표시하지 않습니다.";
+  const submitLabel = isMonthlyOverview ? "조회하기" : "통계 조회하기";
+  const emptyMessage = isMonthlyOverview
+    ? "조회된 월별 보건실 입실현황이 없습니다."
+    : "조회된 보건실 입실 통계가 없습니다.";
+  const errorMessage = isMonthlyOverview
+    ? "월별 입실현황을 조회할 수 없습니다."
+    : "관리자 통계를 조회할 수 없습니다.";
+  const fallbackErrorMessage = isMonthlyOverview
+    ? "월별 입실현황 조회 중 오류가 발생했습니다."
+    : "관리자 통계 조회 중 오류가 발생했습니다.";
 
   useModalLifecycle(onClose);
 
@@ -691,24 +706,23 @@ function AdminVisitStatsModal({ onClose, authState }) {
           gradeStats: Array.isArray(json.gradeStats) ? json.gradeStats : [],
           classStats: Array.isArray(json.classStats) ? json.classStats : [],
         });
-        setMessage(json.summary?.total ? "" : "조회된 보건실 입실 통계가 없습니다.");
+        setMessage(json.summary?.total ? "" : emptyMessage);
       } else {
-        setError(json.message || json.debug || "관리자 통계를 조회할 수 없습니다.");
+        setError(json.message || json.debug || errorMessage);
       }
     } catch (error) {
       console.error("[HealthRoom:adminVisitStats] error", error);
-      setError(getGasErrorMessage(error, "관리자 통계 조회 중 오류가 발생했습니다."));
+      setError(getGasErrorMessage(error, fallbackErrorMessage));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ModalShell overlayRef={overlayRef} onClose={onClose} title="관리자용 보건실 입실 통계">
+    <ModalShell overlayRef={overlayRef} onClose={onClose} title={modalTitle}>
       <div className="space-y-5">
         <div className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm leading-6 text-[#3154A3]">
-          이 화면은 학교 전체 보건실 이용 현황을 통계로 확인하는 관리자용 화면입니다.
-          학생별 증상 및 처치 내용은 표시하지 않습니다.
+          {introText}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -719,7 +733,7 @@ function AdminVisitStatsModal({ onClose, authState }) {
         </div>
 
         <SubmitButton loading={loading} onClick={fetchStats}>
-          통계 조회하기
+          {submitLabel}
         </SubmitButton>
 
         {message && <p className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm font-semibold text-[#627083]">{message}</p>}
@@ -922,19 +936,23 @@ export default function StudentCareSection({ items }) {
     buttonText: DEFAULT_HEALTH_ROOM_CARD.buttonText,
     url: "",
   };
-  const canShowMonthlyVisit = canUseHomeroomScope(authState.assignment);
-  const canShowAdminStats = canUseAdminScope(authState.assignment);
+  const canShowAdminTools = canUseAdminScope(authState.assignment);
+  const canShowHomeroomMonthly = !canShowAdminTools && canUseHomeroomScope(authState.assignment);
+  const canShowStaffHealthRoom =
+    hasActiveAssignment(authState.assignment) &&
+    isStaff(authState.assignment) &&
+    !isHomeroom(authState.assignment) &&
+    !canShowAdminTools;
   const canShowHealthRoom =
     !authState.user ||
     authState.loading ||
     authState.assignmentResult?.status === "not-found" ||
-    canUseSubjectScope(authState.assignment) ||
-    canUseHomeroomScope(authState.assignment) ||
-    canUseAdminScope(authState.assignment);
+    canShowAdminTools ||
+    canShowStaffHealthRoom;
   const visibleCards = [
-    ...(canShowMonthlyVisit ? [{ ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit", status: "담임 권한" }] : []),
-    ...(!canShowMonthlyVisit && canShowAdminStats ? [{ ...ADMIN_MONTHLY_VISIT_CARD, modalType: "adminStats", status: "관리자 권한" }] : []),
-    ...(canShowAdminStats ? [{ ...ADMIN_STATS_CARD, modalType: "adminStats", status: "관리자 권한" }] : []),
+    ...(canShowHomeroomMonthly ? [{ ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit", status: "담임 권한" }] : []),
+    ...(canShowAdminTools ? [{ ...ADMIN_MONTHLY_VISIT_CARD, modalType: "adminMonthlyVisit", status: "관리자 권한" }] : []),
+    ...(canShowAdminTools ? [{ ...ADMIN_STATS_CARD, modalType: "adminStats", status: "관리자 권한" }] : []),
     ...(canShowHealthRoom ? [{
       ...healthRoomCard,
       modalType: "healthRoom",
@@ -996,6 +1014,13 @@ export default function StudentCareSection({ items }) {
       )}
       {activeModal?.type === "adminStats" && (
         <AdminVisitStatsModal authState={authState} onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal?.type === "adminMonthlyVisit" && (
+        <AdminVisitStatsModal
+          authState={authState}
+          variant="monthlyOverview"
+          onClose={() => setActiveModal(null)}
+        />
       )}
       {activeModal?.type === "healthRoom" && (
         <HealthRoomLocationModal authState={authState} onClose={() => setActiveModal(null)} />
