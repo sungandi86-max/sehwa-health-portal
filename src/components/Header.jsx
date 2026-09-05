@@ -34,7 +34,7 @@ export default function Header() {
     params.get("type") === "tbreply";
 
   useEffect(() => {
-    if (!isOperationalEntry) {
+    if (isPublicUpload) {
       setCurrentUser(null);
       setAssignment(null);
       return undefined;
@@ -62,12 +62,12 @@ export default function Header() {
       isMounted = false;
       unsubscribe();
     };
-  }, [isOperationalEntry]);
+  }, [isPublicUpload]);
 
   if (isPublicUpload) return null;
 
   const navItems = isOperationalEntry ? firebaseV2MenuItems : quickMenuItems.slice(0, 5);
-  const canOpenAdmin = isOperationalEntry && currentUser && assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
+  const canOpenAdmin = currentUser && assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
   const staffEntryLabel = currentUser ? "제출·보고" : "교직원 로그인";
 
   return (
@@ -110,24 +110,18 @@ export default function Header() {
           })}
         </nav>
         <div className="flex shrink-0 items-center gap-1.5">
-          {isOperationalEntry && (
+          <button
+            onClick={() => navigate("/firebase-submissions")}
+            className="min-h-10 rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#178C6C] sm:px-3.5"
+          >
+            {staffEntryLabel}
+          </button>
+          {canOpenAdmin && (
             <button
-              onClick={() => navigate("/firebase-submissions")}
-              className="min-h-10 rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#178C6C] sm:px-3.5"
+              onClick={() => navigate("/firebase-dashboard")}
+              className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:bg-[#F8FAFA] sm:px-3.5"
             >
-              {staffEntryLabel}
-            </button>
-          )}
-          {(!isOperationalEntry || canOpenAdmin) && (
-            <button
-              onClick={() => navigate(isOperationalEntry ? "/firebase-dashboard" : "/admin")}
-              className={`min-h-10 rounded-[10px] px-3 py-1.5 text-xs font-semibold transition sm:px-3.5 ${
-                isOperationalEntry
-                  ? "border border-[#DDEAE7] bg-white text-[#102047]"
-                  : "bg-[var(--shh-primary)] text-white"
-              }`}
-            >
-              {isOperationalEntry ? "관리자 화면" : "관리자 로그인"}
+              관리자 화면
             </button>
           )}
         </div>

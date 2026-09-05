@@ -883,7 +883,6 @@ export default function StudentCareSection({ items }) {
     <section id="studentCare" className="mx-auto max-w-6xl scroll-mt-24 px-3 py-5 sm:px-4 md:py-8">
       <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 md:p-5">
         <SectionTitle
-          eyebrow="STUDENT CARE"
           title={studentCareIntro.title}
           description={studentCareIntro.description}
         />
