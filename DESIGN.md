@@ -42,7 +42,8 @@ Current core tokens:
 - Muted text: `#627083`
 - Accent mint: `#20A982`
 - Accent mint dark: `#08754B`
-- Soft background: `#F7FBF9`
+- App background: `#F8FAFA`
+- Muted surface: `#F3F8F6`
 - Surface: `#FFFFFF` or `rgba(255, 255, 255, 0.95)`
 - Border: `#DDEAE7`
 - Info background: `#EEF4FF`
@@ -50,7 +51,7 @@ Current core tokens:
 - Error background: `#FFF7F7`
 - Error text: `#B42318`
 
-Accent color is for interaction, selection, focus, and meaningful status. Do not add decorative gradients, color blobs, confetti palettes, or ornamental accent fields. New colors need a named purpose before they are introduced.
+Accent color is for interaction, selection, focus, and meaningful status. Do not add decorative gradients, radial glows, color blobs, confetti palettes, or ornamental accent fields. New colors need a named purpose before they are introduced.
 
 ## 4. Typography
 
@@ -130,6 +131,13 @@ Default surfaces:
 - Quiet border
 - No shadow, or a very weak shadow only when separation is otherwise unclear
 - Padding 12-16px for cards and compact panels
+
+Reusable primitives:
+
+- `.bogunon-page`: near-white operational canvas using the shared background token
+- `.bogunon-panel`: white 12px bordered panel with a very weak shadow
+- `.bogunon-panel-muted`: 10px muted surface for grouped controls or inline notes
+- `.bogunon-chip`: compact 8px rectangular chip for low-emphasis status or metadata
 
 Reserve elevation for drawers, modals, menus, and focused overlays. Do not make every section a floating SaaS-style card. Do not use 20-30px rounded floating cards as the default visual language.
 
