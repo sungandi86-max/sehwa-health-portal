@@ -26,6 +26,17 @@ function canOpenMySubmissionStatus(assignment) {
   return assignment?.active === true && !HOURLY_INSTRUCTOR_POSITIONS.has(normalizePosition(assignment.position));
 }
 
+function getPrimaryRoleLabel(assignment) {
+  const position = normalizePosition(assignment?.position);
+  if (position) return position;
+
+  const labels = getRoleLabels(assignment?.roles);
+  if (labels.includes("보건교사")) return "보건교사";
+  if (labels.includes("담임교사")) return "담임교사";
+  if (labels.includes("교직원")) return "교직원";
+  return labels[0] || "권한 확인 필요";
+}
+
 function RoleSummary({ assignment }) {
   const labels = getRoleLabels(assignment?.roles);
 
@@ -53,6 +64,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
 
   const assignment = assignmentResult?.assignment || null;
   const displayName = user?.displayName || profile?.displayName || "교직원";
+  const roleLabel = getPrimaryRoleLabel(assignment);
   const canOpenDashboard = useMemo(() => isHealthTeacher(assignment) && assignment?.active === true, [assignment]);
   const canOpenMyStatus = useMemo(() => canOpenMySubmissionStatus(assignment), [assignment]);
 
@@ -138,8 +150,8 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
   };
 
   return (
-    <div className={`rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6] p-3 text-[#102047] ${className}`}>
-      <p className="text-[11px] font-semibold text-[#20A982]">교직원 로그인</p>
+    <div className={`rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-[#102047] ${className}`}>
+      <p className="text-[11px] font-semibold text-[#0D4EA6]">교직원 로그인</p>
       <p className="mt-1 text-xs font-medium leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
         교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
       </p>
@@ -165,7 +177,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-center">
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-[#102047]">{displayName}</p>
-              <p className="mt-0.5 truncate text-xs font-semibold text-[#627083]">{user.email || "이메일 없음"}</p>
+              <p className="mt-0.5 truncate text-xs font-semibold text-[#627083]">{roleLabel}</p>
             </div>
             <button
               type="button"
@@ -185,7 +197,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
               to="/firebase-submissions"
-              className="inline-flex min-h-10 items-center rounded-[9px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white"
+              className="inline-flex min-h-10 items-center rounded-[9px] bg-[#0D4EA6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#183B8F]"
             >
               제출·보고 센터
             </Link>
@@ -202,7 +214,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
                 to="/firebase-dashboard"
                 className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
               >
-                대시보드
+                관리자 화면
               </Link>
             )}
           </div>

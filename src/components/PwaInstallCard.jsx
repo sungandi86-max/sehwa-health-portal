@@ -52,7 +52,7 @@ export default function PwaInstallCard() {
 
   return (
     <section className="mx-auto w-full max-w-6xl px-3 pb-2 sm:px-4 lg:max-w-[1280px]">
-      <details className="group overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white transition hover:border-[#BFEBDC]">
+      <details className="group overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white transition hover:border-[#C8D8FF]">
         <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 py-1.5 marker:content-none sm:gap-3 sm:px-4 sm:py-2">
           <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
             <h2 className="text-sm font-bold leading-5 text-[#102047]">
@@ -62,8 +62,8 @@ export default function PwaInstallCard() {
               자주 사용하는 경우 홈 화면에 추가해 빠르게 열 수 있습니다.
             </p>
           </div>
-          <span className="shrink-0 text-xs font-semibold text-[#08754B] group-open:hidden">자세히 보기 →</span>
-          <span className="hidden shrink-0 text-xs font-semibold text-[#08754B] group-open:inline">접기</span>
+          <span className="shrink-0 text-xs font-semibold text-[#0D4EA6] group-open:hidden">자세히 보기 →</span>
+          <span className="hidden shrink-0 text-xs font-semibold text-[#0D4EA6] group-open:inline">접기</span>
         </summary>
         <div className="border-t border-[#DDEAE7] px-3 pb-3 sm:px-4">
           <div className="grid divide-y divide-[#DDEAE7] text-xs leading-5 text-[#627083] md:grid-cols-3 md:divide-x md:divide-y-0">
@@ -93,7 +93,7 @@ export default function PwaInstallCard() {
             <button
               type="button"
               onClick={handleInstallClick}
-              className="mt-3 min-h-10 w-full rounded-[9px] bg-[#20A982] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#178C6C] sm:w-auto"
+              className="mt-3 min-h-10 w-full rounded-[9px] bg-[#0D4EA6] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#183B8F] sm:w-auto"
             >
               앱 설치
             </button>
