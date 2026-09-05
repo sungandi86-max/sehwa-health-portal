@@ -12,6 +12,7 @@ import {
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
+import { getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
 import { ensureUserProfile, getUserAssignmentResult } from "../lib/userProfile.js";
 
 function AccessMessage({ title, description, action }) {
@@ -42,6 +43,7 @@ function SignOutButton({ disabled, onClick }) {
 export default function FirebaseStaffSubmissionAccessGate({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [staffIdentity, setStaffIdentity] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
@@ -55,6 +57,7 @@ export default function FirebaseStaffSubmissionAccessGate({ children }) {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setProfile(null);
+      setStaffIdentity(null);
       setAssignmentResult(null);
       if (currentUser) setMessage("");
       setIsLoading(false);
@@ -84,7 +87,17 @@ export default function FirebaseStaffSubmissionAccessGate({ children }) {
           CURRENT_SEMESTER
         );
 
+        let currentStaffIdentity = null;
+        if (currentAssignmentResult.assignment?.staffId) {
+          try {
+            currentStaffIdentity = await getAuthenticatedStaffIdentity();
+          } catch (error) {
+            currentStaffIdentity = null;
+          }
+        }
+
         setProfile(ensuredProfile);
+        setStaffIdentity(currentStaffIdentity);
         setAssignmentResult(currentAssignmentResult);
       } catch (error) {
         console.error("[firebase-staff-submission] access load failed", error);
@@ -195,5 +208,5 @@ export default function FirebaseStaffSubmissionAccessGate({ children }) {
     );
   }
 
-  return children({ user, profile, assignment, displayName, handleSignOut, isWorking });
+  return children({ user, profile, assignment, staffIdentity, displayName, handleSignOut, isWorking });
 }

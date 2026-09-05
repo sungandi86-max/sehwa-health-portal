@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { getStaffDisplayName, getStaffRoleDisplay } from "../lib/staffIdentity.js";
 import { createTbSubmission, validateSubmissionFile } from "../lib/staffSubmissions.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
 
@@ -111,7 +112,11 @@ export default function FirebaseTbSubmitPage() {
 
   return (
     <FirebaseStaffSubmissionAccessGate>
-      {({ user, displayName }) => (
+      {({ user, assignment, staffIdentity, displayName }) => {
+        const submitterName = getStaffDisplayName({ identity: staffIdentity, displayName, user });
+        const submitterRole = getStaffRoleDisplay({ assignment, identity: staffIdentity });
+
+        return (
           <FirebaseV2PageShell
             label="제출"
             title="결핵검진 확인증 제출"
@@ -156,8 +161,8 @@ export default function FirebaseTbSubmitPage() {
               className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]"
             >
               <p className="rounded-2xl bg-[#F7FBF9] px-4 py-3 text-sm font-bold leading-6 text-[#627083]">
-                제출자: <span className="text-[#102047]">{user.displayName || displayName}</span>
-                {user.email ? <span> · {user.email}</span> : null}
+                제출자: <span className="text-[#102047]">{submitterName}</span>
+                <span> · {submitterRole}</span>
               </p>
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -235,7 +240,8 @@ export default function FirebaseTbSubmitPage() {
             </form>
           </section>
         </FirebaseV2PageShell>
-      )}
+        );
+      }}
     </FirebaseStaffSubmissionAccessGate>
   );
 }

@@ -24,6 +24,7 @@ function safeIdentity(directoryItem, assignment) {
     staffId: assignment.staffId,
     name,
     department,
+    position: directoryItem?.position || "",
   };
 }
 
