@@ -86,6 +86,17 @@ const SUBMIT_GROUP_LABELS = {
   other: "기타 제출",
 };
 
+const primaryButtonClass =
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] bg-[#0D4EA6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#183B8F] md:min-w-[150px]";
+
+function getStatusBadgeType(item) {
+  const status = String(item.status || "").trim();
+  if (status === "접수 중" || status === "로그인 후 접수") return "blue";
+  if (status === "완료") return "green";
+  if (status === "확인 필요") return "pink";
+  return "gray";
+}
+
 function getSubmitGroup(type) {
   if (["cpr", "tb_registration", "tb", "recruit"].includes(type)) return "staff";
   if (["infection", "student_tb_reply"].includes(type)) return "homeroom";
@@ -169,11 +180,8 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
         <div className={`rounded-[12px] border border-[#DDEAE7] bg-white p-4 md:p-5 ${publicMode ? "mb-4" : ""}`}>
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="mb-1.5 text-xs font-semibold text-[#08754B]">
-                {publicMode ? "SUBMISSION" : "UPLOAD CENTER"}
-              </p>
               <h2 className="text-xl font-bold text-[#102047] md:text-2xl">
-                {publicMode ? "결핵검진 진료회신 제출" : uploadIntro.title}
+                {publicMode ? "결핵검진 진료회신 제출" : "제출 항목"}
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[#627083]">
                 {publicMode
@@ -203,45 +211,46 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                   return (
                     <div
                       key={displayItem.id || `${submitType}-${displayItem.title}`}
-                      className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_180px] md:items-center ${
+                      className={`grid gap-3 p-3.5 md:grid-cols-[minmax(0,1fr)_160px] md:items-center md:p-4 ${
                         index > 0 ? "border-t border-[#DDEAE7]" : ""
-                      } ${displayItem.highlight ? "bg-[#FFFBFC]" : ""}`}
+                      }`}
                     >
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge
-                            type={
-                              displayItem.uploadType === "request"
-                                ? "blue"
-                                : displayItem.highlight
-                                ? "pink"
-                                : "gray"
-                            }
-                          >
-                            {displayItem.status}
-                          </Badge>
-                          <h4 className="text-[15px] font-semibold leading-6 text-[#102047]">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                          <h4 className="text-[15px] font-semibold leading-6 text-[#102047] md:text-base">
                             {displayItem.title}
                           </h4>
+                          <Badge type={getStatusBadgeType(displayItem)}>
+                            {displayItem.status}
+                          </Badge>
                         </div>
-                        <p className="mt-1 text-sm leading-6 text-[#627083]">
-                          <SafeText>{displayItem.description}</SafeText>
-                        </p>
-                        <dl className="mt-2 grid gap-x-4 gap-y-1 text-xs text-[#627083] sm:grid-cols-3">
+                        <dl className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-[#627083]">
                           <div><dt className="inline font-semibold text-[#102047]">대상 </dt><dd className="inline"><SafeText>{displayItem.target}</SafeText></dd></div>
-                          <div><dt className="inline font-semibold text-[#102047]">자료 </dt><dd className="inline"><SafeText>{displayItem.documentType}</SafeText></dd></div>
                           <div><dt className="inline font-semibold text-[#102047]">마감 </dt><dd className="inline"><SafeText>{displayItem.deadline}</SafeText></dd></div>
                         </dl>
-                        {displayItem.fileGuide && (
-                          <p className="mt-2 whitespace-pre-line text-xs leading-5 text-[#627083]">
-                            <SafeText>{displayItem.fileGuide}</SafeText>
-                          </p>
+                        <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#627083]">
+                          <SafeText>{displayItem.description}</SafeText>
+                        </p>
+                        {(displayItem.documentType || displayItem.fileGuide) && (
+                          <details className="mt-2 text-xs leading-5 text-[#627083]">
+                            <summary className="cursor-pointer font-semibold text-[#3154A3]">
+                              제출자료·안내 보기
+                            </summary>
+                            <div className="mt-1.5 space-y-1">
+                              {displayItem.documentType && (
+                                <p><span className="font-semibold text-[#102047]">제출자료 </span><SafeText>{displayItem.documentType}</SafeText></p>
+                              )}
+                              {displayItem.fileGuide && (
+                                <p className="whitespace-pre-line"><SafeText>{displayItem.fileGuide}</SafeText></p>
+                              )}
+                            </div>
+                          </details>
                         )}
                       </div>
                       {displayItem.buttonText && (
                         <button
                           onClick={handleClick}
-                          className="inline-flex min-h-10 items-center justify-center rounded-[10px] border border-[#102047] bg-[#102047] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#183B8F]"
+                          className={primaryButtonClass}
                         >
                           {displayItem.buttonText}
                         </button>

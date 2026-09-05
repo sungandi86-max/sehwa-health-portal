@@ -4,7 +4,7 @@
 
 Sehwa Health Portal is a calm, practical school-health operations portal. It is not a marketing site, an AI SaaS landing page, or a decorative dashboard. Design work must make real school health office tasks easier to scan, decide, and complete.
 
-The preferred atmosphere is quiet and work-focused: white surfaces, a soft mint canvas, deep navy text, compact Korean typography, restrained status color, and dense but orderly information. Explanations support work; they do not replace work.
+The preferred atmosphere is quiet and work-focused: white surfaces, a near-white canvas, Sehwa school blue, deep navy text, compact Korean typography, restrained status color, and dense but orderly information. Explanations support work; they do not replace work.
 
 ## 2. Scope And Protection
 
@@ -31,16 +31,19 @@ Use color as an operational hierarchy, not decoration.
 
 | Role | Preferred Use |
 |---|---|
-| Canvas | Soft mint or near-white app background |
+| Canvas | Near-white or very light gray app background |
 | Surface | White panels, lists, forms, drawers, and grouped controls |
 | Text | Deep navy primary text, slate secondary text, muted meta text |
 | Border | Quiet dividers, input outlines, card boundaries, table rows |
-| Action | Mint for primary interaction, selected state, and focus emphasis |
+| Brand Action | Sehwa school blue for primary navigation and main actions |
+| Auxiliary Accent | Mint only for secondary status, subtle focus, or supportive emphasis |
 | Status | Restrained success, warning, danger, and info tones |
 
 Current core tokens:
 
 - Primary text: `#102047`
+- School blue: `#0D4EA6`
+- School blue hover: `#183B8F`
 - Muted text: `#627083`
 - Accent mint: `#20A982`
 - Accent mint dark: `#08754B`
@@ -53,7 +56,7 @@ Current core tokens:
 - Error background: `#FFF7F7`
 - Error text: `#B42318`
 
-Accent color is for interaction, selection, focus, and meaningful status. Do not add decorative gradients, radial glows, color blobs, confetti palettes, or ornamental accent fields. New colors need a named purpose before they are introduced.
+School blue is the brand action color. Mint is auxiliary, not the main brand color. Use mint sparingly for supportive status or focus treatment where it improves clarity. Do not add decorative gradients, radial glows, color blobs, confetti palettes, or ornamental accent fields. New colors need a named purpose before they are introduced.
 
 ## 4. Typography
 
@@ -170,8 +173,8 @@ Button hierarchy:
 
 | Variant | Style | Use |
 |---|---|---|
-| Primary | Mint fill | Submit, save, approve, main page action |
-| Secondary | White surface with border | Alternative action, navigation, view details |
+| Primary | School blue fill | Submit, save, approve, main page action |
+| Secondary | White surface with blue or neutral border | Alternative action, navigation, view details |
 | Ghost | Transparent or text-only | Low-emphasis tools and inline actions |
 | Danger | Restrained red | Reject, delete, destructive confirmation |
 
