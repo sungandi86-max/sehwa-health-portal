@@ -112,7 +112,7 @@ export default function Header() {
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             onClick={() => navigate("/firebase-submissions")}
-            className="min-h-10 rounded-[10px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#178C6C] sm:px-3.5"
+            className="min-h-10 rounded-[10px] bg-[#0D4EA6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#183B8F] sm:px-3.5"
           >
             {staffEntryLabel}
           </button>

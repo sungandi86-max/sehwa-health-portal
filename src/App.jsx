@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Footer from "./components/Footer.jsx";
 import FirebaseAuthRedirectHandler from "./components/FirebaseAuthRedirectHandler.jsx";
+import UploadPage from "./pages/UploadPage.jsx";
 import {
   appConfig as fallbackAppConfig,
   checkupItems,
@@ -48,7 +49,6 @@ const MySubmissionStatusPage = lazy(() => import("./pages/MySubmissionStatusPage
 const ResourcesPage = lazy(() => import("./pages/ResourcesPage.jsx"));
 const StudentCarePage = lazy(() => import("./pages/StudentCarePage.jsx"));
 const TodayPage = lazy(() => import("./pages/TodayPage.jsx"));
-const UploadPage = lazy(() => import("./pages/UploadPage.jsx"));
 
 function portalScopeForPath(pathname) {
   if (pathname === "/upload") return "upload";
