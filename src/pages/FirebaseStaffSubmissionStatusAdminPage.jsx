@@ -23,7 +23,7 @@ function normalizeText(value) {
 
 function StatusBadge({ status, label }) {
   return (
-    <span className={`rounded-full border px-3 py-1 text-[12px] font-semibold ${STATUS_TONES[status] || STATUS_TONES.unknown}`}>
+    <span className={`rounded-[8px] border px-2.5 py-1 text-[12px] font-semibold ${STATUS_TONES[status] || STATUS_TONES.unknown}`}>
       {label}
     </span>
   );
@@ -31,9 +31,9 @@ function StatusBadge({ status, label }) {
 
 function SummaryCell({ label, value, tone = "text-[#102047]" }) {
   return (
-    <div className="rounded-[14px] border border-[#DDEAE7] bg-white px-3 py-2">
+    <div className="flex min-h-11 items-center justify-between gap-2 rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-1.5">
       <p className="text-[12px] font-semibold text-[#627083]">{label}</p>
-      <p className={`mt-1 text-[22px] font-bold tabular-nums ${tone}`}>{value}</p>
+      <p className={`text-lg font-bold tabular-nums ${tone}`}>{value}</p>
     </div>
   );
 }
@@ -43,20 +43,20 @@ function TaskSummary({ task, selected, onSelect }) {
     <button
       type="button"
       onClick={onSelect}
-      className={`rounded-[16px] border p-4 text-left transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/15 ${
-        selected ? "border-[#20A982] bg-[#F0FBF7]" : "border-[#DDEAE7] bg-white/95 hover:border-[#BFEBDC]"
+      className={`rounded-[12px] border p-3 text-left shadow-[var(--shh-soft-shadow)] transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/15 ${
+        selected ? "border-[#20A982] bg-[#F0FBF7]" : "border-[#DDEAE7] bg-white hover:border-[#BFEBDC]"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-bold leading-5 text-[#102047]">{task.title}</h2>
+          <h2 className="text-[15px] font-semibold leading-5 text-[#102047]">{task.title}</h2>
           <p className="mt-1 text-[12px] font-semibold text-[#627083]">조회 기준 {task.summary.total}명{task.taskId === "health-mandatory-training-2026" && task.summary.latestSyncedAtLabel ? ` · 최근 갱신 ${task.summary.latestSyncedAtLabel}` : ""}</p>
         </div>
-        <span className="rounded-full bg-white px-3 py-1 text-[12px] font-semibold text-[#08754B]">
+        <span className="rounded-[8px] border border-[#DDEAE7] bg-white px-2.5 py-1 text-[12px] font-semibold text-[#08754B]">
           {task.category === "screening" ? "검진" : "연수"}
         </span>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-2 grid gap-2 sm:grid-cols-3">
         <SummaryCell label="완료" value={task.summary.completed} tone="text-[#08754B]" />
         <SummaryCell label="미완료" value={task.summary.incomplete} tone="text-[#9A5B00]" />
         <SummaryCell label="확인필요" value={task.summary.unknown + task.summary.pending} tone="text-[#3154A3]" />
@@ -67,12 +67,12 @@ function TaskSummary({ task, selected, onSelect }) {
 
 function FilterBar({ filters, options, onChange }) {
   return (
-    <section className="rounded-[16px] border border-[#DDEAE7] bg-white/95 p-3">
+    <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
       <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_1fr_1.4fr]">
         <select
           value={filters.status}
           onChange={(event) => onChange({ ...filters, status: event.target.value })}
-          className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
+          className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
           aria-label="상태 필터"
         >
           {STATUS_FILTERS.map((filter) => (
@@ -82,7 +82,7 @@ function FilterBar({ filters, options, onChange }) {
         <select
           value={filters.department}
           onChange={(event) => onChange({ ...filters, department: event.target.value })}
-          className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
+          className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
           aria-label="부서 필터"
         >
           <option value="all">부서 전체</option>
@@ -91,7 +91,7 @@ function FilterBar({ filters, options, onChange }) {
         <select
           value={filters.position}
           onChange={(event) => onChange({ ...filters, position: event.target.value })}
-          className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
+          className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
           aria-label="직책 필터"
         >
           <option value="all">직책 전체</option>
@@ -100,7 +100,7 @@ function FilterBar({ filters, options, onChange }) {
         <input
           value={filters.search}
           onChange={(event) => onChange({ ...filters, search: event.target.value })}
-          className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
+          className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
           placeholder="이름 검색"
           aria-label="이름 검색"
         />
@@ -113,7 +113,7 @@ function StaffRow({ item }) {
   return (
     <article className="grid gap-3 border-b border-[#DDEAE7] px-3 py-3 last:border-b-0 sm:grid-cols-[1.2fr_1fr_0.8fr_auto] sm:items-center">
       <div className="min-w-0">
-        <p className="text-[14px] font-bold text-[#102047]">
+        <p className="text-[14px] font-semibold text-[#102047]">
           {item.realName || "교직원 정보 미연결"}
         </p>
         <p className="mt-1 text-[12px] font-medium text-[#8A96A8]">staffId {item.staffId || "-"}</p>
@@ -204,7 +204,7 @@ function AdminStatusContent({ displayName }) {
 
       {state.status === "success" && selectedTask && (
         <>
-          <section className="grid gap-3 lg:grid-cols-2">
+          <section className="grid gap-2 lg:grid-cols-3">
             {overview.tasks.map((task) => (
               <TaskSummary
                 key={task.taskId}
@@ -219,7 +219,7 @@ function AdminStatusContent({ displayName }) {
           </section>
 
           {overview.directoryStatus !== "success" && (
-            <section className="rounded-[16px] border border-[#F3D8A8] bg-[#FFFDF7] p-4">
+            <section className="rounded-[12px] border border-[#F3D8A8] bg-[#FFFDF7] p-4">
               <p className="text-[13px] font-semibold leading-5 text-[#9A5B00]">
                 교직원 보조 정보를 일부 불러오지 못했습니다. 상태 집계는 projection 기준으로 표시합니다.
               </p>
@@ -227,7 +227,7 @@ function AdminStatusContent({ displayName }) {
           )}
 
           {overview.directoryStatus === "success" && selectedTask.summary.directoryLinked < selectedTask.summary.total && (
-            <section className="rounded-[16px] border border-[#DDEAE7] bg-white/95 p-4">
+            <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4">
               <p className="text-[13px] font-semibold leading-5 text-[#627083]">
                 이름·부서 표시는 현재 학기 staffId가 연결된 계정에 한해 표시됩니다. 나머지는 교직원 directory projection이 준비된 뒤 보강할 수 있습니다.
               </p>
@@ -236,9 +236,9 @@ function AdminStatusContent({ displayName }) {
 
           <FilterBar filters={filters} options={filterOptions} onChange={setFilters} />
 
-          <section className="overflow-hidden rounded-[16px] border border-[#DDEAE7] bg-white/95">
-            <div className="flex flex-col gap-2 border-b border-[#DDEAE7] bg-[#F7FBF9] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-[15px] font-bold text-[#102047]">{selectedTask.title}</h2>
+          <section className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white shadow-[var(--shh-soft-shadow)]">
+            <div className="flex flex-col gap-2 border-b border-[#DDEAE7] bg-[#F3F8F6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-[15px] font-semibold text-[#102047]">{selectedTask.title}</h2>
               <p className="text-[12px] font-semibold text-[#627083]">표시 {filteredItems.length}명 / 조회 기준 {selectedTask.summary.total}명</p>
             </div>
             {filteredItems.length > 0 ? (

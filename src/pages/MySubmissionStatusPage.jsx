@@ -16,24 +16,34 @@ const STATUS_TONES = {
 
 function SummaryStat({ label, value, tone = "text-[#102047]" }) {
   return (
-    <article className="rounded-[16px] border border-[#DDEAE7] bg-white/95 px-4 py-3">
+    <div className="flex min-h-12 items-center justify-between gap-3 border-r border-[#DDEAE7] px-3 last:border-r-0">
       <p className="text-[12px] font-semibold text-[#627083]">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${tone}`}>{value}</p>
-    </article>
+      <p className={`text-xl font-bold tabular-nums ${tone}`}>{value}</p>
+    </div>
+  );
+}
+
+function SummaryRow({ overview }) {
+  return (
+    <section className="grid overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white shadow-[var(--shh-soft-shadow)] sm:grid-cols-3">
+      <SummaryStat label="미완료" value={overview?.summary.incomplete || 0} tone="text-[#9A5B00]" />
+      <SummaryStat label="확인 필요" value={(overview?.summary.pending || 0) + (overview?.summary.unknown || 0)} tone="text-[#3154A3]" />
+      <SummaryStat label="완료" value={overview?.summary.completed || 0} tone="text-[#08754B]" />
+    </section>
   );
 }
 
 function StatusBadge({ status, label }) {
   const tone = STATUS_TONES[status] || STATUS_TONES.unknown;
-  return <span className={`rounded-full border px-3 py-1 text-[12px] font-semibold ${tone}`}>{label}</span>;
+  return <span className={`rounded-[8px] border px-2.5 py-1 text-[12px] font-semibold ${tone}`}>{label}</span>;
 }
 
 function StatusRow({ item }) {
   return (
-    <article className="rounded-[16px] border border-[#DDEAE7] bg-white/95 p-4">
+    <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <StatusBadge status={item.status} label={item.statusLabel} />
             {item.category && (
               <span className="text-[12px] font-semibold text-[#627083]">
@@ -41,10 +51,10 @@ function StatusRow({ item }) {
               </span>
             )}
           </div>
-          <h2 className="mt-3 text-[15px] font-bold leading-5 text-[#102047]">{item.title}</h2>
+          <h2 className="mt-2 text-[15px] font-semibold leading-5 text-[#102047]">{item.title}</h2>
           {item.description && <p className="mt-1 text-[13px] font-medium leading-5 text-[#627083]">{item.description}</p>}
           {item.status === "unknown" && (
-            <p className="mt-2 text-[12px] font-medium leading-5 text-[#9A5B00]">
+            <p className="mt-1.5 text-[12px] font-medium leading-5 text-[#9A5B00]">
               아직 이 항목의 확인 결과가 준비되지 않았습니다.
             </p>
           )}
@@ -52,7 +62,7 @@ function StatusRow({ item }) {
         {item.action && item.status !== "completed" && (
           <Link
             to={item.action.href}
-            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-[10px] border border-[#DDEAE7] bg-[#F7FBF9] px-3 py-2 text-[13px] font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-[#F3F8F6] px-3 py-2 text-[13px] font-semibold text-[#102047] transition hover:border-[#20A982] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
           >
             {item.action.label}
           </Link>
@@ -64,8 +74,8 @@ function StatusRow({ item }) {
 
 function NoticePanel({ title, description }) {
   return (
-    <section className="rounded-[16px] border border-[#DDEAE7] bg-white/95 p-4">
-      <h2 className="text-[15px] font-bold text-[#102047]">{title}</h2>
+    <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4">
+      <h2 className="text-[15px] font-semibold text-[#102047]">{title}</h2>
       <p className="mt-2 text-[13px] font-medium leading-5 text-[#627083]">{description}</p>
     </section>
   );
@@ -148,11 +158,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
       description="현재 연결된 교직원 정보를 기준으로 제출·이수·검진 상태를 확인합니다."
       displayName={displayName}
     >
-      <section className="grid gap-3 sm:grid-cols-3">
-        <SummaryStat label="미완료" value={overview?.summary.incomplete || 0} tone="text-[#9A5B00]" />
-        <SummaryStat label="확인 필요" value={(overview?.summary.pending || 0) + (overview?.summary.unknown || 0)} tone="text-[#3154A3]" />
-        <SummaryStat label="완료" value={overview?.summary.completed || 0} tone="text-[#08754B]" />
-      </section>
+      <SummaryRow overview={overview} />
 
       {state.status === "success" && (
         <section className="space-y-3">

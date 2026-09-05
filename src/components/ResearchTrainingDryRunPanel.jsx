@@ -9,7 +9,7 @@ const EMPTY_RESULT = {
 
 function CountItem({ label, value, tone = "text-[#102047]" }) {
   return (
-    <div className="rounded-[12px] border border-[#DDEAE7] bg-white px-3 py-2">
+    <div className="rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2">
       <p className="text-[11px] font-semibold text-[#627083]">{label}</p>
       <p className={`mt-1 text-[18px] font-bold tabular-nums ${tone}`}>{value ?? 0}</p>
     </div>
@@ -18,7 +18,7 @@ function CountItem({ label, value, tone = "text-[#102047]" }) {
 
 function HeaderCheck({ label, value }) {
   return (
-    <span className="rounded-full border border-[#DDEAE7] bg-white px-3 py-1 text-[12px] font-semibold text-[#627083]">
+    <span className="rounded-[8px] border border-[#DDEAE7] bg-white px-2.5 py-1 text-[12px] font-semibold text-[#627083]">
       {label} {value ? "있음" : "없음"}
     </span>
   );
@@ -31,7 +31,7 @@ function StatusValueList({ values }) {
   return (
     <div className="flex flex-wrap gap-2">
       {entries.map(([label, count]) => (
-        <span key={label} className="rounded-full border border-[#DDEAE7] bg-white px-3 py-1 text-[12px] font-semibold text-[#627083]">
+        <span key={label} className="rounded-[8px] border border-[#DDEAE7] bg-white px-2.5 py-1 text-[12px] font-semibold text-[#627083]">
           {label} {count}
         </span>
       ))}
@@ -57,9 +57,9 @@ function ResultPanel({ data }) {
   const applySyncedAt = formatApplySyncedAt(data.apply?.syncedAt);
 
   return (
-    <div className="mt-3 rounded-[14px] border border-[#DDEAE7] bg-[#F7FBF9] p-3">
+    <div className="mt-3 rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6] p-3">
       {headerMissing && (
-        <p className="mb-3 rounded-[12px] border border-[#F3D8A8] bg-[#FFFDF7] px-3 py-2 text-[12px] font-semibold leading-5 text-[#9A5B00]">
+        <p className="mb-3 rounded-[8px] border border-[#F3D8A8] bg-[#FFFDF7] px-3 py-2 text-[12px] font-semibold leading-5 text-[#9A5B00]">
           성명/이수상태 헤더를 자동 확인하지 못했습니다. 연구부 시트 구조를 확인해 주세요.
         </p>
       )}
@@ -78,7 +78,7 @@ function ResultPanel({ data }) {
         <CountItem label="강사/시간강사 포함" value={data.rows?.lecturerRows} />
       </div>
       {data.apply && (
-        <p className="mt-3 rounded-[12px] border border-[#BFEBDC] bg-white px-3 py-2 text-[12px] font-semibold leading-5 text-[#08754B]">
+        <p className="mt-3 rounded-[8px] border border-[#BFEBDC] bg-white px-3 py-2 text-[12px] font-semibold leading-5 text-[#08754B]">
           Firestore snapshot {data.apply.docsWritten}건을 새로고침했습니다. 기존 research snapshot 중 원본에 없는 항목은 {data.apply.orphanSnapshots}건이며 삭제하지 않았습니다.
           {applySyncedAt ? ` 최근 갱신: ${applySyncedAt}` : ""}
         </p>
@@ -137,11 +137,11 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
   const isWorking = result.status === "loading" || result.status === "applying";
 
   return (
-    <section className="rounded-[16px] border border-[#DDEAE7] bg-white/95 p-4">
+    <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#627083]">RESEARCH SHEET CHECK</p>
-          <h2 className="mt-1 text-[15px] font-bold text-[#102047]">연구부 연수 현황 점검</h2>
+          <p className="text-[12px] font-semibold text-[#08754B]">연구부 연수 현황 점검</p>
+          <h2 className="mt-1 text-[15px] font-semibold text-[#102047]">점검 및 snapshot 새로고침</h2>
           <p className="mt-1 text-[12px] font-semibold leading-5 text-[#627083]">
             점검은 저장하지 않고, 새로고침은 검증 후 Firestore snapshot만 반영합니다.
           </p>
@@ -151,7 +151,7 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
             type="button"
             onClick={handleCheck}
             disabled={isWorking}
-            className="min-h-10 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-2 text-[13px] font-bold text-[#102047] transition hover:border-[#20A982] disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-[13px] font-semibold text-[#102047] transition hover:border-[#20A982] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {result.status === "loading" ? "확인 중..." : "연구부 연수 현황 점검"}
           </button>
@@ -159,7 +159,7 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
             type="button"
             onClick={handleApply}
             disabled={isWorking}
-            className="min-h-10 rounded-[10px] border border-[#20A982] bg-[#20A982] px-4 py-2 text-[13px] font-bold text-white transition hover:bg-[#08754B] disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-10 rounded-[9px] border border-[#20A982] bg-[#20A982] px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-[#08754B] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {result.status === "applying" ? "새로고침 중..." : "연수 현황 새로고침"}
           </button>
@@ -167,7 +167,7 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
       </div>
       {(result.status === "loading" || result.status === "applying") && <p className="mt-3 text-[13px] font-semibold text-[#627083]">{result.message}</p>}
       {result.status === "error" && (
-        <p className="mt-3 rounded-[12px] border border-[#F3D8A8] bg-[#FFFDF7] px-3 py-2 text-[13px] font-semibold text-[#9A5B00]">
+        <p className="mt-3 rounded-[8px] border border-[#F3D8A8] bg-[#FFFDF7] px-3 py-2 text-[13px] font-semibold text-[#9A5B00]">
           {result.message}
         </p>
       )}
