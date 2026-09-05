@@ -39,6 +39,14 @@ const MONTHLY_VISIT_CARD = {
   status: "권한 필요",
 };
 
+const ADMIN_MONTHLY_VISIT_CARD = {
+  title: "월별 입실현황 조회",
+  description: "월별 보건실 이용 현황을 확인합니다.",
+  privacyNotice: "학생별 증상 및 처치 내용은 표시하지 않고, 월별 통계만 확인할 수 있습니다.",
+  buttonText: "조회하기",
+  status: "권한 필요",
+};
+
 const ADMIN_STATS_CARD = {
   title: "관리자용 보건실 입실 통계",
   description: "학교 전체 보건실 입실 현황을 월별 통계로 확인합니다.",
@@ -925,6 +933,7 @@ export default function StudentCareSection({ items }) {
     canUseAdminScope(authState.assignment);
   const visibleCards = [
     ...(canShowMonthlyVisit ? [{ ...MONTHLY_VISIT_CARD, modalType: "monthlyVisit", status: "담임 권한" }] : []),
+    ...(!canShowMonthlyVisit && canShowAdminStats ? [{ ...ADMIN_MONTHLY_VISIT_CARD, modalType: "adminStats", status: "관리자 권한" }] : []),
     ...(canShowAdminStats ? [{ ...ADMIN_STATS_CARD, modalType: "adminStats", status: "관리자 권한" }] : []),
     ...(canShowHealthRoom ? [{
       ...healthRoomCard,
