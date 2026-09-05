@@ -14,15 +14,15 @@ export default function FAQSection({ items, isLoading = false, loadFailed = fals
     : items;
 
   return (
-    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
+    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
         eyebrow="FAQ"
         title="자주 묻는 질문"
         description="교직원이 자주 확인하는 질문을 정리했습니다."
       />
-      <div className="mb-5 rounded-[22px] border border-slate-100 bg-white p-4 shadow-sm">
+      <div className="mb-4 rounded-[12px] border border-[#DDEAE7] bg-white p-4">
         <label className="block">
-          <span className="mb-2 block text-sm font-black text-[#1A3B8B]">FAQ 검색</span>
+          <span className="mb-2 block text-sm font-semibold text-[#102047]">FAQ 검색</span>
           <input
             type="search"
             value={query}
@@ -30,48 +30,48 @@ export default function FAQSection({ items, isLoading = false, loadFailed = fals
               setQuery(event.target.value);
               setOpenIndex(0);
             }}
-            className="min-h-11 w-full rounded-2xl border border-slate-200 bg-[#F7F9FC] px-4 py-3 text-sm font-bold text-[#263238] outline-none transition focus:border-[#1A3B8B] focus:ring-2 focus:ring-[#1A3B8B]/10"
+            className="min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 text-sm font-semibold text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-2 focus:ring-[#20A982]/10"
             placeholder="결핵, 채용검진, 감염병, 보건실, 인바디 등으로 검색해보세요."
           />
         </label>
       </div>
       {fallbackUsed && (
-        <div className="mb-4 rounded-[20px] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+        <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
           FAQ를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
         {isLoading ? (
-          <div className="rounded-[22px] border border-slate-100 bg-white p-6 text-center text-sm font-bold text-slate-600 shadow-sm">
+          <div className="p-5 text-center text-sm font-semibold text-[#627083]">
             FAQ를 불러오는 중입니다.
           </div>
         ) : filteredItems.length ? (
           filteredItems.map((item, idx) => (
             <div
               key={item.id || item.question}
-              className="overflow-hidden rounded-[22px] border border-slate-100 bg-white shadow-sm"
+              className="border-b border-[#E8F0EE] last:border-b-0"
             >
               <button
                 onClick={() => setOpenIndex(openIndex === idx ? -1 : idx)}
-                className="flex w-full items-center justify-between gap-4 p-5 text-left"
+                className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-[#F8FAFA]"
               >
-                <span className="font-extrabold text-[#263238]">Q. {item.question}</span>
-                <span className="text-2xl text-[#1A3B8B]">{openIndex === idx ? "-" : "+"}</span>
+                <span className="text-sm font-bold text-[#102047]">Q. {item.question}</span>
+                <span className="text-lg font-semibold text-[#08754B]">{openIndex === idx ? "-" : "+"}</span>
               </button>
               {openIndex === idx && (
-                <div className="border-t border-slate-100 bg-[#F7F9FC] p-5 text-sm leading-7 text-slate-600">
+                <div className="border-t border-[#E8F0EE] bg-[#F8FAFA] px-4 py-3 text-sm leading-7 text-[#627083]">
                   {item.answer}
                 </div>
               )}
             </div>
           ))
         ) : loadFailed ? (
-          <div className="rounded-[22px] border border-slate-100 bg-white p-6 text-center text-sm font-bold text-slate-600 shadow-sm">
+          <div className="p-5 text-center text-sm font-semibold text-[#627083]">
             FAQ를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.
           </div>
         ) : (
-          <div className="rounded-[22px] border border-slate-100 bg-white p-6 text-center text-sm font-bold text-slate-600 shadow-sm">
+          <div className="p-5 text-center text-sm font-semibold text-[#627083]">
             검색 결과가 없습니다. 필요한 경우 보건실로 문의해주세요.
           </div>
         )}

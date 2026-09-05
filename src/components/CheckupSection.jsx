@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AppCard, Badge, SectionTitle, isValidUrl } from "./ui.jsx";
+import { Badge, SectionTitle, isValidUrl } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
 // "자료실 열기" 버튼은 내부 resources 섹션으로 이동
@@ -9,8 +9,8 @@ const INTERNAL_BUTTONS = {
   "자료실로 이동": "resources",
 };
 
-const btnCls = "inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
-const secondaryBtnCls = "inline-flex min-h-11 w-full items-center justify-center rounded-2xl border border-[#C9DFFF] bg-white px-5 py-3 text-center text-sm font-bold text-[#1A3B8B] shadow-sm transition hover:-translate-y-[1px] hover:bg-[#EAF3FF] md:w-auto";
+const btnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] bg-[#102047] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
+const secondaryBtnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#C9DFFF] bg-white px-4 py-2.5 text-center text-sm font-semibold text-[#102047] transition hover:border-[#9DB7F0] hover:bg-[#F6FAFF] md:w-auto";
 
 function parseDateBoundary(value, boundary) {
   const text = String(value || "").trim();
@@ -67,13 +67,13 @@ function CheckupModal({ modal, onClose }) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-3xl sm:rounded-3xl sm:p-6">
+      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-[16px] bg-white p-5 shadow-xl sm:max-w-3xl sm:rounded-[16px] sm:p-6">
         <div className="flex items-start justify-between gap-4">
-          <h3 className="text-xl font-extrabold text-[#1A3B8B]">{modal.title}</h3>
+          <h3 className="text-lg font-bold text-[#102047]">{modal.title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 min-w-11 rounded-full bg-slate-100 px-3 text-lg font-bold text-slate-600"
+            className="min-h-10 min-w-10 rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-lg font-semibold text-[#627083]"
             aria-label="닫기"
           >
             ×
@@ -82,7 +82,7 @@ function CheckupModal({ modal, onClose }) {
 
         {modal.type === "image" ? (
           <>
-            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-[#F7F9FC]">
+            <div className="mt-4 overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA]">
               <img
                 src={modal.imageUrl}
                 alt={`${modal.title} 안내 이미지`}
@@ -101,7 +101,7 @@ function CheckupModal({ modal, onClose }) {
             )}
           </>
         ) : (
-          <p className="mt-4 whitespace-pre-line rounded-2xl bg-[#F7F9FC] p-4 text-sm leading-7 text-slate-700" style={{ wordBreak: "keep-all" }}>
+          <p className="mt-4 whitespace-pre-line rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-4 text-sm leading-7 text-[#435061]" style={{ wordBreak: "keep-all" }}>
             {modal.message}
           </p>
         )}
@@ -164,29 +164,25 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
   };
 
   return (
-    <section id="checkup" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
+    <section id="checkup" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
         eyebrow="CHECKUP"
         title="검진·검사 안내"
         description="1학년 건강검진, 2·3학년 결핵검진·소변검사, 교직원 결핵검진 안내를 모아둔 영역입니다."
       />
       {fallbackUsed && (
-        <div className="mb-4 rounded-[20px] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+        <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
           검진·검사 안내를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
         {isLoading && (
-          <AppCard>
-            <p className="text-sm font-bold text-slate-600">검진·검사 안내를 불러오는 중입니다.</p>
-          </AppCard>
+          <p className="px-4 py-5 text-sm font-semibold text-[#627083]">검진·검사 안내를 불러오는 중입니다.</p>
         )}
 
         {!isLoading && loadFailed && (
-          <AppCard>
-            <p className="text-sm font-bold text-slate-600">검진·검사 안내를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p>
-          </AppCard>
+          <p className="px-4 py-5 text-sm font-semibold text-[#627083]">검진·검사 안내를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p>
         )}
 
         {!isLoading && !loadFailed && items.map((item) => {
@@ -204,53 +200,63 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
             effectiveDisplayMode === "pending" ||
             (effectiveDisplayMode === "image" && isValidUrl(item.imageUrl));
           return (
-            <AppCard key={item.title}>
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-lg font-extrabold text-[#263238]">{item.title}</h3>
-                <Badge type="blue">{item.operatingStatus || item.status}</Badge>
+            <article key={item.title} className="border-b border-[#E8F0EE] px-4 py-4 last:border-b-0">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-bold text-[#102047]">{item.title}</h3>
+                    <Badge type="blue">{item.operatingStatus || item.status}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[#627083]">{item.description}</p>
+                  <p className="mt-2 text-sm font-semibold text-[#102047]">대상 · {item.target}</p>
+                  {!!(item.details || []).length && (
+                    <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-[#627083]">
+                      {(item.details || []).map((detail, i) => (
+                        <li key={i}>{detail}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row md:justify-end">
+                  {primaryButtonText && effectiveDisplayMode === "link" && (internalTarget || isValidUrl(item.url)) && (
+                    <button type="button" onClick={() => openLinkAction(item, internalTarget)} className={btnCls}>
+                      {primaryButtonText}
+                    </button>
+                  )}
+                  {primaryButtonText && hasPrimaryModalAction && (
+                    <button type="button" onClick={() => openPrimaryAction(item)} className={btnCls}>
+                      {primaryButtonText}
+                    </button>
+                  )}
+                  {item.secondaryText && secondaryAction === "notice" && (
+                    <button type="button" onClick={() => runSecondaryAction(item)} className={secondaryBtnCls}>
+                      {item.secondaryText}
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>
-              <p className="mt-3 text-sm font-bold text-[#1A3B8B]">대상 · {item.target}</p>
-              <ul className="mt-4 space-y-2 text-sm text-slate-600">
-                {(item.details || []).map((detail, i) => (
-                  <li key={i}>• {detail}</li>
-                ))}
-              </ul>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                {primaryButtonText && effectiveDisplayMode === "link" && (internalTarget || isValidUrl(item.url)) && (
-                  <button type="button" onClick={() => openLinkAction(item, internalTarget)} className={btnCls}>
-                    {primaryButtonText}
-                  </button>
-                )}
-                {primaryButtonText && hasPrimaryModalAction && (
-                  <button type="button" onClick={() => openPrimaryAction(item)} className={btnCls}>
-                    {primaryButtonText}
-                  </button>
-                )}
-                {item.secondaryText && secondaryAction === "notice" && (
-                  <button type="button" onClick={() => runSecondaryAction(item)} className={secondaryBtnCls}>
-                    {item.secondaryText}
-                  </button>
-                )}
-              </div>
-            </AppCard>
+            </article>
           );
         })}
 
         {/* 교직원 결핵검진 유형 선택 카드 — 사용 TRUE이고 접수기간 안일 때만 표시 */}
         {!isLoading && !loadFailed && shouldShowTbRegistrationCard && (
-          <AppCard>
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="text-lg font-extrabold text-[#263238]">교직원 결핵검진 유형 선택</h3>
-              <Badge type="pink">신청 접수 중</Badge>
+          <article className="border-b border-[#E8F0EE] px-4 py-4 last:border-b-0">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-bold text-[#102047]">교직원 결핵검진 유형 선택</h3>
+                  <Badge type="pink">신청 접수 중</Badge>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[#627083]">
+                  학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
+                </p>
+              </div>
+              <button onClick={() => setTbRegistrationOpen(true)} className={btnCls}>
+                유형 선택하기
+              </button>
             </div>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
-            </p>
-            <button onClick={() => setTbRegistrationOpen(true)} className={`${btnCls} mt-4`}>
-              유형 선택하기
-            </button>
-          </AppCard>
+          </article>
         )}
       </div>
 

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { AppCard, Badge, PrimaryButton, SectionTitle } from "./ui.jsx";
+import { Badge, PrimaryButton, SectionTitle } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
-const btnCls = "mt-4 inline-block w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-center text-sm font-bold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:w-auto";
+const btnCls = "inline-block w-full rounded-[10px] bg-[#102047] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
 
 export default function ResourceSection({ items, loadFailed, isLoading = false, fallbackUsed = false }) {
   const [category, setCategory] = useState("전체");
@@ -19,53 +19,63 @@ export default function ResourceSection({ items, loadFailed, isLoading = false, 
     : "표시할 건강정보/이벤트 데이터가 없습니다.";
 
   return (
-    <section id="resources" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-10">
+    <section id="resources" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
         eyebrow="INFO & EVENTS"
         title="건강정보/이벤트"
         description="보건 관련 안내문, 참고 자료 링크, 보건실 이벤트를 모아두는 공간입니다."
       />
       {isLoading ? (
-        <div className="rounded-[24px] border border-slate-100 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">
+        <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-5 text-center text-sm font-semibold text-[#627083]">
           자료를 불러오는 중입니다.
         </div>
       ) : items.length > 0 ? (
         <>
           {fallbackUsed && (
-            <div className="mb-4 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-3 text-sm font-bold text-slate-500">
+            <div className="mb-4 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-3 text-sm font-semibold text-[#627083]">
               자료를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
             </div>
           )}
-          <div className="mb-5 flex gap-2 overflow-x-auto pb-2">
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
-                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold ${
-                  category === cat ? "bg-[#1A3B8B] text-white" : "bg-white text-slate-600"
+                className={`whitespace-nowrap rounded-[10px] border px-3 py-2 text-sm font-semibold ${
+                  category === cat
+                    ? "border-[#102047] bg-[#102047] text-white"
+                    : "border-[#DDEAE7] bg-white text-[#627083]"
                 }`}
               >
                 {cat}
               </button>
             ))}
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
             {filtered.map((item) => (
-              <AppCard key={item.title}>
-                <Badge type="blue">{item.category}</Badge>
-                <h3 className="mt-3 text-lg font-extrabold text-[#263238]">{item.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>
-                {item.buttonText && (
-                  item.url === "inbody"
-                    ? <button onClick={() => setInbodyOpen(true)} className={btnCls}>{item.buttonText}</button>
-                    : <PrimaryButton url={item.url}>{item.buttonText}</PrimaryButton>
-                )}
-              </AppCard>
+              <article key={item.title} className="border-b border-[#E8F0EE] px-4 py-4 last:border-b-0">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-bold text-[#102047]">{item.title}</h3>
+                      <Badge type="blue">{item.category}</Badge>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-[#627083]">{item.description}</p>
+                  </div>
+                  {item.buttonText && (
+                    <div className="shrink-0">
+                      {item.url === "inbody"
+                        ? <button onClick={() => setInbodyOpen(true)} className={btnCls}>{item.buttonText}</button>
+                        : <PrimaryButton url={item.url}>{item.buttonText}</PrimaryButton>}
+                    </div>
+                  )}
+                </div>
+              </article>
             ))}
           </div>
         </>
       ) : (
-        <div className="rounded-[24px] border border-slate-100 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">
+        <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-5 text-center text-sm font-semibold text-[#627083]">
           {emptyMessage}
         </div>
       )}
