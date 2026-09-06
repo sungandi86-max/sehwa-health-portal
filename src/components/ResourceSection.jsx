@@ -1,8 +1,16 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { isValidUrl, SectionTitle } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
 const btnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[9px] border border-[#C8D8FF] bg-white px-3.5 py-2 text-center text-sm font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] hover:bg-[#EEF4FF] md:w-auto";
+const SECTION_BUTTON_MAP = {
+  "자료실 열기": "/resources",
+  "자료실로 이동": "/resources",
+  "제출·업로드 센터": "/upload",
+  "업로드 센터": "/upload",
+  "제출하기": "/upload",
+};
 
 function getResourceGroupTitle(category) {
   return String(category || "").includes("이벤트") ? "신청·이벤트" : category || "건강정보";
@@ -18,10 +26,17 @@ function groupResources(items) {
 }
 
 function ResourceAction({ item, onOpenInbody }) {
+  const navigate = useNavigate();
+
   if (!item.buttonText) return null;
 
   if (item.url === "inbody") {
     return <button onClick={onOpenInbody} className={btnCls}>{item.buttonText}</button>;
+  }
+
+  const inferredRoute = SECTION_BUTTON_MAP[String(item.buttonText).trim()];
+  if (inferredRoute) {
+    return <button onClick={() => navigate(inferredRoute)} className={btnCls}>{item.buttonText}</button>;
   }
 
   if (!isValidUrl(item.url)) return null;
