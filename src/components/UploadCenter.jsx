@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
+import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { uploadIntro } from "../data/fallbackData.js";
-import { Badge, SafeText } from "./ui.jsx";
+import { auth } from "../lib/firebase.js";
+import { getStaffDisplayName, getStaffRoleDisplay, getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
+import { getUserAssignmentResult } from "../lib/userProfile.js";
+import { SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
 const INFECTION_REPORT_CARD = {
@@ -86,15 +91,16 @@ const SUBMIT_GROUP_LABELS = {
   other: "기타 제출",
 };
 
-const primaryButtonClass =
-  "inline-flex min-h-10 items-center justify-center rounded-[10px] bg-[#0D4EA6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#183B8F] md:min-w-[150px]";
+const actionButtonClass =
+  "inline-flex min-h-10 items-center justify-center rounded-[9px] border border-[#C8D8FF] bg-white px-3.5 py-2 text-sm font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] hover:bg-[#EEF4FF] md:min-w-[136px]";
 
-function getStatusBadgeType(item) {
+function getStatusToneClass(item) {
   const status = String(item.status || "").trim();
-  if (status === "접수 중" || status === "로그인 후 접수") return "blue";
-  if (status === "완료") return "green";
-  if (status === "확인 필요") return "pink";
-  return "gray";
+  if (status === "접수 중" || status === "로그인 후 접수") return "border-[#C8D8FF] bg-[#EEF4FF] text-[#3154A3]";
+  if (status === "완료") return "border-[#CFEBDD] bg-[#F3FBF7] text-[#08754B]";
+  if (status === "확인 필요" || status === "확인 요청") return "border-[#F3DCB4] bg-[#FFF9ED] text-[#9A6700]";
+  if (status === "종료" || status === "마감") return "border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]";
+  return "border-[#DDEAE7] bg-[#F8FAFA] text-[#627083]";
 }
 
 function getSubmitGroup(type) {
@@ -149,9 +155,42 @@ function resolveSubmitCardType(item) {
   return "other";
 }
 
+function StatusChip({ item }) {
+  if (!item.status) return null;
+
+  return (
+    <span className={`inline-flex shrink-0 items-center rounded-[8px] border px-2 py-0.5 text-[11px] font-semibold ${getStatusToneClass(item)}`}>
+      {item.status}
+    </span>
+  );
+}
+
+function SubmitterIdentity({ viewer }) {
+  if (viewer.status === "loading") {
+    return <span className="text-[#8A96A8]">교직원 정보 확인 중</span>;
+  }
+
+  if (viewer.status === "ready") {
+    return (
+      <>
+        <span className="font-semibold text-[#102047]">{viewer.name}</span>
+        <span className="text-[#C1CAD6]">·</span>
+        <span className="text-[#627083]">{viewer.role}</span>
+      </>
+    );
+  }
+
+  if (viewer.status === "needs-assignment") {
+    return <span className="text-[#9A6700]">교직원 정보 연결 필요</span>;
+  }
+
+  return <span className="text-[#627083]">로그인 후 제출</span>;
+}
+
 export default function UploadCenter({ items, publicMode = false, publicType = "" }) {
   const navigate = useNavigate();
   const [modalType, setModalType] = useState(null);
+  const [viewer, setViewer] = useState({ status: publicMode ? "hidden" : "loading", name: "", role: "" });
   const allItems = items.some((item) => resolveSubmitCardType(item) === "infection")
     ? items
     : [...items, INFECTION_REPORT_CARD];
@@ -168,103 +207,183 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
       [group]: [...(groups[group] || []), { item: nextItem, submitType }],
     };
   }, {});
+  const rows = Object.entries(groupedItems).flatMap(([group, entries]) =>
+    entries.map((entry) => ({ ...entry, group }))
+  );
 
   useEffect(() => {
     if (!publicMode || publicType !== "tbreply") return;
     setModalType("student_tb_reply");
   }, [publicMode, publicType]);
 
+  useEffect(() => {
+    if (publicMode) {
+      setViewer({ status: "hidden", name: "", role: "" });
+      return undefined;
+    }
+
+    let isMounted = true;
+    let requestId = 0;
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      requestId += 1;
+      const currentRequestId = requestId;
+
+      if (!currentUser) {
+        if (isMounted) setViewer({ status: "signed-out", name: "", role: "" });
+        return;
+      }
+
+      if (isMounted) setViewer({ status: "loading", name: "", role: "" });
+
+      try {
+        const assignmentResult = await getUserAssignmentResult(
+          currentUser.uid,
+          CURRENT_SCHOOL_YEAR,
+          CURRENT_SEMESTER
+        );
+        const assignment = assignmentResult.assignment;
+        let identity = null;
+
+        if (assignment?.staffId) {
+          identity = await getAuthenticatedStaffIdentity().catch(() => null);
+        }
+
+        if (!isMounted || currentRequestId !== requestId) return;
+
+        if (!assignment?.active) {
+          setViewer({ status: "needs-assignment", name: "", role: "" });
+          return;
+        }
+
+        setViewer({
+          status: "ready",
+          name: getStaffDisplayName({ identity, displayName: currentUser.displayName, user: currentUser }),
+          role: getStaffRoleDisplay({ assignment, identity }),
+        });
+      } catch {
+        if (isMounted && currentRequestId === requestId) {
+          setViewer({ status: "needs-assignment", name: "", role: "" });
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [publicMode]);
+
   return (
     <>
       <section id="upload" className={`mx-auto max-w-6xl scroll-mt-24 px-4 ${publicMode ? "py-5" : "py-8"}`}>
-        <div className={`rounded-[12px] border border-[#DDEAE7] bg-white p-4 md:p-5 ${publicMode ? "mb-4" : ""}`}>
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-[#102047] md:text-2xl">
-                {publicMode ? "결핵검진 진료회신 제출" : "제출 항목"}
-              </h2>
+        <div className={`border-b border-[#DDEAE7] pb-4 ${publicMode ? "mb-4" : ""}`}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold leading-tight text-[#102047] md:text-[1.65rem]">
+                {publicMode ? "결핵검진 진료회신 제출" : "제출·보고 센터"}
+              </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[#627083]">
                 {publicMode
                   ? "학생이 제출한 진료회신란 또는 진료확인서를 업로드하는 전용 페이지입니다."
-                  : uploadIntro.description}
+                  : "교직원 제출과 학생 감염병 보고 항목을 확인합니다."}
               </p>
             </div>
-            {!publicMode && <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-xs leading-5 text-[#627083] md:max-w-sm">
-              {uploadIntro.notice}
-            </div>}
+            {!publicMode && (
+              <div className="inline-flex w-fit max-w-full items-center gap-2 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm">
+                <SubmitterIdentity viewer={viewer} />
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="mt-4 space-y-5">
-          {Object.entries(groupedItems).map(([group, entries]) => (
-            <div key={group}>
-              {!publicMode && (
-                <h3 className="mb-2 text-sm font-semibold text-[#102047]">
-                  {SUBMIT_GROUP_LABELS[group] || SUBMIT_GROUP_LABELS.other}
-                </h3>
-              )}
-              <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
-                {entries.map(({ item: displayItem, submitType }, index) => {
-                  const handleClick = () => (
-                    submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
-                  );
-                  return (
-                    <div
-                      key={displayItem.id || `${submitType}-${displayItem.title}`}
-                      className={`grid gap-3 p-3.5 md:grid-cols-[minmax(0,1fr)_160px] md:items-center md:p-4 ${
-                        index > 0 ? "border-t border-[#DDEAE7]" : ""
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                          <h4 className="text-[15px] font-semibold leading-6 text-[#102047] md:text-base">
-                            {displayItem.title}
-                          </h4>
-                          <Badge type={getStatusBadgeType(displayItem)}>
-                            {displayItem.status}
-                          </Badge>
-                        </div>
-                        <dl className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-[#627083]">
-                          <div><dt className="inline font-semibold text-[#102047]">대상 </dt><dd className="inline"><SafeText>{displayItem.target}</SafeText></dd></div>
-                          <div><dt className="inline font-semibold text-[#102047]">마감 </dt><dd className="inline"><SafeText>{displayItem.deadline}</SafeText></dd></div>
-                        </dl>
-                        <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#627083]">
-                          <SafeText>{displayItem.description}</SafeText>
-                        </p>
-                        {(displayItem.documentType || displayItem.fileGuide) && (
-                          <details className="mt-2 text-xs leading-5 text-[#627083]">
-                            <summary className="cursor-pointer font-semibold text-[#3154A3]">
-                              제출자료·안내 보기
-                            </summary>
-                            <div className="mt-1.5 space-y-1">
-                              {displayItem.documentType && (
-                                <p><span className="font-semibold text-[#102047]">제출자료 </span><SafeText>{displayItem.documentType}</SafeText></p>
-                              )}
-                              {displayItem.fileGuide && (
-                                <p className="whitespace-pre-line"><SafeText>{displayItem.fileGuide}</SafeText></p>
-                              )}
-                            </div>
-                          </details>
-                        )}
-                      </div>
-                      {displayItem.buttonText && (
-                        <button
-                          onClick={handleClick}
-                          className={primaryButtonClass}
-                        >
-                          {displayItem.buttonText}
-                        </button>
+        <div className="mt-5 overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-[#DDEAE7] px-4 py-3">
+            <div>
+              <h2 className="text-base font-bold text-[#102047]">제출 항목</h2>
+              {!publicMode && <p className="mt-0.5 text-xs text-[#627083]">현재 접수 중인 제출·보고 항목</p>}
+            </div>
+            <span className="shrink-0 text-xs font-semibold text-[#627083]">{rows.length}개</span>
+          </div>
+
+          <div className="divide-y divide-[#DDEAE7]">
+            {rows.map(({ item: displayItem, submitType, group }) => {
+              const handleClick = () => (
+                submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
+              );
+
+              return (
+                <article
+                  key={displayItem.id || `${submitType}-${displayItem.title}`}
+                  className="grid gap-3 px-4 py-3.5 md:grid-cols-[minmax(0,1fr)_148px] md:items-center md:py-4"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusChip item={displayItem} />
+                      {!publicMode && (
+                        <span className="text-xs font-medium text-[#8A96A8]">
+                          {SUBMIT_GROUP_LABELS[group] || SUBMIT_GROUP_LABELS.other}
+                        </span>
+                      )}
+                      {displayItem.deadline && (
+                        <span className="text-xs font-medium text-[#627083]">
+                          <SafeText>{displayItem.deadline}</SafeText>
+                        </span>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+
+                    <h3 className="mt-1.5 text-[15px] font-semibold leading-6 text-[#102047] md:text-base">
+                      {displayItem.title}
+                    </h3>
+
+                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083] md:line-clamp-1">
+                      <SafeText>{displayItem.description}</SafeText>
+                    </p>
+
+                    <p className="mt-1.5 text-xs font-medium leading-5 text-[#627083]">
+                      <SafeText>{displayItem.target}</SafeText>
+                      {displayItem.documentType && (
+                        <>
+                          <span className="mx-1.5 text-[#C1CAD6]">·</span>
+                          <SafeText>{displayItem.documentType}</SafeText>
+                        </>
+                      )}
+                    </p>
+
+                    {(displayItem.documentType || displayItem.fileGuide) && (
+                      <details className="mt-2 text-xs leading-5 text-[#627083]">
+                        <summary className="cursor-pointer font-semibold text-[#0D4EA6]">
+                          제출자료·안내 보기
+                        </summary>
+                        <div className="mt-1.5 space-y-1 border-l border-[#DDEAE7] pl-3">
+                          {displayItem.documentType && (
+                            <p><span className="font-semibold text-[#102047]">제출자료 </span><SafeText>{displayItem.documentType}</SafeText></p>
+                          )}
+                          {displayItem.fileGuide && (
+                            <p className="whitespace-pre-line"><SafeText>{displayItem.fileGuide}</SafeText></p>
+                          )}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+
+                  {displayItem.buttonText && (
+                    <button
+                      type="button"
+                      onClick={handleClick}
+                      className={actionButtonClass}
+                    >
+                      {displayItem.buttonText} →
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
         </div>
 
         {!publicMode && (
-          <p className="mt-4 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-3 text-sm leading-6 text-[#627083]">
+          <p className="mt-3 text-sm leading-6 text-[#627083]">
             {uploadIntro.subNotice}
           </p>
         )}
