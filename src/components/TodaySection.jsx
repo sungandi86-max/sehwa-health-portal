@@ -1,5 +1,20 @@
 import { Badge, SectionTitle } from "./ui.jsx";
 
+function NoticeDisclosure({ description }) {
+  if (!description || String(description).length < 58) return null;
+
+  return (
+    <details className="mt-2 text-xs leading-5 text-[#627083]">
+      <summary className="cursor-pointer font-semibold text-[#0D4EA6]">
+        안내 보기
+      </summary>
+      <p className="mt-1.5 border-l border-[#DDEAE7] pl-3">
+        {description}
+      </p>
+    </details>
+  );
+}
+
 export default function TodaySection({ items, isLoading = false, loadFailed = false, fallbackUsed = false }) {
   return (
     <section id="today" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
@@ -29,11 +44,11 @@ export default function TodaySection({ items, isLoading = false, loadFailed = fa
           </div>
         ))}
         {!isLoading && items.length === 0 && (
-          <p className="p-4 text-sm font-semibold text-[#627083]">현재 진행 중인 보건실 안내가 없습니다.</p>
+          <p className="p-4 text-sm font-semibold text-[#627083]">등록된 안내가 없습니다.</p>
         )}
         {!isLoading && items.map((item, index) => (
-          <article key={item.title} className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_220px] ${index > 0 ? "border-t border-[#DDEAE7]" : ""}`}>
-            <div>
+          <article key={item.title} className={`p-4 ${index > 0 ? "border-t border-[#DDEAE7]" : ""}`}>
+            <div className="min-w-0">
               <div className="mb-1.5 flex flex-wrap items-center gap-2">
                 <Badge type={item.badgeType}>{item.status}</Badge>
                 <span className="text-xs font-semibold text-[#627083]">{item.date || item.dateLabel || "상시"} · {item.target || "전체"}</span>
@@ -44,13 +59,14 @@ export default function TodaySection({ items, isLoading = false, loadFailed = fa
               >
                 {item.title}
               </h3>
-              <p className="mt-1 text-sm leading-6 text-[#627083]">{item.description}</p>
+              <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083] md:line-clamp-1">{item.description}</p>
+              <NoticeDisclosure description={item.description} />
+              {item.actionText && (
+                <p className="mt-2 text-xs font-semibold text-[#0D4EA6]">
+                  다음 작업 · {item.actionText}
+                </p>
+              )}
             </div>
-            {item.actionText && (
-              <p className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] p-3 text-sm font-semibold text-[#3154A3]">
-                {item.actionText}
-              </p>
-            )}
           </article>
         ))}
       </div>

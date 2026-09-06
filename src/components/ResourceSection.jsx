@@ -1,8 +1,37 @@
 import { useMemo, useState } from "react";
-import { Badge, PrimaryButton, SectionTitle } from "./ui.jsx";
+import { isValidUrl, SectionTitle } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
-const btnCls = "inline-block w-full rounded-[10px] bg-[#102047] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
+const btnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[9px] border border-[#C8D8FF] bg-white px-3.5 py-2 text-center text-sm font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] hover:bg-[#EEF4FF] md:w-auto";
+
+function getResourceGroupTitle(category) {
+  return String(category || "").includes("이벤트") ? "신청·이벤트" : category || "건강정보";
+}
+
+function groupResources(items) {
+  return items.reduce((groups, item) => {
+    const title = getResourceGroupTitle(item.category);
+    const current = groups.get(title) || [];
+    groups.set(title, [...current, item]);
+    return groups;
+  }, new Map());
+}
+
+function ResourceAction({ item, onOpenInbody }) {
+  if (!item.buttonText) return null;
+
+  if (item.url === "inbody") {
+    return <button onClick={onOpenInbody} className={btnCls}>{item.buttonText}</button>;
+  }
+
+  if (!isValidUrl(item.url)) return null;
+
+  return (
+    <a href={item.url.trim()} target="_blank" rel="noopener noreferrer" className={btnCls}>
+      {item.buttonText}
+    </a>
+  );
+}
 
 export default function ResourceSection({ items, loadFailed, isLoading = false, fallbackUsed = false }) {
   const [category, setCategory] = useState("전체");
@@ -14,6 +43,7 @@ export default function ResourceSection({ items, loadFailed, isLoading = false, 
   );
 
   const filtered = category === "전체" ? items : items.filter((item) => item.category === category);
+  const groupedResources = useMemo(() => [...groupResources(filtered).entries()], [filtered]);
   const emptyMessage = loadFailed
     ? "데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
     : "표시할 건강정보/이벤트 데이터가 없습니다.";
@@ -51,26 +81,32 @@ export default function ResourceSection({ items, loadFailed, isLoading = false, 
             ))}
           </div>
           <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
-            {filtered.map((item) => (
-              <article key={item.title} className="border-b border-[#E8F0EE] px-4 py-4 last:border-b-0">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-bold text-[#102047]">{item.title}</h3>
-                      <Badge type="blue">{item.category}</Badge>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-[#627083]">{item.description}</p>
-                  </div>
-                  {item.buttonText && (
-                    <div className="shrink-0">
-                      {item.url === "inbody"
-                        ? <button onClick={() => setInbodyOpen(true)} className={btnCls}>{item.buttonText}</button>
-                        : <PrimaryButton url={item.url}>{item.buttonText}</PrimaryButton>}
-                    </div>
-                  )}
+            {groupedResources.map(([groupTitle, groupItems], groupIndex) => (
+              <div key={groupTitle} className={groupIndex > 0 ? "border-t border-[#DDEAE7]" : ""}>
+                <div className="border-b border-[#E8F0EE] bg-[#FBFCFD] px-4 py-2.5">
+                  <h2 className="text-sm font-bold text-[#102047]">{groupTitle}</h2>
                 </div>
-              </article>
+                {groupItems.map((item) => (
+                  <article key={item.title} className="border-b border-[#E8F0EE] px-4 py-3.5 last:border-b-0 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4">
+                    <div className="min-w-0">
+                      <h3 className="text-[15px] font-semibold leading-6 text-[#102047]">{item.title}</h3>
+                      <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083] md:line-clamp-1">{item.description}</p>
+                      {item.category && (
+                        <p className="mt-1 text-xs font-medium text-[#8A96A8]">분류 · {item.category}</p>
+                      )}
+                    </div>
+                    <div className="mt-3 shrink-0 md:mt-0 md:justify-self-end">
+                      <ResourceAction item={item} onOpenInbody={() => setInbodyOpen(true)} />
+                    </div>
+                  </article>
+                ))}
+              </div>
             ))}
+            {filtered.length === 0 && (
+              <div className="px-4 py-5 text-center text-sm font-semibold text-[#627083]">
+                선택한 분류에 표시할 자료가 없습니다.
+              </div>
+            )}
           </div>
         </>
       ) : (
