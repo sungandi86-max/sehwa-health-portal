@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { SectionTitle, isValidUrl } from "./ui.jsx";
+import { formatContentEndDate } from "../lib/contentVisibility.js";
+import { isValidUrl } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
 // "자료실 열기" 버튼은 내부 resources 섹션으로 이동
@@ -9,8 +10,8 @@ const INTERNAL_BUTTONS = {
   "자료실로 이동": "resources",
 };
 
-const btnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] bg-[#0D4EA6] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:w-auto";
-const secondaryBtnCls = "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#C9DFFF] bg-white px-4 py-2.5 text-center text-sm font-semibold text-[#102047] transition hover:border-[#9DB7F0] hover:bg-[#F6FAFF] md:w-auto";
+const btnCls = "inline-flex min-h-10 items-center justify-center rounded-[9px] border border-[#C8D8FF] bg-white px-3.5 py-2 text-center text-sm font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] hover:bg-[#EEF4FF] md:min-w-[128px]";
+const secondaryBtnCls = "inline-flex min-h-10 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3.5 py-2 text-center text-sm font-semibold text-[#102047] transition hover:border-[#C8D8FF] hover:bg-[#F8FAFA] md:min-w-[128px]";
 
 function getStatusChipClass(status) {
   const text = String(status || "").trim();
@@ -27,10 +28,44 @@ function getStatusChipClass(status) {
 }
 
 function StatusChip({ children }) {
+  if (!children) return null;
+
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-[8px] border px-2.5 py-1 text-xs font-semibold ${getStatusChipClass(children)}`}>
+    <span className={`inline-flex shrink-0 items-center rounded-[8px] border px-2 py-0.5 text-[11px] font-semibold ${getStatusChipClass(children)}`}>
       {children}
     </span>
+  );
+}
+
+function getScheduleText(item) {
+  const directSchedule = item.schedule || item.period || item.date || item.deadline;
+  if (directSchedule) return directSchedule;
+  return formatContentEndDate(item);
+}
+
+function DetailsDisclosure({ item }) {
+  const details = Array.isArray(item.details) ? item.details.filter(Boolean) : [];
+  const hasUpdateNotice = Boolean(item.updateNotice);
+  if (!details.length && !hasUpdateNotice) return null;
+
+  return (
+    <details className="mt-2 text-xs leading-5 text-[#627083]">
+      <summary className="cursor-pointer font-semibold text-[#0D4EA6]">
+        검진 안내 보기
+      </summary>
+      <div className="mt-1.5 space-y-2 border-l border-[#DDEAE7] pl-3">
+        {details.length > 0 && (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1">
+            {details.map((detail, i) => (
+              <li key={i}>{detail}</li>
+            ))}
+          </ul>
+        )}
+        {hasUpdateNotice && (
+          <p className="text-[#806018]">{item.updateNotice}</p>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -187,12 +222,26 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
 
   return (
     <section id="checkup" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
-      <SectionTitle
-        title="검진·검사 안내"
-        description="1학년 건강검진, 2·3학년 결핵검진·소변검사, 교직원 결핵검진 안내를 모아둔 영역입니다."
-      />
+      <div className="border-b border-[#DDEAE7] pb-4">
+        <h1 className="text-2xl font-bold leading-tight text-[#102047] md:text-[1.65rem]">
+          검진·검사 안내
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#627083]">
+          학교에서 진행되는 검진과 검사 일정을 확인합니다.
+        </p>
+      </div>
 
-      <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
+      <div className="mt-5 overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
+        <div className="flex items-center justify-between gap-3 border-b border-[#DDEAE7] px-4 py-3">
+          <div>
+            <h2 className="text-base font-bold text-[#102047]">검진·검사 항목</h2>
+            <p className="mt-0.5 text-xs text-[#627083]">현재 안내 중인 검진·검사 일정</p>
+          </div>
+          <span className="shrink-0 text-xs font-semibold text-[#627083]">
+            {items.length + (shouldShowTbRegistrationCard ? 1 : 0)}개
+          </span>
+        </div>
+
         {isLoading && (
           <p className="px-4 py-5 text-sm font-semibold text-[#627083]">검진·검사 안내를 불러오는 중입니다.</p>
         )}
@@ -217,65 +266,60 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
             (effectiveDisplayMode === "image" && isValidUrl(item.imageUrl));
           const statusText = item.operatingStatus || item.status;
           return (
-            <article key={item.title} className="border-b border-[#E8F0EE] px-3.5 py-3.5 last:border-b-0 md:px-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                    <h3 className="text-base font-bold leading-6 text-[#102047]">{item.title}</h3>
-                    <StatusChip>{statusText}</StatusChip>
-                  </div>
-                  <p className="mt-1.5 text-sm font-semibold text-[#102047]">대상 · {item.target}</p>
-                  <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#627083]">{item.description}</p>
-                  {!!(item.details || []).length && (
-                    <details className="mt-2 text-xs leading-5 text-[#627083]">
-                      <summary className="cursor-pointer font-semibold text-[#3154A3]">
-                        세부 확인사항 보기
-                      </summary>
-                      <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                        {(item.details || []).map((detail, i) => (
-                          <li key={i}>{detail}</li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
+            <article key={item.title} className="border-b border-[#DDEAE7] px-4 py-3.5 last:border-b-0 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4 md:py-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusChip>{statusText}</StatusChip>
+                  <span className="text-xs font-medium text-[#627083]">대상 · {item.target || "전체"}</span>
+                  <span className="text-xs font-medium text-[#627083]">일정 · {getScheduleText(item)}</span>
                 </div>
-                <div className="flex shrink-0 flex-col gap-2 sm:flex-row md:justify-end">
-                  {primaryButtonText && effectiveDisplayMode === "link" && (internalTarget || isValidUrl(item.url)) && (
-                    <button type="button" onClick={() => openLinkAction(item, internalTarget)} className={btnCls}>
-                      {primaryButtonText}
-                    </button>
-                  )}
-                  {primaryButtonText && hasPrimaryModalAction && (
-                    <button type="button" onClick={() => openPrimaryAction(item)} className={btnCls}>
-                      {primaryButtonText}
-                    </button>
-                  )}
-                  {item.secondaryText && secondaryAction === "notice" && (
-                    <button type="button" onClick={() => runSecondaryAction(item)} className={secondaryBtnCls}>
-                      {item.secondaryText}
-                    </button>
-                  )}
-                </div>
+
+                <h3 className="mt-1.5 text-[15px] font-semibold leading-6 text-[#102047] md:text-base">
+                  {item.title}
+                </h3>
+                <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083] md:line-clamp-1">
+                  {item.description}
+                </p>
+                <DetailsDisclosure item={item} />
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2 md:mt-0 md:justify-end">
+                {primaryButtonText && effectiveDisplayMode === "link" && (internalTarget || isValidUrl(item.url)) && (
+                  <button type="button" onClick={() => openLinkAction(item, internalTarget)} className={btnCls}>
+                    {primaryButtonText} →
+                  </button>
+                )}
+                {primaryButtonText && hasPrimaryModalAction && (
+                  <button type="button" onClick={() => openPrimaryAction(item)} className={btnCls}>
+                    {primaryButtonText} →
+                  </button>
+                )}
+                {item.secondaryText && secondaryAction === "notice" && (
+                  <button type="button" onClick={() => runSecondaryAction(item)} className={secondaryBtnCls}>
+                    {item.secondaryText} →
+                  </button>
+                )}
               </div>
             </article>
           );
         })}
 
-        {/* 교직원 결핵검진 유형 선택 카드 — 사용 TRUE이고 접수기간 안일 때만 표시 */}
         {!isLoading && !loadFailed && shouldShowTbRegistrationCard && (
-          <article className="border-b border-[#E8F0EE] px-3.5 py-3.5 last:border-b-0 md:px-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                  <h3 className="text-base font-bold leading-6 text-[#102047]">교직원 결핵검진 유형 선택</h3>
-                  <StatusChip>신청 접수 중</StatusChip>
-                </div>
-                <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#627083]">
-                  학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
-                </p>
+          <article className="border-b border-[#DDEAE7] px-4 py-3.5 last:border-b-0 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4 md:py-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusChip>신청 접수 중</StatusChip>
+                <span className="text-xs font-medium text-[#627083]">대상 · 교직원</span>
+                <span className="text-xs font-medium text-[#627083]">일정 · 접수기간 내</span>
               </div>
-              <button onClick={() => setTbRegistrationOpen(true)} className={btnCls}>
-                유형 선택하기
+              <h3 className="mt-1.5 text-[15px] font-semibold leading-6 text-[#102047] md:text-base">교직원 결핵검진 유형 선택</h3>
+              <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083] md:line-clamp-1">
+                학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
+              </p>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 md:mt-0 md:justify-end">
+              <button type="button" onClick={() => setTbRegistrationOpen(true)} className={btnCls}>
+                유형 선택하기 →
               </button>
             </div>
           </article>
