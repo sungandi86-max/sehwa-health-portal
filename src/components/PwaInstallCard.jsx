@@ -58,7 +58,7 @@ export default function PwaInstallCard() {
             <h2 className="text-sm font-bold leading-5 text-[#102047]">
               모바일에서 앱처럼 사용하기
             </h2>
-            <p className="truncate text-xs font-medium text-[#627083]" style={{ wordBreak: "keep-all" }}>
+            <p className="line-clamp-2 text-xs font-medium leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
               자주 사용하는 경우 홈 화면에 추가해 빠르게 열 수 있습니다.
             </p>
           </div>

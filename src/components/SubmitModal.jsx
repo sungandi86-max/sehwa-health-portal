@@ -1137,7 +1137,7 @@ const MODAL_META = {
   recruit: { title: "채용검진 대체 인정 확인 요청", icon: "📋", color: "text-[#1A3B8B]" },
   other: { title: "기타 보건 관련 자료 제출", icon: "📂", color: "text-slate-600" },
   tb_registration: { title: "교직원 결핵검진 유형 선택", icon: "🫁", color: "text-[#1A3B8B]" },
-  inbody: { title: "인바디 측정 신청", icon: "⚖️", color: "text-[#1A3B8B]" },
+  inbody: { title: "인바디 측정 신청", icon: "", color: "text-[#1A3B8B]" },
   student_tb_reply: { title: "결핵검진 진료회신 제출", icon: "📄", color: "text-[#1A3B8B]" },
   infection: { title: "감염병 발생 보고", icon: "📝", color: "text-[#1A3B8B]" },
 };
@@ -1236,7 +1236,7 @@ export default function SubmitModal({ type, onClose, tbConfig, publicMode = fals
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-5">
           <div>
             <p className={`text-xl font-black ${meta.color}`}>
-              {meta.icon} {meta.title}
+              {meta.icon ? `${meta.icon} ` : ""}{meta.title}
             </p>
           </div>
           <button
