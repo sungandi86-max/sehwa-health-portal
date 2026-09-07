@@ -74,6 +74,10 @@ service cloud.firestore {
           "classNo",
           "position",
           "staffId",
+          "assignmentSource",
+          "homeroomStatusConfirmed",
+          "homeroomStatusChoice",
+          "homeroomStatusConfirmedAt",
           "active",
           "createdAt",
           "updatedAt"
@@ -102,6 +106,10 @@ service cloud.firestore {
         )
         && (data.position == null || data.position is string)
         && (!data.keys().hasAny(["staffId"]) || data.staffId == null || data.staffId is string)
+        && (!data.keys().hasAny(["assignmentSource"]) || data.assignmentSource == null || data.assignmentSource is string)
+        && (!data.keys().hasAny(["homeroomStatusConfirmed"]) || data.homeroomStatusConfirmed is bool)
+        && (!data.keys().hasAny(["homeroomStatusChoice"]) || data.homeroomStatusChoice == null || data.homeroomStatusChoice in ["homeroom_teacher", "not_homeroom_teacher"])
+        && (!data.keys().hasAny(["homeroomStatusConfirmedAt"]) || data.homeroomStatusConfirmedAt == null || data.homeroomStatusConfirmedAt is timestamp)
         && data.active is bool;
     }
 

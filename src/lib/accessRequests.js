@@ -147,6 +147,19 @@ export async function submitHomeroomAccessRequest(firebaseUser, schoolYear, seme
   });
 }
 
+export async function confirmTeamsHomeroomStatus(firebaseUser, isHomeroomTeacher) {
+  if (!firebaseUser?.uid) throw new Error("로그인이 필요합니다.");
+  if (getAuthProvider(firebaseUser) !== "microsoft") throw new Error("학교 Teams 계정만 담임 여부를 확인할 수 있습니다.");
+
+  return requestJson(ACCESS_REQUEST_API_PATH, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "confirmHomeroomStatus",
+      isHomeroomTeacher: isHomeroomTeacher === true,
+    }),
+  });
+}
+
 export async function getAccessRequests(status = "pending", options = {}) {
   const params = new URLSearchParams({ status });
   if (options.requestType) params.set("requestType", options.requestType);

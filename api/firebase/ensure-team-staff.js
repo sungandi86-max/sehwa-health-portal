@@ -68,6 +68,8 @@ export default async function handler(req, res) {
         grade: null,
         classNo: null,
         position: "교사",
+        assignmentSource: "teams_auto_staff",
+        homeroomStatusConfirmed: false,
         active: true,
         createdAt: now,
         updatedAt: now,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
-import { getCurrentHomeroomAccessRequest, submitHomeroomAccessRequest } from "../lib/accessRequests.js";
+import { confirmTeamsHomeroomStatus, getCurrentHomeroomAccessRequest, submitHomeroomAccessRequest } from "../lib/accessRequests.js";
 
 const GRADE_OPTIONS = [1, 2, 3];
 const CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -23,10 +23,18 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
-export default function FirebaseHomeroomAccessRequestAction({ user, profile, assignment }) {
+export default function FirebaseHomeroomAccessRequestAction({
+  user,
+  profile,
+  assignment,
+  initialChoiceRequired = false,
+  onPromptConfirmed,
+}) {
   const [request, setRequest] = useState(null);
   const [grade, setGrade] = useState("1");
   const [classNo, setClassNo] = useState("1");
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isInitialChoiceComplete, setIsInitialChoiceComplete] = useState(!initialChoiceRequired);
   const [state, setState] = useState({ status: "loading", message: "" });
 
   const identityText = useMemo(() => {
@@ -36,12 +44,16 @@ export default function FirebaseHomeroomAccessRequestAction({ user, profile, ass
   }, [assignment, profile, user]);
 
   useEffect(() => {
+    setIsInitialChoiceComplete(!initialChoiceRequired);
+  }, [initialChoiceRequired]);
+
+  useEffect(() => {
     let shouldIgnore = false;
 
     async function loadRequest() {
       if (!user?.uid) return;
 
-      setState({ status: "loading", message: "" });
+      setState({ status: "loading", message: "담임 권한 신청 상태를 확인하는 중입니다." });
       try {
         const currentRequest = await getCurrentHomeroomAccessRequest(user.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
         if (shouldIgnore) return;
@@ -90,23 +102,47 @@ export default function FirebaseHomeroomAccessRequestAction({ user, profile, ass
   };
 
   const canSubmit = state.status !== "loading" && state.status !== "submitting" && request?.status !== "pending" && request?.status !== "approved";
+  const shouldAskInitialChoice = initialChoiceRequired && !isInitialChoiceComplete && !request;
+  const showForm = canSubmit && isExpanded && !shouldAskInitialChoice;
+  const isChoiceWorking = state.status === "loading" || state.status === "submitting";
+
+  const confirmInitialChoice = async (isHomeroomTeacher) => {
+    setState({ status: "submitting", message: "담임 여부를 저장하는 중입니다." });
+    try {
+      await confirmTeamsHomeroomStatus(user, isHomeroomTeacher);
+      setIsInitialChoiceComplete(true);
+      onPromptConfirmed?.(isHomeroomTeacher ? "homeroom_teacher" : "not_homeroom_teacher");
+      setState({ status: "ready", message: "" });
+      if (isHomeroomTeacher) setIsExpanded(true);
+    } catch (error) {
+      setState({
+        status: "error",
+        message: error?.message || "담임 여부를 저장하지 못했습니다.",
+      });
+    }
+  };
+
+  if (initialChoiceRequired && isInitialChoiceComplete && !isExpanded && !request) return null;
 
   return (
-    <form className="mt-3 rounded-[10px] border border-[#C8D8FF] bg-white px-3 py-3 text-left" onSubmit={handleSubmit}>
+    <form className="mt-3 rounded-[10px] border border-[#C8D8FF] bg-[#FBFCFF] px-3 py-3 text-left" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-[#0D4EA6]">담임교사이신가요?</p>
-          <p className="mt-1 text-xs font-normal leading-5 text-[#627083]">
-            학급별 건강관리 기능을 이용하려면 담임 권한을 신청해주세요.
+          <p className="text-sm font-semibold text-[#102047]">
+            {shouldAskInitialChoice ? "담임 여부를 확인해주세요" : "담임교사이신가요?"}
+          </p>
+          <p className="mt-1 text-xs font-normal leading-5 text-[#3154A3]" style={{ wordBreak: "keep-all" }}>
+            {shouldAskInitialChoice
+              ? "담임교사인 경우 학급별 학생 건강관리 기능을 이용하려면 담임 권한 신청이 필요합니다."
+              : "학급별 학생 건강관리 기능을 이용하려면 담임 권한 신청이 필요합니다."}
           </p>
         </div>
         <p className="shrink-0 text-[11px] font-medium text-[#627083]">{CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기</p>
       </div>
 
-      <div className="mt-3 rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
+      <div className="mt-3 rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2">
         <p className="text-[11px] font-medium text-[#627083]">신청자</p>
         <p className="mt-0.5 text-xs font-semibold text-[#102047]">{identityText}</p>
-        {assignment?.staffId && <p className="mt-0.5 text-[11px] font-normal text-[#627083]">교직원ID {assignment.staffId}</p>}
       </div>
 
       {state.message && (
@@ -115,7 +151,40 @@ export default function FirebaseHomeroomAccessRequestAction({ user, profile, ass
         </p>
       )}
 
-      {canSubmit && (
+      {shouldAskInitialChoice && (
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => confirmInitialChoice(true)}
+            disabled={isChoiceWorking}
+            className="inline-flex min-h-10 items-center justify-center rounded-[9px] bg-[#0D4EA6] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {state.status === "submitting" ? "저장 중..." : "담임교사입니다"}
+          </button>
+          <button
+            type="button"
+            onClick={() => confirmInitialChoice(false)}
+            disabled={isChoiceWorking}
+            className="inline-flex min-h-10 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#102047] transition hover:border-[#C8D8FF] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            담임교사가 아닙니다
+          </button>
+        </div>
+      )}
+
+      {canSubmit && !showForm && !shouldAskInitialChoice && (
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(true)}
+            className="inline-flex min-h-10 items-center justify-center rounded-[9px] bg-[#0D4EA6] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15"
+          >
+            {request?.status === "rejected" ? "담임 권한 다시 신청" : "담임 권한 신청"}
+          </button>
+        </div>
+      )}
+
+      {showForm && (
         <>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <label className="grid gap-1.5 text-xs font-semibold text-[#102047]">
@@ -154,7 +223,7 @@ export default function FirebaseHomeroomAccessRequestAction({ user, profile, ass
             disabled={state.status === "submitting"}
             className="mt-3 min-h-10 rounded-[9px] bg-[#0D4EA6] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {state.status === "submitting" ? "신청 중..." : "담임 권한 신청"}
+            {state.status === "submitting" ? "신청 중..." : request?.status === "rejected" ? "담임 권한 다시 신청" : "담임 권한 신청"}
           </button>
         </>
       )}

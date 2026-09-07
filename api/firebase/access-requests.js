@@ -6,6 +6,7 @@ import { getAccessRequestPosition, normalizeAccessRequestApplicant } from "../..
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
 const GOOGLE_PROVIDER_ID = "google.com";
+const MICROSOFT_PROVIDER_ID = "microsoft.com";
 const ACCESS_REQUEST_LIMIT = 200;
 const ACCESS_REQUEST_TYPES = {
   BASE_ACCESS: "base_access",
@@ -301,6 +302,12 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
           homeroom,
           requester,
         });
+        transaction.update(assignmentRef, {
+          homeroomStatusConfirmed: true,
+          homeroomStatusChoice: "homeroom_teacher",
+          homeroomStatusConfirmedAt: now,
+          updatedAt: now,
+        });
         return { status: "resubmitted", requester, homeroom };
       }
     }
@@ -325,6 +332,12 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
       reviewNote: null,
       homeroom,
       requester,
+    });
+    transaction.update(assignmentRef, {
+      homeroomStatusConfirmed: true,
+      homeroomStatusChoice: "homeroom_teacher",
+      homeroomStatusConfirmedAt: now,
+      updatedAt: now,
     });
 
     return { status: "created", requester, homeroom };
@@ -356,8 +369,60 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
   return res.status(200).json({ ok: true, status: result.status });
 }
 
+async function confirmHomeroomStatus(res, decodedToken, body) {
+  if (getProviderId(decodedToken) !== MICROSOFT_PROVIDER_ID) {
+    return res.status(403).json({ ok: false, message: "학교 Teams 계정만 담임 여부를 확인할 수 있습니다." });
+  }
+
+  const choice = body.isHomeroomTeacher === true ? "homeroom_teacher" : "not_homeroom_teacher";
+  const db = getFirebaseAdminDb();
+  const assignmentRef = db.collection("user_assignments").doc(getAssignmentId(decodedToken.uid));
+  const now = Timestamp.now();
+
+  const result = await db.runTransaction(async (transaction) => {
+    const assignmentSnapshot = await transaction.get(assignmentRef);
+    if (!assignmentSnapshot.exists) return { status: "missing-assignment" };
+
+    const assignment = assignmentSnapshot.data();
+    if (assignment.active !== true) return { status: "inactive-assignment" };
+    if (!hasRole(assignment, "staff")) return { status: "not-staff" };
+    if (hasRole(assignment, "homeroom")) return { status: "already-homeroom" };
+    if (hasReviewerRole(assignment)) return { status: "not-needed" };
+
+    transaction.update(assignmentRef, {
+      homeroomStatusConfirmed: true,
+      homeroomStatusChoice: choice,
+      homeroomStatusConfirmedAt: now,
+      updatedAt: now,
+    });
+    return { status: "confirmed" };
+  });
+
+  if (result.status === "missing-assignment") {
+    return res.status(409).json({ ok: false, message: "기본 이용 권한 확인 후 담임 여부를 선택할 수 있습니다." });
+  }
+  if (result.status === "inactive-assignment") {
+    return res.status(409).json({ ok: false, message: "현재 학기 이용 권한이 활성화되어 있지 않습니다." });
+  }
+  if (result.status === "not-staff") {
+    return res.status(403).json({ ok: false, message: "담임 여부 확인 대상이 아닙니다." });
+  }
+  if (result.status === "already-homeroom") {
+    return res.status(200).json({ ok: true, status: result.status, message: "이미 담임 권한이 등록되어 있습니다." });
+  }
+  if (result.status === "not-needed") {
+    return res.status(200).json({ ok: true, status: result.status, message: "관리자 권한 계정은 담임 여부 확인이 필요하지 않습니다." });
+  }
+
+  return res.status(200).json({ ok: true, status: result.status });
+}
+
 async function submitRequest(req, res, decodedToken) {
   const body = await readJsonBody(req);
+  if (body.action === "confirmHomeroomStatus") {
+    return confirmHomeroomStatus(res, decodedToken, body);
+  }
+
   const requestType = normalizeRequestType(body.requestType);
   if (!requestType) return res.status(400).json({ ok: false, message: "권한 신청 유형이 올바르지 않습니다." });
 

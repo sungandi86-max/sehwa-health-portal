@@ -9,6 +9,7 @@ import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { auth } from "../lib/firebase.js";
 import {
   getFriendlyAuthErrorMessage,
+  getAuthProvider,
   getMicrosoftSchoolDomainBlockMessage,
   signInWithGoogle,
   signInWithMicrosoft,
@@ -78,6 +79,10 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
       !isAdmin(assignment)
     );
   }, [assignment]);
+  const needsInitialHomeroomConfirmation = useMemo(() => {
+    return canRequestHomeroomAccess && getAuthProvider(user) === "microsoft" && assignment?.homeroomStatusConfirmed !== true;
+  }, [assignment, canRequestHomeroomAccess, user]);
+  const canShowHomeroomGuide = canRequestHomeroomAccess && assignment?.homeroomStatusChoice !== "not_homeroom_teacher";
   const isSignedIn = Boolean(user);
 
   useEffect(() => {
@@ -240,8 +245,23 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
               <AdminNotificationPanel user={user} enabled={canOpenDashboard} compact />
             </div>
           )}
-          {canRequestHomeroomAccess && (
-            <FirebaseHomeroomAccessRequestAction user={user} profile={profile} assignment={assignment} />
+          {canShowHomeroomGuide && (
+            <FirebaseHomeroomAccessRequestAction
+              user={user}
+              profile={profile}
+              assignment={assignment}
+              initialChoiceRequired={needsInitialHomeroomConfirmation}
+              onPromptConfirmed={(choice) => {
+                setAssignmentResult((current) => current?.assignment ? ({
+                  ...current,
+                  assignment: {
+                    ...current.assignment,
+                    homeroomStatusConfirmed: true,
+                    homeroomStatusChoice: choice,
+                  },
+                }) : current);
+              }}
+            />
           )}
           {assignmentResult?.status === "not-found" && <FirebaseAccessRequestAction user={user} />}
           {message && (

@@ -17,6 +17,7 @@ import {
 } from "../lib/studentCarePresence.js";
 import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher, isHomeroom, isStaff } from "../lib/userProfile.js";
 import FirebaseAccessRequestAction from "./FirebaseAccessRequestAction.jsx";
+import FirebaseHomeroomAccessRequestAction from "./FirebaseHomeroomAccessRequestAction.jsx";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
 import { AppCard, Badge, SectionTitle } from "./ui.jsx";
 
@@ -82,6 +83,16 @@ function canUseHomeroomScope(assignment) {
 
 function canUseAdminScope(assignment) {
   return hasActiveAssignment(assignment) && (isHealthTeacher(assignment) || isAdmin(assignment));
+}
+
+function canRequestHomeroomAccess(assignment) {
+  return (
+    hasActiveAssignment(assignment) &&
+    isStaff(assignment) &&
+    !isHomeroom(assignment) &&
+    !isHealthTeacher(assignment) &&
+    !isAdmin(assignment)
+  );
 }
 
 function getGasErrorMessage(error, fallback) {
@@ -863,6 +874,7 @@ export default function StudentCareSection({ items }) {
   };
   const canShowAdminTools = canUseAdminScope(authState.assignment);
   const canShowHomeroomMonthly = !canShowAdminTools && canUseHomeroomScope(authState.assignment);
+  const canShowHomeroomRequest = canRequestHomeroomAccess(authState.assignment);
   const canShowHealthRoom =
     !authState.user ||
     authState.loading ||
@@ -897,6 +909,13 @@ export default function StudentCareSection({ items }) {
             {studentCareIntro.guide}
           </div>
         </div>
+        {canShowHomeroomRequest && (
+          <FirebaseHomeroomAccessRequestAction
+            user={authState.user}
+            profile={authState.profile}
+            assignment={authState.assignment}
+          />
+        )}
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {!visibleCards.length && <AccessNotice authState={authState} />}
           {visibleCards.map((card) => (
