@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../lib/firebaseAdmin.js";
+import { notifyAdminPushSubscribers } from "../lib/adminPushNotifications.js";
 import { getAccessRequestPosition, normalizeAccessRequestApplicant } from "../../src/lib/accessRequestApplicant.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
@@ -137,6 +138,10 @@ function getBaseAccessAssignmentScope(accessRequest) {
   };
 }
 
+function shouldNotifyRequestStatus(status) {
+  return status === "created" || status === "resubmitted";
+}
+
 async function getCurrentRequest(req, res, decodedToken) {
   const db = getFirebaseAdminDb();
   const url = new URL(req.url, "http://localhost");
@@ -237,6 +242,19 @@ async function submitBaseAccessRequest(res, decodedToken, body) {
     return { status: "created" };
   });
 
+  if (shouldNotifyRequestStatus(result.status)) {
+    const homeroomText = homeroomRequest.isHomeroomRequested
+      ? ` 담임 권한 포함 · ${homeroomRequest.requestedGrade}학년 ${homeroomRequest.requestedClassNo}반`
+      : "";
+    await notifyAdminPushSubscribers({
+      dedupeKey: `base_access:${requestRef.id}`,
+      type: ACCESS_REQUEST_TYPES.BASE_ACCESS,
+      title: "이용 권한 신청",
+      body: `${applicant.realName} · ${getAccessRequestPosition(applicant)}님이 이용 권한을 신청했습니다.${homeroomText}`,
+      destination: "/firebase-admin/access-requests",
+    });
+  }
+
   return res.status(200).json({ ok: true, status: result.status });
 }
 
@@ -267,6 +285,12 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
       if (requestData.status === "pending") return { status: "already-pending" };
       if (requestData.status === "approved") return { status: "already-approved" };
       if (requestData.status === "rejected") {
+        const requester = {
+          displayName: userSnapshot.data()?.displayName || decodedToken.name || "",
+          department: assignment.department || "",
+          position: assignment.position || "",
+          staffId: assignment.staffId || "",
+        };
         transaction.update(requestRef, {
           status: "pending",
           requestedAt: now,
@@ -275,17 +299,18 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
           reviewedAt: null,
           reviewNote: null,
           homeroom,
-          requester: {
-            displayName: userSnapshot.data()?.displayName || decodedToken.name || "",
-            department: assignment.department || "",
-            position: assignment.position || "",
-            staffId: assignment.staffId || "",
-          },
+          requester,
         });
-        return { status: "resubmitted" };
+        return { status: "resubmitted", requester, homeroom };
       }
     }
 
+    const requester = {
+      displayName: userSnapshot.data()?.displayName || decodedToken.name || "",
+      department: assignment.department || "",
+      position: assignment.position || "",
+      staffId: assignment.staffId || "",
+    };
     transaction.set(requestRef, {
       uid: decodedToken.uid,
       requestType: ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS,
@@ -299,15 +324,10 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
       reviewedAt: null,
       reviewNote: null,
       homeroom,
-      requester: {
-        displayName: userSnapshot.data()?.displayName || decodedToken.name || "",
-        department: assignment.department || "",
-        position: assignment.position || "",
-        staffId: assignment.staffId || "",
-      },
+      requester,
     });
 
-    return { status: "created" };
+    return { status: "created", requester, homeroom };
   });
 
   if (result.status === "missing-assignment") {
@@ -321,6 +341,16 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
   }
   if (result.status === "not-needed") {
     return res.status(200).json({ ok: true, status: result.status, message: "관리자 권한 계정은 담임 권한 신청이 필요하지 않습니다." });
+  }
+
+  if (shouldNotifyRequestStatus(result.status)) {
+    await notifyAdminPushSubscribers({
+      dedupeKey: `homeroom_access:${requestRef.id}`,
+      type: ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS,
+      title: "담임 권한 신청",
+      body: `${result.requester?.displayName || "교직원"} · ${result.requester?.position || "교사"}님이 ${result.homeroom.grade}학년 ${result.homeroom.classNo}반 담임 권한을 신청했습니다.`,
+      destination: "/firebase-admin/access-requests",
+    });
   }
 
   return res.status(200).json({ ok: true, status: result.status });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
+import AdminNotificationPanel from "../components/AdminNotificationPanel.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
@@ -415,6 +416,8 @@ export default function FirebaseDashboardPage() {
             </div>
           </div>
         </header>
+
+        <AdminNotificationPanel user={user} enabled={hasAdminAccess} />
 
         <section aria-label="오늘의 요약">
           <h2 className="mb-2 px-1 text-[16px] font-semibold text-[#102047]">오늘의 요약</h2>

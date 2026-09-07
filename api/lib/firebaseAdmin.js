@@ -3,6 +3,7 @@ import path from "node:path";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
 
 const DEFAULT_PROJECT_ID = "sehwa-health-portal-v2";
 const LOCAL_ENV_FILE = ".env.local";
@@ -74,4 +75,8 @@ export function getFirebaseAdminAuth() {
 
 export function getFirebaseAdminDb() {
   return getFirestore(getFirebaseAdminApp());
+}
+
+export function getFirebaseAdminMessaging() {
+  return getMessaging(getFirebaseAdminApp());
 }

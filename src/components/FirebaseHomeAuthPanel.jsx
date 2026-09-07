@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
+import AdminNotificationPanel, { AdminNotificationBadge } from "./AdminNotificationPanel.jsx";
 import FirebaseAccessRequestAction from "./FirebaseAccessRequestAction.jsx";
 import FirebaseHomeroomAccessRequestAction from "./FirebaseHomeroomAccessRequestAction.jsx";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
@@ -225,9 +226,13 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
                 className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:bg-white"
               >
                 관리자 화면
+                <AdminNotificationBadge user={user} enabled={canOpenDashboard} />
               </Link>
             )}
           </div>
+          {canOpenDashboard && (
+            <AdminNotificationPanel user={user} enabled={canOpenDashboard} compact />
+          )}
           {canRequestHomeroomAccess && (
             <FirebaseHomeroomAccessRequestAction user={user} profile={profile} assignment={assignment} />
           )}

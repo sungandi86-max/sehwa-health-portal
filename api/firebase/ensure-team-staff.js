@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../lib/firebaseAdmin.js";
+import { notifyAdminPushSubscribers } from "../lib/adminPushNotifications.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
@@ -72,7 +73,11 @@ export default async function handler(req, res) {
         updatedAt: now,
       });
 
-      return { status: "created" };
+      return {
+        status: "created",
+        displayName: userData.displayName || decodedToken.name || "교직원",
+        position: "교사",
+      };
     });
 
     if (result.status === "missing-user") {
@@ -80,6 +85,16 @@ export default async function handler(req, res) {
     }
     if (result.status === "inactive-user") {
       return res.status(403).json({ ok: false, message: "비활성 계정은 기본 권한을 설정할 수 없습니다." });
+    }
+
+    if (result.status === "created") {
+      await notifyAdminPushSubscribers({
+        dedupeKey: `new_user:${decodedToken.uid}`,
+        type: "new_staff_signup",
+        title: "새 교직원 가입",
+        body: `${result.displayName} · ${result.position}님이 온라인 보건실에 가입했습니다.`,
+        destination: "/firebase-admin/users",
+      });
     }
 
     return res.status(200).json({ ok: true, status: result.status });
