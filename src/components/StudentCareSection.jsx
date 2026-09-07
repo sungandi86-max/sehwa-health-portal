@@ -24,7 +24,7 @@ const inputCls =
   "w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2.5 text-sm text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-2 focus:ring-[#20A982]/10 placeholder:text-[#8A97A8]";
 
 const btnCls =
-  "mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#102047] bg-[#102047] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#183B8F] md:mt-0 md:w-auto";
+  "mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 py-2 text-center text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F]";
 
 const HEALTH_ROOM_BUTTON = "보건실 소재 확인하기";
 const HEALTH_ROOM_BUTTON_LEGACY = "蹂닿굔???낆떎?꾪솴 ?닿린";
@@ -897,11 +897,14 @@ export default function StudentCareSection({ items }) {
             {studentCareIntro.guide}
           </div>
         </div>
-        <div className="mt-4 overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {!visibleCards.length && <AccessNotice authState={authState} />}
-          {visibleCards.map((card, index) => (
-            <div key={card.title} className={`grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center ${index > 0 ? "border-t border-[#DDEAE7]" : ""}`}>
-              <div className="min-w-0">
+          {visibleCards.map((card) => (
+            <article
+              key={card.title}
+              className="flex min-h-[220px] flex-col rounded-[12px] border border-[#DDEAE7] bg-white p-4"
+            >
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-[15px] font-semibold leading-6 text-[#102047] md:text-base">{card.title}</h3>
                   <span className="inline-flex shrink-0 whitespace-nowrap rounded-[8px] border border-[#C8D8FF] bg-[#EEF4FF] px-2 py-0.5 text-[11px] font-semibold text-[#3154A3] md:hidden">
@@ -922,7 +925,7 @@ export default function StudentCareSection({ items }) {
               >
                 {card.buttonText}
               </button>
-            </div>
+            </article>
           ))}
         </div>
       </div>
