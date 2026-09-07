@@ -1,7 +1,6 @@
 import { app, auth } from "./firebase.js";
 
-const ADMIN_PUSH_TOKEN_API_PATH = "/api/firebase/admin-push-tokens";
-const ADMIN_NOTIFICATIONS_API_PATH = "/api/firebase/admin-notifications";
+const ADMIN_PUSH_API_PATH = "/api/firebase/admin-push";
 
 export function getBrowserNotificationPermission() {
   if (typeof Notification === "undefined") return "unsupported";
@@ -47,7 +46,7 @@ async function requestAdminJson(path, firebaseUser, options = {}) {
 }
 
 export async function fetchAdminNotifications(firebaseUser) {
-  const result = await requestAdminJson(ADMIN_NOTIFICATIONS_API_PATH, firebaseUser);
+  const result = await requestAdminJson(`${ADMIN_PUSH_API_PATH}?action=listNotifications`, firebaseUser);
   return {
     unreadCount: Number(result.unreadCount || 0),
     notifications: Array.isArray(result.notifications) ? result.notifications : [],
@@ -55,9 +54,9 @@ export async function fetchAdminNotifications(firebaseUser) {
 }
 
 export async function markAdminNotificationRead(firebaseUser, notificationId) {
-  return requestAdminJson(ADMIN_NOTIFICATIONS_API_PATH, firebaseUser, {
+  return requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
     method: "POST",
-    body: JSON.stringify({ notificationId }),
+    body: JSON.stringify({ action: "markNotificationRead", notificationId }),
   });
 }
 
@@ -86,9 +85,10 @@ export async function registerAdminPushToken(firebaseUser) {
   const token = await getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration });
   if (!token) throw new Error("알림 기기 정보를 생성하지 못했습니다.");
 
-  await requestAdminJson(ADMIN_PUSH_TOKEN_API_PATH, firebaseUser, {
+  await requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
     method: "POST",
     body: JSON.stringify({
+      action: "registerToken",
       token,
       platform: getDevicePlatform(),
     }),

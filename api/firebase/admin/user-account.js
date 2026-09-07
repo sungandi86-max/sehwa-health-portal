@@ -1,5 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
-import { getAssignmentId, readJsonBody, sendCors, verifyDirectoryAdmin } from "../../lib/staffDirectory.js";
+import { getAssignmentId, readJsonBody, sendCors, verifyDirectoryAdmin } from "../../../server/lib/staffDirectory.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;

@@ -1,5 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { getFirebaseAdminDb } from "../lib/firebaseAdmin.js";
+import { getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
 
 const AGGREGATE_COLLECTION = "student_care_monthly_aggregates";
 const PRESENCE_PUBLIC_COLLECTION = "student_care_presence_public";

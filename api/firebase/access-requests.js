@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../lib/firebaseAdmin.js";
-import { notifyAdminPushSubscribers } from "../lib/adminPushNotifications.js";
+import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
+import { notifyAdminPushSubscribers } from "../../server/lib/adminPushNotifications.js";
 import { getAccessRequestPosition, normalizeAccessRequestApplicant } from "../../src/lib/accessRequestApplicant.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;

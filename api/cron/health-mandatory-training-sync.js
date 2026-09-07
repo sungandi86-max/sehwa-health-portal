@@ -1,4 +1,4 @@
-import { getFirebaseAdminDb } from "../lib/firebaseAdmin.js";
+import { getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
 import { applyHealthMandatoryTrainingSnapshot } from "../../server/healthMandatoryTrainingDryRun.js";
 
 function isAuthorizedCron(req) {

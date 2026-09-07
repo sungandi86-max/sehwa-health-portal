@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./lib/firebaseAdmin.js";
+import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;

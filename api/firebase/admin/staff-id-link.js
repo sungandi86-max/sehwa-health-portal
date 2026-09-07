@@ -5,7 +5,7 @@ import {
   readStaffDirectory,
   sendCors,
   verifyDirectoryAdmin,
-} from "../../lib/staffDirectory.js";
+} from "../../../server/lib/staffDirectory.js";
 
 const ASSIGNMENT_LIMIT = 700;
 

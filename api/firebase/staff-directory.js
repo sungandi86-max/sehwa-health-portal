@@ -1,6 +1,6 @@
 import { applyHealthMandatoryTrainingSnapshot, runHealthMandatoryTrainingDryRun } from "../../server/healthMandatoryTrainingDryRun.js";
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../lib/firebaseAdmin.js";
-import { getAssignmentId, getBearerToken, readJsonBody, readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../lib/staffDirectory.js";
+import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
+import { getAssignmentId, getBearerToken, readJsonBody, readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../../server/lib/staffDirectory.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
 
