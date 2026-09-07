@@ -9,8 +9,8 @@ export const firebaseV2MenuItems = [
   {
     id: "today",
     title: "오늘의 보건실",
-    description: "보건교사 대시보드와 진행 현황",
-    href: "/firebase-dashboard",
+    description: "보건실 운영 안내와 오늘의 공지",
+    href: "/today",
   },
   {
     id: "checkup",
