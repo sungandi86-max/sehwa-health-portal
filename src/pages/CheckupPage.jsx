@@ -1,43 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CheckupSection from "../components/CheckupSection.jsx";
-import { getActiveCheckups } from "../lib/checkups.js";
-
-const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
-
-async function fetchLegacyCheckups(signal) {
-  const response = await fetch("/api/portal?scope=fallback&type=checkups", { signal });
-  const contentType = response.headers.get("content-type") || "";
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  if (!contentType.includes("application/json") && import.meta.env.DEV) {
-    return fetchLegacyCheckupsFromUrl(`${DEV_PORTAL_API_FALLBACK}?scope=fallback&type=checkups&preview=local`, signal);
-  }
-
-  const portal = await response.json();
-  if (portal?.success === false || portal?.result === "error") {
-    throw new Error(portal.message || "Portal API error");
-  }
-
-  return {
-    checkups: Array.isArray(portal?.checkups) ? portal.checkups : [],
-    tbConfig: portal?.tbConfig || null,
-  };
-}
-
-async function fetchLegacyCheckupsFromUrl(url, signal) {
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(`fallback HTTP ${response.status}`);
-
-  const portal = await response.json();
-  if (portal?.success === false || portal?.result === "error") {
-    throw new Error(portal.message || "Portal API error");
-  }
-
-  return {
-    checkups: Array.isArray(portal?.checkups) ? portal.checkups : [],
-    tbConfig: portal?.tbConfig || null,
-  };
-}
+import { fetchPortalContent } from "../lib/portalContent.js";
 
 export default function CheckupPage({ items, tbConfig }) {
   const navigate = useNavigate();
@@ -56,36 +20,23 @@ export default function CheckupPage({ items, tbConfig }) {
       setFallbackUsed(false);
 
       try {
-        const firestoreCheckups = await getActiveCheckups();
+        const portal = await fetchPortalContent("checkups", controller.signal);
         if (shouldIgnore) return;
 
-        setCheckups(firestoreCheckups);
-        setEffectiveTbConfig(tbConfig);
+        setCheckups(Array.isArray(portal?.checkups) ? portal.checkups : []);
+        setEffectiveTbConfig(portal?.tbConfig || tbConfig);
         setLoadFailed(false);
         setIsLoading(false);
       } catch (error) {
         if (shouldIgnore) return;
-        console.error("[checkup] Firestore load failed", error);
-
-        try {
-          const legacy = await fetchLegacyCheckups(controller.signal);
-          if (shouldIgnore) return;
-
-          setCheckups(legacy.checkups);
-          setEffectiveTbConfig(legacy.tbConfig || tbConfig);
-          setLoadFailed(legacy.checkups.length === 0);
-          setFallbackUsed(true);
-          setIsLoading(false);
-        } catch (fallbackError) {
-          if (shouldIgnore) return;
-          if (fallbackError?.name !== "AbortError") {
-            console.error("[checkup] legacy fallback failed", fallbackError);
-          }
-          setCheckups(Array.isArray(items) ? items : []);
-          setEffectiveTbConfig(tbConfig);
-          setLoadFailed(true);
-          setIsLoading(false);
+        if (error?.name !== "AbortError") {
+          console.error("[checkup] Sheet load failed", error);
         }
+        setCheckups(Array.isArray(items) ? items : []);
+        setEffectiveTbConfig(tbConfig);
+        setLoadFailed(true);
+        setFallbackUsed(Array.isArray(items) && items.length > 0);
+        setIsLoading(false);
       }
     }
 

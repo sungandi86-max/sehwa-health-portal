@@ -1,37 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import FAQSection from "../components/FAQSection.jsx";
-import { getActiveFaqs } from "../lib/faqs.js";
-
-const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
-
-async function fetchLegacyFaqs(signal) {
-  const response = await fetch("/api/portal?scope=fallback&type=faq", { signal });
-  const contentType = response.headers.get("content-type") || "";
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  if (!contentType.includes("application/json") && import.meta.env.DEV) {
-    return fetchLegacyFaqsFromUrl(`${DEV_PORTAL_API_FALLBACK}?scope=fallback&type=faq&preview=local`, signal);
-  }
-
-  const portal = await response.json();
-  if (portal?.success === false || portal?.result === "error") {
-    throw new Error(portal.message || "Portal API error");
-  }
-
-  return Array.isArray(portal?.faqs) ? portal.faqs : [];
-}
-
-async function fetchLegacyFaqsFromUrl(url, signal) {
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new Error(`fallback HTTP ${response.status}`);
-
-  const portal = await response.json();
-  if (portal?.success === false || portal?.result === "error") {
-    throw new Error(portal.message || "Portal API error");
-  }
-
-  return Array.isArray(portal?.faqs) ? portal.faqs : [];
-}
+import { fetchPortalContent } from "../lib/portalContent.js";
 
 export default function FAQPage({ items }) {
   const navigate = useNavigate();
@@ -49,33 +19,21 @@ export default function FAQPage({ items }) {
       setFallbackUsed(false);
 
       try {
-        const firestoreFaqs = await getActiveFaqs();
+        const portal = await fetchPortalContent("faq", controller.signal);
         if (shouldIgnore) return;
 
-        setFaqs(firestoreFaqs);
+        setFaqs(Array.isArray(portal?.faqs) ? portal.faqs : []);
         setLoadFailed(false);
         setIsLoading(false);
       } catch (error) {
         if (shouldIgnore) return;
-        console.error("[faq] Firestore load failed", error);
-
-        try {
-          const legacyFaqs = await fetchLegacyFaqs(controller.signal);
-          if (shouldIgnore) return;
-
-          setFaqs(legacyFaqs);
-          setLoadFailed(legacyFaqs.length === 0);
-          setFallbackUsed(true);
-          setIsLoading(false);
-        } catch (fallbackError) {
-          if (shouldIgnore) return;
-          if (fallbackError?.name !== "AbortError") {
-            console.error("[faq] legacy fallback failed", fallbackError);
-          }
-          setFaqs(Array.isArray(items) ? items : []);
-          setLoadFailed(true);
-          setIsLoading(false);
+        if (error?.name !== "AbortError") {
+          console.error("[faq] Sheet load failed", error);
         }
+        setFaqs(Array.isArray(items) ? items : []);
+        setLoadFailed(true);
+        setFallbackUsed(Array.isArray(items) && items.length > 0);
+        setIsLoading(false);
       }
     }
 

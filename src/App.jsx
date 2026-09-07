@@ -9,6 +9,7 @@ import {
   educationItems,
   faqItems,
   noticeItems,
+  resourceItems,
   studentCareItems,
   uploadItems,
 } from "./data/fallbackData.js";
@@ -191,7 +192,7 @@ export default function App() {
   const liveCheckups    = portalData ? (portalData.checkups   || []) : checkupItems;
   const liveEducations  = portalData ? (portalData.educations || []) : educationItems;
   const liveStudentCare = portalData ? (portalData.studentCare|| []) : studentCareItems;
-  const liveResources   = portalData ? (portalData.resources  || []) : [];
+  const liveResources   = portalData ? (portalData.resources  || []) : resourceItems;
   const liveFaqs        = portalData ? (portalData.faqs       || []) : faqItems;
   const liveRoadmap     = portalData?.roadmap || { enabled: false, adminOnly: true, items: [] };
   const resourcesLoadFailed = !portalData;
