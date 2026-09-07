@@ -92,7 +92,7 @@ const SUBMIT_GROUP_LABELS = {
 };
 
 const actionButtonClass =
-  "inline-flex min-h-10 items-center justify-center rounded-[9px] border border-[#C8D8FF] bg-white px-3.5 py-2 text-sm font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] hover:bg-[#EEF4FF] md:min-w-[136px]";
+  "mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-3.5 py-2 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F]";
 
 function getStatusToneClass(item) {
   const status = String(item.status || "").trim();
@@ -297,7 +297,7 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
           </div>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
+        <div className="mt-5 rounded-[12px] border border-[#DDEAE7] bg-white">
           <div className="flex items-center justify-between gap-3 border-b border-[#DDEAE7] px-4 py-3">
             <div>
               <h2 className="text-base font-bold text-[#102047]">제출 항목</h2>
@@ -306,7 +306,7 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
             <span className="shrink-0 text-xs font-semibold text-[#627083]">{rows.length}개</span>
           </div>
 
-          <div className="divide-y divide-[#DDEAE7]">
+          <div className="grid gap-4 p-4 md:grid-cols-2">
             {rows.map(({ item: displayItem, submitType, group }) => {
               const handleClick = () => (
                 submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
@@ -315,9 +315,9 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
               return (
                 <article
                   key={displayItem.id || `${submitType}-${displayItem.title}`}
-                  className="grid gap-3 px-4 py-3.5 md:grid-cols-[minmax(0,1fr)_148px] md:items-center md:py-4"
+                  className="flex min-h-[280px] flex-col rounded-[12px] border border-[#DDEAE7] bg-white p-4"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusChip item={displayItem} />
                       {!publicMode && (
@@ -336,19 +336,30 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                       {displayItem.title}
                     </h3>
 
-                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083] md:line-clamp-1">
+                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083]">
                       <SafeText>{displayItem.description}</SafeText>
                     </p>
 
-                    <p className="mt-1.5 text-xs font-medium leading-5 text-[#627083]">
-                      <SafeText>{displayItem.target}</SafeText>
-                      {displayItem.documentType && (
-                        <>
-                          <span className="mx-1.5 text-[#C1CAD6]">·</span>
-                          <SafeText>{displayItem.documentType}</SafeText>
-                        </>
+                    <dl className="mt-3 grid gap-1.5 text-xs leading-5">
+                      {displayItem.target && (
+                        <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+                          <dt className="font-semibold text-[#102047]">대상</dt>
+                          <dd className="text-[#627083]"><SafeText>{displayItem.target}</SafeText></dd>
+                        </div>
                       )}
-                    </p>
+                      {displayItem.documentType && (
+                        <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+                          <dt className="font-semibold text-[#102047]">자료</dt>
+                          <dd className="text-[#627083]"><SafeText>{displayItem.documentType}</SafeText></dd>
+                        </div>
+                      )}
+                      {displayItem.deadline && (
+                        <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+                          <dt className="font-semibold text-[#102047]">마감</dt>
+                          <dd className="text-[#627083]"><SafeText>{displayItem.deadline}</SafeText></dd>
+                        </div>
+                      )}
+                    </dl>
 
                     {(displayItem.documentType || displayItem.fileGuide) && (
                       <details className="mt-2 text-xs leading-5 text-[#627083]">
