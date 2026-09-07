@@ -210,7 +210,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
             <p className="text-[11px] font-medium text-[#627083]">현재 권한</p>
             <RoleSummary assignment={assignment} />
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+          <div className="flex flex-wrap gap-2">
             <Link
               to="/firebase-submissions"
               className="inline-flex min-h-9 items-center justify-center rounded-[9px] bg-[#0D4EA6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#183B8F]"
