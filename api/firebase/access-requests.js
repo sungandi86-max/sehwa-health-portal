@@ -97,6 +97,46 @@ function normalizeHomeroomInput(input) {
   return { homeroom: { grade, classNo }, message: "" };
 }
 
+function normalizeBaseAccessHomeroomRequest(input) {
+  const isHomeroomRequested = input?.isHomeroomRequested === true;
+  if (!isHomeroomRequested) {
+    return {
+      request: {
+        isHomeroomRequested: false,
+        requestedGrade: null,
+        requestedClassNo: null,
+      },
+      message: "",
+    };
+  }
+
+  const { homeroom, message } = normalizeHomeroomInput({
+    grade: input.requestedGrade,
+    classNo: input.requestedClassNo,
+  });
+  if (!homeroom) return { request: null, message };
+
+  return {
+    request: {
+      isHomeroomRequested: true,
+      requestedGrade: homeroom.grade,
+      requestedClassNo: homeroom.classNo,
+    },
+    message: "",
+  };
+}
+
+function getBaseAccessAssignmentScope(accessRequest) {
+  const { request } = normalizeBaseAccessHomeroomRequest(accessRequest);
+  if (!request) return null;
+
+  return {
+    roles: request.isHomeroomRequested ? ["staff", "homeroom"] : ["staff"],
+    grade: request.isHomeroomRequested ? request.requestedGrade : null,
+    classNo: request.isHomeroomRequested ? request.requestedClassNo : null,
+  };
+}
+
 async function getCurrentRequest(req, res, decodedToken) {
   const db = getFirebaseAdminDb();
   const url = new URL(req.url, "http://localhost");
@@ -144,6 +184,8 @@ async function submitBaseAccessRequest(res, decodedToken, body) {
 
   const { applicant, message } = normalizeAccessRequestApplicant(body.applicant);
   if (!applicant) return res.status(400).json({ ok: false, message });
+  const { request: homeroomRequest, message: homeroomMessage } = normalizeBaseAccessHomeroomRequest(body);
+  if (!homeroomRequest) return res.status(400).json({ ok: false, message: homeroomMessage });
 
   const db = getFirebaseAdminDb();
   const assignmentRef = db.collection("user_assignments").doc(getAssignmentId(decodedToken.uid));
@@ -168,6 +210,7 @@ async function submitBaseAccessRequest(res, decodedToken, body) {
           reviewedAt: null,
           reviewNote: null,
           applicant,
+          ...homeroomRequest,
         });
         return { status: "resubmitted" };
       }
@@ -188,6 +231,7 @@ async function submitBaseAccessRequest(res, decodedToken, body) {
       reviewedAt: null,
       reviewNote: null,
       applicant,
+      ...homeroomRequest,
     });
 
     return { status: "created" };
@@ -353,13 +397,16 @@ async function reviewRequest(req, res, decodedToken) {
       }
 
       if (!assignmentSnapshot.exists) {
+        const assignmentScope = getBaseAccessAssignmentScope(accessRequest);
+        if (!assignmentScope) return { status: "invalid-homeroom-request" };
+
         transaction.set(assignmentRef, {
           uid: accessRequest.uid,
           schoolYear: accessRequest.schoolYear,
           semester: accessRequest.semester,
-          roles: ["staff"],
-          grade: null,
-          classNo: null,
+          roles: assignmentScope.roles,
+          grade: assignmentScope.grade,
+          classNo: assignmentScope.classNo,
           position: getAccessRequestPosition(accessRequest.applicant),
           active: true,
           createdAt: now,

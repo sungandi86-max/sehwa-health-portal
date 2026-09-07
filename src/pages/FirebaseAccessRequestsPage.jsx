@@ -62,6 +62,7 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
   const canReview = accessRequest.status === "pending";
   const requestType = getAccessRequestType(accessRequest);
   const isHomeroomRequest = requestType === ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS;
+  const includesHomeroomAccess = !isHomeroomRequest && accessRequest.isHomeroomRequested === true;
   const requester = accessRequest.requester || {};
   const applicantName = isHomeroomRequest
     ? requester.displayName || accessRequest.displayName || "신청자 확인 필요"
@@ -72,8 +73,10 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
   const staffType = isHomeroomRequest
     ? requester.position || "직책 미입력"
     : accessRequest.applicant?.staffType || "구분 미입력";
-  const requestedClass = accessRequest.homeroom
+  const requestedClass = isHomeroomRequest && accessRequest.homeroom
     ? `${accessRequest.homeroom.grade}학년 ${accessRequest.homeroom.classNo}반`
+    : includesHomeroomAccess
+      ? `${accessRequest.requestedGrade}학년 ${accessRequest.requestedClassNo}반`
     : "-";
 
   return (
@@ -87,6 +90,11 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
             <span className="rounded-full border border-[#C8D8FF] bg-white px-3 py-1 text-xs font-semibold text-[#0D4EA6]">
               {ACCESS_REQUEST_TYPE_LABELS[requestType] || "권한 신청"}
             </span>
+            {includesHomeroomAccess && (
+              <span className="rounded-full border border-[#C8D8FF] bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#3154A3]">
+                담임 권한 포함 · {requestedClass}
+              </span>
+            )}
             <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#3154A3]">
               {accessRequest.schoolYear}학년도 {accessRequest.semester}학기
             </span>
@@ -116,20 +124,24 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
         </div>
         <div>
           <dt className="text-xs font-semibold text-[#102047]">신청 권한</dt>
-          <dd className="mt-1 text-sm font-medium text-[#627083]">{isHomeroomRequest ? "담임교사" : "교직원"}</dd>
+          <dd className="mt-1 text-sm font-medium text-[#627083]">
+            {isHomeroomRequest ? "담임교사" : includesHomeroomAccess ? "교직원 + 담임교사" : "교직원"}
+          </dd>
         </div>
       </dl>
 
-      {isHomeroomRequest && (
+      {(isHomeroomRequest || includesHomeroomAccess) && (
         <dl className="mt-3 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-2">
           <div>
             <dt className="text-xs font-semibold text-[#102047]">요청 학급</dt>
             <dd className="mt-1 text-sm font-medium text-[#627083]">{requestedClass}</dd>
           </div>
-          <div>
-            <dt className="text-xs font-semibold text-[#102047]">교직원ID</dt>
-            <dd className="mt-1 text-sm font-medium text-[#627083]">{requester.staffId || "미연결"}</dd>
-          </div>
+          {isHomeroomRequest && (
+            <div>
+              <dt className="text-xs font-semibold text-[#102047]">교직원ID</dt>
+              <dd className="mt-1 text-sm font-medium text-[#627083]">{requester.staffId || "미연결"}</dd>
+            </div>
+          )}
         </dl>
       )}
 

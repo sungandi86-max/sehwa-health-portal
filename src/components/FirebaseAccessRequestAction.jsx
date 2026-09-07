@@ -8,8 +8,14 @@ import {
 import { getCurrentAccessRequest, submitStaffAccessRequest } from "../lib/accessRequests.js";
 import { getAuthProvider } from "../lib/firebaseAuth.js";
 
+const HOMEROOM_GRADE_OPTIONS = [1, 2, 3];
+const HOMEROOM_CLASS_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
 function getRequestMessage(request) {
   if (!request) return "";
+  if (request.status === "pending" && request.isHomeroomRequested === true) {
+    return "기본 이용 권한과 담임 권한 신청이 접수되었습니다. 보건실 승인 후 이용할 수 있습니다.";
+  }
   if (request.status === "pending") return "권한 신청이 접수되어 있습니다. 보건실 승인 후 이용할 수 있습니다.";
   if (request.status === "approved") return "권한 신청은 승인되었지만 현재 권한 문서가 확인되지 않습니다. 보건실에 문의해 주세요.";
   if (request.status === "rejected") return "이전 권한 신청이 거절되었습니다. 필요한 경우 다시 신청할 수 있습니다.";
@@ -28,6 +34,11 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
     realName: "",
     department: getInitialDepartment("교사"),
     staffType: "교사",
+  });
+  const [homeroomRequest, setHomeroomRequest] = useState({
+    isHomeroomRequested: false,
+    requestedGrade: "1",
+    requestedClassNo: "1",
   });
   const [usesCustomDepartment, setUsesCustomDepartment] = useState(false);
   const isGoogleUser = getAuthProvider(user) === "google";
@@ -91,6 +102,18 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
     setApplicant((current) => ({ ...current, department: value }));
   };
 
+  const handleHomeroomChoiceChange = (event) => {
+    setHomeroomRequest((current) => ({
+      ...current,
+      isHomeroomRequested: event.target.value === "yes",
+    }));
+  };
+
+  const handleHomeroomFieldChange = (event) => {
+    const { name, value } = event.target;
+    setHomeroomRequest((current) => ({ ...current, [name]: value }));
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     const normalized = normalizeAccessRequestApplicant(applicant);
@@ -101,15 +124,18 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
 
     setState({ status: "submitting", message: "권한 신청을 접수하는 중입니다." });
     try {
-      const result = await submitStaffAccessRequest(user, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER, normalized.applicant);
+      const result = await submitStaffAccessRequest({
+        firebaseUser: user,
+        schoolYear: CURRENT_SCHOOL_YEAR,
+        semester: CURRENT_SEMESTER,
+        applicantInput: normalized.applicant,
+        homeroomInput: homeroomRequest,
+      });
       const nextRequest = await getCurrentAccessRequest(user.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
       setRequest(nextRequest);
       setState({
         status: "ready",
-        message:
-          result.status === "already-pending"
-            ? "권한 신청이 접수되어 있습니다."
-            : "이용 권한 신청이 접수되었습니다.",
+        message: getRequestMessage(nextRequest) || (result.status === "already-pending" ? "권한 신청이 접수되어 있습니다." : "이용 권한 신청이 접수되었습니다."),
       });
       onSubmitted?.();
     } catch (error) {
@@ -199,6 +225,69 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
               />
             </label>
           )}
+          <fieldset className="grid gap-3 rounded-2xl border border-[#DDEAE7] bg-[#F8FAFA] p-3">
+            <legend className="px-1 text-sm font-semibold text-[#102047]">담임교사 여부</legend>
+            <div className="grid gap-2 text-sm font-medium text-[#102047] sm:grid-cols-2">
+              <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[#DDEAE7] bg-white px-3">
+                <input
+                  type="radio"
+                  name="isHomeroomRequested"
+                  value="no"
+                  checked={!homeroomRequest.isHomeroomRequested}
+                  onChange={handleHomeroomChoiceChange}
+                  className="h-4 w-4 accent-[#0D4EA6]"
+                />
+                아니오
+              </label>
+              <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[#DDEAE7] bg-white px-3">
+                <input
+                  type="radio"
+                  name="isHomeroomRequested"
+                  value="yes"
+                  checked={homeroomRequest.isHomeroomRequested}
+                  onChange={handleHomeroomChoiceChange}
+                  className="h-4 w-4 accent-[#0D4EA6]"
+                />
+                예
+              </label>
+            </div>
+            {homeroomRequest.isHomeroomRequested && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-2 text-sm font-semibold text-[#102047]">
+                  학년
+                  <select
+                    name="requestedGrade"
+                    value={homeroomRequest.requestedGrade}
+                    onChange={handleHomeroomFieldChange}
+                    className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/15"
+                    required
+                  >
+                    {HOMEROOM_GRADE_OPTIONS.map((grade) => (
+                      <option key={grade} value={grade}>
+                        {grade}학년
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-2 text-sm font-semibold text-[#102047]">
+                  반
+                  <select
+                    name="requestedClassNo"
+                    value={homeroomRequest.requestedClassNo}
+                    onChange={handleHomeroomFieldChange}
+                    className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none transition focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/15"
+                    required
+                  >
+                    {HOMEROOM_CLASS_OPTIONS.map((classNo) => (
+                      <option key={classNo} value={classNo}>
+                        {classNo}반
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+          </fieldset>
         </div>
       )}
       <button

@@ -23,6 +23,38 @@ export const ACCESS_REQUEST_TYPE_LABELS = {
 
 const ACCESS_REQUEST_API_PATH = "/api/firebase/access-requests";
 
+function normalizeHomeroomRequestInput(input = {}) {
+  const isHomeroomRequested = input.isHomeroomRequested === true;
+  if (!isHomeroomRequested) {
+    return {
+      homeroomRequest: {
+        isHomeroomRequested: false,
+        requestedGrade: null,
+        requestedClassNo: null,
+      },
+      message: "",
+    };
+  }
+
+  const requestedGrade = Number(input.requestedGrade);
+  const requestedClassNo = Number(input.requestedClassNo);
+  if (!Number.isInteger(requestedGrade) || requestedGrade < 1 || requestedGrade > 3) {
+    return { homeroomRequest: null, message: "학년을 선택해 주세요." };
+  }
+  if (!Number.isInteger(requestedClassNo) || requestedClassNo < 1 || requestedClassNo > 12) {
+    return { homeroomRequest: null, message: "반을 선택해 주세요." };
+  }
+
+  return {
+    homeroomRequest: {
+      isHomeroomRequested: true,
+      requestedGrade,
+      requestedClassNo,
+    },
+    message: "",
+  };
+}
+
 async function getIdToken() {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error("로그인이 필요합니다.");
@@ -74,16 +106,25 @@ export async function getCurrentHomeroomAccessRequest(uid, schoolYear, semester)
   return result.request || null;
 }
 
-export async function submitStaffAccessRequest(firebaseUser, schoolYear, semester, applicantInput) {
+export async function submitStaffAccessRequest({ firebaseUser, schoolYear, semester, applicantInput, homeroomInput = {} }) {
   if (!firebaseUser?.uid) throw new Error("로그인이 필요합니다.");
   if (getAuthProvider(firebaseUser) !== "google") throw new Error("Google 계정만 이용 권한을 신청할 수 있습니다.");
 
   const { applicant, message } = normalizeAccessRequestApplicant(applicantInput);
   if (!applicant) throw new Error(message);
 
+  const { homeroomRequest, message: homeroomMessage } = normalizeHomeroomRequestInput(homeroomInput);
+  if (!homeroomRequest) throw new Error(homeroomMessage);
+
   return requestJson(ACCESS_REQUEST_API_PATH, {
     method: "POST",
-    body: JSON.stringify({ schoolYear, semester, requestType: ACCESS_REQUEST_TYPES.BASE_ACCESS, applicant }),
+    body: JSON.stringify({
+      schoolYear,
+      semester,
+      requestType: ACCESS_REQUEST_TYPES.BASE_ACCESS,
+      applicant,
+      ...homeroomRequest,
+    }),
   });
 }
 

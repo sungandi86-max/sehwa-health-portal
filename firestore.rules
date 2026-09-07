@@ -119,7 +119,10 @@ service cloud.firestore {
           "reviewedBy",
           "reviewedAt",
           "reviewNote",
-          "applicant"
+          "applicant",
+          "isHomeroomRequested",
+          "requestedGrade",
+          "requestedClassNo"
         ])
         && data.keys().hasAll([
           "uid",
@@ -134,7 +137,10 @@ service cloud.firestore {
           "reviewedBy",
           "reviewedAt",
           "reviewNote",
-          "applicant"
+          "applicant",
+          "isHomeroomRequested",
+          "requestedGrade",
+          "requestedClassNo"
         ])
         && data.uid == request.auth.uid
         && data.email == request.auth.token.email
@@ -148,7 +154,8 @@ service cloud.firestore {
         && data.reviewedBy == null
         && data.reviewedAt == null
         && data.reviewNote == null
-        && isValidAccessRequestApplicant(data.applicant);
+        && isValidAccessRequestApplicant(data.applicant)
+        && isValidBaseAccessHomeroomRequest(data);
     }
 
     function isValidAccessRequestApplicant(applicant) {
@@ -177,6 +184,23 @@ service cloud.firestore {
         );
     }
 
+    function isValidBaseAccessHomeroomRequest(data) {
+      return (
+          data.isHomeroomRequested == false
+          && data.requestedGrade == null
+          && data.requestedClassNo == null
+        )
+        || (
+          data.isHomeroomRequested == true
+          && data.requestedGrade is number
+          && data.requestedGrade >= 1
+          && data.requestedGrade <= 3
+          && data.requestedClassNo is number
+          && data.requestedClassNo >= 1
+          && data.requestedClassNo <= 12
+        );
+    }
+
     function isValidAccessRequestResubmit() {
       return isSelf(resource.data.uid)
         && resource.data.status == "rejected"
@@ -187,7 +211,10 @@ service cloud.firestore {
           "reviewedBy",
           "reviewedAt",
           "reviewNote",
-          "applicant"
+          "applicant",
+          "isHomeroomRequested",
+          "requestedGrade",
+          "requestedClassNo"
         ])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email
@@ -201,7 +228,8 @@ service cloud.firestore {
         && request.resource.data.reviewedBy == null
         && request.resource.data.reviewedAt == null
         && request.resource.data.reviewNote == null
-        && isValidAccessRequestApplicant(request.resource.data.applicant);
+        && isValidAccessRequestApplicant(request.resource.data.applicant)
+        && isValidBaseAccessHomeroomRequest(request.resource.data);
     }
 
     function preservesOwnCurrentHealthTeacherAssignment(assignmentId, data) {
