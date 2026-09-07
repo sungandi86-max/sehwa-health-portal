@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAdminNotifications } from "../hooks/useAdminNotifications.js";
 
 function formatDate(value) {
@@ -48,10 +48,25 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
     : isRegistered
       ? "알림 켜짐 ✓"
       : "알림 받기";
+  const firstUnreadNotification = notifications.notifications.find((notification) => !notification.read);
 
   const openNotification = async (notification) => {
     await notifications.markRead(notification.id);
     navigate(notification.destination || "/firebase-dashboard");
+  };
+
+  const openForegroundNotification = async () => {
+    if (!notifications.foregroundNotice) return;
+    await openNotification(notifications.foregroundNotice);
+  };
+
+  const openPrimaryNotificationAction = async () => {
+    if (firstUnreadNotification) {
+      await openNotification(firstUnreadNotification);
+      return;
+    }
+
+    navigate("/firebase-admin/access-requests");
   };
 
   if (compact) {
@@ -81,7 +96,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
         {notifications.foregroundNotice && (
           <button
             type="button"
-            onClick={() => navigate(notifications.foregroundNotice.destination || "/firebase-dashboard")}
+            onClick={openForegroundNotification}
             className="mt-2 block w-full rounded-[8px] border border-[#C8D8FF] bg-[#EEF4FF] px-2.5 py-1.5 text-left text-xs font-medium leading-5 text-[#3154A3]"
           >
             <span className="font-semibold">{notifications.foregroundNotice.title}</span>
@@ -131,7 +146,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
       {notifications.foregroundNotice && (
         <button
           type="button"
-          onClick={() => navigate(notifications.foregroundNotice.destination || "/firebase-dashboard")}
+          onClick={openForegroundNotification}
           className="mt-3 block w-full rounded-[9px] border border-[#C8D8FF] bg-[#EEF4FF] px-3 py-2 text-left text-xs font-medium leading-5 text-[#3154A3]"
         >
           <span className="block font-semibold">{notifications.foregroundNotice.title}</span>
@@ -176,12 +191,13 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
       )}
 
       {!compact && (
-        <Link
-          to="/firebase-admin/access-requests"
+        <button
+          type="button"
+          onClick={openPrimaryNotificationAction}
           className="mt-3 inline-flex min-h-9 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#C8D8FF]"
         >
           권한 신청 확인
-        </Link>
+        </button>
       )}
     </section>
   );
