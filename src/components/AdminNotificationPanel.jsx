@@ -49,6 +49,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
       ? "알림 켜짐 ✓"
       : "알림 받기";
   const firstUnreadNotification = notifications.notifications.find((notification) => !notification.read);
+  const hasUnreadNotification = notifications.unreadCount > 0;
 
   const openNotification = async (notification) => {
     await notifications.markRead(notification.id);
@@ -66,6 +67,11 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
       return;
     }
 
+    if (hasUnreadNotification) {
+      await notifications.refresh();
+      return;
+    }
+
     navigate("/firebase-admin/access-requests");
   };
 
@@ -77,6 +83,15 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
           <span className="rounded-[8px] border border-[#DDEAE7] bg-white px-2 py-0.5 text-[11px] font-medium text-[#627083]">
             {notificationStatusText(notifications.permission, notifications.unreadCount)}
           </span>
+          {hasUnreadNotification ? (
+            <button
+              type="button"
+              onClick={openPrimaryNotificationAction}
+              className="min-h-8 rounded-[8px] border border-[#DDEAE7] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#102047] transition hover:border-[#C8D8FF]"
+            >
+              알림 확인
+            </button>
+          ) : null}
           {canRegister ? (
             <button
               type="button"
@@ -196,7 +211,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
           onClick={openPrimaryNotificationAction}
           className="mt-3 inline-flex min-h-9 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#C8D8FF]"
         >
-          권한 신청 확인
+          {hasUnreadNotification ? "미확인 알림 확인" : "권한 신청 확인"}
         </button>
       )}
     </section>

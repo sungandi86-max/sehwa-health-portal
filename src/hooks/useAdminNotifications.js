@@ -9,6 +9,13 @@ import {
   subscribeToForegroundAdminNotifications,
 } from "../lib/adminNotifications.js";
 
+const ADMIN_NOTIFICATIONS_CHANGED_EVENT = "admin-notifications:changed";
+
+function notifyAdminNotificationsChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(ADMIN_NOTIFICATIONS_CHANGED_EVENT));
+}
+
 export function useAdminNotifications({ user, enabled }) {
   const [state, setState] = useState({ status: "idle", message: "" });
   const [notifications, setNotifications] = useState([]);
@@ -60,6 +67,29 @@ export function useAdminNotifications({ user, enabled }) {
   }, [refresh]);
 
   useEffect(() => {
+    if (!enabled || !user || typeof window === "undefined") return undefined;
+
+    const refreshIfVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void refresh();
+    };
+
+    window.addEventListener(ADMIN_NOTIFICATIONS_CHANGED_EVENT, refreshIfVisible);
+    window.addEventListener("focus", refreshIfVisible);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", refreshIfVisible);
+    }
+
+    return () => {
+      window.removeEventListener(ADMIN_NOTIFICATIONS_CHANGED_EVENT, refreshIfVisible);
+      window.removeEventListener("focus", refreshIfVisible);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", refreshIfVisible);
+      }
+    };
+  }, [enabled, refresh, user]);
+
+  useEffect(() => {
     if (!enabled || !user) return undefined;
 
     let active = true;
@@ -95,6 +125,7 @@ export function useAdminNotifications({ user, enabled }) {
       await refresh();
       setRegistrationStatus("registered");
       setState({ status: "success", message: "이 브라우저에서 관리자 알림을 받습니다." });
+      notifyAdminNotificationsChanged();
     } catch (error) {
       setPermission(getBrowserNotificationPermission());
       setRegistrationStatus("unregistered");
@@ -109,6 +140,7 @@ export function useAdminNotifications({ user, enabled }) {
 
     await markAdminNotificationRead(user, notificationId);
     await refresh();
+    notifyAdminNotificationsChanged();
   };
 
   return {
