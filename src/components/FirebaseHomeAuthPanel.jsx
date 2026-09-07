@@ -78,6 +78,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
       !isAdmin(assignment)
     );
   }, [assignment]);
+  const isSignedIn = Boolean(user);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -161,11 +162,15 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
   };
 
   return (
-    <div className={`rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-[#102047] ${className}`}>
-      <p className="text-[11px] font-semibold text-[#0D4EA6]">교직원 로그인</p>
-      <p className="mt-1 text-xs font-normal leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
-        교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
-      </p>
+    <div className={`rounded-[12px] border border-[#DDEAE7] ${isSignedIn ? "bg-white" : "bg-[#F8FAFA]"} p-3 text-[#102047] ${className}`}>
+      {!isSignedIn && (
+        <>
+          <p className="text-[11px] font-semibold text-[#0D4EA6]">교직원 로그인</p>
+          <p className="mt-1 text-xs font-normal leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+            교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
+          </p>
+        </>
+      )}
 
       {status === "loading" && (
         <p className="mt-3 rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#627083]">
@@ -184,11 +189,12 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
       )}
 
       {user && (
-        <div className="mt-2.5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-start">
+        <div className="space-y-3">
+          <div className="flex flex-col gap-2 border-b border-[#DDEAE7] pb-2.5 sm:flex-row sm:items-start sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-start">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#102047]">{displayName} · {roleLabel}</p>
-              <p className="mt-0.5 truncate text-xs font-normal text-[#627083]">
+              <p className="text-[11px] font-medium text-[#627083]">현재 사용자</p>
+              <p className="mt-1 truncate text-sm font-semibold text-[#102047]">{displayName} · {roleLabel}</p>
+              <p className="mt-0.5 truncate text-xs font-normal leading-5 text-[#627083]">
                 {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
               </p>
             </div>
@@ -201,21 +207,21 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
               로그아웃
             </button>
           </div>
-          <div className="mt-2.5">
+          <div>
             <p className="mb-1.5 text-[11px] font-medium text-[#627083]">현재 권한</p>
             <RoleSummary assignment={assignment} />
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
             <Link
               to="/firebase-submissions"
-              className="inline-flex min-h-10 items-center rounded-[9px] bg-[#0D4EA6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#183B8F]"
+              className="inline-flex min-h-9 items-center justify-center rounded-[9px] bg-[#0D4EA6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#183B8F]"
             >
               제출·보고 센터
             </Link>
             {canOpenMyStatus && (
               <Link
                 to="/my-submission-status"
-                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#C8D8FF] bg-white px-3 py-1.5 text-xs font-semibold text-[#0D4EA6] transition hover:bg-[#FBFCFF]"
+                className="inline-flex min-h-9 items-center justify-center rounded-[9px] border border-[#C8D8FF] bg-white px-3 py-1.5 text-xs font-semibold text-[#0D4EA6] transition hover:bg-[#FBFCFF]"
               >
                 나의 제출·이수 현황
               </Link>
@@ -223,7 +229,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
             {canOpenDashboard && (
               <Link
                 to="/firebase-dashboard"
-                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:bg-white"
+                className="inline-flex min-h-9 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:bg-[#FBFCFF]"
               >
                 관리자 화면
                 <AdminNotificationBadge user={user} enabled={canOpenDashboard} />
@@ -231,7 +237,9 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
             )}
           </div>
           {canOpenDashboard && (
-            <AdminNotificationPanel user={user} enabled={canOpenDashboard} compact />
+            <div className="border-t border-[#DDEAE7] pt-3">
+              <AdminNotificationPanel user={user} enabled={canOpenDashboard} compact />
+            </div>
           )}
           {canRequestHomeroomAccess && (
             <FirebaseHomeroomAccessRequestAction user={user} profile={profile} assignment={assignment} />
