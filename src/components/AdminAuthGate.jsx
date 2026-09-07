@@ -49,8 +49,8 @@ function AdminReceiptAlert({ alert }) {
     <section className="mb-4">
       <div className="rounded-[24px] border border-[#A8E6D1] bg-[#F2FBF7] p-4 shadow-sm md:flex md:items-center md:justify-between md:gap-5 md:p-5">
         <div>
-          <p className="text-xs font-black text-[#2E7D32]">TODAY RECEIPTS</p>
-          <h2 className="mt-1 text-xl font-black text-[#1A3B8B]">
+          <p className="text-xs font-semibold text-[#2E7D32]">TODAY RECEIPTS</p>
+          <h2 className="mt-1 text-xl font-semibold text-[#1A3B8B]">
             오늘 신규 접수 {totalToday}건이 있습니다.
           </h2>
           <div className="mt-3 grid gap-2 text-sm font-bold text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
@@ -65,7 +65,7 @@ function AdminReceiptAlert({ alert }) {
         <button
           type="button"
           onClick={() => navigate("/admin/receipts")}
-          className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:mt-0 md:w-auto"
+          className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:mt-0 md:w-auto"
         >
           접수 현황 확인하기
         </button>

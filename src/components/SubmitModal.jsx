@@ -417,7 +417,7 @@ function SubmitButton({ onClick, submitting, children = "제출하기" }) {
       type="button"
       onClick={onClick}
       disabled={submitting}
-      className={`w-full rounded-2xl px-5 py-4 text-sm font-black text-white shadow-sm transition
+      className={`w-full rounded-2xl px-5 py-4 text-sm font-semibold text-white shadow-sm transition
         ${submitting
           ? "cursor-not-allowed bg-slate-300"
           : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md active:translate-y-0"
@@ -517,7 +517,7 @@ function StudentFileUploadForm({
       {publicMode && <PrivacyNoticeBox />}
 
       <div className="space-y-3">
-        <p className="text-sm font-black text-[#1A3B8B]">학생 정보</p>
+        <p className="text-sm font-semibold text-[#1A3B8B]">학생 정보</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="학년" required>
             <select className={selectCls} value={form.grade} onChange={set("grade")}>
@@ -549,7 +549,7 @@ function StudentFileUploadForm({
       </div>
 
       <div className="space-y-3">
-        <p className="text-sm font-black text-[#1A3B8B]">진료 정보</p>
+        <p className="text-sm font-semibold text-[#1A3B8B]">진료 정보</p>
         <Field label="진료일">
           <input type="date" className={inputCls} value={form.visitDate} onChange={set("visitDate")} />
         </Field>
@@ -584,7 +584,7 @@ function PrivacyNoticeBox() {
 
   return (
     <div className="rounded-3xl border border-[#C9DFFF] bg-[#F7FBFF] p-5 text-sm leading-8 text-slate-700 sm:p-6">
-      <p className="mb-3 flex items-center gap-2 text-base font-black text-[#1A3B8B]">
+      <p className="mb-3 flex items-center gap-2 text-base font-semibold text-[#1A3B8B]">
         <span aria-hidden="true">🔒</span>
         <span>개인정보 처리 안내</span>
       </p>
@@ -1235,7 +1235,7 @@ export default function SubmitModal({ type, onClose, tbConfig, publicMode = fals
         {/* 헤더 */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-5">
           <div>
-            <p className={`text-xl font-black ${meta.color}`}>
+            <p className={`text-xl font-semibold ${meta.color}`}>
               {meta.icon ? `${meta.icon} ` : ""}{meta.title}
             </p>
           </div>
@@ -1305,15 +1305,15 @@ function SuccessView({ info, onClose, onAnother, publicMode = false }) {
       </div>
       <div className="space-y-4">
         <div>
-          <p className="text-xl font-black text-[#263238]">✅ {title}</p>
+          <p className="text-xl font-semibold text-[#263238]">✅ {title}</p>
           <p className="mt-2 text-sm leading-7 text-slate-600">{body}</p>
         </div>
         <div className="rounded-2xl bg-[#F7F9FC] p-4 text-left text-sm leading-7 text-slate-700">
-          {!isInfection && !isStudentFile && <p><span className="font-black text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>}
-          <p><span className="font-black text-[#1A3B8B]">제출 항목:</span> {info?.itemTitle || "-"}</p>
-          {(isInfection || isStudentFile) && <p><span className="font-black text-[#1A3B8B]">학생 정보:</span> {info?.studentInfo || "-"}</p>}
-          {isInfection && <p><span className="font-black text-[#1A3B8B]">감염병명:</span> {info?.diseaseName || "-"}</p>}
-          <p><span className="font-black text-[#1A3B8B]">제출시간:</span> {info?.submittedAt || "-"}</p>
+          {!isInfection && !isStudentFile && <p><span className="font-semibold text-[#1A3B8B]">제출자 성명:</span> {info?.submitterName || "-"}</p>}
+          <p><span className="font-semibold text-[#1A3B8B]">제출 항목:</span> {info?.itemTitle || "-"}</p>
+          {(isInfection || isStudentFile) && <p><span className="font-semibold text-[#1A3B8B]">학생 정보:</span> {info?.studentInfo || "-"}</p>}
+          {isInfection && <p><span className="font-semibold text-[#1A3B8B]">감염병명:</span> {info?.diseaseName || "-"}</p>}
+          <p><span className="font-semibold text-[#1A3B8B]">제출시간:</span> {info?.submittedAt || "-"}</p>
         </div>
         <p className="text-sm leading-7 text-slate-600">
           {isRecruit ? (

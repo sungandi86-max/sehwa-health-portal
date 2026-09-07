@@ -73,9 +73,9 @@ function AccessMessage({ title, description, action, message }) {
   return (
     <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-xl rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 text-center shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
-        <h1 className="mt-5 text-2xl font-black tracking-[-0.02em] text-[#102047]">{title}</h1>
+        <h1 className="mt-5 text-2xl font-semibold text-[#102047]">{title}</h1>
         <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">{description}</p>
-        {message && <p className="mt-4 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-black text-[#B42318]">{message}</p>}
+        {message && <p className="mt-4 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-semibold text-[#B42318]">{message}</p>}
         {action}
       </div>
     </section>
@@ -84,12 +84,12 @@ function AccessMessage({ title, description, action, message }) {
 
 function RoleBadges({ roles }) {
   const labels = getRoleLabels(roles);
-  if (!labels.length) return <span className="text-xs font-black text-[#8A96A8]">권한 미등록</span>;
+  if (!labels.length) return <span className="text-xs font-semibold text-[#8A96A8]">권한 미등록</span>;
 
   return (
     <div className="flex flex-wrap gap-2">
       {labels.map((label) => (
-        <span key={label} className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+        <span key={label} className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
           {label}
         </span>
       ))}
@@ -306,21 +306,21 @@ export default function FirebaseSubmissionsPage() {
         <header className="rounded-[32px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#20A982]">제출·보고 센터</p>
-              <h1 className="mt-3 text-3xl font-black tracking-[-0.02em] text-[#102047] sm:text-4xl">제출·보고 센터</h1>
+              <p className="text-xs font-semibold uppercase text-[#20A982]">제출·보고 센터</p>
+              <h1 className="mt-3 text-3xl font-semibold text-[#102047] sm:text-4xl">제출·보고 센터</h1>
               <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#627083]">
                 교직원 제출과 학생 감염병 보고 항목을 한 화면에서 선택합니다.
               </p>
             </div>
             <div className="rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-4 sm:min-w-64">
-              <p className="text-sm font-black text-[#102047]">{displayName} 선생님</p>
+              <p className="text-sm font-semibold text-[#102047]">{displayName} 선생님</p>
               <p className="mt-1 text-xs font-bold text-[#627083]">{CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기</p>
               <div className="mt-3"><RoleBadges roles={assignment?.roles} /></div>
               <button
                 type="button"
                 onClick={handleSignOut}
                 disabled={isWorking}
-                className="mt-4 min-h-11 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-xs font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-4 min-h-11 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-xs font-semibold text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 로그아웃
               </button>
@@ -335,7 +335,7 @@ export default function FirebaseSubmissionsPage() {
           </div>
         )}
         {(authState.status === "error" || assignmentResult?.status === "permission-denied" || assignmentResult?.status === "error") && (
-          <p className="rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-sm font-black text-[#B42318]">
+          <p className="rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-sm font-semibold text-[#B42318]">
             {authState.message || assignmentResult?.message || "권한 정보를 확인하지 못했습니다."}
           </p>
         )}
@@ -343,10 +343,10 @@ export default function FirebaseSubmissionsPage() {
         <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[#20A982]">Active submissions</p>
-              <h2 className="mt-2 text-xl font-black text-[#102047]">제출 항목</h2>
+              <p className="text-xs font-semibold uppercase text-[#20A982]">Active submissions</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#102047]">제출 항목</h2>
             </div>
-            <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+            <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
               {visibleItems.length}개 항목
             </span>
           </div>
@@ -360,13 +360,13 @@ export default function FirebaseSubmissionsPage() {
           )}
 
           {(itemsState.status === "permission-denied" || itemsState.status === "error") && (
-            <p className="mt-5 rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-black text-[#B42318]">
+            <p className="mt-5 rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-semibold text-[#B42318]">
               {itemsState.message}
             </p>
           )}
 
           {itemsState.status === "success" && visibleItems.length === 0 && (
-            <p className="mt-5 rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-5 text-sm font-black text-[#627083]">
+            <p className="mt-5 rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-5 text-sm font-semibold text-[#627083]">
               현재 표시할 제출 항목이 없습니다.
             </p>
           )}
@@ -380,7 +380,7 @@ export default function FirebaseSubmissionsPage() {
 
         <Link
           to="/firebase-dashboard"
-          className="inline-flex min-h-11 items-center rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+          className="inline-flex min-h-11 items-center rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
         >
           대시보드로 돌아가기
         </Link>

@@ -57,7 +57,7 @@ export default function FirebaseFaqPage() {
         >
           <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
             <label className="block">
-              <span className="mb-2 block text-sm font-black text-[#102047]">FAQ 검색</span>
+              <span className="mb-2 block text-sm font-semibold text-[#102047]">FAQ 검색</span>
               <input
                 type="search"
                 value={query}
@@ -80,7 +80,7 @@ export default function FirebaseFaqPage() {
 
             {hasNoSearchResult && (
               <div className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-6 text-center shadow-[0_14px_36px_rgba(16,32,71,0.05)]">
-                <p className="text-sm font-black text-[#627083]">검색 결과가 없습니다. 필요한 경우 보건실로 문의해주세요.</p>
+                <p className="text-sm font-semibold text-[#627083]">검색 결과가 없습니다. 필요한 경우 보건실로 문의해주세요.</p>
               </div>
             )}
 
@@ -97,13 +97,13 @@ export default function FirebaseFaqPage() {
                 >
                   <span>
                     {faq.category && (
-                      <span className="mb-2 block w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+                      <span className="mb-2 block w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
                         {faq.category}
                       </span>
                     )}
-                    <span className="block text-base font-black leading-6 text-[#102047]">Q. {faq.question}</span>
+                    <span className="block text-base font-semibold leading-6 text-[#102047]">Q. {faq.question}</span>
                   </span>
-                  <span className="text-2xl font-black text-[#20A982]">{openId === faq.id ? "-" : "+"}</span>
+                  <span className="text-2xl font-semibold text-[#20A982]">{openId === faq.id ? "-" : "+"}</span>
                 </button>
                 {openId === faq.id && (
                   <div className="border-t border-[#DDEAE7] bg-[#F7FBF9] p-5 text-sm font-medium leading-7 text-[#627083]">

@@ -35,7 +35,7 @@ function StatusPill({ status, children }) {
       ? "bg-[#FFF8E8] text-[#9A5B00]"
       : "bg-[#EEF4FF] text-[#3154A3]";
 
-  return <span className={`rounded-full px-3 py-1 text-xs font-black ${tone}`}>{children}</span>;
+  return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${tone}`}>{children}</span>;
 }
 
 function StateMessage({ state }) {
@@ -51,7 +51,7 @@ function StateMessage({ state }) {
 
   if (state.status === "error" || state.status === "permission-denied") {
     return (
-      <p className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-black text-[#B42318]">
+      <p className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-semibold text-[#B42318]">
         {state.message}
       </p>
     );
@@ -59,7 +59,7 @@ function StateMessage({ state }) {
 
   if (state.status === "empty") {
     return (
-      <p className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 text-sm font-black text-[#627083]">
+      <p className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 text-sm font-semibold text-[#627083]">
         현재 등록된 교직원이 없습니다.
       </p>
     );
@@ -71,8 +71,8 @@ function StateMessage({ state }) {
 function SummaryCard({ label, value, tone = "text-[#102047]" }) {
   return (
     <article className="rounded-[22px] border border-[#DDEAE7] bg-[#FAFDFC] px-4 py-3">
-      <p className="text-xs font-black text-[#627083]">{label}</p>
-      <p className={`mt-1 text-2xl font-black ${tone}`}>{value}</p>
+      <p className="text-xs font-semibold text-[#627083]">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold ${tone}`}>{value}</p>
     </article>
   );
 }
@@ -91,31 +91,31 @@ function RosterRow({ row, selectedItem }) {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill status={row.status}>{row.statusLabel}</StatusPill>
-            <span className="rounded-full bg-[#F7FBF9] px-3 py-1 text-xs font-black text-[#627083]">
+            <span className="rounded-full bg-[#F7FBF9] px-3 py-1 text-xs font-semibold text-[#627083]">
               {ITEM_LABELS[selectedItem]}
             </span>
           </div>
-          <h2 className="mt-3 break-keep text-base font-black text-[#102047]">{row.displayName}</h2>
+          <h2 className="mt-3 break-keep text-base font-semibold text-[#102047]">{row.displayName}</h2>
           <p className="mt-1 break-all text-xs font-bold text-[#627083]">{row.email || "이메일 없음"}</p>
         </div>
         <dl className="grid gap-2 text-sm sm:grid-cols-3 lg:min-w-[460px]">
           <div>
-            <dt className="text-xs font-black text-[#8A96A8]">보직/업무</dt>
+            <dt className="text-xs font-semibold text-[#8A96A8]">보직/업무</dt>
             <dd className="mt-1 font-bold text-[#102047]">{row.position || "미등록"}</dd>
           </div>
           <div>
-            <dt className="text-xs font-black text-[#8A96A8]">제출일</dt>
+            <dt className="text-xs font-semibold text-[#8A96A8]">제출일</dt>
             <dd className="mt-1 font-bold text-[#102047]">{row.submittedAtLabel || "-"}</dd>
           </div>
           <div>
-            <dt className="text-xs font-black text-[#8A96A8]">처리 상태</dt>
+            <dt className="text-xs font-semibold text-[#8A96A8]">처리 상태</dt>
             <dd className="mt-1 font-bold text-[#102047]">{row.status === "missing" ? "-" : row.statusLabel}</dd>
           </div>
         </dl>
         {row.status !== "missing" && (
           <Link
             to={adminHref}
-            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 py-2 text-xs font-black text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 py-2 text-xs font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
           >
             제출 보기
           </Link>
@@ -196,7 +196,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
                 key={itemId}
                 type="button"
                 onClick={() => setSelectedItem(itemId)}
-                className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
+                className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
                   selectedItem === itemId
                     ? "bg-[#20A982] text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)]"
                     : "border border-[#DDEAE7] bg-[#F7FBF9] text-[#102047]"
@@ -206,7 +206,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
               </button>
             ))}
           </div>
-          <label className="text-sm font-black text-[#102047] lg:w-72">
+          <label className="text-sm font-semibold text-[#102047] lg:w-72">
             검색
             <input
               value={searchTerm}
@@ -219,7 +219,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
 
         {overview?.item && (
           <div className="mt-5 rounded-[24px] bg-[#F7FBF9] p-4">
-            <p className="text-sm font-black text-[#102047]">{overview.item.title}</p>
+            <p className="text-sm font-semibold text-[#102047]">{overview.item.title}</p>
             <p className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-[#627083]">
               {overview.item.description || overview.item.guideText || "제출 항목 안내가 등록되지 않았습니다."}
             </p>
@@ -243,7 +243,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
               key={filter}
               type="button"
               onClick={() => setStatusFilter(filter)}
-              className={`min-h-10 rounded-2xl px-4 py-2 text-xs font-black transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
+              className={`min-h-10 rounded-2xl px-4 py-2 text-xs font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
                 statusFilter === filter ? "bg-[#20A982] text-white" : "bg-[#F7FBF9] text-[#627083]"
               }`}
             >
@@ -258,7 +258,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
           visibleRoster.map((row) => <RosterRow key={row.uid} row={row} selectedItem={selectedItem} />)}
 
         {state.status === "success" && visibleRoster.length === 0 && (
-          <p className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 text-sm font-black text-[#627083]">
+          <p className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 text-sm font-semibold text-[#627083]">
             {statusFilter === "missing" ? "모든 대상자가 제출했습니다." : "조건에 맞는 교직원이 없습니다."}
           </p>
         )}

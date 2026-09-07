@@ -159,10 +159,10 @@ export default function FirebaseTestPage() {
         <div className="rounded-[30px] border border-[#DDEAE7] bg-white/90 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
           <div className="mb-7 flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#20A982]">
+              <p className="text-xs font-semibold uppercase text-[#20A982]">
                 로그인 점검
               </p>
-              <h1 className="mt-3 text-3xl font-black tracking-[-0.02em] text-[#102047] sm:text-4xl">
+              <h1 className="mt-3 text-3xl font-semibold text-[#102047] sm:text-4xl">
                 로그인 점검
               </h1>
               <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#627083]">
@@ -177,7 +177,7 @@ export default function FirebaseTestPage() {
             </div>
           ) : !user ? (
             <div className="rounded-[26px] border border-[#DDEAE7] bg-gradient-to-br from-white to-[#F0FBF7] p-5">
-              <h2 className="text-xl font-black text-[#102047]">교직원 계정으로 로그인</h2>
+              <h2 className="text-xl font-semibold text-[#102047]">교직원 계정으로 로그인</h2>
               <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
                 교사: Teams · 그 외 교직원: Google
               </p>
@@ -191,16 +191,16 @@ export default function FirebaseTestPage() {
           ) : (
             <div className="space-y-5">
               <div className="rounded-[26px] border border-[#DDEAE7] bg-gradient-to-br from-white to-[#F7FBF9] p-5">
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-[#20A982]">
+                <p className="text-xs font-semibold uppercase text-[#20A982]">
                   로그인 계정
                 </p>
-                <h2 className="mt-2 text-2xl font-black text-[#102047]">
+                <h2 className="mt-2 text-2xl font-semibold text-[#102047]">
                   {user.displayName || profile?.displayName || "이름 미등록"}
                 </h2>
                 <p className="mt-1 break-all text-sm font-bold text-[#627083]">
                   {user.email || "이메일 없음"}
                 </p>
-                <p className="mt-2 text-xs font-black text-[#20A982]">
+                <p className="mt-2 text-xs font-semibold text-[#20A982]">
                   {getAuthProviderLabel(user)} 로그인
                 </p>
               </div>
@@ -208,15 +208,15 @@ export default function FirebaseTestPage() {
               <div className="rounded-[26px] border border-[#DDEAE7] bg-white p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.12em] text-[#20A982]">
+                    <p className="text-xs font-semibold uppercase text-[#20A982]">
                       현재 학기
                     </p>
-                    <h2 className="mt-2 text-xl font-black text-[#102047]">
+                    <h2 className="mt-2 text-xl font-semibold text-[#102047]">
                       {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
                     </h2>
                   </div>
                   {isProfileLoading && (
-                    <span className="w-fit rounded-full bg-[#EAF8F3] px-3 py-1 text-xs font-black text-[#08754B]">
+                    <span className="w-fit rounded-full bg-[#EAF8F3] px-3 py-1 text-xs font-semibold text-[#08754B]">
                       권한 확인 중
                     </span>
                   )}
@@ -240,7 +240,7 @@ export default function FirebaseTestPage() {
                           roleLabels.map((roleLabel) => (
                             <span
                               key={roleLabel}
-                              className="rounded-full border border-[#B8E8D6] bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]"
+                              className="rounded-full border border-[#B8E8D6] bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]"
                             >
                               {roleLabel}
                             </span>
@@ -252,19 +252,19 @@ export default function FirebaseTestPage() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-[#7B8797]">보직</p>
-                      <p className="mt-2 text-sm font-black text-[#102047]">
+                      <p className="mt-2 text-sm font-semibold text-[#102047]">
                         {assignment.position || "보직 미등록"}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs font-bold text-[#7B8797]">권한 상태</p>
-                      <p className="mt-2 text-sm font-black text-[#102047]">
+                      <p className="mt-2 text-sm font-semibold text-[#102047]">
                         {assignment.active === true ? "활성" : "비활성"}
                       </p>
                     </div>
                     <div>
                       <p className="text-xs font-bold text-[#7B8797]">담임 정보</p>
-                      <p className="mt-2 text-sm font-black text-[#102047]">
+                      <p className="mt-2 text-sm font-semibold text-[#102047]">
                         {assignment.grade ? `${assignment.grade}학년 ${assignment.classNo || "-"}반` : "해당 없음"}
                       </p>
                     </div>
@@ -277,7 +277,7 @@ export default function FirebaseTestPage() {
                   type="button"
                   onClick={handleMicrosoftSignIn}
                   disabled={isWorking}
-                  className="min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.2)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.2)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isWorking ? "처리 중..." : "Teams 다시 로그인"}
                 </button>
@@ -285,7 +285,7 @@ export default function FirebaseTestPage() {
                   type="button"
                   onClick={handleGoogleSignIn}
                   disabled={isWorking}
-                  className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Google로 로그인
                 </button>
@@ -293,7 +293,7 @@ export default function FirebaseTestPage() {
                   type="button"
                   onClick={handleSignOut}
                   disabled={isWorking}
-                  className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   로그아웃
                 </button>
@@ -310,8 +310,8 @@ export default function FirebaseTestPage() {
 
         <aside className="space-y-4">
           <div className="rounded-[28px] border border-[#DDEAE7] bg-white/90 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.06)]">
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#20A982]">이용 권한</p>
-            <p className="mt-2 text-lg font-black text-[#102047]">
+            <p className="text-xs font-semibold uppercase text-[#20A982]">이용 권한</p>
+            <p className="mt-2 text-lg font-semibold text-[#102047]">
               {accessStateLabel}
             </p>
             <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
@@ -320,7 +320,7 @@ export default function FirebaseTestPage() {
           </div>
 
           <div className="rounded-[28px] border border-[#DDEAE7] bg-[#F0FBF7] p-5">
-            <p className="text-sm font-black text-[#08754B]">개인정보 저장 최소화</p>
+            <p className="text-sm font-semibold text-[#08754B]">개인정보 저장 최소화</p>
             <p className="mt-2 text-sm font-medium leading-6 text-[#31584C]">
               역할과 보직은 학년도/학기별 권한 문서에서만 관리하고, 사용자 문서에는 고정 역할을 저장하지 않습니다.
             </p>
@@ -328,27 +328,27 @@ export default function FirebaseTestPage() {
 
           {user && (
             <details className="rounded-[24px] border border-[#DDEAE7] bg-white p-4">
-              <summary className="cursor-pointer text-sm font-black text-[#102047]">개발 정보 보기</summary>
+              <summary className="cursor-pointer text-sm font-semibold text-[#102047]">개발 정보 보기</summary>
               <dl className="mt-4 space-y-3 text-xs">
                 <div>
                   <dt className="font-bold text-[#7B8797]">UID</dt>
-                  <dd className="mt-1 break-all font-black text-[#102047]">{user.uid}</dd>
+                  <dd className="mt-1 break-all font-semibold text-[#102047]">{user.uid}</dd>
                 </div>
                 <div>
                   <dt className="font-bold text-[#7B8797]">assignment status</dt>
-                  <dd className="mt-1 font-black text-[#102047]">{assignmentResult?.status || "checking"}</dd>
+                  <dd className="mt-1 font-semibold text-[#102047]">{assignmentResult?.status || "checking"}</dd>
                 </div>
                 <div>
                   <dt className="font-bold text-[#7B8797]">provider</dt>
-                  <dd className="mt-1 font-black text-[#102047]">{getFirebaseProviderId(user) || "-"}</dd>
+                  <dd className="mt-1 font-semibold text-[#102047]">{getFirebaseProviderId(user) || "-"}</dd>
                 </div>
                 <div>
                   <dt className="font-bold text-[#7B8797]">error code</dt>
-                  <dd className="mt-1 font-black text-[#102047]">{assignmentResult?.errorCode || "-"}</dd>
+                  <dd className="mt-1 font-semibold text-[#102047]">{assignmentResult?.errorCode || "-"}</dd>
                 </div>
                 <div>
                   <dt className="font-bold text-[#7B8797]">users.active</dt>
-                  <dd className="mt-1 font-black text-[#102047]">
+                  <dd className="mt-1 font-semibold text-[#102047]">
                     {profile ? String(profile.active === true) : "확인 중"}
                   </dd>
                 </div>

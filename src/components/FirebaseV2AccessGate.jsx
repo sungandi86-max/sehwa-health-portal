@@ -18,7 +18,7 @@ function AccessMessage({ title, description, action }) {
   return (
     <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-8 text-[#102047] sm:px-6 sm:py-12">
       <div className="mx-auto max-w-xl rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 text-center shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
-        <h1 className="mt-5 text-2xl font-black tracking-[-0.02em] text-[#102047]">{title}</h1>
+        <h1 className="mt-5 text-2xl font-semibold text-[#102047]">{title}</h1>
         <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">{description}</p>
         {action}
       </div>
@@ -164,7 +164,7 @@ export default function FirebaseV2AccessGate({ children }) {
               type="button"
               onClick={handleSignOut}
               disabled={isWorking}
-              className="mt-4 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-4 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
             >
               로그아웃
             </button>
@@ -184,7 +184,7 @@ export default function FirebaseV2AccessGate({ children }) {
             type="button"
             onClick={handleSignOut}
             disabled={isWorking}
-            className="mt-6 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-6 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
           >
             로그아웃
           </button>
@@ -203,7 +203,7 @@ export default function FirebaseV2AccessGate({ children }) {
             type="button"
             onClick={handleSignOut}
             disabled={isWorking}
-            className="mt-6 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-6 min-h-12 rounded-2xl border border-[#DDEAE7] bg-white px-5 py-3 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
           >
             로그아웃
           </button>

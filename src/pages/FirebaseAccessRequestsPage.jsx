@@ -38,7 +38,7 @@ function StateMessage({ state }) {
 
   if (state.status === "error") {
     return (
-      <p className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-black text-[#B42318]">
+      <p className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-semibold text-[#B42318]">
         {state.message}
       </p>
     );
@@ -66,19 +66,19 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-3 py-1 text-xs font-black ${statusClassName(accessRequest.status)}`}>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClassName(accessRequest.status)}`}>
               {ACCESS_REQUEST_STATUS_LABELS[accessRequest.status] || accessRequest.status}
             </span>
-            <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">
+            <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#3154A3]">
               {accessRequest.schoolYear}학년도 {accessRequest.semester}학기
             </span>
           </div>
-          <h2 className="mt-4 break-keep text-lg font-black text-[#102047]">{applicantName}</h2>
+          <h2 className="mt-4 break-keep text-lg font-semibold text-[#102047]">{applicantName}</h2>
           {accessRequest.displayName && (
             <p className="mt-1 text-xs font-bold text-[#8A96A8]">Google 표시이름: {accessRequest.displayName}</p>
           )}
           <p className="mt-1 break-all text-sm font-bold text-[#627083]">{accessRequest.email || "이메일 없음"}</p>
-          <p className="mt-2 text-sm font-black text-[#08754B]">
+          <p className="mt-2 text-sm font-semibold text-[#08754B]">
             {department} · {staffType}
           </p>
         </div>
@@ -87,26 +87,26 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
 
       <dl className="mt-5 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-3">
         <div>
-          <dt className="text-xs font-black text-[#102047]">소속/부서</dt>
+          <dt className="text-xs font-semibold text-[#102047]">소속/부서</dt>
           <dd className="mt-1 text-sm font-medium text-[#627083]">{department}</dd>
         </div>
         <div>
-          <dt className="text-xs font-black text-[#102047]">교직원 구분</dt>
+          <dt className="text-xs font-semibold text-[#102047]">교직원 구분</dt>
           <dd className="mt-1 text-sm font-medium text-[#627083]">{staffType}</dd>
         </div>
         <div>
-          <dt className="text-xs font-black text-[#102047]">신청 권한</dt>
+          <dt className="text-xs font-semibold text-[#102047]">신청 권한</dt>
           <dd className="mt-1 text-sm font-medium text-[#627083]">교직원</dd>
         </div>
       </dl>
 
       <dl className="mt-3 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-2">
         <div>
-          <dt className="text-xs font-black text-[#102047]">검토일</dt>
+          <dt className="text-xs font-semibold text-[#102047]">검토일</dt>
           <dd className="mt-1 text-sm font-medium text-[#627083]">{formatDateTime(accessRequest.reviewedAt)}</dd>
         </div>
         <div>
-          <dt className="text-xs font-black text-[#102047]">메모</dt>
+          <dt className="text-xs font-semibold text-[#102047]">메모</dt>
           <dd className="mt-1 text-sm font-medium text-[#627083]">{accessRequest.reviewNote || "-"}</dd>
         </div>
       </dl>
@@ -117,7 +117,7 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
             type="button"
             onClick={() => onReject(accessRequest)}
             disabled={isPending}
-            className="min-h-11 rounded-2xl border border-[#F6D8D8] bg-[#FFF7F7] px-4 py-2 text-sm font-black text-[#B42318] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#B42318]/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-2xl border border-[#F6D8D8] bg-[#FFF7F7] px-4 py-2 text-sm font-semibold text-[#B42318] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#B42318]/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? "처리 중..." : "거절"}
           </button>
@@ -125,7 +125,7 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
             type="button"
             onClick={() => onApprove(accessRequest)}
             disabled={isPending}
-            className="min-h-11 rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? "처리 중..." : "승인"}
           </button>
@@ -212,7 +212,7 @@ function FirebaseAccessRequestsContent({ user, displayName }) {
               key={status}
               type="button"
               onClick={() => setStatusFilter(status)}
-              className={`min-h-10 rounded-2xl px-4 py-2 text-xs font-black transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
+              className={`min-h-10 rounded-2xl px-4 py-2 text-xs font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
                 statusFilter === status ? "bg-[#20A982] text-white shadow-[0_10px_24px_rgba(32,169,130,0.18)]" : "bg-[#F7FBF9] text-[#627083]"
               }`}
             >
@@ -229,14 +229,14 @@ function FirebaseAccessRequestsContent({ user, displayName }) {
             ["거절", summary.rejected, "#B42318"],
           ].map(([label, value, color]) => (
             <div key={label} className="rounded-2xl bg-[#F7FBF9] px-4 py-3">
-              <dt className="text-xs font-black text-[#627083]">{label}</dt>
-              <dd className="mt-1 text-2xl font-black" style={{ color }}>{value}</dd>
+              <dt className="text-xs font-semibold text-[#627083]">{label}</dt>
+              <dd className="mt-1 text-2xl font-semibold" style={{ color }}>{value}</dd>
             </div>
           ))}
         </dl>
 
         {actionState.message && (
-          <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-black ${actionState.status === "error" ? "bg-[#FFF7F7] text-[#B42318]" : "bg-[#F0FBF7] text-[#08754B]"}`}>
+          <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${actionState.status === "error" ? "bg-[#FFF7F7] text-[#B42318]" : "bg-[#F0FBF7] text-[#08754B]"}`}>
             {actionState.message}
           </p>
         )}
@@ -246,7 +246,7 @@ function FirebaseAccessRequestsContent({ user, displayName }) {
         {loadState.status === "loading" || loadState.status === "error" ? <StateMessage state={loadState} /> : null}
 
         {loadState.status === "success" && requests.length === 0 && (
-          <p className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-6 text-center text-sm font-black text-[#627083] shadow-[0_14px_36px_rgba(16,32,71,0.05)]">
+          <p className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-6 text-center text-sm font-semibold text-[#627083] shadow-[0_14px_36px_rgba(16,32,71,0.05)]">
             해당 조건의 권한 신청이 없습니다.
           </p>
         )}

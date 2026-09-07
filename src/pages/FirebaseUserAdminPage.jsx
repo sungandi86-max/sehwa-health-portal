@@ -624,7 +624,7 @@ function CopyTermPanel({ schoolYear, semester, onCopied }) {
     <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 sm:p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#08754B]">Next term</p>
+          <p className="text-xs font-semibold uppercase text-[#08754B]">Next term</p>
           <h2 className="mt-1 text-lg font-semibold text-[#102047]">다음 학기 권한 준비</h2>
           <p className="mt-2 text-sm font-medium leading-6 text-[#31584C]">
             {schoolYear}학년도 {semester}학기 권한을 {nextTerm.schoolYear}학년도 {nextTerm.semester}학기로 복사합니다.

@@ -48,7 +48,7 @@ function ReceiptItemCard({ item }) {
     <AppCard className="p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-black text-[#1A3B8B]">{item.label}</h3>
+          <h3 className="text-lg font-semibold text-[#1A3B8B]">{item.label}</h3>
           <p className="mt-1 text-xs font-bold text-slate-500">{item.sheetName}</p>
         </div>
         <Badge type={item.available ? "blue" : "pink"}>{item.available ? "시트 연결" : "요청형"}</Badge>
@@ -57,17 +57,17 @@ function ReceiptItemCard({ item }) {
       <div className="mt-4 grid grid-cols-2 gap-2">
         <div className="rounded-2xl bg-[#EAF3FF] p-3">
           <p className="text-xs font-bold text-slate-500">전체 건수</p>
-          <p className="mt-1 text-xl font-black text-[#1A3B8B]">{numberText(item.totalCount)}</p>
+          <p className="mt-1 text-xl font-semibold text-[#1A3B8B]">{numberText(item.totalCount)}</p>
         </div>
         <div className="rounded-2xl bg-[#F2FBF7] p-3">
           <p className="text-xs font-bold text-slate-500">오늘 신규</p>
-          <p className="mt-1 text-xl font-black text-[#2E7D32]">{numberText(item.todayCount)}</p>
+          <p className="mt-1 text-xl font-semibold text-[#2E7D32]">{numberText(item.todayCount)}</p>
         </div>
       </div>
 
       <div className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm font-semibold leading-6 text-slate-600">
         <p>
-          <span className="font-black text-[#263238]">최근 접수 일시: </span>
+          <span className="font-semibold text-[#263238]">최근 접수 일시: </span>
           {item.recentReceivedAt || "-"}
         </p>
         <p className="mt-1 text-xs text-slate-500">
@@ -78,7 +78,7 @@ function ReceiptItemCard({ item }) {
       <button
         type="button"
         onClick={() => setNotice("원본 허브 구글시트에서 해당 관련 시트를 확인해 주세요. 이 화면에는 개인정보를 표시하지 않습니다.")}
-        className="mt-4 min-h-11 w-full rounded-2xl border border-[#C9DFFF] bg-white px-4 py-3 text-sm font-black text-[#1A3B8B] transition hover:bg-[#EAF3FF]"
+        className="mt-4 min-h-11 w-full rounded-2xl border border-[#C9DFFF] bg-white px-4 py-3 text-sm font-semibold text-[#1A3B8B] transition hover:bg-[#EAF3FF]"
       >
         확인 방법 보기
       </button>
@@ -96,7 +96,7 @@ function SectionBlock({ section }) {
   return (
     <section className="mt-6">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-black text-[#263238]">{section.title}</h2>
+        <h2 className="text-xl font-semibold text-[#263238]">{section.title}</h2>
         <Badge type={section.id === "eventApplications" ? "green" : "blue"}>
           {section.id === "eventApplications" ? "이벤트 신청" : "제출·보고"}
         </Badge>
@@ -168,7 +168,7 @@ export default function AdminReceiptStatusPage({ adminUser }) {
         <AppCard className="mt-5 p-5">
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <p className="text-sm font-black text-[#263238]">Firebase 관리자 권한으로 조회</p>
+              <p className="text-sm font-semibold text-[#263238]">Firebase 관리자 권한으로 조회</p>
               <p className="mt-1 text-xs font-bold leading-5 text-slate-500" style={{ wordBreak: "keep-all" }}>
                 로그인한 보건교사/관리자 권한을 서버에서 확인한 뒤 기존 접수 현황을 불러옵니다.
               </p>
@@ -177,7 +177,7 @@ export default function AdminReceiptStatusPage({ adminUser }) {
               type="button"
               onClick={fetchSummary}
               disabled={loading}
-              className={`min-h-11 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition ${
+              className={`min-h-11 rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition ${
                 loading ? "cursor-not-allowed bg-slate-300" : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md"
               }`}
             >
@@ -185,7 +185,7 @@ export default function AdminReceiptStatusPage({ adminUser }) {
             </button>
           </div>
           {message && (
-            <p className="mt-3 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-sm font-black text-[#D94F70]">
+            <p className="mt-3 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-sm font-semibold text-[#D94F70]">
               {message}
             </p>
           )}
@@ -196,13 +196,13 @@ export default function AdminReceiptStatusPage({ adminUser }) {
             <p className="mt-5 rounded-2xl bg-[#F7F9FC] px-4 py-3 text-sm font-bold leading-6 text-slate-600" style={{ wordBreak: "keep-all" }}>
               감염병 발생 보고는 감염병 보고 관리 메뉴에서 확인합니다.
             </p>
-            <h2 className="mt-5 text-xl font-black text-[#263238]">오늘 신규 접수 요약</h2>
+            <h2 className="mt-5 text-xl font-semibold text-[#263238]">오늘 신규 접수 요약</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {sections.flatMap((section) => section.items || []).map((item) => (
                 <div key={`summary-${item.id}`} className="rounded-2xl bg-white p-4 shadow-sm">
-                  <p className="text-xs font-black text-slate-500">{item.label}</p>
-                  <p className="mt-2 text-sm font-black text-[#2E7D32]">오늘 신규</p>
-                  <p className="mt-1 text-2xl font-black text-[#1A3B8B]">{numberText(item.todayCount)}</p>
+                  <p className="text-xs font-semibold text-slate-500">{item.label}</p>
+                  <p className="mt-2 text-sm font-semibold text-[#2E7D32]">오늘 신규</p>
+                  <p className="mt-1 text-2xl font-semibold text-[#1A3B8B]">{numberText(item.todayCount)}</p>
                 </div>
               ))}
             </div>

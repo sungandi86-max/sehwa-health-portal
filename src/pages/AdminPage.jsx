@@ -34,8 +34,8 @@ function SummaryCard({ label, value, description, tone = "blue" }) {
 
   return (
     <div className={`rounded-2xl border border-white/80 ${bg} p-4`}>
-      <p className="text-xs font-black text-slate-500">{label}</p>
-      <p className={`mt-2 text-2xl font-black ${color}`}>{value}</p>
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className={`mt-2 text-2xl font-semibold ${color}`}>{value}</p>
       <p className="mt-2 text-xs font-bold leading-5 text-slate-600">{description}</p>
     </div>
   );
@@ -101,16 +101,16 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
         <AppCard className="mt-5 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black text-[#2E7D32]">TODAY CHECKLIST</p>
-              <h3 className="mt-1 text-xl font-black text-[#263238]">오늘 확인할 일</h3>
+              <p className="text-xs font-semibold text-[#2E7D32]">TODAY CHECKLIST</p>
+              <h3 className="mt-1 text-xl font-semibold text-[#263238]">오늘 확인할 일</h3>
             </div>
             <p className="text-xs font-bold text-slate-500">학생명, 진단명, 파일 링크는 표시하지 않습니다.</p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             {checkItems.map((item) => (
               <div key={item.label} className="rounded-2xl border border-slate-100 bg-[#F7F9FC] p-4">
-                <p className="text-sm font-black text-[#263238]">{item.label}</p>
-                <p className="mt-2 text-2xl font-black text-[#1A3B8B]">{countText(item.count)}</p>
+                <p className="text-sm font-semibold text-[#263238]">{item.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-[#1A3B8B]">{countText(item.count)}</p>
               </div>
             ))}
           </div>
@@ -119,8 +119,8 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
         <AppCard className="mt-5 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black text-[#D94F70]">SHORTCUTS</p>
-              <h3 className="mt-1 text-xl font-black text-[#263238]">주요 기능 바로가기</h3>
+              <p className="text-xs font-semibold text-[#D94F70]">SHORTCUTS</p>
+              <h3 className="mt-1 text-xl font-semibold text-[#263238]">주요 기능 바로가기</h3>
             </div>
             <p className="text-xs font-bold text-slate-500">교직원 공개 화면에는 표시되지 않습니다.</p>
           </div>
@@ -137,7 +137,7 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
                 <p className="mt-3 text-sm font-bold leading-6 text-slate-600" style={{ wordBreak: "keep-all" }}>
                   {item.description}
                 </p>
-                <p className="mt-4 text-sm font-black text-[#1A3B8B]">열기</p>
+                <p className="mt-4 text-sm font-semibold text-[#1A3B8B]">열기</p>
               </button>
             ))}
           </div>

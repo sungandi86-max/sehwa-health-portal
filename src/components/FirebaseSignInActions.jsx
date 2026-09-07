@@ -39,7 +39,7 @@ export default function FirebaseSignInActions({
   return (
     <div className={`${compact ? "mt-3 space-y-2" : "mt-5 space-y-3"} text-left`}>
       {displayMessage && (
-        <p className={`${compact ? "rounded-[10px] px-3 py-2 text-xs font-semibold" : "rounded-2xl px-4 py-3 text-sm font-black"} border border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]`}>
+        <p className={`${compact ? "rounded-[10px] px-3 py-2 text-xs font-semibold" : "rounded-2xl px-4 py-3 text-sm font-semibold"} border border-[#F6D8D8] bg-[#FFF7F7] text-[#B42318]`}>
           {displayMessage}
         </p>
       )}

@@ -30,7 +30,10 @@ body {
   width: 100%;
   overflow-x: hidden;
   background: var(--shh-bg);
-  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -56,6 +59,7 @@ body {
   --v2-border: #DDEAE7;
   background: var(--v2-bg);
   letter-spacing: 0;
+  line-height: 1.55;
 }
 
 .bogunon-page {
@@ -170,14 +174,21 @@ body {
   margin-top: 0.375rem;
 }
 
-.firebase-v2-surface .font-black {
-  font-weight: 700;
+.firebase-v2-surface .font-black,
+.firebase-v2-surface .font-extrabold {
+  font-weight: 600;
+}
+
+.firebase-v2-surface .tabular-nums.font-bold,
+.firebase-v2-surface .tabular-nums.font-semibold {
+  font-weight: 600;
 }
 
 .firebase-v2-surface h1,
 .firebase-v2-surface .text-4xl,
 .firebase-v2-surface .text-3xl {
   font-size: 1.5rem;
+  font-weight: 700;
   line-height: 1.25;
 }
 
@@ -185,12 +196,14 @@ body {
 .firebase-v2-surface .text-2xl,
 .firebase-v2-surface .text-xl {
   font-size: 1.0625rem;
+  font-weight: 600;
   line-height: 1.4;
 }
 
 .firebase-v2-surface h3,
 .firebase-v2-surface .text-lg {
   font-size: 0.9375rem;
+  font-weight: 600;
   line-height: 1.45;
 }
 

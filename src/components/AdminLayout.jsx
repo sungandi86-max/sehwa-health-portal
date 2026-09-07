@@ -25,8 +25,8 @@ export default function AdminLayout({ children, alert }) {
       <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="min-w-0 rounded-[24px] border border-slate-100 bg-white p-4 shadow-sm lg:sticky lg:top-20 lg:h-[calc(100vh-6rem)]">
           <div className="border-b border-slate-100 pb-4">
-            <p className="text-xs font-black text-[#D94F70]">ADMIN CONSOLE</p>
-            <h2 className="mt-1 text-xl font-black text-[#1A3B8B]">온라인 보건실 관리자</h2>
+            <p className="text-xs font-semibold text-[#D94F70]">ADMIN CONSOLE</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#1A3B8B]">온라인 보건실 관리자</h2>
             <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
               교직원 공개 화면과 분리된 운영 관리 영역입니다.
             </p>
@@ -39,7 +39,7 @@ export default function AdminLayout({ children, alert }) {
                 to={item.path}
                 className={({ isActive }) => {
                   const active = isActive || isMenuActive(item.path, location.pathname);
-                  return `rounded-2xl px-4 py-3 text-sm font-black transition ${
+                  return `rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                     active
                       ? "bg-[#1A3B8B] text-white shadow-sm"
                       : "text-slate-600 hover:bg-[#EAF3FF] hover:text-[#1A3B8B]"
@@ -54,7 +54,7 @@ export default function AdminLayout({ children, alert }) {
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="mt-4 min-h-11 w-full rounded-2xl border border-[#C9DFFF] bg-white px-4 py-3 text-sm font-black text-[#1A3B8B] transition hover:bg-[#EAF3FF]"
+            className="mt-4 min-h-11 w-full rounded-2xl border border-[#C9DFFF] bg-white px-4 py-3 text-sm font-semibold text-[#1A3B8B] transition hover:bg-[#EAF3FF]"
           >
             공개 포털로 이동
           </button>

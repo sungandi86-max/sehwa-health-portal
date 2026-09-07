@@ -38,7 +38,7 @@ function BoardPanel({ title, subtitle, children, className = "" }) {
   return (
     <section className={`rounded-[24px] border border-white/70 bg-white p-4 shadow-sm md:p-5 ${className}`}>
       <div className="mb-4">
-        <h3 className="text-lg font-black text-[#1A3B8B]">{title}</h3>
+        <h3 className="text-lg font-semibold text-[#1A3B8B]">{title}</h3>
         {subtitle && <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">{subtitle}</p>}
       </div>
       {children}
@@ -55,7 +55,7 @@ function GuideBlock({ title, children, tone = "default" }) {
 
   return (
     <div className={`rounded-[22px] border p-4 shadow-sm ${toneClass}`}>
-      <h4 className={`text-sm font-black ${tone === "warn" ? "text-[#D94F70]" : "text-[#1A3B8B]"}`}>{title}</h4>
+      <h4 className={`text-sm font-semibold ${tone === "warn" ? "text-[#D94F70]" : "text-[#1A3B8B]"}`}>{title}</h4>
       <div className="mt-3 text-sm font-semibold leading-7 text-slate-700" style={{ wordBreak: "keep-all" }}>
         {children}
       </div>
@@ -100,7 +100,7 @@ function CopyButton({ children, value, onCopy, variant = "primary" }) {
       type="button"
       disabled={disabled}
       onClick={() => onCopy(value)}
-      className={`min-h-11 rounded-2xl px-4 py-3 text-sm font-black transition ${
+      className={`min-h-11 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
         disabled ? "cursor-not-allowed bg-slate-100 text-slate-400" : activeClass
       }`}
     >
@@ -125,8 +125,8 @@ function WorkSelector({ tasks, selectedKey, onSelect }) {
                 : "border-[#C9DFFF] bg-[#F7FDFC] text-[#263238] hover:-translate-y-[1px] hover:bg-[#EAF3FF]"
             }`}
           >
-            <p className={`text-xs font-black ${active ? "text-[#A8E6D1]" : "text-[#D94F70]"}`}>{task.category || "업무분류"}</p>
-            <p className="mt-2 text-base font-black leading-6">{task.taskName || "업무명 없음"}</p>
+            <p className={`text-xs font-semibold ${active ? "text-[#A8E6D1]" : "text-[#D94F70]"}`}>{task.category || "업무분류"}</p>
+            <p className="mt-2 text-base font-semibold leading-6">{task.taskName || "업무명 없음"}</p>
             <p className={`mt-2 text-xs font-bold ${active ? "text-white/80" : "text-slate-500"}`}>
               {task.count}개 단계
             </p>
@@ -157,13 +157,13 @@ function StepSelector({ steps, selectedStep, onSelect }) {
                 : "border-slate-100 bg-white text-slate-600 hover:border-[#C9DFFF] hover:bg-[#F7F9FC]"
             }`}
           >
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
               active ? "bg-[#1A3B8B] text-white" : "bg-[#E8F6EE] text-[#2E7D32]"
             }`}>
               {index + 1}
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-black">{safeText(item.step, "단계 미정")}</span>
+              <span className="block text-sm font-semibold">{safeText(item.step, "단계 미정")}</span>
               <span className="block truncate text-xs font-semibold text-slate-500">{safeText(item.todo, "지금 할 일이 등록되지 않았습니다.")}</span>
             </span>
           </button>
@@ -177,20 +177,20 @@ function SummarySidebar({ selectedTask, selectedItem, recentTask, totalSteps, cu
   return (
     <div className="grid gap-3">
       <AppCard className="p-4">
-        <p className="text-xs font-black text-[#D94F70]">최근 선택한 업무</p>
-        <p className="mt-2 text-base font-black leading-6 text-[#263238]">
+        <p className="text-xs font-semibold text-[#D94F70]">최근 선택한 업무</p>
+        <p className="mt-2 text-base font-semibold leading-6 text-[#263238]">
           {recentTask ? recentTask.taskName : selectedTask?.taskName || "아직 선택한 업무 없음"}
         </p>
         <p className="mt-1 text-xs font-bold text-slate-500">{recentTask ? recentTask.category : selectedTask?.category || "1단계에서 업무를 선택하세요."}</p>
       </AppCard>
       <AppCard className="p-4">
-        <p className="text-xs font-black text-[#D94F70]">기준일</p>
-        <p className="mt-2 text-base font-black text-[#263238]">{todayLabel()}</p>
+        <p className="text-xs font-semibold text-[#D94F70]">기준일</p>
+        <p className="mt-2 text-base font-semibold text-[#263238]">{todayLabel()}</p>
         <p className="mt-1 text-xs font-bold text-slate-500">시트 로드맵 기준으로 확인합니다.</p>
       </AppCard>
       <AppCard className="p-4">
-        <p className="text-xs font-black text-[#D94F70]">일정 요약</p>
-        <p className="mt-2 text-base font-black text-[#263238]">
+        <p className="text-xs font-semibold text-[#D94F70]">일정 요약</p>
+        <p className="mt-2 text-base font-semibold text-[#263238]">
           {selectedItem ? `${currentStepIndex + 1}/${totalSteps} 단계` : "단계 선택 전"}
         </p>
         <p className="mt-1 text-xs font-bold text-slate-500">{selectedItem ? safeText(selectedItem.step, "현재 단계") : "2단계에서 현재 단계를 선택하세요."}</p>
@@ -218,8 +218,8 @@ function ToolCard({ tool }) {
   const content = (
     <>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-black text-[#1A3B8B]">{safeText(tool.name, "관련 도구")}</p>
-        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[0.68rem] font-black text-slate-500">
+        <p className="text-sm font-semibold text-[#1A3B8B]">{safeText(tool.name, "관련 도구")}</p>
+        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[0.68rem] font-semibold text-slate-500">
           {typeLabel}
         </span>
       </div>
@@ -287,22 +287,22 @@ function RoadmapToolSection({ item }) {
             rel="noopener noreferrer"
             className="min-h-24 rounded-2xl border border-[#A8E6D1] bg-[#F2FBF7] p-4 text-left transition hover:-translate-y-[1px] hover:bg-[#E8F6EE]"
           >
-            <p className="text-sm font-black text-[#1A3B8B]">관련 시트 열기</p>
+            <p className="text-sm font-semibold text-[#1A3B8B]">관련 시트 열기</p>
             <p className="mt-2 text-xs font-semibold leading-5 text-slate-600">
               {safeText(item.relatedSheet, "원본 관련 시트")}
             </p>
           </a>
         ) : (
           <div className="min-h-24 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
-            <p className="text-sm font-black text-slate-500">관련 시트 열기</p>
+            <p className="text-sm font-semibold text-slate-500">관련 시트 열기</p>
             <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">링크 미등록</p>
           </div>
         )}
 
         {item.relatedMenuId && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-black text-slate-500">관련 메뉴 ID</p>
-            <p className="mt-2 inline-flex rounded-full bg-[#EAF3FF] px-3 py-1.5 text-xs font-black text-[#1A3B8B]">
+            <p className="text-xs font-semibold text-slate-500">관련 메뉴 ID</p>
+            <p className="mt-2 inline-flex rounded-full bg-[#EAF3FF] px-3 py-1.5 text-xs font-semibold text-[#1A3B8B]">
               {item.relatedMenuId}
             </p>
           </div>
@@ -316,7 +316,7 @@ function RoadmapGuide({ item, nextItem, onCopy, copiedMessage, stepIndex, totalS
   if (!item) {
     return (
       <AppCard className="p-6 text-center">
-        <p className="text-lg font-black text-[#1A3B8B]">업무와 단계를 선택해주세요.</p>
+        <p className="text-lg font-semibold text-[#1A3B8B]">업무와 단계를 선택해주세요.</p>
         <p className="mt-2 text-sm font-semibold text-slate-500">1단계에서 업무를 고르고, 2단계에서 현재 단계를 선택하면 실행 가이드가 표시됩니다.</p>
       </AppCard>
     );
@@ -332,15 +332,15 @@ function RoadmapGuide({ item, nextItem, onCopy, copiedMessage, stepIndex, totalS
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Badge type="blue">{safeText(item.category, "업무분류")}</Badge>
-            <h3 className="mt-3 text-2xl font-black leading-8 text-[#263238]">{safeText(item.taskName, "업무명 없음")}</h3>
-            <p className="mt-3 text-lg font-black text-[#1A3B8B]">현재 단계: {safeText(item.step, "단계 미정")}</p>
+            <h3 className="mt-3 text-2xl font-semibold leading-8 text-[#263238]">{safeText(item.taskName, "업무명 없음")}</h3>
+            <p className="mt-3 text-lg font-semibold text-[#1A3B8B]">현재 단계: {safeText(item.step, "단계 미정")}</p>
             <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
               {todoItems[0] || "선택한 단계에서 확인해야 할 업무를 점검하는 단계입니다."}
             </p>
           </div>
           <div className="rounded-2xl bg-white px-4 py-3 text-right shadow-sm">
-            <p className="text-xs font-black text-[#D94F70]">진행 위치</p>
-            <p className="mt-1 text-xl font-black text-[#1A3B8B]">{stepIndex + 1}/{totalSteps}</p>
+            <p className="text-xs font-semibold text-[#D94F70]">진행 위치</p>
+            <p className="mt-1 text-xl font-semibold text-[#1A3B8B]">{stepIndex + 1}/{totalSteps}</p>
           </div>
         </div>
       </GuideBlock>
@@ -357,19 +357,19 @@ function RoadmapGuide({ item, nextItem, onCopy, copiedMessage, stepIndex, totalS
       <GuideBlock title="추가 확인 사항 또는 주의사항" tone={item.privacyNote ? "warn" : "default"}>
         <div className="grid gap-3 md:grid-cols-2">
           <div>
-            <p className="text-xs font-black text-[#1A3B8B]">안내 대상</p>
+            <p className="text-xs font-semibold text-[#1A3B8B]">안내 대상</p>
             <p className="mt-1">{safeText(item.audience)}</p>
           </div>
           <div>
-            <p className="text-xs font-black text-[#D94F70]">개인정보 주의</p>
+            <p className="text-xs font-semibold text-[#D94F70]">개인정보 주의</p>
             <p className="mt-1 whitespace-pre-line">{safeText(item.privacyNote, "개인정보나 건강정보를 포함하지 않도록 확인하세요.")}</p>
           </div>
           <div>
-            <p className="text-xs font-black text-[#1A3B8B]">열어둘 메뉴</p>
+            <p className="text-xs font-semibold text-[#1A3B8B]">열어둘 메뉴</p>
             <div className="mt-2"><MenuBadges value={item.openMenus} type="blue" /></div>
           </div>
           <div>
-            <p className="text-xs font-black text-[#1A3B8B]">숨길 메뉴</p>
+            <p className="text-xs font-semibold text-[#1A3B8B]">숨길 메뉴</p>
             <div className="mt-2"><MenuBadges value={item.hideMenus} type="gray" /></div>
           </div>
         </div>
@@ -380,11 +380,11 @@ function RoadmapGuide({ item, nextItem, onCopy, copiedMessage, stepIndex, totalS
       <GuideBlock title="관련 메신저 템플릿">
         <div className="grid gap-3">
           <div className="rounded-2xl bg-[#F7F9FC] p-4">
-            <p className="text-xs font-black text-[#1A3B8B]">메신저 제목</p>
-            <p className="mt-2 font-black text-[#263238]">{safeText(item.messageTitle)}</p>
+            <p className="text-xs font-semibold text-[#1A3B8B]">메신저 제목</p>
+            <p className="mt-2 font-semibold text-[#263238]">{safeText(item.messageTitle)}</p>
           </div>
           <div className="rounded-2xl bg-[#F7F9FC] p-4">
-            <p className="text-xs font-black text-[#1A3B8B]">메신저 문구</p>
+            <p className="text-xs font-semibold text-[#1A3B8B]">메신저 문구</p>
             <p className="mt-2 whitespace-pre-line font-semibold leading-7 text-slate-700" style={{ wordBreak: "keep-all" }}>
               {safeText(item.messageBody)}
             </p>
@@ -397,13 +397,13 @@ function RoadmapGuide({ item, nextItem, onCopy, copiedMessage, stepIndex, totalS
               href={MESSAGE_HELPER_LITE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-[#C9DFFF] bg-white px-4 py-2 text-sm font-black text-[#1A3B8B] transition hover:-translate-y-[1px] hover:bg-[#EAF3FF] hover:shadow-md"
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-[#C9DFFF] bg-white px-4 py-2 text-sm font-semibold text-[#1A3B8B] transition hover:-translate-y-[1px] hover:bg-[#EAF3FF] hover:shadow-md"
             >
               메신저 문구 생성기 Lite 열기
             </a>
           </div>
           {copiedMessage && (
-            <p className="rounded-2xl bg-[#E8F6EE] px-4 py-3 text-sm font-black text-[#2E7D32]">
+            <p className="rounded-2xl bg-[#E8F6EE] px-4 py-3 text-sm font-semibold text-[#2E7D32]">
               {copiedMessage}
             </p>
           )}

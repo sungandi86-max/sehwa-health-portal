@@ -73,16 +73,16 @@ export default function FirebaseEducationPage() {
                 className="flex min-h-64 flex-col rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.05)]"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+                  <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
                     {resource.category || "자료"}
                   </span>
                   {resource.target && (
-                    <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">
+                    <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#3154A3]">
                       {resource.target}
                     </span>
                   )}
                 </div>
-                <h2 className="mt-4 text-lg font-black leading-7 text-[#102047]">
+                <h2 className="mt-4 text-lg font-semibold leading-7 text-[#102047]">
                   {resource.title || "제목 없는 교육자료"}
                 </h2>
                 {resource.description && (
@@ -103,12 +103,12 @@ export default function FirebaseEducationPage() {
                     href={resource.linkUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-auto inline-flex min-h-11 w-fit items-center rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+                    className="mt-auto inline-flex min-h-11 w-fit items-center rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
                   >
                     {resource.buttonLabel || "자료 열기"}
                   </a>
                 ) : (
-                  <p className="mt-auto text-sm font-black text-[#8A96A8]">링크 미등록</p>
+                  <p className="mt-auto text-sm font-semibold text-[#8A96A8]">링크 미등록</p>
                 )}
               </article>
             ))}

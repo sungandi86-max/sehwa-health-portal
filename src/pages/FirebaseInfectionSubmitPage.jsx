@@ -25,7 +25,7 @@ const DEFAULT_ITEM = {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="text-sm font-black text-[#102047]">{label}</span>
+      <span className="text-sm font-semibold text-[#102047]">{label}</span>
       <div className="mt-2">{children}</div>
     </label>
   );
@@ -201,22 +201,22 @@ function InfectionForm(props) {
       <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
         <aside className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]">
           <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">{item.status || "접수 중"}</span>
-            <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">{item.deadlineLabel || "수시"}</span>
+            <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">{item.status || "접수 중"}</span>
+            <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#3154A3]">{item.deadlineLabel || "수시"}</span>
           </div>
-          <h2 className="mt-4 text-2xl font-black tracking-[-0.02em] text-[#102047]">{item.title}</h2>
+          <h2 className="mt-4 text-2xl font-semibold text-[#102047]">{item.title}</h2>
           <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">{item.description}</p>
           <dl className="mt-5 space-y-3 rounded-[24px] bg-[#F7FBF9] p-4 text-sm text-[#627083]">
-            <div><dt className="font-black text-[#102047]">대상</dt><dd className="mt-1 font-medium">{item.target || "-"}</dd></div>
-            <div><dt className="font-black text-[#102047]">학급</dt><dd className="mt-1 font-medium">{fixedGrade || "-"}학년 {fixedClassNo || "-"}반</dd></div>
-            <div><dt className="font-black text-[#102047]">안내</dt><dd className="mt-1 whitespace-pre-line font-medium">{item.guideText || "-"}</dd></div>
+            <div><dt className="font-semibold text-[#102047]">대상</dt><dd className="mt-1 font-medium">{item.target || "-"}</dd></div>
+            <div><dt className="font-semibold text-[#102047]">학급</dt><dd className="mt-1 font-medium">{fixedGrade || "-"}학년 {fixedClassNo || "-"}반</dd></div>
+            <div><dt className="font-semibold text-[#102047]">안내</dt><dd className="mt-1 whitespace-pre-line font-medium">{item.guideText || "-"}</dd></div>
           </dl>
           <p className="mt-5 rounded-[22px] bg-[#F0FBF7] p-4 text-sm font-bold leading-6 text-[#08754B]">주민등록번호, 연락처, 상세 진료내용은 입력하지 않습니다.</p>
-          {loadState.status === "permission-denied" || loadState.status === "error" ? <p className="mt-4 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-black text-[#B42318]">{loadState.message}</p> : null}
+          {loadState.status === "permission-denied" || loadState.status === "error" ? <p className="mt-4 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-semibold text-[#B42318]">{loadState.message}</p> : null}
         </aside>
 
         <form onSubmit={props.onSubmit} className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]">
-          {healthTeacher ? <TeacherClassFields values={values} setters={setters} /> : <p className="rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-4 text-sm font-black text-[#102047]">학급: {fixedGrade}학년 {fixedClassNo}반</p>}
+          {healthTeacher ? <TeacherClassFields values={values} setters={setters} /> : <p className="rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-4 text-sm font-semibold text-[#102047]">학급: {fixedGrade}학년 {fixedClassNo}반</p>}
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="번호"><input type="number" min="1" value={values.studentNumber} onChange={(event) => setters.setStudentNumber(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
             <Field label="학생 이름"><input type="text" value={values.studentName} onChange={(event) => setters.setStudentName(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
@@ -226,12 +226,12 @@ function InfectionForm(props) {
             <Field label="등교중지 종료일"><input type="date" value={values.exclusionEndDate} onChange={(event) => setters.setExclusionEndDate(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
           </div>
           <Field label="비고"><textarea value={values.note} onChange={(event) => setters.setNote(event.target.value)} rows={3} className="mt-2 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 py-3 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
-          {submitState.message && <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-black ${submitState.status === "success" ? "bg-[#F0FBF7] text-[#08754B]" : submitState.status === "submitting" ? "bg-[#EEF4FF] text-[#3154A3]" : "bg-[#FFF7F7] text-[#B42318]"}`}>{submitState.message}</p>}
-          <button type="submit" disabled={isSubmitDisabled} className="mt-5 min-h-12 w-full rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.22)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-50">{submitState.status === "submitting" ? "제출 중..." : item.buttonLabel || "감염병 발생 보고하기"}</button>
+          {submitState.message && <p className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${submitState.status === "success" ? "bg-[#F0FBF7] text-[#08754B]" : submitState.status === "submitting" ? "bg-[#EEF4FF] text-[#3154A3]" : "bg-[#FFF7F7] text-[#B42318]"}`}>{submitState.message}</p>}
+          <button type="submit" disabled={isSubmitDisabled} className="mt-5 min-h-12 w-full rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.22)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-50">{submitState.status === "submitting" ? "제출 중..." : item.buttonLabel || "감염병 발생 보고하기"}</button>
         </form>
       </section>
       <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]">
-        <h2 className="text-xl font-black text-[#102047]">{CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기 감염병 보고 목록</h2>
+        <h2 className="text-xl font-semibold text-[#102047]">{CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기 감염병 보고 목록</h2>
         <div className="mt-4"><FirebaseInfectionReportList reports={reports} state={listState} /></div>
       </section>
     </FirebaseV2PageShell>

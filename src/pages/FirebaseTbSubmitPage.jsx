@@ -22,7 +22,7 @@ const STAFF_TYPES = ["교사", "강사", "행정직원"];
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="text-sm font-black text-[#102047]">{label}</span>
+      <span className="text-sm font-semibold text-[#102047]">{label}</span>
       <div className="mt-2">{children}</div>
     </label>
   );
@@ -126,31 +126,31 @@ export default function FirebaseTbSubmitPage() {
           <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <aside className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+                <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
                   {item.status || "접수 중"}
                 </span>
-                <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-black text-[#3154A3]">
+                <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#3154A3]">
                   {item.deadlineLabel || "상시"}
                 </span>
               </div>
-              <h2 className="mt-4 text-2xl font-black tracking-[-0.02em] text-[#102047]">{item.title}</h2>
+              <h2 className="mt-4 text-2xl font-semibold text-[#102047]">{item.title}</h2>
               <p className="mt-3 text-sm font-medium leading-6 text-[#627083]">{item.description}</p>
               <dl className="mt-5 space-y-3 rounded-[24px] bg-[#F7FBF9] p-4 text-sm text-[#627083]">
                 <div>
-                  <dt className="font-black text-[#102047]">대상</dt>
+                  <dt className="font-semibold text-[#102047]">대상</dt>
                   <dd className="mt-1 font-medium">{item.target || "-"}</dd>
                 </div>
                 <div>
-                  <dt className="font-black text-[#102047]">제출자료</dt>
+                  <dt className="font-semibold text-[#102047]">제출자료</dt>
                   <dd className="mt-1 font-medium">{item.documentType || "-"}</dd>
                 </div>
                 <div>
-                  <dt className="font-black text-[#102047]">안내</dt>
+                  <dt className="font-semibold text-[#102047]">안내</dt>
                   <dd className="mt-1 whitespace-pre-line font-medium">{item.guideText || "-"}</dd>
                 </div>
               </dl>
               {loadState.status === "permission-denied" || loadState.status === "error" ? (
-                <p className="mt-4 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-black text-[#B42318]">
+                <p className="mt-4 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-semibold text-[#B42318]">
                   {loadState.message}
                 </p>
               ) : null}
@@ -207,7 +207,7 @@ export default function FirebaseTbSubmitPage() {
                     type="file"
                     accept="application/pdf,image/jpeg,image/png"
                     onChange={handleFileChange}
-                    className="block min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 py-3 text-sm font-bold text-[#102047] file:mr-3 file:rounded-xl file:border-0 file:bg-[#F0FBF7] file:px-3 file:py-2 file:text-sm file:font-black file:text-[#08754B]"
+                    className="block min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 py-3 text-sm font-bold text-[#102047] file:mr-3 file:rounded-xl file:border-0 file:bg-[#F0FBF7] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#08754B]"
                   />
                 </Field>
               </div>
@@ -218,7 +218,7 @@ export default function FirebaseTbSubmitPage() {
 
               {submitState.message && (
                 <p
-                  className={`mt-4 rounded-2xl px-4 py-3 text-sm font-black ${
+                  className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${
                     submitState.status === "success"
                       ? "bg-[#F0FBF7] text-[#08754B]"
                       : submitState.status === "submitting"
@@ -233,7 +233,7 @@ export default function FirebaseTbSubmitPage() {
               <button
                 type="submit"
                 disabled={isSubmitDisabled}
-                className="mt-5 min-h-12 w-full rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.22)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 min-h-12 w-full rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.22)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitState.status === "submitting" ? "제출 중..." : item.buttonLabel || "확인증 업로드하기"}
               </button>

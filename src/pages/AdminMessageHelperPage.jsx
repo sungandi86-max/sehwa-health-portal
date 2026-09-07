@@ -10,7 +10,7 @@ function LiteOpenButton({ className = "" }) {
       href={MESSAGE_HELPER_LITE_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md ${className}`}
+      className={`inline-flex min-h-11 items-center justify-center rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md ${className}`}
     >
       보건실 메신저 문구 생성기 열기
     </a>
@@ -42,8 +42,8 @@ export default function AdminMessageHelperPage() {
 
         <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
           <AppCard className="p-5 md:p-6">
-            <p className="text-sm font-black text-[#D94F70]">보건실 업무용 Lite 도구</p>
-            <h3 className="mt-2 text-2xl font-black leading-9 text-[#263238]">
+            <p className="text-sm font-semibold text-[#D94F70]">보건실 업무용 Lite 도구</p>
+            <h3 className="mt-2 text-2xl font-semibold leading-9 text-[#263238]">
               보건실 메신저 문구 생성기 Lite
             </h3>
             <p className="mt-3 text-sm font-semibold leading-7 text-slate-600" style={{ wordBreak: "keep-all" }}>
@@ -70,21 +70,21 @@ export default function AdminMessageHelperPage() {
 
           <div className="space-y-4">
             <AppCard className="border-[#A8E6D1] bg-[#F2FBF7] p-5">
-              <p className="text-sm font-black text-[#2E7D32]">개인정보 저장 없음</p>
+              <p className="text-sm font-semibold text-[#2E7D32]">개인정보 저장 없음</p>
               <p className="mt-2 text-sm font-bold leading-6 text-slate-700" style={{ wordBreak: "keep-all" }}>
                 입력한 내용은 화면에서만 사용되며 별도로 저장되지 않습니다.
               </p>
             </AppCard>
 
             <AppCard className="border-[#F7C9D6] bg-[#FFF5F8] p-5">
-              <p className="text-sm font-black text-[#D94F70]">민감정보 주의</p>
+              <p className="text-sm font-semibold text-[#D94F70]">민감정보 주의</p>
               <p className="mt-2 text-sm font-bold leading-6 text-slate-700" style={{ wordBreak: "keep-all" }}>
                 학생 이름, 진단명, 검진 결과, 상세 건강정보를 문구에 직접 포함하지 않도록 주의해 주세요.
               </p>
             </AppCard>
 
             <AppCard className="p-5">
-              <p className="text-sm font-black text-[#1A3B8B]">화면 안 임베드 안내</p>
+              <p className="text-sm font-semibold text-[#1A3B8B]">화면 안 임베드 안내</p>
               <p className="mt-2 text-sm font-semibold leading-6 text-slate-600" style={{ wordBreak: "keep-all" }}>
                 Apps Script 웹앱은 보안 설정에 따라 iframe 표시가 제한될 수 있어, 안정적인 새 창 열기 방식을 기본으로 사용합니다.
               </p>

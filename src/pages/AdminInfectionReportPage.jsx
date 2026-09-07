@@ -52,8 +52,8 @@ function statusBadgeType(status) {
 function SummaryCard({ label, value, type = "blue" }) {
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm">
-      <p className="text-xs font-black text-slate-500">{label}</p>
-      <p className={`mt-2 text-2xl font-black ${type === "pink" ? "text-[#D94F70]" : type === "green" ? "text-[#2E7D32]" : "text-[#1A3B8B]"}`}>
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className={`mt-2 text-2xl font-semibold ${type === "pink" ? "text-[#D94F70]" : type === "green" ? "text-[#2E7D32]" : "text-[#1A3B8B]"}`}>
         {numberText(value)}
       </p>
     </div>
@@ -64,7 +64,7 @@ function Info({ label, value }) {
   const displayValue = value === "시트 확인" ? "원본 시트 확인" : value;
   return (
     <div className="rounded-2xl bg-slate-50 px-3 py-2">
-      <p className="text-[0.7rem] font-black text-slate-500">{label}</p>
+      <p className="text-[0.7rem] font-semibold text-slate-500">{label}</p>
       <p className="mt-1 font-bold text-[#263238]">{displayValue || "-"}</p>
     </div>
   );
@@ -75,8 +75,8 @@ function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, up
     <AppCard className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black text-slate-500">접수일시 또는 발생일</p>
-          <h3 className="mt-1 text-base font-black text-[#1A3B8B]">
+          <p className="text-xs font-semibold text-slate-500">접수일시 또는 발생일</p>
+          <h3 className="mt-1 text-base font-semibold text-[#1A3B8B]">
             {item.receivedAt || item.occurredAt || "-"}
           </h3>
         </div>
@@ -99,7 +99,7 @@ function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, up
       </div>
 
       <div className="mt-4 rounded-2xl border border-[#C9DFFF] bg-white p-3">
-        <label className="mb-1.5 block text-xs font-black text-[#1A3B8B]">상태 변경</label>
+        <label className="mb-1.5 block text-xs font-semibold text-[#1A3B8B]">상태 변경</label>
         <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
           <select
             value={statusDraft || item.status || "확인 중"}
@@ -115,7 +115,7 @@ function ReportCard({ item, statusDraft, onStatusDraftChange, onStatusUpdate, up
             type="button"
             onClick={() => onStatusUpdate(item)}
             disabled={!canUpdate || updating}
-            className={`min-h-11 rounded-2xl px-4 py-2 text-sm font-black text-white transition ${
+            className={`min-h-11 rounded-2xl px-4 py-2 text-sm font-semibold text-white transition ${
               !canUpdate || updating ? "cursor-not-allowed bg-slate-300" : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md"
             }`}
           >
@@ -231,7 +231,7 @@ export default function AdminInfectionReportPage({ adminUser }) {
         <AppCard className="mt-5 p-5">
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <p className="text-sm font-black text-[#263238]">Firebase 관리자 권한으로 조회</p>
+              <p className="text-sm font-semibold text-[#263238]">Firebase 관리자 권한으로 조회</p>
               <p className="mt-1 text-xs font-bold leading-5 text-slate-500" style={{ wordBreak: "keep-all" }}>
                 로그인한 보건교사/관리자 권한을 서버에서 확인한 뒤 기존 감염병 보고 시트를 조회·수정합니다.
               </p>
@@ -240,7 +240,7 @@ export default function AdminInfectionReportPage({ adminUser }) {
               type="button"
               onClick={fetchReports}
               disabled={loading}
-              className={`min-h-11 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-sm transition ${
+              className={`min-h-11 rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition ${
                 loading ? "cursor-not-allowed bg-slate-300" : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md"
               }`}
             >
@@ -250,7 +250,7 @@ export default function AdminInfectionReportPage({ adminUser }) {
         </AppCard>
 
         {message && (
-          <p className="mt-4 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-sm font-black text-[#D94F70]">
+          <p className="mt-4 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-sm font-semibold text-[#D94F70]">
             {message}
           </p>
         )}
@@ -270,7 +270,7 @@ export default function AdminInfectionReportPage({ adminUser }) {
                   key={item}
                   type="button"
                   onClick={() => setFilter(item)}
-                  className={`min-h-10 rounded-full px-4 py-2 text-sm font-black transition ${
+                  className={`min-h-10 rounded-full px-4 py-2 text-sm font-semibold transition ${
                     filter === item
                       ? "bg-[#1A3B8B] text-white shadow-sm"
                       : "border border-slate-200 bg-white text-slate-600 hover:bg-[#EAF3FF] hover:text-[#1A3B8B]"

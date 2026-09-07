@@ -37,7 +37,7 @@ function StateMessage({ state, emptyMessage }) {
 
   if (state.status === "permission-denied" || state.status === "error") {
     return (
-      <p className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-black text-[#B42318]">
+      <p className="rounded-[26px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-semibold text-[#B42318]">
         {state.message}
       </p>
     );
@@ -45,7 +45,7 @@ function StateMessage({ state, emptyMessage }) {
 
   if (state.status === "empty") {
     return (
-      <p className="rounded-[26px] border border-[#DDEAE7] bg-[#F7FBF9] p-5 text-sm font-black text-[#627083]">
+      <p className="rounded-[26px] border border-[#DDEAE7] bg-[#F7FBF9] p-5 text-sm font-semibold text-[#627083]">
         {emptyMessage}
       </p>
     );
@@ -62,7 +62,7 @@ function StatusPill({ status, labels }) {
       ? "bg-[#FFF7F7] text-[#B42318]"
       : "bg-[#EEF4FF] text-[#3154A3]";
 
-  return <span className={`rounded-full px-3 py-1 text-xs font-black ${tone}`}>{labels[status] || status}</span>;
+  return <span className={`rounded-full px-3 py-1 text-xs font-semibold ${tone}`}>{labels[status] || status}</span>;
 }
 
 function StatusButtons({ currentStatus, options, labels, pending, onChange }) {
@@ -76,7 +76,7 @@ function StatusButtons({ currentStatus, options, labels, pending, onChange }) {
             type="button"
             onClick={() => onChange(status)}
             disabled={pending || currentStatus === status}
-            className="min-h-10 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-xs font-black text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-45"
+            className="min-h-10 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-xs font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-45"
           >
             {labels[status]}
           </button>
@@ -90,7 +90,7 @@ function DetailRow({ label, value }) {
 
   return (
     <div>
-      <dt className="text-xs font-black text-[#102047]">{label}</dt>
+      <dt className="text-xs font-semibold text-[#102047]">{label}</dt>
       <dd className="mt-1 break-keep text-sm font-medium leading-6 text-[#627083]">{value}</dd>
     </div>
   );
@@ -106,12 +106,12 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-black text-[#08754B]">
+            <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
               {item.typeLabel}
             </span>
             <StatusPill status={item.status} labels={STAFF_STATUS_LABELS} />
           </div>
-          <h2 className="mt-4 text-lg font-black text-[#102047]">{submitterName}</h2>
+          <h2 className="mt-4 text-lg font-semibold text-[#102047]">{submitterName}</h2>
           {submitterEmail && <p className="mt-1 break-all text-sm font-bold text-[#627083]">{submitterEmail}</p>}
           <p className="mt-2 text-xs font-bold text-[#8A96A8]">제출일시 {item.submittedAtLabel}</p>
         </div>
@@ -120,12 +120,12 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
             href={item.file.driveUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-2xl bg-[#20A982] px-4 py-2 text-xs font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-2xl bg-[#20A982] px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
           >
             제출 파일 보기
           </a>
         ) : (
-          <span className="inline-flex min-h-10 shrink-0 items-center rounded-2xl bg-[#F7FBF9] px-4 py-2 text-xs font-black text-[#8A96A8]">
+          <span className="inline-flex min-h-10 shrink-0 items-center rounded-2xl bg-[#F7FBF9] px-4 py-2 text-xs font-semibold text-[#8A96A8]">
             {item.itemId === "recruit" ? "파일 없음" : "파일 링크 없음"}
           </span>
         )}
@@ -179,12 +179,12 @@ function InfectionReportCard({ report, pendingId, onStatusChange }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#FFF7F7] px-3 py-1 text-xs font-black text-[#B42318]">
+            <span className="rounded-full bg-[#FFF7F7] px-3 py-1 text-xs font-semibold text-[#B42318]">
               감염병 발생 보고
             </span>
             <StatusPill status={report.status} labels={INFECTION_STATUS_LABELS} />
           </div>
-          <h2 className="mt-4 text-lg font-black text-[#102047]">
+          <h2 className="mt-4 text-lg font-semibold text-[#102047]">
             {student.grade || "-"}학년 {student.classNo || "-"}반 {student.number || "-"}번 {student.name || "-"}
           </h2>
           <p className="mt-2 text-xs font-bold text-[#8A96A8]">제출일시 {report.submittedAtLabel}</p>
@@ -192,7 +192,7 @@ function InfectionReportCard({ report, pendingId, onStatusChange }) {
       </div>
 
       <details className="mt-5 rounded-[24px] bg-[#F7FBF9] p-4">
-        <summary className="cursor-pointer text-sm font-black text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20">
+        <summary className="cursor-pointer text-sm font-semibold text-[#102047] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20">
           상세 정보 보기
         </summary>
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -225,7 +225,7 @@ function FilterButton({ active, children, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`min-h-10 rounded-2xl px-4 py-2 text-xs font-black transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
+      className={`min-h-10 rounded-2xl px-4 py-2 text-xs font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
         active ? "bg-[#20A982] text-white shadow-[0_10px_24px_rgba(32,169,130,0.18)]" : "bg-white text-[#627083]"
       }`}
     >
@@ -353,7 +353,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
             <button
               type="button"
               onClick={() => handleTabChange("staff")}
-              className={`min-h-11 flex-1 rounded-[18px] px-4 py-2 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
+              className={`min-h-11 flex-1 rounded-[18px] px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
                 activeTab === "staff" ? "bg-white text-[#102047] shadow-[0_8px_20px_rgba(16,32,71,0.08)]" : "text-[#627083]"
               }`}
             >
@@ -362,7 +362,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
             <button
               type="button"
               onClick={() => handleTabChange("infection")}
-              className={`min-h-11 flex-1 rounded-[18px] px-4 py-2 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
+              className={`min-h-11 flex-1 rounded-[18px] px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
                 activeTab === "infection" ? "bg-white text-[#102047] shadow-[0_8px_20px_rgba(16,32,71,0.08)]" : "text-[#627083]"
               }`}
             >
@@ -384,7 +384,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
 
         {actionState.message && (
           <p
-            className={`mt-4 rounded-2xl px-4 py-3 text-sm font-black ${
+            className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${
               actionState.status === "success"
                 ? "bg-[#F0FBF7] text-[#08754B]"
                 : actionState.status === "loading"
@@ -429,7 +429,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
 
       <Link
         to="/firebase-dashboard"
-        className="inline-flex min-h-11 items-center rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-black text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+        className="inline-flex min-h-11 items-center rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
       >
         대시보드로 돌아가기
       </Link>

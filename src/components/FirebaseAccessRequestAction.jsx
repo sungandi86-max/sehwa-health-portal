@@ -122,7 +122,7 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
 
   if (!isGoogleUser) {
     return (
-      <p className="mt-5 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-black text-[#B42318]">
+      <p className="mt-5 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-semibold text-[#B42318]">
         기본 이용 권한을 설정하지 못했습니다. 보건실에 문의해 주세요.
       </p>
     );
@@ -133,13 +133,13 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
   return (
     <form className="mt-6 space-y-3 text-left" onSubmit={handleSubmit}>
       {state.message && (
-        <p className={`rounded-2xl px-4 py-3 text-sm font-black ${state.status === "error" ? "bg-[#FFF7F7] text-[#B42318]" : "bg-[#F0FBF7] text-[#08754B]"}`}>
+        <p className={`rounded-2xl px-4 py-3 text-sm font-semibold ${state.status === "error" ? "bg-[#FFF7F7] text-[#B42318]" : "bg-[#F0FBF7] text-[#08754B]"}`}>
           {state.message}
         </p>
       )}
       {canSubmit && (
         <div className="grid gap-3 rounded-[24px] border border-[#DDEAE7] bg-white/90 p-4">
-          <label className="grid gap-2 text-sm font-black text-[#102047]">
+          <label className="grid gap-2 text-sm font-semibold text-[#102047]">
             실명
             <input
               type="text"
@@ -152,7 +152,7 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
               required
             />
           </label>
-          <label className="grid gap-2 text-sm font-black text-[#102047]">
+          <label className="grid gap-2 text-sm font-semibold text-[#102047]">
             교직원 구분
             <select
               name="staffType"
@@ -167,7 +167,7 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
               ))}
             </select>
           </label>
-          <label className="grid gap-2 text-sm font-black text-[#102047]">
+          <label className="grid gap-2 text-sm font-semibold text-[#102047]">
             소속/부서
             <select
               value={usesCustomDepartment ? "custom" : applicant.department}
@@ -185,7 +185,7 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
             </select>
           </label>
           {applicant.staffType === "기타" && usesCustomDepartment && (
-            <label className="grid gap-2 text-sm font-black text-[#102047]">
+            <label className="grid gap-2 text-sm font-semibold text-[#102047]">
               소속/부서 직접입력
               <input
                 type="text"
@@ -204,7 +204,7 @@ export default function FirebaseAccessRequestAction({ user, onSubmitted }) {
       <button
         type="submit"
         disabled={!canSubmit}
-        className="min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-black text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-h-12 rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {state.status === "submitting" ? "신청 중..." : "이용 권한 신청"}
       </button>

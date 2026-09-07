@@ -55,7 +55,7 @@ export default function MessageTemplateSection({ items }) {
         {filtered.map((item) => (
           <AppCard key={item.title}>
             <Badge type="pink">{item.category}</Badge>
-            <h3 className="mt-3 text-lg font-extrabold text-[#263238]">{item.title}</h3>
+            <h3 className="mt-3 text-lg font-semibold text-[#263238]">{item.title}</h3>
             <pre className="mt-4 whitespace-pre-wrap rounded-2xl bg-[#F7F9FC] p-4 text-sm leading-6 text-slate-600 font-sans">
               {item.content}
             </pre>
