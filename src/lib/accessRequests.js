@@ -11,6 +11,16 @@ export const ACCESS_REQUEST_STATUS_LABELS = {
   rejected: "거절",
 };
 
+export const ACCESS_REQUEST_TYPES = {
+  BASE_ACCESS: "base_access",
+  HOMEROOM_ACCESS: "homeroom_access",
+};
+
+export const ACCESS_REQUEST_TYPE_LABELS = {
+  [ACCESS_REQUEST_TYPES.BASE_ACCESS]: "기본 이용 권한",
+  [ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS]: "담임 권한",
+};
+
 const ACCESS_REQUEST_API_PATH = "/api/firebase/access-requests";
 
 async function getIdToken() {
@@ -42,10 +52,25 @@ export function getAccessRequestId(uid, schoolYear, semester) {
   return `${uid}_${schoolYear}_${semester}`;
 }
 
+export function getAccessRequestType(accessRequest) {
+  return accessRequest?.requestType || ACCESS_REQUEST_TYPES.BASE_ACCESS;
+}
+
 export async function getCurrentAccessRequest(uid, schoolYear, semester) {
   if (!uid) return null;
 
-  const result = await requestJson(`${ACCESS_REQUEST_API_PATH}?mode=current&schoolYear=${schoolYear}&semester=${semester}`);
+  const result = await requestJson(
+    `${ACCESS_REQUEST_API_PATH}?mode=current&schoolYear=${schoolYear}&semester=${semester}&requestType=${ACCESS_REQUEST_TYPES.BASE_ACCESS}`
+  );
+  return result.request || null;
+}
+
+export async function getCurrentHomeroomAccessRequest(uid, schoolYear, semester) {
+  if (!uid) return null;
+
+  const result = await requestJson(
+    `${ACCESS_REQUEST_API_PATH}?mode=current&schoolYear=${schoolYear}&semester=${semester}&requestType=${ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS}`
+  );
   return result.request || null;
 }
 
@@ -58,17 +83,42 @@ export async function submitStaffAccessRequest(firebaseUser, schoolYear, semeste
 
   return requestJson(ACCESS_REQUEST_API_PATH, {
     method: "POST",
-    body: JSON.stringify({ schoolYear, semester, applicant }),
+    body: JSON.stringify({ schoolYear, semester, requestType: ACCESS_REQUEST_TYPES.BASE_ACCESS, applicant }),
   });
 }
 
-export async function getAccessRequests(status = "pending") {
-  const result = await requestJson(`${ACCESS_REQUEST_API_PATH}?status=${status}`);
+export async function submitHomeroomAccessRequest(firebaseUser, schoolYear, semester, homeroomInput) {
+  if (!firebaseUser?.uid) throw new Error("로그인이 필요합니다.");
+
+  const grade = Number(homeroomInput?.grade);
+  const classNo = Number(homeroomInput?.classNo);
+  if (!Number.isInteger(grade) || grade < 1 || grade > 3) throw new Error("학년을 선택해 주세요.");
+  if (!Number.isInteger(classNo) || classNo < 1 || classNo > 12) throw new Error("반을 선택해 주세요.");
+
+  return requestJson(ACCESS_REQUEST_API_PATH, {
+    method: "POST",
+    body: JSON.stringify({
+      schoolYear,
+      semester,
+      requestType: ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS,
+      homeroom: { grade, classNo },
+    }),
+  });
+}
+
+export async function getAccessRequests(status = "pending", options = {}) {
+  const params = new URLSearchParams({ status });
+  if (options.requestType) params.set("requestType", options.requestType);
+
+  const result = await requestJson(`${ACCESS_REQUEST_API_PATH}?${params.toString()}`);
   return result.requests || [];
 }
 
-export async function getPendingAccessRequestCount() {
-  const result = await requestJson(`${ACCESS_REQUEST_API_PATH}?mode=count&status=pending`);
+export async function getPendingAccessRequestCount(options = {}) {
+  const params = new URLSearchParams({ mode: "count", status: "pending" });
+  if (options.requestType) params.set("requestType", options.requestType);
+
+  const result = await requestJson(`${ACCESS_REQUEST_API_PATH}?${params.toString()}`);
   return result.count || 0;
 }
 

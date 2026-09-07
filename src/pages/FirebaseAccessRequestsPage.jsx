@@ -5,7 +5,10 @@ import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import {
   ACCESS_REQUEST_STATUSES,
   ACCESS_REQUEST_STATUS_LABELS,
+  ACCESS_REQUEST_TYPES,
+  ACCESS_REQUEST_TYPE_LABELS,
   approveAccessRequest,
+  getAccessRequestType,
   getAccessRequests,
   rejectAccessRequest,
 } from "../lib/accessRequests.js";
@@ -57,9 +60,21 @@ function statusClassName(status) {
 function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
   const isPending = pendingId === accessRequest.id;
   const canReview = accessRequest.status === "pending";
-  const applicantName = accessRequest.applicant?.realName || "실명 미입력";
-  const department = accessRequest.applicant?.department || "소속 미입력";
-  const staffType = accessRequest.applicant?.staffType || "구분 미입력";
+  const requestType = getAccessRequestType(accessRequest);
+  const isHomeroomRequest = requestType === ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS;
+  const requester = accessRequest.requester || {};
+  const applicantName = isHomeroomRequest
+    ? requester.displayName || accessRequest.displayName || "신청자 확인 필요"
+    : accessRequest.applicant?.realName || "실명 미입력";
+  const department = isHomeroomRequest
+    ? requester.department || "소속 미입력"
+    : accessRequest.applicant?.department || "소속 미입력";
+  const staffType = isHomeroomRequest
+    ? requester.position || "직책 미입력"
+    : accessRequest.applicant?.staffType || "구분 미입력";
+  const requestedClass = accessRequest.homeroom
+    ? `${accessRequest.homeroom.grade}학년 ${accessRequest.homeroom.classNo}반`
+    : "-";
 
   return (
     <article className="rounded-[28px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.06)]">
@@ -69,15 +84,20 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
             <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClassName(accessRequest.status)}`}>
               {ACCESS_REQUEST_STATUS_LABELS[accessRequest.status] || accessRequest.status}
             </span>
+            <span className="rounded-full border border-[#C8D8FF] bg-white px-3 py-1 text-xs font-semibold text-[#0D4EA6]">
+              {ACCESS_REQUEST_TYPE_LABELS[requestType] || "권한 신청"}
+            </span>
             <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#3154A3]">
               {accessRequest.schoolYear}학년도 {accessRequest.semester}학기
             </span>
           </div>
           <h2 className="mt-4 break-keep text-lg font-semibold text-[#102047]">{applicantName}</h2>
-          {accessRequest.displayName && (
+          {!isHomeroomRequest && accessRequest.displayName && (
             <p className="mt-1 text-xs font-bold text-[#8A96A8]">Google 표시이름: {accessRequest.displayName}</p>
           )}
-          <p className="mt-1 break-all text-sm font-bold text-[#627083]">{accessRequest.email || "이메일 없음"}</p>
+          {!isHomeroomRequest && (
+            <p className="mt-1 break-all text-sm font-bold text-[#627083]">{accessRequest.email || "이메일 없음"}</p>
+          )}
           <p className="mt-2 text-sm font-semibold text-[#08754B]">
             {department} · {staffType}
           </p>
@@ -91,14 +111,27 @@ function AccessRequestCard({ accessRequest, pendingId, onApprove, onReject }) {
           <dd className="mt-1 text-sm font-medium text-[#627083]">{department}</dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold text-[#102047]">교직원 구분</dt>
+          <dt className="text-xs font-semibold text-[#102047]">{isHomeroomRequest ? "직책" : "교직원 구분"}</dt>
           <dd className="mt-1 text-sm font-medium text-[#627083]">{staffType}</dd>
         </div>
         <div>
           <dt className="text-xs font-semibold text-[#102047]">신청 권한</dt>
-          <dd className="mt-1 text-sm font-medium text-[#627083]">교직원</dd>
+          <dd className="mt-1 text-sm font-medium text-[#627083]">{isHomeroomRequest ? "담임교사" : "교직원"}</dd>
         </div>
       </dl>
+
+      {isHomeroomRequest && (
+        <dl className="mt-3 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-2">
+          <div>
+            <dt className="text-xs font-semibold text-[#102047]">요청 학급</dt>
+            <dd className="mt-1 text-sm font-medium text-[#627083]">{requestedClass}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-[#102047]">교직원ID</dt>
+            <dd className="mt-1 text-sm font-medium text-[#627083]">{requester.staffId || "미연결"}</dd>
+          </div>
+        </dl>
+      )}
 
       <dl className="mt-3 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-2">
         <div>
@@ -202,7 +235,7 @@ function FirebaseAccessRequestsContent({ user, displayName }) {
     <FirebaseV2PageShell
       label="관리자"
       title="권한 신청 관리"
-      description="등록된 Google 계정의 현재 학기 기본 교직원 권한 신청을 승인하거나 거절합니다."
+      description="기본 이용 권한과 담임 권한 신청을 확인하고 승인하거나 거절합니다."
       displayName={displayName}
     >
       <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">

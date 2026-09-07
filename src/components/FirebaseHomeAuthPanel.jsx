@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
 import FirebaseAccessRequestAction from "./FirebaseAccessRequestAction.jsx";
+import FirebaseHomeroomAccessRequestAction from "./FirebaseHomeroomAccessRequestAction.jsx";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { auth } from "../lib/firebase.js";
@@ -14,7 +15,7 @@ import {
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
-import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
+import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher, isHomeroom, isStaff } from "../lib/userProfile.js";
 
 const HOURLY_INSTRUCTOR_POSITIONS = new Set(["강사", "시간강사"]);
 
@@ -65,8 +66,17 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
   const assignment = assignmentResult?.assignment || null;
   const displayName = user?.displayName || profile?.displayName || "교직원";
   const roleLabel = getPrimaryRoleLabel(assignment);
-  const canOpenDashboard = useMemo(() => isHealthTeacher(assignment) && assignment?.active === true, [assignment]);
+  const canOpenDashboard = useMemo(() => assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment)), [assignment]);
   const canOpenMyStatus = useMemo(() => canOpenMySubmissionStatus(assignment), [assignment]);
+  const canRequestHomeroomAccess = useMemo(() => {
+    return (
+      assignment?.active === true &&
+      isStaff(assignment) &&
+      !isHomeroom(assignment) &&
+      !isHealthTeacher(assignment) &&
+      !isAdmin(assignment)
+    );
+  }, [assignment]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -218,6 +228,9 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
               </Link>
             )}
           </div>
+          {canRequestHomeroomAccess && (
+            <FirebaseHomeroomAccessRequestAction user={user} profile={profile} assignment={assignment} />
+          )}
           {assignmentResult?.status === "not-found" && <FirebaseAccessRequestAction user={user} />}
           {message && (
             <p className="mt-3 rounded-[8px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-xs font-semibold text-[#B42318]">

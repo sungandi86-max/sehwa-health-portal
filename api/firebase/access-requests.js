@@ -6,9 +6,25 @@ const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
 const GOOGLE_PROVIDER_ID = "google.com";
 const ACCESS_REQUEST_LIMIT = 200;
+const ACCESS_REQUEST_TYPES = {
+  BASE_ACCESS: "base_access",
+  HOMEROOM_ACCESS: "homeroom_access",
+};
+const ACCESS_REQUEST_TYPE_VALUES = new Set(Object.values(ACCESS_REQUEST_TYPES));
 
 function getAssignmentId(uid, schoolYear = CURRENT_SCHOOL_YEAR, semester = CURRENT_SEMESTER) {
   return `${uid}_${schoolYear}_${semester}`;
+}
+
+function getAccessRequestId(uid, schoolYear = CURRENT_SCHOOL_YEAR, semester = CURRENT_SEMESTER, requestType = ACCESS_REQUEST_TYPES.BASE_ACCESS) {
+  return requestType === ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS
+    ? `${getAssignmentId(uid, schoolYear, semester)}_homeroom`
+    : getAssignmentId(uid, schoolYear, semester);
+}
+
+function normalizeRequestType(value) {
+  const requestType = String(value || ACCESS_REQUEST_TYPES.BASE_ACCESS);
+  return ACCESS_REQUEST_TYPE_VALUES.has(requestType) ? requestType : "";
 }
 
 function getBearerToken(req) {
@@ -39,6 +55,7 @@ function serializeAccessRequest(documentSnapshot) {
   const data = documentSnapshot.data();
   return {
     id: documentSnapshot.id,
+    requestType: data.requestType || ACCESS_REQUEST_TYPES.BASE_ACCESS,
     ...data,
     requestedAt: serializeTimestamp(data.requestedAt),
     updatedAt: serializeTimestamp(data.updatedAt),
@@ -53,17 +70,40 @@ async function verifyRequestUser(req) {
   return getFirebaseAdminAuth().verifyIdToken(idToken);
 }
 
-async function hasHealthTeacherAccess(db, uid) {
+function hasReviewerRole(assignment) {
+  return assignment.active === true && Array.isArray(assignment.roles) && assignment.roles.some((role) => ["health_teacher", "admin"].includes(role));
+}
+
+function hasRole(assignment, role) {
+  return Array.isArray(assignment?.roles) && assignment.roles.includes(role);
+}
+
+async function hasReviewerAccess(db, uid) {
   const assignmentSnapshot = await db.collection("user_assignments").doc(getAssignmentId(uid)).get();
   if (!assignmentSnapshot.exists) return false;
 
-  const assignment = assignmentSnapshot.data();
-  return assignment.active === true && Array.isArray(assignment.roles) && assignment.roles.includes("health_teacher");
+  return hasReviewerRole(assignmentSnapshot.data());
+}
+
+function normalizeHomeroomInput(input) {
+  const grade = Number(input?.grade);
+  const classNo = Number(input?.classNo);
+  if (!Number.isInteger(grade) || grade < 1 || grade > 3) {
+    return { homeroom: null, message: "학년을 선택해 주세요." };
+  }
+  if (!Number.isInteger(classNo) || classNo < 1 || classNo > 12) {
+    return { homeroom: null, message: "반을 선택해 주세요." };
+  }
+  return { homeroom: { grade, classNo }, message: "" };
 }
 
 async function getCurrentRequest(req, res, decodedToken) {
   const db = getFirebaseAdminDb();
-  const requestSnapshot = await db.collection("access_requests").doc(getAssignmentId(decodedToken.uid)).get();
+  const url = new URL(req.url, "http://localhost");
+  const requestType = normalizeRequestType(url.searchParams.get("requestType"));
+  if (!requestType) return res.status(400).json({ ok: false, message: "권한 신청 유형이 올바르지 않습니다." });
+
+  const requestSnapshot = await db.collection("access_requests").doc(getAccessRequestId(decodedToken.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER, requestType)).get();
 
   return res.status(200).json({
     ok: true,
@@ -73,35 +113,35 @@ async function getCurrentRequest(req, res, decodedToken) {
 
 async function listRequests(req, res, decodedToken) {
   const db = getFirebaseAdminDb();
-  const hasAccess = await hasHealthTeacherAccess(db, decodedToken.uid);
+  const hasAccess = await hasReviewerAccess(db, decodedToken.uid);
   if (!hasAccess) return res.status(403).json({ ok: false, message: "관리자 권한을 확인해 주세요." });
 
   const url = new URL(req.url, "http://localhost");
   const status = url.searchParams.get("status") || "pending";
   const mode = url.searchParams.get("mode") || "list";
+  const requestType = normalizeRequestType(url.searchParams.get("requestType"));
   const collectionRef = db.collection("access_requests");
   const baseQuery = status === "all" ? collectionRef : collectionRef.where("status", "==", status);
-
-  if (mode === "count") {
-    const snapshot = await baseQuery.limit(ACCESS_REQUEST_LIMIT).get();
-    return res.status(200).json({ ok: true, count: snapshot.size });
+  if (url.searchParams.has("requestType") && !requestType) {
+    return res.status(400).json({ ok: false, message: "권한 신청 유형이 올바르지 않습니다." });
   }
 
   const snapshot = await baseQuery.limit(ACCESS_REQUEST_LIMIT).get();
-  const requests = snapshot.docs.map(serializeAccessRequest).sort((left, right) => {
+  const requests = snapshot.docs.map(serializeAccessRequest).filter((request) => !requestType || request.requestType === requestType).sort((left, right) => {
     const leftTime = Date.parse(left.requestedAt || "") || 0;
     const rightTime = Date.parse(right.requestedAt || "") || 0;
     return rightTime - leftTime;
   });
+  if (mode === "count") return res.status(200).json({ ok: true, count: requests.length });
+
   return res.status(200).json({ ok: true, requests });
 }
 
-async function submitRequest(req, res, decodedToken) {
+async function submitBaseAccessRequest(res, decodedToken, body) {
   if (getProviderId(decodedToken) !== GOOGLE_PROVIDER_ID) {
     return res.status(403).json({ ok: false, message: "Google 계정만 이용 권한을 신청할 수 있습니다." });
   }
 
-  const body = await readJsonBody(req);
   const { applicant, message } = normalizeAccessRequestApplicant(body.applicant);
   if (!applicant) return res.status(400).json({ ok: false, message });
 
@@ -137,6 +177,7 @@ async function submitRequest(req, res, decodedToken) {
       uid: decodedToken.uid,
       email: decodedToken.email || "",
       displayName: decodedToken.name || "",
+      requestType: ACCESS_REQUEST_TYPES.BASE_ACCESS,
       schoolYear: CURRENT_SCHOOL_YEAR,
       semester: CURRENT_SEMESTER,
       requestedRole: "staff",
@@ -155,9 +196,107 @@ async function submitRequest(req, res, decodedToken) {
   return res.status(200).json({ ok: true, status: result.status });
 }
 
+async function submitHomeroomAccessRequest(res, decodedToken, body) {
+  const { homeroom, message } = normalizeHomeroomInput(body.homeroom);
+  if (!homeroom) return res.status(400).json({ ok: false, message });
+
+  const db = getFirebaseAdminDb();
+  const assignmentRef = db.collection("user_assignments").doc(getAssignmentId(decodedToken.uid));
+  const requestRef = db.collection("access_requests").doc(getAccessRequestId(decodedToken.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER, ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS));
+  const userRef = db.collection("users").doc(decodedToken.uid);
+  const now = Timestamp.now();
+
+  const result = await db.runTransaction(async (transaction) => {
+    const assignmentSnapshot = await transaction.get(assignmentRef);
+    const requestSnapshot = await transaction.get(requestRef);
+    const userSnapshot = await transaction.get(userRef);
+
+    if (!assignmentSnapshot.exists) return { status: "missing-assignment" };
+
+    const assignment = assignmentSnapshot.data();
+    if (assignment.active !== true) return { status: "inactive-assignment" };
+    if (hasRole(assignment, "homeroom")) return { status: "already-homeroom" };
+    if (hasReviewerRole(assignment)) return { status: "not-needed" };
+
+    if (requestSnapshot.exists) {
+      const requestData = requestSnapshot.data();
+      if (requestData.status === "pending") return { status: "already-pending" };
+      if (requestData.status === "approved") return { status: "already-approved" };
+      if (requestData.status === "rejected") {
+        transaction.update(requestRef, {
+          status: "pending",
+          requestedAt: now,
+          updatedAt: now,
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewNote: null,
+          homeroom,
+          requester: {
+            displayName: userSnapshot.data()?.displayName || decodedToken.name || "",
+            department: assignment.department || "",
+            position: assignment.position || "",
+            staffId: assignment.staffId || "",
+          },
+        });
+        return { status: "resubmitted" };
+      }
+    }
+
+    transaction.set(requestRef, {
+      uid: decodedToken.uid,
+      requestType: ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS,
+      schoolYear: CURRENT_SCHOOL_YEAR,
+      semester: CURRENT_SEMESTER,
+      requestedRole: "homeroom",
+      status: "pending",
+      requestedAt: now,
+      updatedAt: now,
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNote: null,
+      homeroom,
+      requester: {
+        displayName: userSnapshot.data()?.displayName || decodedToken.name || "",
+        department: assignment.department || "",
+        position: assignment.position || "",
+        staffId: assignment.staffId || "",
+      },
+    });
+
+    return { status: "created" };
+  });
+
+  if (result.status === "missing-assignment") {
+    return res.status(409).json({ ok: false, message: "기본 이용 권한 확인 후 담임 권한을 신청할 수 있습니다." });
+  }
+  if (result.status === "inactive-assignment") {
+    return res.status(409).json({ ok: false, message: "현재 학기 이용 권한이 활성화되어 있지 않습니다." });
+  }
+  if (result.status === "already-homeroom") {
+    return res.status(200).json({ ok: true, status: result.status, message: "이미 담임 권한이 등록되어 있습니다." });
+  }
+  if (result.status === "not-needed") {
+    return res.status(200).json({ ok: true, status: result.status, message: "관리자 권한 계정은 담임 권한 신청이 필요하지 않습니다." });
+  }
+
+  return res.status(200).json({ ok: true, status: result.status });
+}
+
+async function submitRequest(req, res, decodedToken) {
+  const body = await readJsonBody(req);
+  const requestType = normalizeRequestType(body.requestType);
+  if (!requestType) return res.status(400).json({ ok: false, message: "권한 신청 유형이 올바르지 않습니다." });
+
+  if (requestType === ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS) {
+    return submitHomeroomAccessRequest(res, decodedToken, body);
+  }
+
+  return submitBaseAccessRequest(res, decodedToken, body);
+}
+
 async function reviewRequest(req, res, decodedToken) {
   const db = getFirebaseAdminDb();
-  const hasAccess = await hasHealthTeacherAccess(db, decodedToken.uid);
+  const hasAccess = await hasReviewerAccess(db, decodedToken.uid);
   if (!hasAccess) return res.status(403).json({ ok: false, message: "관리자 권한을 확인해 주세요." });
 
   const body = await readJsonBody(req);
@@ -180,11 +319,39 @@ async function reviewRequest(req, res, decodedToken) {
     if (!requestSnapshot.exists) return { status: "missing-request" };
 
     const accessRequest = requestSnapshot.data();
+    const requestType = accessRequest.requestType || ACCESS_REQUEST_TYPES.BASE_ACCESS;
     if (action === "approve") {
       const assignmentRef = db
         .collection("user_assignments")
         .doc(getAssignmentId(accessRequest.uid, accessRequest.schoolYear, accessRequest.semester));
       const assignmentSnapshot = await transaction.get(assignmentRef);
+      if (requestType === ACCESS_REQUEST_TYPES.HOMEROOM_ACCESS) {
+        const { homeroom } = normalizeHomeroomInput(accessRequest.homeroom);
+        if (!homeroom) return { status: "invalid-homeroom-request" };
+        if (!assignmentSnapshot.exists) return { status: "missing-assignment" };
+
+        const assignment = assignmentSnapshot.data();
+        if (assignment.active !== true) return { status: "inactive-assignment" };
+
+        const roles = Array.isArray(assignment.roles) ? assignment.roles : [];
+        const nextRoles = roles.includes("homeroom") ? roles : [...roles, "homeroom"];
+        transaction.update(assignmentRef, {
+          roles: nextRoles,
+          grade: homeroom.grade,
+          classNo: homeroom.classNo,
+          updatedAt: now,
+        });
+
+        transaction.update(requestRef, {
+          status: "approved",
+          reviewedBy: reviewer,
+          reviewedAt: now,
+          updatedAt: now,
+          reviewNote: null,
+        });
+        return { status: "approved" };
+      }
+
       if (!assignmentSnapshot.exists) {
         transaction.set(assignmentRef, {
           uid: accessRequest.uid,
@@ -222,6 +389,15 @@ async function reviewRequest(req, res, decodedToken) {
 
   if (result.status === "missing-request") {
     return res.status(404).json({ ok: false, message: "권한 신청을 찾을 수 없습니다." });
+  }
+  if (result.status === "missing-assignment") {
+    return res.status(409).json({ ok: false, message: "기본 이용 권한이 없어 담임 권한을 승인할 수 없습니다." });
+  }
+  if (result.status === "inactive-assignment") {
+    return res.status(409).json({ ok: false, message: "현재 학기 이용 권한이 비활성 상태입니다." });
+  }
+  if (result.status === "invalid-homeroom-request") {
+    return res.status(400).json({ ok: false, message: "담임 권한 신청 정보가 올바르지 않습니다." });
   }
 
   return res.status(200).json({ ok: true, status: result.status });

@@ -11,7 +11,7 @@ import {
   signInWithMicrosoft,
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
-import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
+import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 function AccessMessage({ title, description, action }) {
@@ -35,7 +35,7 @@ export default function FirebaseV2AccessGate({ children }) {
   const [message, setMessage] = useState("");
 
   const assignment = assignmentResult?.assignment || null;
-  const hasHealthTeacherAccess = isHealthTeacher(assignment) && assignment?.active === true;
+  const hasAdminAccess = assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
   const displayName = useMemo(() => user?.displayName || profile?.displayName || "교직원", [profile, user]);
 
   useEffect(() => {
@@ -193,7 +193,7 @@ export default function FirebaseV2AccessGate({ children }) {
     );
   }
 
-  if (!hasHealthTeacherAccess) {
+  if (!hasAdminAccess) {
     return (
       <AccessMessage
         title="보건교사 관리자 권한이 없습니다."

@@ -16,7 +16,7 @@ import {
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
-import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher } from "../lib/userProfile.js";
+import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 const QUICK_MENUS = [
@@ -28,7 +28,7 @@ const QUICK_MENUS = [
   { title: "제출·보고 관리", description: "제출 확인과 감염병 보고 처리", status: "관리자", href: "/firebase-admin/submissions" },
   { title: "제출 현황", description: "대상자별 제출·미제출 확인", status: "관리자", href: "/firebase-admin/submission-status" },
   { title: "교직원 제출·이수 현황", description: "결핵검진·CPR 이수 상태", status: "관리자", href: "/firebase-admin/staff-submission-status" },
-  { title: "권한 신청", description: "Google 계정 권한 신청 승인", status: "관리자", href: "/firebase-admin/access-requests" },
+  { title: "권한 신청", description: "기본·담임 권한 신청 승인", status: "관리자", href: "/firebase-admin/access-requests" },
   { title: "교직원 권한 관리", description: "역할·담임·보직 학기별 관리", status: "관리자", href: "/firebase-admin/users" },
 ];
 
@@ -127,7 +127,7 @@ export default function FirebaseDashboardPage() {
   const [message, setMessage] = useState("");
 
   const assignment = assignmentResult?.assignment || null;
-  const hasHealthTeacherAccess = isHealthTeacher(assignment) && assignment?.active === true;
+  const hasAdminAccess = assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
 
   const displayName = useMemo(() => {
     return user?.displayName || profile?.displayName || "교직원";
@@ -180,7 +180,7 @@ export default function FirebaseDashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!hasHealthTeacherAccess) {
+    if (!hasAdminAccess) {
       setAnnouncements([]);
       setAnnouncementsState({ status: "idle", message: "" });
       setDashboardSummary(null);
@@ -220,10 +220,10 @@ export default function FirebaseDashboardPage() {
     return () => {
       shouldIgnore = true;
     };
-  }, [hasHealthTeacherAccess]);
+  }, [hasAdminAccess]);
 
   useEffect(() => {
-    if (!hasHealthTeacherAccess) {
+    if (!hasAdminAccess) {
       setDashboardSummary(null);
       setSummaryState({ status: "idle", message: "" });
       return;
@@ -261,7 +261,7 @@ export default function FirebaseDashboardPage() {
     return () => {
       shouldIgnore = true;
     };
-  }, [hasHealthTeacherAccess]);
+  }, [hasAdminAccess]);
 
   const handleMicrosoftSignIn = async () => {
     setIsWorking(true);
@@ -360,11 +360,11 @@ export default function FirebaseDashboardPage() {
     );
   }
 
-  if (!hasHealthTeacherAccess) {
+  if (!hasAdminAccess) {
     return (
       <AccessMessage
         title="보건교사 관리자 권한이 없습니다."
-        description="현재 계정은 온라인 보건실 보건교사 대시보드에 접근할 수 없습니다."
+        description="현재 계정은 온라인 보건실 관리자 대시보드에 접근할 수 없습니다."
         action={
           <button
             type="button"

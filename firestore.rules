@@ -247,12 +247,12 @@ service cloud.firestore {
     }
 
     match /access_requests/{requestId} {
-      allow read: if hasCurrentHealthTeacherAssignment()
+      allow read: if hasCurrentHealthTeacherOrAdminAssignment()
         || (signedIn() && resource.data.uid == request.auth.uid);
       allow create: if signedIn()
         && requestId == currentAssignmentId(request.auth.uid)
         && isValidAccessRequestCreate(request.resource.data);
-      allow update: if hasCurrentHealthTeacherAssignment() || isValidAccessRequestResubmit();
+      allow update: if hasCurrentHealthTeacherOrAdminAssignment() || isValidAccessRequestResubmit();
       allow delete: if false;
     }
 
