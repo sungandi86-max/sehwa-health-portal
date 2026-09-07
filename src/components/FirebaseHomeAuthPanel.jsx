@@ -162,7 +162,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
   };
 
   return (
-    <div className={`rounded-[12px] border border-[#DDEAE7] ${isSignedIn ? "bg-white" : "bg-[#F8FAFA]"} p-3 text-[#102047] ${className}`}>
+    <div className={`rounded-[12px] border border-[#DDEAE7] ${isSignedIn ? "bg-[#FBFCFF]" : "bg-[#F8FAFA]"} p-2.5 text-[#102047] sm:p-3 ${className}`}>
       {!isSignedIn && (
         <>
           <p className="text-[11px] font-semibold text-[#0D4EA6]">교직원 로그인</p>
@@ -189,11 +189,10 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
       )}
 
       {user && (
-        <div className="space-y-3">
-          <div className="flex flex-col gap-2 border-b border-[#DDEAE7] pb-2.5 sm:flex-row sm:items-start sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-start">
+        <div className="space-y-2.5">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-medium text-[#627083]">현재 사용자</p>
-              <p className="mt-1 truncate text-sm font-semibold text-[#102047]">{displayName} · {roleLabel}</p>
+              <p className="truncate text-sm font-semibold text-[#102047]">{displayName} · {roleLabel}</p>
               <p className="mt-0.5 truncate text-xs font-normal leading-5 text-[#627083]">
                 {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
               </p>
@@ -207,8 +206,8 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
               로그아웃
             </button>
           </div>
-          <div>
-            <p className="mb-1.5 text-[11px] font-medium text-[#627083]">현재 권한</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-medium text-[#627083]">현재 권한</p>
             <RoleSummary assignment={assignment} />
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -237,7 +236,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
             )}
           </div>
           {canOpenDashboard && (
-            <div className="border-t border-[#DDEAE7] pt-3">
+            <div className="border-t border-[#DDEAE7] pt-2.5">
               <AdminNotificationPanel user={user} enabled={canOpenDashboard} compact />
             </div>
           )}
