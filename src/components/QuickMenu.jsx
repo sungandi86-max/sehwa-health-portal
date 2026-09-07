@@ -41,6 +41,8 @@ const MENU_TONES = {
   },
 };
 
+const PRIORITY_MENU_IDS = new Set(["today", "upload", "studentCare"]);
+
 function MenuIcon({ id }) {
   if (id === "upload") {
     return (
@@ -98,30 +100,37 @@ export default function QuickMenu({ items = quickMenuItems, className = "", vari
         {items.map((item) => {
           const tone = MENU_TONES[item.id] || MENU_TONES.default;
           const target = item.href || ROUTE_MAP[item.id] || "/";
+          const isPriority = PRIORITY_MENU_IDS.has(item.id);
           return (
             <button
               key={item.id}
               onClick={() => navigate(target)}
               className={
                 isPortalCompact
-                  ? "group flex h-full min-h-[92px] min-w-0 flex-col rounded-[12px] border border-[#DDEAE7] bg-white p-3 text-left shadow-none transition hover:border-[#C8D8FF] hover:bg-[#FBFCFF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:min-h-[98px]"
+                  ? "group flex h-full min-h-[88px] min-w-0 flex-col rounded-[12px] border border-[#DDEAE7] bg-white p-2.5 text-left shadow-none transition hover:border-[#C8D8FF] hover:bg-[#FBFCFF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:min-h-[94px] sm:p-3"
                   : `group flex h-full min-h-32 min-w-0 flex-col rounded-[12px] border p-4 text-left shadow-none transition hover:border-[#C8D8FF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:p-4 lg:min-h-36 ${tone.card}`
               }
             >
-              <div className={`${isPortalCompact ? "mb-2 flex items-start justify-between gap-2" : "mb-2.5 flex items-start justify-between gap-3 sm:mb-3"}`}>
+              <div className={`${isPortalCompact ? "mb-1.5 flex items-start justify-between gap-2" : "mb-2.5 flex items-start justify-between gap-3 sm:mb-3"}`}>
                 <span className={
                   isPortalCompact
-                    ? "grid h-8 w-8 shrink-0 place-items-center rounded-[9px] border border-[#C8D8FF] bg-[#EEF4FF] text-[#0D4EA6]"
+                    ? `grid h-8 w-8 shrink-0 place-items-center rounded-[9px] border ${
+                        isPriority
+                          ? "border-[#C8D8FF] bg-[#EEF4FF] text-[#0D4EA6]"
+                          : "border-[#DDEAE7] bg-[#F8FAFA] text-[#627083]"
+                      }`
                     : `grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border ${tone.tile}`
                 }>
                   <MenuIcon id={item.id} />
                 </span>
-                {isPortalCompact ? <span className="text-sm font-semibold text-[#0D4EA6]">→</span> : item.featured ? <Badge type="blue">핵심</Badge> : <span className={`text-base font-semibold ${tone.cta}`}>→</span>}
+                {isPortalCompact ? (
+                  <span className={`text-xs font-semibold ${isPriority ? "text-[#0D4EA6]" : "text-[#627083]"}`}>→</span>
+                ) : item.featured ? <Badge type="blue">핵심</Badge> : <span className={`text-base font-semibold ${tone.cta}`}>→</span>}
               </div>
               <h3 className={`${isPortalCompact ? "text-sm font-semibold leading-5 sm:text-[15px]" : "text-[15px] font-semibold leading-5"} text-[#0F1F4B]`} style={{ wordBreak: "keep-all" }}>
                 {item.title}
               </h3>
-              <p className={`${isPortalCompact ? "mt-1 line-clamp-1 text-xs font-medium leading-5 sm:line-clamp-2" : "menu-card-description mt-1.5 text-xs font-medium leading-5 sm:text-sm sm:leading-6"} text-slate-600`}>
+              <p className={`${isPortalCompact ? "mt-1 line-clamp-1 text-xs font-normal leading-5 sm:line-clamp-2" : "menu-card-description mt-1.5 text-xs font-medium leading-5 sm:text-sm sm:leading-6"} text-slate-600`}>
                 {item.description}
               </p>
               {!isPortalCompact && (

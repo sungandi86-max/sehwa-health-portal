@@ -40,13 +40,13 @@ function getPrimaryRoleLabel(assignment) {
 function RoleSummary({ assignment }) {
   const labels = getRoleLabels(assignment?.roles);
 
-  if (!assignment) return <span className="text-sm font-semibold text-[#627083]">권한 확인 필요</span>;
-  if (!labels.length) return <span className="text-sm font-semibold text-[#627083]">역할 미등록</span>;
+  if (!assignment) return <span className="text-xs font-medium text-[#627083]">권한 확인 필요</span>;
+  if (!labels.length) return <span className="text-xs font-medium text-[#627083]">역할 미등록</span>;
 
   return (
     <div className="flex flex-wrap gap-1.5">
       {labels.map((label) => (
-        <span key={label} className="rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]">
+        <span key={label} className="rounded-[8px] border border-[#DDEAE7] bg-white px-2 py-0.5 text-[11px] font-medium text-[#3154A3]">
           {label}
         </span>
       ))}
@@ -152,7 +152,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
   return (
     <div className={`rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-[#102047] ${className}`}>
       <p className="text-[11px] font-semibold text-[#0D4EA6]">교직원 로그인</p>
-      <p className="mt-1 text-xs font-medium leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+      <p className="mt-1 text-xs font-normal leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
         교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
       </p>
 
@@ -173,25 +173,25 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
       )}
 
       {user && (
-        <div className="mt-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-center">
+        <div className="mt-2.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-start">
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-[#102047]">{displayName}</p>
-              <p className="mt-0.5 truncate text-xs font-semibold text-[#627083]">{roleLabel}</p>
+              <p className="truncate text-sm font-semibold text-[#102047]">{displayName} · {roleLabel}</p>
+              <p className="mt-0.5 truncate text-xs font-normal text-[#627083]">
+                {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
+              </p>
             </div>
             <button
               type="button"
               onClick={handleSignOut}
               disabled={isWorking}
-              className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-8 self-start rounded-[8px] px-2 py-1 text-xs font-medium text-[#627083] transition hover:bg-white hover:text-[#102047] disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
             >
               로그아웃
             </button>
           </div>
-          <div className="mt-3">
-            <p className="mb-2 text-xs font-semibold text-[#627083]">
-              {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기 현재 권한
-            </p>
+          <div className="mt-2.5">
+            <p className="mb-1.5 text-[11px] font-medium text-[#627083]">현재 권한</p>
             <RoleSummary assignment={assignment} />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -204,7 +204,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
             {canOpenMyStatus && (
               <Link
                 to="/my-submission-status"
-                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
+                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#C8D8FF] bg-white px-3 py-1.5 text-xs font-semibold text-[#0D4EA6] transition hover:bg-[#FBFCFF]"
               >
                 나의 제출·이수 현황
               </Link>
@@ -212,7 +212,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
             {canOpenDashboard && (
               <Link
                 to="/firebase-dashboard"
-                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047]"
+                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:bg-white"
               >
                 관리자 화면
               </Link>

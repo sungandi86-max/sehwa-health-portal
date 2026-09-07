@@ -11,12 +11,14 @@ const legacyMenuRoutes = {
   resources: "/resources",
 };
 
-const portalHomeManagerNote = "제출한 자료는 보건교사가 관리자 화면에서 확인합니다.";
+const portalHomePrivacyNotice =
+  "학생 개인정보·민감정보는 화면에 직접 표시하지 않으며, 제출 자료는 보건교사가 관리자 화면에서 확인합니다.";
 
 export default function HomePage({ config }) {
   const portalHomeConfig = {
     ...config,
-    managerNote: portalHomeManagerNote,
+    privacyNotice: portalHomePrivacyNotice,
+    managerNote: "",
   };
   const firebaseMenuById = new Map(firebaseV2MenuItems.map((item) => [item.id, item]));
   const legacyMenuById = new Map(quickMenuItems.map((item) => [item.id, item]));
@@ -26,7 +28,11 @@ export default function HomePage({ config }) {
     firebaseMenuById.get("checkup"),
     firebaseMenuById.get("education"),
     { ...legacyMenuById.get("homeroom"), href: legacyMenuRoutes.homeroom },
-    { ...legacyMenuById.get("studentCare"), href: legacyMenuRoutes.studentCare },
+    {
+      ...legacyMenuById.get("studentCare"),
+      href: legacyMenuRoutes.studentCare,
+      description: "권한에 따라 학생 건강관리 자료와 보건실 현황을 확인합니다.",
+    },
     { ...legacyMenuById.get("resources"), href: legacyMenuRoutes.resources },
     firebaseMenuById.get("faq"),
   ].filter(Boolean);
