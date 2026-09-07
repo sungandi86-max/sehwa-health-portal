@@ -14,7 +14,7 @@ export default function Footer() {
     <footer className="bg-[#183B8F] px-4 py-4 text-center text-xs text-blue-50">
       <p className="font-semibold">세화여자고등학교 온라인 보건실</p>
       <p className="mt-1 font-normal text-blue-100/85">교직원 보건업무 안내 · 제출 · 자료 확인 포털</p>
-      <p className="mt-1 text-[11px] font-normal text-blue-200 opacity-55">Copyright 2026. 온라인 보건실. All rights reserved.</p>
+      <p className="mt-1 text-[11px] font-normal text-blue-200 opacity-55">© 2026 보건교사 박숙현. All rights reserved.</p>
     </footer>
   );
 }
