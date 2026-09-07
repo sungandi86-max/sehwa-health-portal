@@ -84,6 +84,15 @@ function isLegacyAdminAction(params) {
   ].includes(String(params.action || ""));
 }
 
+function isLegacyStudentCarePasswordRequest(params) {
+  const action = String(params.action || "");
+  const mode = String(params.mode || "");
+  return (
+    ["getHealthRoomLocation", "confirmHealthRoomHomeroom"].includes(action) ||
+    ["monthlyVisit", "adminVisitStats"].includes(mode)
+  );
+}
+
 function canUseSubjectScope(assignment) {
   return isActiveAssignment(assignment) && hasAnyRole(assignment, ["staff", "homeroom", "health_teacher", "admin"]);
 }
@@ -465,6 +474,9 @@ export default async function handler(req, res) {
 
   if (isLegacyAdminAction(params)) {
     return jsonError(res, 401, "Firebase 관리자 로그인이 필요한 요청입니다.");
+  }
+  if (isLegacyStudentCarePasswordRequest(params)) {
+    return jsonError(res, 401, "Firebase 로그인이 필요한 요청입니다.");
   }
 
   console.log("[health-room-status] proxy request", {
