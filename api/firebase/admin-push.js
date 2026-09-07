@@ -107,6 +107,23 @@ async function registerToken(res, uid, req, body) {
   return res.status(200).json({ ok: true });
 }
 
+async function getRegistrationStatus(res, uid, body) {
+  const token = String(body.token || "").trim();
+  if (!token || token.length < 20) {
+    return res.status(400).json({ ok: false, message: "알림 기기 정보를 확인하지 못했습니다." });
+  }
+
+  const tokenSnapshot = await getFirebaseAdminDb()
+    .collection("admin_push_tokens")
+    .doc(uid)
+    .collection("tokens")
+    .doc(getAdminPushTokenId(token))
+    .get();
+  const registered = tokenSnapshot.exists && tokenSnapshot.data()?.active === true;
+
+  return res.status(200).json({ ok: true, registered });
+}
+
 async function removeToken(res, uid, body) {
   const token = String(body.token || "").trim();
   const tokenId = String(body.tokenId || (token ? getAdminPushTokenId(token) : "")).trim();
@@ -139,6 +156,7 @@ async function handlePost(req, res, uid) {
   const action = String(body.action || "markNotificationRead");
 
   if (action === "registerToken") return registerToken(res, uid, req, body);
+  if (action === "getRegistrationStatus") return getRegistrationStatus(res, uid, body);
   if (action === "removeToken") return removeToken(res, uid, body);
   if (action === "markNotificationRead") return markNotificationRead(res, uid, body);
 

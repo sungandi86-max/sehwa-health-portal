@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchAdminNotifications,
+  fetchAdminPushRegistrationStatus,
   getBrowserNotificationPermission,
   getPushCapability,
   markAdminNotificationRead,
@@ -13,6 +14,7 @@ export function useAdminNotifications({ user, enabled }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [permission, setPermission] = useState(getBrowserNotificationPermission());
+  const [registrationStatus, setRegistrationStatus] = useState("unknown");
   const [isRegistering, setIsRegistering] = useState(false);
   const [foregroundNotice, setForegroundNotice] = useState(null);
   const capability = useMemo(() => getPushCapability(), []);
@@ -21,6 +23,7 @@ export function useAdminNotifications({ user, enabled }) {
     if (!enabled || !user) {
       setNotifications([]);
       setUnreadCount(0);
+      setRegistrationStatus("unknown");
       setState({ status: "idle", message: "" });
       return;
     }
@@ -30,14 +33,27 @@ export function useAdminNotifications({ user, enabled }) {
       const result = await fetchAdminNotifications(user);
       setNotifications(result.notifications);
       setUnreadCount(result.unreadCount);
-      setPermission(getBrowserNotificationPermission());
+      const nextPermission = getBrowserNotificationPermission();
+      setPermission(nextPermission);
+      if (nextPermission === "granted" && capability.supported) {
+        setRegistrationStatus("checking");
+        try {
+          const registration = await fetchAdminPushRegistrationStatus(user);
+          setRegistrationStatus(registration.registered ? "registered" : "unregistered");
+        } catch {
+          setRegistrationStatus("unknown");
+        }
+      } else {
+        setRegistrationStatus("unregistered");
+      }
       setState({ status: "success", message: "" });
     } catch (error) {
       setNotifications([]);
       setUnreadCount(0);
+      setRegistrationStatus("unknown");
       setState({ status: "error", message: error?.message || "관리자 알림을 불러오지 못했습니다." });
     }
-  }, [enabled, user]);
+  }, [capability.supported, enabled, user]);
 
   useEffect(() => {
     void refresh();
@@ -70,14 +86,18 @@ export function useAdminNotifications({ user, enabled }) {
     if (!enabled || !user) return;
 
     setIsRegistering(true);
+    setRegistrationStatus("checking");
     setState({ status: "loading", message: "" });
     try {
       await registerAdminPushToken(user);
       setPermission(getBrowserNotificationPermission());
+      setRegistrationStatus("registered");
       await refresh();
+      setRegistrationStatus("registered");
       setState({ status: "success", message: "이 브라우저에서 관리자 알림을 받습니다." });
     } catch (error) {
       setPermission(getBrowserNotificationPermission());
+      setRegistrationStatus("unregistered");
       setState({ status: "error", message: error?.message || "알림을 켜지 못했습니다." });
     } finally {
       setIsRegistering(false);
@@ -98,6 +118,7 @@ export function useAdminNotifications({ user, enabled }) {
     markRead,
     notifications,
     permission,
+    registrationStatus,
     refresh,
     register,
     state,

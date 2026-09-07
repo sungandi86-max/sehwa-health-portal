@@ -41,7 +41,13 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
   if (!enabled) return null;
 
   const canRegister = notifications.capability.supported && notifications.permission !== "denied";
+  const isRegistered = notifications.registrationStatus === "registered";
   const showRecent = !compact && notifications.notifications.length > 0;
+  const registerButtonLabel = notifications.isRegistering || notifications.registrationStatus === "checking"
+    ? "등록 중"
+    : isRegistered
+      ? "알림 켜짐 ✓"
+      : "알림 받기";
 
   const openNotification = async (notification) => {
     await notifications.markRead(notification.id);
@@ -66,10 +72,14 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
           <button
             type="button"
             onClick={notifications.register}
-            disabled={notifications.isRegistering}
-            className="min-h-9 rounded-[9px] border border-[#C8D8FF] bg-white px-3 py-1.5 text-xs font-semibold text-[#0D4EA6] transition hover:bg-[#FBFCFF] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={notifications.isRegistering || notifications.registrationStatus === "checking" || isRegistered}
+            className={`min-h-9 rounded-[9px] border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed ${
+              isRegistered
+                ? "border-[#B8D8C9] bg-[#F3F8F6] text-[#08754B]"
+                : "border-[#C8D8FF] bg-white text-[#0D4EA6] hover:bg-[#FBFCFF] disabled:opacity-50"
+            }`}
           >
-            {notifications.isRegistering ? "등록 중" : "알림 받기"}
+            {registerButtonLabel}
           </button>
         ) : null}
       </div>

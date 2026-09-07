@@ -45,12 +45,46 @@ async function requestAdminJson(path, firebaseUser, options = {}) {
   return result;
 }
 
+async function getCurrentAdminPushToken() {
+  const capability = getPushCapability();
+  if (!capability.supported) throw new Error("이 브라우저는 알림을 지원하지 않습니다.");
+
+  const vapidKey = String(import.meta.env.VITE_FIREBASE_VAPID_KEY || "").trim();
+  if (!vapidKey) throw new Error("알림 설정 키가 아직 등록되지 않았습니다.");
+
+  const [{ getMessaging, getToken, isSupported }] = await Promise.all([
+    import("firebase/messaging"),
+    window.navigator.serviceWorker.register("/sw.js", { scope: "/" }),
+  ]);
+
+  const messagingSupported = await isSupported();
+  if (!messagingSupported) throw new Error("이 브라우저에서는 Firebase 알림을 사용할 수 없습니다.");
+
+  const serviceWorkerRegistration = await window.navigator.serviceWorker.ready;
+  const token = await getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration });
+  if (!token) throw new Error("알림 기기 정보를 생성하지 못했습니다.");
+
+  return token;
+}
+
 export async function fetchAdminNotifications(firebaseUser) {
   const result = await requestAdminJson(`${ADMIN_PUSH_API_PATH}?action=listNotifications`, firebaseUser);
   return {
     unreadCount: Number(result.unreadCount || 0),
     notifications: Array.isArray(result.notifications) ? result.notifications : [],
   };
+}
+
+export async function fetchAdminPushRegistrationStatus(firebaseUser) {
+  if (getBrowserNotificationPermission() !== "granted") return { registered: false };
+
+  const token = await getCurrentAdminPushToken();
+  const result = await requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
+    method: "POST",
+    body: JSON.stringify({ action: "getRegistrationStatus", token }),
+  });
+
+  return { registered: result.registered === true };
 }
 
 export async function markAdminNotificationRead(firebaseUser, notificationId) {
@@ -70,20 +104,7 @@ export async function registerAdminPushToken(firebaseUser) {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") throw new Error("브라우저 알림 권한이 필요합니다.");
 
-  const vapidKey = String(import.meta.env.VITE_FIREBASE_VAPID_KEY || "").trim();
-  if (!vapidKey) throw new Error("알림 설정 키가 아직 등록되지 않았습니다.");
-
-  const [{ getMessaging, getToken, isSupported }] = await Promise.all([
-    import("firebase/messaging"),
-    window.navigator.serviceWorker.register("/sw.js", { scope: "/" }),
-  ]);
-
-  const messagingSupported = await isSupported();
-  if (!messagingSupported) throw new Error("이 브라우저에서는 Firebase 알림을 사용할 수 없습니다.");
-
-  const serviceWorkerRegistration = await window.navigator.serviceWorker.ready;
-  const token = await getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration });
-  if (!token) throw new Error("알림 기기 정보를 생성하지 못했습니다.");
+  const token = await getCurrentAdminPushToken();
 
   await requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
     method: "POST",
