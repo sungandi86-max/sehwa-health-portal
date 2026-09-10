@@ -51,9 +51,9 @@ export default function PwaInstallCard() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-3 pb-1.5 sm:px-4 lg:max-w-[1280px]">
-      <details className="group overflow-hidden rounded-[10px] border border-[#DDEAE7] bg-white transition hover:border-[#C8D8FF]">
-        <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 px-3 py-1 marker:content-none sm:gap-3 sm:px-3.5 sm:py-1.5">
+    <section className="mx-auto w-full max-w-6xl px-3 pb-3 sm:px-4 lg:max-w-[1280px]">
+      <details className="group overflow-hidden rounded-[12px] border border-[#D7E8FF] bg-[#F1F7FF] transition hover:border-[#C8D8FF]">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 py-1.5 marker:content-none sm:gap-3 sm:px-4 sm:py-2">
           <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
             <h2 className="text-sm font-semibold leading-5 text-[#102047]">
               모바일에서 앱처럼 사용하기
@@ -65,7 +65,7 @@ export default function PwaInstallCard() {
           <span className="shrink-0 text-xs font-medium text-[#0D4EA6] group-open:hidden">자세히 보기 →</span>
           <span className="hidden shrink-0 text-xs font-medium text-[#0D4EA6] group-open:inline">접기</span>
         </summary>
-        <div className="border-t border-[#DDEAE7] px-3 pb-3 sm:px-4">
+        <div className="border-t border-[#D7E8FF] bg-white/70 px-3 pb-3 sm:px-4">
           <div className="grid divide-y divide-[#DDEAE7] text-xs leading-5 text-[#627083] md:grid-cols-3 md:divide-x md:divide-y-0">
             <div className="py-3 md:pr-4">
               <p className="font-bold text-[#102047]">안드로이드 Chrome</p>

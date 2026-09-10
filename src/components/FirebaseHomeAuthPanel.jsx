@@ -171,7 +171,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
       {!isSignedIn && (
         <>
           <p className="text-[11px] font-semibold text-[#0D4EA6]">교직원 로그인</p>
-          <p className="mt-1 text-xs font-normal leading-5 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+          <p className="mt-1 text-xs font-normal leading-5 text-[#627083]" style={{ wordBreak: "normal", overflowWrap: "anywhere" }}>
             교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
           </p>
         </>

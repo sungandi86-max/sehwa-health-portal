@@ -43,7 +43,7 @@ export default function FirebaseSignInActions({
           {displayMessage}
         </p>
       )}
-      <div className={`grid ${compact ? "grid-cols-2 gap-2 lg:grid-cols-1" : "gap-3"}`}>
+      <div className={`grid ${compact ? "grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1" : "gap-3"}`}>
         <button
           type="button"
           onClick={handleMicrosoftClick}
