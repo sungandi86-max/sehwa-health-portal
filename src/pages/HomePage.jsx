@@ -102,7 +102,7 @@ export default function HomePage({ config }) {
   return (
     <>
       <HeroSection config={portalHomeConfig} action={<FirebaseHomeAuthPanel className="h-full" />} />
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-3 pb-3 pt-3 sm:px-4 lg:max-w-[1280px] md:flex-row md:items-end md:justify-between">
+      <section className="mx-auto flex w-full max-w-6xl flex-col gap-1.5 px-3 pb-2.5 pt-2.5 sm:px-4 lg:max-w-[1280px] md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="text-xl font-bold leading-tight text-[#102047]">주요 메뉴</h2>
           <p className="mt-1 text-sm font-normal leading-5 text-[#627083]">

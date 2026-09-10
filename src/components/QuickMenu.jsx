@@ -115,7 +115,7 @@ export default function QuickMenu({ items = quickMenuItems, className = "", vari
   const isPortalCompact = variant === "portalCompact";
 
   return (
-    <section className={`mx-auto w-full max-w-6xl px-3 sm:px-4 lg:max-w-[1280px] ${isPortalCompact ? "pb-3" : "pb-6 md:pb-10"} ${className}`}>
+    <section className={`mx-auto w-full max-w-6xl px-3 sm:px-4 lg:max-w-[1280px] ${isPortalCompact ? "pb-2.5" : "pb-6 md:pb-10"} ${className}`}>
       <div className={`grid auto-rows-fr grid-cols-1 ${isPortalCompact ? "gap-3 sm:grid-cols-2 lg:grid-cols-4" : "gap-2.5 sm:gap-3 md:grid-cols-2 lg:grid-cols-4 lg:gap-4"}`}>
         {items.map((item) => {
           const tone = MENU_TONES[item.id] || MENU_TONES.default;
@@ -127,14 +127,14 @@ export default function QuickMenu({ items = quickMenuItems, className = "", vari
               onClick={() => navigate(target)}
               className={
                 isPortalCompact
-                  ? `group flex h-full min-h-[108px] min-w-0 flex-col rounded-[14px] border p-3 text-left shadow-[0_6px_16px_rgba(16,32,71,0.035)] transition hover:-translate-y-0.5 hover:border-[#C8D8FF] hover:shadow-[0_8px_20px_rgba(16,32,71,0.06)] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:min-h-[116px] sm:p-3.5 ${tone.card}`
+                  ? `group flex h-full min-h-[100px] min-w-0 flex-col rounded-[14px] border p-3 text-left shadow-[0_6px_16px_rgba(16,32,71,0.035)] transition hover:-translate-y-0.5 hover:border-[#C8D8FF] hover:shadow-[0_8px_20px_rgba(16,32,71,0.06)] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:min-h-[108px] ${tone.card}`
                   : `group flex h-full min-h-32 min-w-0 flex-col rounded-[12px] border p-4 text-left shadow-none transition hover:border-[#C8D8FF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:p-4 lg:min-h-36 ${tone.card}`
               }
             >
               <div className={`${isPortalCompact ? "mb-1.5 flex items-start justify-between gap-2" : "mb-2.5 flex items-start justify-between gap-3 sm:mb-3"}`}>
                 <span className={
                   isPortalCompact
-                    ? `grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border ${tone.tile}`
+                    ? `grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border ${tone.tile}`
                     : `grid h-10 w-10 shrink-0 place-items-center rounded-[10px] border ${tone.tile}`
                 }>
                   <MenuIcon id={item.id} />
@@ -146,7 +146,7 @@ export default function QuickMenu({ items = quickMenuItems, className = "", vari
               <h3 className={`${isPortalCompact ? "text-base font-semibold leading-6" : "text-[15px] font-semibold leading-5"} text-[#0F1F4B]`} style={{ wordBreak: "keep-all" }}>
                 {item.title}
               </h3>
-              <p className={`${isPortalCompact ? "mt-1.5 line-clamp-2 text-sm font-normal leading-5" : "menu-card-description mt-1.5 text-xs font-medium leading-5 sm:text-sm sm:leading-6"} text-slate-600`}>
+              <p className={`${isPortalCompact ? "mt-1 line-clamp-2 text-sm font-normal leading-5" : "menu-card-description mt-1.5 text-xs font-medium leading-5 sm:text-sm sm:leading-6"} text-slate-600`}>
                 {item.description}
               </p>
               {!isPortalCompact && (
