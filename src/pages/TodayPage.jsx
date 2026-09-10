@@ -3,12 +3,11 @@ import { useNavigate } from "react-router-dom";
 import TodaySection from "../components/TodaySection.jsx";
 import { fetchPortalContent } from "../lib/portalContent.js";
 
-export default function TodayPage({ items }) {
+export default function TodayPage() {
   const navigate = useNavigate();
   const [notices, setNotices] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [fallbackUsed, setFallbackUsed] = useState(false);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -16,7 +15,6 @@ export default function TodayPage({ items }) {
 
     async function loadNotices() {
       setIsLoading(true);
-      setFallbackUsed(false);
 
       try {
         const portal = await fetchPortalContent("today", controller.signal);
@@ -30,9 +28,8 @@ export default function TodayPage({ items }) {
         if (error?.name !== "AbortError") {
           console.error("[today] Sheet load failed", error);
         }
-        setNotices(Array.isArray(items) ? items : []);
+        setNotices([]);
         setLoadFailed(true);
-        setFallbackUsed(Array.isArray(items) && items.length > 0);
         setIsLoading(false);
       }
     }
@@ -43,7 +40,7 @@ export default function TodayPage({ items }) {
       shouldIgnore = true;
       controller.abort();
     };
-  }, [items]);
+  }, []);
 
   return (
     <>
@@ -59,7 +56,6 @@ export default function TodayPage({ items }) {
         items={notices}
         isLoading={isLoading}
         loadFailed={loadFailed}
-        fallbackUsed={fallbackUsed}
       />
     </>
   );

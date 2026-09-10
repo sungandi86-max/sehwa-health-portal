@@ -49,19 +49,13 @@ function EducationGuideDisclosure({ item }) {
   );
 }
 
-export default function EducationSection({ items, isLoading = false, loadFailed = false, fallbackUsed = false }) {
+export default function EducationSection({ items, isLoading = false, loadFailed = false }) {
   return (
     <section id="education" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
       <SectionTitle
         title="교육 자료실"
         description="응급처치교육, 성교육, 장애인식 개선교육, 약물 오남용 예방교육 링크를 모아둔 공간입니다."
       />
-      {fallbackUsed && (
-        <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-          교육 자료를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
-        </div>
-      )}
-
       <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
         <div className="flex items-center justify-between gap-3 border-b border-[#DDEAE7] px-4 py-3">
           <div>
@@ -77,6 +71,10 @@ export default function EducationSection({ items, isLoading = false, loadFailed 
 
         {!isLoading && loadFailed && (
           <p className="px-4 py-5 text-sm font-semibold text-[#627083]">교육 자료를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p>
+        )}
+
+        {!isLoading && !loadFailed && items.length === 0 && (
+          <p className="px-4 py-5 text-sm font-semibold text-[#627083]">현재 등록된 교육자료가 없습니다.</p>
         )}
 
         {!isLoading && !loadFailed && items.map((item) => (

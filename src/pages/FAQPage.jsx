@@ -3,12 +3,11 @@ import { useNavigate } from "react-router-dom";
 import FAQSection from "../components/FAQSection.jsx";
 import { fetchPortalContent } from "../lib/portalContent.js";
 
-export default function FAQPage({ items }) {
+export default function FAQPage() {
   const navigate = useNavigate();
   const [faqs, setFaqs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [fallbackUsed, setFallbackUsed] = useState(false);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -16,7 +15,6 @@ export default function FAQPage({ items }) {
 
     async function loadFaqs() {
       setIsLoading(true);
-      setFallbackUsed(false);
 
       try {
         const portal = await fetchPortalContent("faq", controller.signal);
@@ -30,9 +28,8 @@ export default function FAQPage({ items }) {
         if (error?.name !== "AbortError") {
           console.error("[faq] Sheet load failed", error);
         }
-        setFaqs(Array.isArray(items) ? items : []);
+        setFaqs([]);
         setLoadFailed(true);
-        setFallbackUsed(Array.isArray(items) && items.length > 0);
         setIsLoading(false);
       }
     }
@@ -43,7 +40,7 @@ export default function FAQPage({ items }) {
       shouldIgnore = true;
       controller.abort();
     };
-  }, [items]);
+  }, []);
 
   return (
     <>
@@ -59,7 +56,6 @@ export default function FAQPage({ items }) {
         items={faqs}
         isLoading={isLoading}
         loadFailed={loadFailed}
-        fallbackUsed={fallbackUsed}
       />
     </>
   );

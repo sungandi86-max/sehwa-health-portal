@@ -3,12 +3,11 @@ import { useNavigate } from "react-router-dom";
 import EducationSection from "../components/EducationSection.jsx";
 import { fetchPortalContent } from "../lib/portalContent.js";
 
-export default function EducationPage({ items }) {
+export default function EducationPage() {
   const navigate = useNavigate();
   const [educations, setEducations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [fallbackUsed, setFallbackUsed] = useState(false);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -16,7 +15,6 @@ export default function EducationPage({ items }) {
 
     async function loadEducations() {
       setIsLoading(true);
-      setFallbackUsed(false);
 
       try {
         const portal = await fetchPortalContent("education", controller.signal);
@@ -30,9 +28,8 @@ export default function EducationPage({ items }) {
         if (error?.name !== "AbortError") {
           console.error("[education] Sheet load failed", error);
         }
-        setEducations(Array.isArray(items) ? items : []);
+        setEducations([]);
         setLoadFailed(true);
-        setFallbackUsed(Array.isArray(items) && items.length > 0);
         setIsLoading(false);
       }
     }
@@ -43,7 +40,7 @@ export default function EducationPage({ items }) {
       shouldIgnore = true;
       controller.abort();
     };
-  }, [items]);
+  }, []);
 
   return (
     <>
@@ -59,7 +56,6 @@ export default function EducationPage({ items }) {
         items={educations}
         isLoading={isLoading}
         loadFailed={loadFailed}
-        fallbackUsed={fallbackUsed}
       />
     </>
   );

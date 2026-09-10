@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SectionTitle } from "./ui.jsx";
 
-export default function FAQSection({ items, isLoading = false, loadFailed = false, fallbackUsed = false }) {
+export default function FAQSection({ items, isLoading = false, loadFailed = false }) {
   const [openIndex, setOpenIndex] = useState(0);
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
@@ -34,12 +34,6 @@ export default function FAQSection({ items, isLoading = false, loadFailed = fals
           />
         </label>
       </div>
-      {fallbackUsed && (
-        <div className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-          FAQ를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
-        </div>
-      )}
-
       <div className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
         {isLoading ? (
           <div className="p-5 text-center text-sm font-semibold text-[#627083]">
@@ -68,6 +62,10 @@ export default function FAQSection({ items, isLoading = false, loadFailed = fals
         ) : loadFailed ? (
           <div className="p-5 text-center text-sm font-semibold text-[#627083]">
             FAQ를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.
+          </div>
+        ) : items.length === 0 ? (
+          <div className="p-5 text-center text-sm font-semibold text-[#627083]">
+            현재 등록된 FAQ가 없습니다.
           </div>
         ) : (
           <div className="p-5 text-center text-sm font-semibold text-[#627083]">

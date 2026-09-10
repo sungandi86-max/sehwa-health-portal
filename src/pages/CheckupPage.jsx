@@ -3,12 +3,11 @@ import CheckupSection from "../components/CheckupSection.jsx";
 import { PortalBackToHome } from "../components/PortalSubpageLayout.jsx";
 import { fetchPortalContent } from "../lib/portalContent.js";
 
-export default function CheckupPage({ items, tbConfig }) {
+export default function CheckupPage({ tbConfig }) {
   const [checkups, setCheckups] = useState([]);
   const [effectiveTbConfig, setEffectiveTbConfig] = useState(tbConfig);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [fallbackUsed, setFallbackUsed] = useState(false);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -16,7 +15,6 @@ export default function CheckupPage({ items, tbConfig }) {
 
     async function loadCheckups() {
       setIsLoading(true);
-      setFallbackUsed(false);
 
       try {
         const portal = await fetchPortalContent("checkups", controller.signal);
@@ -31,10 +29,9 @@ export default function CheckupPage({ items, tbConfig }) {
         if (error?.name !== "AbortError") {
           console.error("[checkup] Sheet load failed", error);
         }
-        setCheckups(Array.isArray(items) ? items : []);
+        setCheckups([]);
         setEffectiveTbConfig(tbConfig);
         setLoadFailed(true);
-        setFallbackUsed(Array.isArray(items) && items.length > 0);
         setIsLoading(false);
       }
     }
@@ -45,7 +42,7 @@ export default function CheckupPage({ items, tbConfig }) {
       shouldIgnore = true;
       controller.abort();
     };
-  }, [items, tbConfig]);
+  }, [tbConfig]);
 
   return (
     <>
@@ -57,7 +54,6 @@ export default function CheckupPage({ items, tbConfig }) {
         tbConfig={effectiveTbConfig}
         isLoading={isLoading}
         loadFailed={loadFailed}
-        fallbackUsed={fallbackUsed}
       />
     </>
   );

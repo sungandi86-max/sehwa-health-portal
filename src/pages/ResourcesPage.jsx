@@ -3,12 +3,11 @@ import { useNavigate } from "react-router-dom";
 import ResourceSection from "../components/ResourceSection.jsx";
 import { fetchPortalContent } from "../lib/portalContent.js";
 
-export default function ResourcesPage({ items }) {
+export default function ResourcesPage() {
   const navigate = useNavigate();
   const [resources, setResources] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [resourceLoadFailed, setResourceLoadFailed] = useState(false);
-  const [fallbackUsed, setFallbackUsed] = useState(false);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -16,7 +15,6 @@ export default function ResourcesPage({ items }) {
 
     async function loadResources() {
       setIsLoading(true);
-      setFallbackUsed(false);
       try {
         const portal = await fetchPortalContent("resources", controller.signal);
         if (shouldIgnore) return;
@@ -29,9 +27,8 @@ export default function ResourcesPage({ items }) {
         if (error?.name !== "AbortError") {
           console.error("[resources] Sheet load failed", error);
         }
-        setResources(Array.isArray(items) ? items : []);
+        setResources([]);
         setResourceLoadFailed(true);
-        setFallbackUsed(Array.isArray(items) && items.length > 0);
         setIsLoading(false);
       }
     }
@@ -42,7 +39,7 @@ export default function ResourcesPage({ items }) {
       shouldIgnore = true;
       controller.abort();
     };
-  }, [items]);
+  }, []);
 
   return (
     <>
@@ -58,7 +55,6 @@ export default function ResourcesPage({ items }) {
         items={resources}
         loadFailed={resourceLoadFailed}
         isLoading={isLoading}
-        fallbackUsed={fallbackUsed}
       />
     </>
   );

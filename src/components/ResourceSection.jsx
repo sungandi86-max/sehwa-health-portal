@@ -48,7 +48,7 @@ function ResourceAction({ item, onOpenInbody }) {
   );
 }
 
-export default function ResourceSection({ items, loadFailed, isLoading = false, fallbackUsed = false }) {
+export default function ResourceSection({ items, loadFailed, isLoading = false }) {
   const [category, setCategory] = useState("전체");
   const [inbodyOpen, setInbodyOpen] = useState(false);
 
@@ -60,7 +60,7 @@ export default function ResourceSection({ items, loadFailed, isLoading = false, 
   const filtered = category === "전체" ? items : items.filter((item) => item.category === category);
   const groupedResources = useMemo(() => [...groupResources(filtered).entries()], [filtered]);
   const emptyMessage = loadFailed
-    ? "데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
+    ? "건강정보/이벤트를 불러오지 못했습니다. 잠시 후 다시 확인해주세요."
     : "표시할 건강정보/이벤트 데이터가 없습니다.";
 
   return (
@@ -75,11 +75,6 @@ export default function ResourceSection({ items, loadFailed, isLoading = false, 
         </div>
       ) : items.length > 0 ? (
         <>
-          {fallbackUsed && (
-            <div className="mb-4 rounded-[10px] border border-[#DDEAE7] bg-white px-4 py-3 text-sm font-semibold text-[#627083]">
-              자료를 불러오는 중 문제가 있어 기존 방식으로 표시했습니다.
-            </div>
-          )}
           <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
             {categories.map((cat) => (
               <button

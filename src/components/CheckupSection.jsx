@@ -163,7 +163,7 @@ function CheckupModal({ modal, onClose }) {
   );
 }
 
-export default function CheckupSection({ items, tbConfig, isLoading = false, loadFailed = false, fallbackUsed = false }) {
+export default function CheckupSection({ items, tbConfig, isLoading = false, loadFailed = false }) {
   const navigate = useNavigate();
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
@@ -246,6 +246,10 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
 
         {!isLoading && loadFailed && (
           <p className="py-5 text-sm font-semibold text-[#627083]">검진·검사 안내를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p>
+        )}
+
+        {!isLoading && !loadFailed && items.length === 0 && !shouldShowTbRegistrationCard && (
+          <p className="py-5 text-sm font-semibold text-[#627083]">현재 안내 중인 검진·검사가 없습니다.</p>
         )}
 
         {!isLoading && !loadFailed && (

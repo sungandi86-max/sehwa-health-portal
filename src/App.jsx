@@ -5,11 +5,6 @@ import FirebaseAuthRedirectHandler from "./components/FirebaseAuthRedirectHandle
 import UploadPage from "./pages/UploadPage.jsx";
 import {
   appConfig as fallbackAppConfig,
-  checkupItems,
-  educationItems,
-  faqItems,
-  noticeItems,
-  resourceItems,
   studentCareItems,
   uploadItems,
 } from "./data/fallbackData.js";
@@ -187,15 +182,9 @@ export default function App() {
     ? { ...fallbackAppConfig, ...portalData.appConfig }
     : fallbackAppConfig;
 
-  const liveNotices     = portalData?.notices?.length     ? portalData.notices     : noticeItems;
   const liveUploads     = portalData ? (portalData.uploads    || []) : uploadItems;
-  const liveCheckups    = portalData ? (portalData.checkups   || []) : checkupItems;
-  const liveEducations  = portalData ? (portalData.educations || []) : educationItems;
   const liveStudentCare = portalData ? (portalData.studentCare|| []) : studentCareItems;
-  const liveResources   = portalData ? (portalData.resources  || []) : resourceItems;
-  const liveFaqs        = portalData ? (portalData.faqs       || []) : faqItems;
   const liveRoadmap     = portalData?.roadmap || { enabled: false, adminOnly: true, items: [] };
-  const resourcesLoadFailed = !portalData;
 
   return (
     <BrowserRouter>
@@ -212,14 +201,14 @@ export default function App() {
             <Suspense fallback={<LoadingSkeleton />}>
               <Routes>
                 <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
-                <Route path="/today"       element={<TodayPage       items={liveNotices} />} />
+                <Route path="/today"       element={<TodayPage />} />
                 <Route path="/upload"      element={<UploadPage      items={liveUploads} tbConfig={tbConfig} />} />
-                <Route path="/checkup"     element={<CheckupPage     items={liveCheckups} tbConfig={tbConfig} />} />
-                <Route path="/education"   element={<EducationPage   items={liveEducations} />} />
+                <Route path="/checkup"     element={<CheckupPage     tbConfig={tbConfig} />} />
+                <Route path="/education"   element={<EducationPage />} />
                 <Route path="/homeroom"    element={<HomeroomPage />} />
                 <Route path="/student-care" element={<StudentCarePage items={liveStudentCare} />} />
-                <Route path="/resources"   element={<ResourcesPage   items={liveResources} loadFailed={resourcesLoadFailed} />} />
-                <Route path="/faq"         element={<FAQPage         items={liveFaqs} />} />
+                <Route path="/resources"   element={<ResourcesPage />} />
+                <Route path="/faq"         element={<FAQPage />} />
                 <Route path="/firebase-test" element={<FirebaseTestPage />} />
                 <Route path="/firebase-dashboard" element={<FirebaseDashboardPage />} />
                 <Route path="/firebase-checkups" element={<FirebaseCheckupsPage />} />
