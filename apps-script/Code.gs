@@ -228,13 +228,7 @@ function doGet(e) {
   const action = e && e.parameter ? String(e.parameter.action || "").trim() : "";
   try {
     if (action === "getTbConfig") {
-      const config = {
-        enabled:       getAppConfig_("결핵검진유형선택_사용"),
-        startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
-        endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
-        closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
-        closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
-      };
+      const config = getTbRegistrationConfig_();
       return jsonOutput_({ result: "success", config });
     }
     if (action === "verifyPrivate") {
@@ -691,13 +685,13 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
       fields.note || "", fileName, fileLink]);
 
   } else if (sheetName === "응답_교직원결핵검진유형선택") {
-    const enabled       = getAppConfig_("결핵검진유형선택_사용");
-    const startDateRaw  = getAppConfig_("결핵검진유형선택_접수시작");
-    const endDateRaw    = getAppConfig_("결핵검진유형선택_접수마감");
-    const closedMsg     = getAppConfig_("결핵검진유형선택_마감안내") || "접수 기한이 마감되었습니다.";
+    const config        = getTbRegistrationConfig_();
+    const startDateRaw  = config.startDate;
+    const endDateRaw    = config.endDate;
+    const closedMsg     = config.closedMessage || "접수 기한이 마감되었습니다.";
     const notStartedMsg = "접수 시작 전입니다. 접수 기간에 다시 이용해주세요.";
 
-    if (String(enabled) !== "TRUE") throw new Error(closedMsg);
+    if (!isTrue_(config.enabled)) throw new Error(closedMsg);
 
     const nowDate = new Date();
 
@@ -2704,22 +2698,7 @@ function getPortalData_(options) {
 }
 
 function getPortalTbConfig_() {
-  const config = getPortalAppConfigValues_([
-    "결핵검진유형선택_사용",
-    "결핵검진유형선택_접수시작",
-    "결핵검진유형선택_접수마감",
-    "결핵검진유형선택_마감버튼",
-    "결핵검진유형선택_마감후버튼",
-    "결핵검진유형선택_마감안내"
-  ]);
-
-  return {
-    enabled:       config["결핵검진유형선택_사용"],
-    startDate:     config["결핵검진유형선택_접수시작"],
-    endDate:       config["결핵검진유형선택_접수마감"],
-    closedButton:  config["결핵검진유형선택_마감버튼"] || config["결핵검진유형선택_마감후버튼"],
-    closedMessage: config["결핵검진유형선택_마감안내"],
-  };
+  return getTbRegistrationConfig_();
 }
 
 function getPortalAppConfigValues_(keys) {
@@ -2769,6 +2748,12 @@ function jsonOutput_(data) {
 }
 
 function getRows_(ss, sheetName) {
+  return getSheetRows_(ss, sheetName)
+    .filter(item => isTrue_(item["사용여부"]))
+    .sort((a, b) => Number(a["정렬순서"] || 999) - Number(b["정렬순서"] || 999));
+}
+
+function getSheetRows_(ss, sheetName) {
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
   const values = sheet.getDataRange().getDisplayValues();
@@ -2779,9 +2764,7 @@ function getRows_(ss, sheetName) {
       const item = {};
       headers.forEach((header, i) => { item[header] = row[i]; });
       return item;
-    })
-    .filter(item => isTrue_(item["사용여부"]))
-    .sort((a, b) => Number(a["정렬순서"] || 999) - Number(b["정렬순서"] || 999));
+    });
 }
 
 function getValue_(row, names, fallback) {
@@ -2794,6 +2777,51 @@ function getValue_(row, names, fallback) {
 function isTrue_(value) {
   const text = String(value).trim().toUpperCase();
   return text === "TRUE" || text === "사용" || text === "Y" || text === "YES" || text === "1";
+}
+
+function isTbRegistrationUploadRow_(row) {
+  const text = [
+    getValue_(row, ["유형"]),
+    getValue_(row, ["제목"]),
+    getValue_(row, ["제출 자료", "제출자료"]),
+    getValue_(row, ["버튼명"]),
+    getValue_(row, ["링크"])
+  ].join(" ").toLowerCase();
+
+  return text.indexOf("tb_registration") >= 0 ||
+    text.indexOf("tb-registration") >= 0 ||
+    text.indexOf("tb_group") >= 0 ||
+    text.indexOf("교직원 결핵검진 단체검진") >= 0 ||
+    text.indexOf("단체검진 신청") >= 0 ||
+    text.indexOf("결핵검진 유형") >= 0;
+}
+
+function getTbRegistrationUploadConfig_() {
+  const ss = getSpreadsheet_();
+  const row = getSheetRows_(ss, SHEET_NAMES.portalUploads).find(isTbRegistrationUploadRow_);
+  if (!row) return null;
+
+  return {
+    enabled: isTrue_(row["사용여부"]) ? "TRUE" : "FALSE",
+    startDate: getValue_(row, ["노출시작일"]),
+    endDate: getValue_(row, ["노출종료일"]),
+    closedButton: getValue_(row, ["마감버튼", "마감후버튼"]),
+    closedMessage: getValue_(row, ["마감안내"], "접수 기한이 지나 제출할 수 없습니다. 필요한 경우 보건실로 문의해주세요.")
+  };
+}
+
+function getLegacyTbRegistrationConfig_() {
+  return {
+    enabled:       getAppConfig_("결핵검진유형선택_사용"),
+    startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
+    endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
+    closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
+    closedMessage: getAppConfig_("결핵검진유형선택_마감안내")
+  };
+}
+
+function getTbRegistrationConfig_() {
+  return getTbRegistrationUploadConfig_() || getLegacyTbRegistrationConfig_();
 }
 
 function parseExposureDateBoundary_(value, boundary) {
