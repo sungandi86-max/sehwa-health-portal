@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import CheckupSection from "../components/CheckupSection.jsx";
+import { PortalBackToHome } from "../components/PortalSubpageLayout.jsx";
 import { fetchPortalContent } from "../lib/portalContent.js";
 
 export default function CheckupPage({ items, tbConfig }) {
-  const navigate = useNavigate();
   const [checkups, setCheckups] = useState([]);
   const [effectiveTbConfig, setEffectiveTbConfig] = useState(tbConfig);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,13 +49,8 @@ export default function CheckupPage({ items, tbConfig }) {
 
   return (
     <>
-      <div className="mx-auto max-w-6xl px-4 pt-6">
-        <button
-          onClick={() => navigate("/")}
-          className="mb-2 flex min-h-10 items-center gap-1 rounded-[10px] px-3 py-2 text-sm font-semibold text-[#627083] transition hover:bg-[#F3F8F6] hover:text-[#102047]"
-        >
-          ← 메인으로
-        </button>
+      <div className="mx-auto w-full max-w-[1280px] px-3 pt-4 sm:px-4 sm:pt-5">
+        <PortalBackToHome />
       </div>
       <CheckupSection
         items={checkups}

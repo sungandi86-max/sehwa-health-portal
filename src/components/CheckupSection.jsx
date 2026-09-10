@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatContentEndDate } from "../lib/contentVisibility.js";
+import { PortalAction, PortalBadge, PortalInfoBox, PortalNoticeBox, PortalTaskCard } from "./PortalSubpageLayout.jsx";
 import { isValidUrl } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
@@ -11,7 +12,6 @@ const INTERNAL_BUTTONS = {
 };
 
 const btnCls = "inline-flex min-h-10 items-center justify-center rounded-[9px] border border-[#C8D8FF] bg-white px-3.5 py-2 text-center text-sm font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] hover:bg-[#EEF4FF] md:min-w-[128px]";
-const secondaryBtnCls = "inline-flex min-h-10 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3.5 py-2 text-center text-sm font-semibold text-[#102047] transition hover:border-[#C8D8FF] hover:bg-[#F8FAFA] md:min-w-[128px]";
 
 function getStatusChipClass(status) {
   const text = String(status || "").trim();
@@ -45,8 +45,7 @@ function getScheduleText(item) {
 
 function DetailsDisclosure({ item }) {
   const details = Array.isArray(item.details) ? item.details.filter(Boolean) : [];
-  const hasUpdateNotice = Boolean(item.updateNotice);
-  if (!details.length && !hasUpdateNotice) return null;
+  if (!details.length) return null;
 
   return (
     <details className="mt-2 text-xs leading-5 text-[#627083]">
@@ -60,9 +59,6 @@ function DetailsDisclosure({ item }) {
               <li key={i}>{detail}</li>
             ))}
           </ul>
-        )}
-        {hasUpdateNotice && (
-          <p className="text-[#806018]">{item.updateNotice}</p>
         )}
       </div>
     </details>
@@ -221,110 +217,137 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
   };
 
   return (
-    <section id="checkup" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-8">
-      <div className="border-b border-[#DDEAE7] pb-4">
-        <h1 className="text-2xl font-bold leading-tight text-[#102047] md:text-[1.65rem]">
+    <section id="checkup" className="mx-auto w-full max-w-[1280px] scroll-mt-24 px-3 py-3 sm:px-4 sm:py-4">
+      <header className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5">
+        <p className="text-[11px] font-semibold text-[#0D4EA6]">검진·검사 안내</p>
+        <h1 className="mt-1 text-[22px] font-bold leading-tight text-[#102047] sm:text-2xl">
           검진·검사 안내
         </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#627083]">
+        <p className="mt-2 max-w-3xl text-sm font-normal leading-6 text-[#627083]" style={{ wordBreak: "keep-all" }}>
           학교에서 진행되는 검진과 검사 일정을 확인합니다.
         </p>
-      </div>
+      </header>
 
-      <div className="mt-5 overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
-        <div className="flex items-center justify-between gap-3 border-b border-[#DDEAE7] px-4 py-3">
+      <section className="mt-3 rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5">
+        <div className="flex items-center justify-between gap-3 border-b border-[#DDEAE7] pb-3">
           <div>
-            <h2 className="text-base font-bold text-[#102047]">검진·검사 항목</h2>
+            <p className="text-[11px] font-semibold text-[#0D4EA6]">검진·검사 항목</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#102047]">검진·검사 항목</h2>
             <p className="mt-0.5 text-xs text-[#627083]">현재 안내 중인 검진·검사 일정</p>
           </div>
-          <span className="shrink-0 text-xs font-semibold text-[#627083]">
-            {items.length + (shouldShowTbRegistrationCard ? 1 : 0)}개
+          <span className="shrink-0 rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">
+            {items.length + (shouldShowTbRegistrationCard ? 1 : 0)}개 항목
           </span>
         </div>
 
         {isLoading && (
-          <p className="px-4 py-5 text-sm font-semibold text-[#627083]">검진·검사 안내를 불러오는 중입니다.</p>
+          <p className="py-5 text-sm font-semibold text-[#627083]">검진·검사 안내를 불러오는 중입니다.</p>
         )}
 
         {!isLoading && loadFailed && (
-          <p className="px-4 py-5 text-sm font-semibold text-[#627083]">검진·검사 안내를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p>
+          <p className="py-5 text-sm font-semibold text-[#627083]">검진·검사 안내를 불러오지 못했습니다. 잠시 후 다시 확인해주세요.</p>
         )}
 
-        {!isLoading && !loadFailed && items.map((item) => {
-          const internalTarget = INTERNAL_BUTTONS[item.buttonText];
-          const displayMode = String(item.displayMode || "link").trim().toLowerCase();
-          const secondaryAction = String(item.secondaryAction || "").trim().toLowerCase();
-          const isStudentTbSchedule = item.title === "2·3학년 결핵검진 안내";
-          const effectiveDisplayMode = isStudentTbSchedule
-            ? (isValidUrl(item.imageUrl) ? "image" : "pending")
-            : displayMode;
-          const primaryButtonText = isStudentTbSchedule
-            ? (isValidUrl(item.imageUrl) ? "운영표 보기" : "운영표 업데이트 예정")
-            : item.buttonText;
-          const hasPrimaryModalAction =
-            effectiveDisplayMode === "pending" ||
-            (effectiveDisplayMode === "image" && isValidUrl(item.imageUrl));
-          const statusText = item.operatingStatus || item.status;
-          return (
-            <article key={item.title} className="border-b border-[#DDEAE7] px-4 py-3.5 last:border-b-0 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4 md:py-4">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusChip>{statusText}</StatusChip>
-                  <span className="text-xs font-medium text-[#627083]">대상 · {item.target || "전체"}</span>
-                  <span className="text-xs font-medium text-[#627083]">일정 · {getScheduleText(item)}</span>
-                </div>
+        {!isLoading && !loadFailed && (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {items.map((item) => {
+              const internalTarget = INTERNAL_BUTTONS[item.buttonText];
+              const displayMode = String(item.displayMode || "link").trim().toLowerCase();
+              const secondaryAction = String(item.secondaryAction || "").trim().toLowerCase();
+              const isStudentTbSchedule = item.title === "2·3학년 결핵검진 안내";
+              const effectiveDisplayMode = isStudentTbSchedule
+                ? (isValidUrl(item.imageUrl) ? "image" : "pending")
+                : displayMode;
+              const primaryButtonText = isStudentTbSchedule
+                ? (isValidUrl(item.imageUrl) ? "운영표 보기" : "운영표 업데이트 예정")
+                : item.buttonText;
+              const hasPrimaryModalAction =
+                effectiveDisplayMode === "pending" ||
+                (effectiveDisplayMode === "image" && isValidUrl(item.imageUrl));
+              const statusText = item.operatingStatus || item.status;
 
-                <h3 className="mt-1.5 text-[15px] font-semibold leading-6 text-[#102047] md:text-base">
-                  {item.title}
-                </h3>
-                <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083] md:line-clamp-1">
-                  {item.description}
-                </p>
-                <DetailsDisclosure item={item} />
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2 md:mt-0 md:justify-end">
-                {primaryButtonText && effectiveDisplayMode === "link" && (internalTarget || isValidUrl(item.url)) && (
-                  <button type="button" onClick={() => openLinkAction(item, internalTarget)} className={btnCls}>
-                    {primaryButtonText} →
-                  </button>
-                )}
-                {primaryButtonText && hasPrimaryModalAction && (
-                  <button type="button" onClick={() => openPrimaryAction(item)} className={btnCls}>
-                    {primaryButtonText} →
-                  </button>
-                )}
-                {item.secondaryText && secondaryAction === "notice" && (
-                  <button type="button" onClick={() => runSecondaryAction(item)} className={secondaryBtnCls}>
-                    {item.secondaryText} →
-                  </button>
-                )}
-              </div>
-            </article>
-          );
-        })}
+              return (
+                <PortalTaskCard
+                  key={item.title}
+                  badges={(
+                    <>
+                      <PortalBadge tone="audience">{item.target || "전체"}</PortalBadge>
+                      <PortalBadge tone="period">{getScheduleText(item)}</PortalBadge>
+                      <StatusChip>{statusText}</StatusChip>
+                    </>
+                  )}
+                  title={item.title}
+                  description={item.description}
+                  action={(
+                    <div className="grid gap-2">
+                      {primaryButtonText && effectiveDisplayMode === "link" && (internalTarget || isValidUrl(item.url)) && (
+                        <PortalAction onClick={() => openLinkAction(item, internalTarget)}>
+                          {primaryButtonText}
+                        </PortalAction>
+                      )}
+                      {primaryButtonText && effectiveDisplayMode === "link" && !internalTarget && !isValidUrl(item.url) && (
+                        <PortalAction disabled>링크 준비 중</PortalAction>
+                      )}
+                      {primaryButtonText && hasPrimaryModalAction && (
+                        <PortalAction onClick={() => openPrimaryAction(item)}>
+                          {primaryButtonText}
+                        </PortalAction>
+                      )}
+                      {item.secondaryText && secondaryAction === "notice" && (
+                        <PortalAction onClick={() => runSecondaryAction(item)} variant="secondary">
+                          {item.secondaryText}
+                        </PortalAction>
+                      )}
+                    </div>
+                  )}
+                >
+                  <PortalInfoBox>
+                    <dl className="grid gap-1.5 text-xs leading-5">
+                      <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+                        <dt className="font-semibold text-[#102047]">대상</dt>
+                        <dd>{item.target || "전체"}</dd>
+                      </div>
+                      <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+                        <dt className="font-semibold text-[#102047]">일정</dt>
+                        <dd>{getScheduleText(item)}</dd>
+                      </div>
+                      {statusText && (
+                        <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
+                          <dt className="font-semibold text-[#102047]">상태</dt>
+                          <dd>{statusText}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  </PortalInfoBox>
+                  <DetailsDisclosure item={item} />
+                  {item.updateNotice && <PortalNoticeBox>{item.updateNotice}</PortalNoticeBox>}
+                </PortalTaskCard>
+              );
+            })}
+          </div>
+        )}
 
         {!isLoading && !loadFailed && shouldShowTbRegistrationCard && (
-          <article className="border-b border-[#DDEAE7] px-4 py-3.5 last:border-b-0 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4 md:py-4">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusChip>신청 접수 중</StatusChip>
-                <span className="text-xs font-medium text-[#627083]">대상 · 교직원</span>
-                <span className="text-xs font-medium text-[#627083]">일정 · 접수기간 내</span>
-              </div>
-              <h3 className="mt-1.5 text-[15px] font-semibold leading-6 text-[#102047] md:text-base">교직원 결핵검진 유형 선택</h3>
-              <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083] md:line-clamp-1">
-                학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요.
-              </p>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2 md:mt-0 md:justify-end">
-              <button type="button" onClick={() => setTbRegistrationOpen(true)} className={btnCls}>
-                유형 선택하기 →
-              </button>
-            </div>
-          </article>
+          <div className={items.length ? "mt-3 grid gap-3 md:grid-cols-2" : "mt-4 grid gap-3 md:grid-cols-2"}>
+            <PortalTaskCard
+              badges={(
+                <>
+                  <StatusChip>신청 접수 중</StatusChip>
+                  <PortalBadge tone="audience">교직원</PortalBadge>
+                  <PortalBadge tone="period">접수기간 내</PortalBadge>
+                </>
+              )}
+              title="교직원 결핵검진 유형 선택"
+              description="학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요."
+              action={(
+                <button type="button" onClick={() => setTbRegistrationOpen(true)} className={btnCls}>
+                  유형 선택하기
+                </button>
+              )}
+            />
+          </div>
         )}
-      </div>
+      </section>
 
       {tbRegistrationOpen && (
         <SubmitModal type="tb_registration" onClose={() => setTbRegistrationOpen(false)} tbConfig={tbConfig} />

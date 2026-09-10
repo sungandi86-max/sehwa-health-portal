@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
-import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
+import {
+  PortalAction,
+  PortalBackToHome,
+  PortalBadge,
+  PortalInfoBox,
+  PortalNoticeBox,
+  PortalPageHeader,
+  PortalPageLayout,
+  PortalTaskCard,
+} from "../components/PortalSubpageLayout.jsx";
 import { getActiveCheckups } from "../lib/checkups.js";
 import { formatContentEndDate } from "../lib/contentVisibility.js";
 
@@ -49,106 +59,97 @@ export default function FirebaseCheckupsPage() {
   return (
     <FirebaseV2AccessGate>
       {({ displayName }) => (
-        <FirebaseV2PageShell
-          label="검진·검사"
-          title="검진·검사 안내"
-          description="현재 노출 가능한 검진·검사 안내를 확인합니다."
-          displayName={displayName}
-        >
-          <section className="grid gap-3 sm:grid-cols-2">
+        <PortalPageLayout>
+          <PortalBackToHome />
+          <PortalPageHeader
+            label="검진·검사 안내"
+            title="검진·검사 안내"
+            description="현재 노출 가능한 검진·검사 안내를 확인합니다."
+            identity={(
+              <>
+                <p className="text-sm font-semibold text-[#102047]">{displayName} 선생님</p>
+                <p className="mt-1 text-xs font-normal text-[#627083]">현재 학기 검진·검사 안내</p>
+              </>
+            )}
+          />
+          {loadState.status !== "success" && (
             <FirebaseContentState
               status={loadState.status}
               message={loadState.message}
               emptyMessage="현재 안내 중인 검진·검사 일정이 없습니다."
             />
+          )}
 
-            {checkups.map((checkup) => (
-              <article
-                key={checkup.id}
-                className="flex flex-col rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_14px_36px_rgba(16,32,71,0.05)]"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
-                    {checkup.target || "전체"}
-                  </span>
-                  <span className="rounded-full bg-[#EEF4FF] px-3 py-1 text-xs font-semibold text-[#3154A3]">
-                    {formatContentEndDate(checkup)}
-                  </span>
-                  {checkup.status && (
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#627083]">
-                      {checkup.scheduleStatus || checkup.status}
-                    </span>
+          {loadState.status === "success" && (
+            <section className="grid gap-3 md:grid-cols-2">
+              {checkups.map((checkup) => (
+                <PortalTaskCard
+                  key={checkup.id}
+                  badges={(
+                    <>
+                      <PortalBadge tone="audience">{checkup.target || "전체"}</PortalBadge>
+                      <PortalBadge tone="period">{formatContentEndDate(checkup)}</PortalBadge>
+                      <PortalBadge tone="status">{checkup.scheduleStatus || checkup.status}</PortalBadge>
+                    </>
                   )}
-                </div>
-                <h2 className="mt-4 text-lg font-semibold leading-7 text-[#102047]">
-                  {checkup.title || "제목 없는 검진 안내"}
-                </h2>
-                {checkup.description && (
-                  <p className="mt-2 line-clamp-3 text-sm font-medium leading-6 text-[#627083]">
-                    {checkup.description}
-                  </p>
-                )}
-                {checkup.details.length > 0 && (
-                  <ul className="mt-4 space-y-2 rounded-2xl bg-[#F7FBF9] p-4 text-sm font-medium leading-6 text-[#627083]">
-                    {checkup.details.slice(0, 4).map((detail) => (
-                      <li key={detail}>• {detail}</li>
-                    ))}
-                  </ul>
-                )}
-                {checkup.updateNotice && (
-                  <p className="mt-4 rounded-2xl border border-[#F5E4B8] bg-[#FFF9EA] p-4 text-sm font-bold leading-6 text-[#806018]">
-                    {checkup.updateNotice}
-                  </p>
-                )}
-                <div className="mt-auto flex flex-wrap gap-2 pt-4">
-                  {isExternalUrl(checkup.linkUrl) && (
-                    <a
-                      href={checkup.linkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex min-h-11 items-center rounded-2xl bg-[#20A982] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
-                    >
-                      {checkup.linkLabel || "안내 열기"}
-                    </a>
+                  title={checkup.title || "제목 없는 검진 안내"}
+                  description={checkup.description}
+                  action={(
+                    <div className="grid gap-2">
+                      {isExternalUrl(checkup.linkUrl) && (
+                        <PortalAction href={checkup.linkUrl} external>
+                          {checkup.linkLabel || `${checkup.title || "검진·검사"} 안내 보기`}
+                        </PortalAction>
+                      )}
+                      {checkup.displayMode === "image" && isExternalUrl(checkup.imageUrl) && (
+                        <PortalAction href={checkup.imageUrl} external variant={isExternalUrl(checkup.linkUrl) ? "secondary" : "primary"}>
+                          운영표 보기
+                        </PortalAction>
+                      )}
+                      {isExternalUrl(checkup.downloadUrl) && (
+                        <PortalAction href={checkup.downloadUrl} external variant={isExternalUrl(checkup.linkUrl) || isExternalUrl(checkup.imageUrl) ? "secondary" : "primary"}>
+                          원본 보기
+                        </PortalAction>
+                      )}
+                      {checkup.displayMode === "link" && checkup.linkLabel && !isExternalUrl(checkup.linkUrl) && (
+                        <PortalAction disabled>
+                          링크 준비 중
+                        </PortalAction>
+                      )}
+                      {checkup.secondaryButtonLabel && checkup.secondaryAction === "notice" && (
+                        <PortalAction
+                          onClick={() => setNotice({ title: checkup.secondaryButtonLabel, message: checkup.copyText || checkup.updateNotice })}
+                          variant={isExternalUrl(checkup.linkUrl) || isExternalUrl(checkup.imageUrl) || isExternalUrl(checkup.downloadUrl) ? "secondary" : "primary"}
+                        >
+                          {checkup.secondaryButtonLabel}
+                        </PortalAction>
+                      )}
+                      {!isExternalUrl(checkup.linkUrl) &&
+                        !(checkup.displayMode === "image" && isExternalUrl(checkup.imageUrl)) &&
+                        !isExternalUrl(checkup.downloadUrl) &&
+                        !(checkup.secondaryButtonLabel && checkup.secondaryAction === "notice") &&
+                        !(checkup.displayMode === "link" && checkup.linkLabel && !isExternalUrl(checkup.linkUrl)) && (
+                          <PortalAction disabled>링크 준비 중</PortalAction>
+                        )}
+                    </div>
                   )}
-                  {checkup.displayMode === "image" && isExternalUrl(checkup.imageUrl) && (
-                    <a
-                      href={checkup.imageUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex min-h-11 items-center rounded-2xl bg-[#102047] px-4 py-2 text-sm font-semibold text-white transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#102047]/15"
-                    >
-                      운영표 보기
-                    </a>
+                >
+                  {checkup.details.length > 0 && (
+                    <PortalInfoBox>
+                      <ul className="space-y-1.5">
+                        {checkup.details.slice(0, 4).map((detail) => (
+                          <li key={detail}>• {detail}</li>
+                        ))}
+                      </ul>
+                    </PortalInfoBox>
                   )}
-                  {isExternalUrl(checkup.downloadUrl) && (
-                    <a
-                      href={checkup.downloadUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex min-h-11 items-center rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
-                    >
-                      원본 보기
-                    </a>
+                  {checkup.updateNotice && (
+                    <PortalNoticeBox>{checkup.updateNotice}</PortalNoticeBox>
                   )}
-                  {checkup.displayMode === "link" && checkup.linkLabel && !isExternalUrl(checkup.linkUrl) && (
-                    <span className="inline-flex min-h-11 items-center rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 py-2 text-sm font-semibold text-[#627083]">
-                      {checkup.linkLabel} · 링크 미등록
-                    </span>
-                  )}
-                  {checkup.secondaryButtonLabel && checkup.secondaryAction === "notice" && (
-                    <button
-                      type="button"
-                      onClick={() => setNotice({ title: checkup.secondaryButtonLabel, message: checkup.copyText || checkup.updateNotice })}
-                      className="inline-flex min-h-11 items-center rounded-2xl border border-[#CFEFE7] bg-[#F7FBF9] px-4 py-2 text-sm font-semibold text-[#08754B] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
-                    >
-                      {checkup.secondaryButtonLabel}
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
-          </section>
+                </PortalTaskCard>
+              ))}
+            </section>
+          )}
 
           {notice && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102047]/40 p-4">
@@ -160,14 +161,14 @@ export default function FirebaseCheckupsPage() {
                 <button
                   type="button"
                   onClick={() => setNotice(null)}
-                  className="mt-5 inline-flex min-h-11 items-center rounded-2xl bg-[#20A982] px-5 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+                  className="mt-5 inline-flex min-h-10 items-center rounded-[10px] bg-[#0D4EA6] px-5 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15"
                 >
                   확인
                 </button>
               </div>
             </div>
           )}
-        </FirebaseV2PageShell>
+        </PortalPageLayout>
       )}
     </FirebaseV2AccessGate>
   );

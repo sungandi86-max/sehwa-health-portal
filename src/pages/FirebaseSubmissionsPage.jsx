@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { firebaseV2SubmissionItems } from "../data/firebaseV2Navigation.js";
 import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
+import {
+  PortalAction,
+  PortalBackToHome,
+  PortalBadge,
+  PortalInfoBox,
+  PortalPageHeader,
+  PortalPageLayout,
+  PortalTaskCard,
+} from "../components/PortalSubpageLayout.jsx";
 import { auth } from "../lib/firebase.js";
 import {
   getFriendlyAuthErrorMessage,
@@ -25,11 +33,11 @@ const SUBMISSION_ROUTES = {
   infection: "/firebase-submit/infection",
 };
 
-const ITEM_TONES = {
-  cpr: "from-[#F0FBF7] to-white text-[#08754B]",
-  tb: "from-[#EEF4FF] to-white text-[#3154A3]",
-  recruit: "from-[#F8F3FF] to-white text-[#6A3BC2]",
-  infection: "from-[#FFF7F7] to-white text-[#B42318]",
+const SUBMISSION_ACTION_LABELS = {
+  cpr: "이수증 제출하기",
+  tb: "확인증 제출하기",
+  recruit: "확인 요청하기",
+  infection: "발생 보고하기",
 };
 
 function getCanonicalSubmissionItems(items) {
@@ -98,52 +106,43 @@ function RoleBadges({ roles }) {
 }
 
 function SubmissionCard({ item }) {
-  const tone = ITEM_TONES[item.submissionType] || ITEM_TONES.cpr;
   const href = SUBMISSION_ROUTES[item.submissionType];
 
   return (
-    <Link
-      to={href}
-      className={`group flex flex-col rounded-[16px] border border-[#DDEAE7] bg-gradient-to-br ${tone} p-4 transition hover:-translate-y-[1px] hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 sm:p-4`}
-      aria-label={`${item.title} 열기`}
+    <PortalTaskCard
+      badges={(
+        <>
+          <PortalBadge tone="status">{item.status}</PortalBadge>
+          <PortalBadge tone="period">{item.deadlineLabel}</PortalBadge>
+        </>
+      )}
+      title={item.title}
+      description={item.description}
+      action={<PortalAction href={href}>{SUBMISSION_ACTION_LABELS[item.submissionType] || item.buttonLabel || "제출하기"}</PortalAction>}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {item.status && <span className="rounded-full bg-white/85 px-3 py-1 text-xs font-semibold">{item.status}</span>}
-          {item.deadlineLabel && (
-            <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-[#3154A3]">
-              {item.deadlineLabel}
-            </span>
+      <PortalInfoBox>
+        <dl className="grid gap-2 sm:grid-cols-2">
+          {item.target && (
+            <div>
+              <dt className="text-xs font-semibold text-[#102047]">대상</dt>
+              <dd className="mt-0.5">{item.target}</dd>
+            </div>
           )}
-        </div>
-        <span className="text-sm font-bold transition group-hover:translate-x-1" aria-hidden="true">→</span>
-      </div>
-      <h2 className="mt-3 text-base font-bold text-[#102047]">{item.title}</h2>
-      {item.description && <p className="mt-1 line-clamp-2 text-sm font-medium leading-5 text-[#627083]">{item.description}</p>}
-      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-        {item.target && (
-          <div>
-            <dt className="text-xs font-semibold text-[#102047]">대상</dt>
-            <dd className="mt-1 font-medium text-[#627083]">{item.target}</dd>
-          </div>
-        )}
-        {item.documentType && (
-          <div>
-            <dt className="text-xs font-semibold text-[#102047]">제출자료</dt>
-            <dd className="mt-1 font-medium text-[#627083]">{item.documentType}</dd>
-          </div>
-        )}
-        {item.guideText && (
-          <div className="sm:col-span-2">
-            <dt className="text-xs font-semibold text-[#102047]">안내</dt>
-            <dd className="mt-1 line-clamp-2 whitespace-pre-line font-medium text-[#627083]">{item.guideText}</dd>
-          </div>
-        )}
-      </dl>
-      <span className="mt-3 inline-flex items-center text-sm font-bold">
-        {item.buttonLabel || "제출하기"}
-      </span>
-    </Link>
+          {item.documentType && (
+            <div>
+              <dt className="text-xs font-semibold text-[#102047]">제출자료</dt>
+              <dd className="mt-0.5">{item.documentType}</dd>
+            </div>
+          )}
+          {item.guideText && (
+            <div className="sm:col-span-2">
+              <dt className="text-xs font-semibold text-[#102047]">안내</dt>
+              <dd className="mt-0.5 line-clamp-2 whitespace-pre-line">{item.guideText}</dd>
+            </div>
+          )}
+        </dl>
+      </PortalInfoBox>
+    </PortalTaskCard>
   );
 }
 
@@ -301,52 +300,48 @@ export default function FirebaseSubmissionsPage() {
   }
 
   return (
-    <section className="firebase-v2-surface min-h-full bg-[#F7FBF9] px-4 py-4 text-[#102047] sm:px-6 sm:py-6">
-      <div className="mx-auto w-full max-w-6xl space-y-4">
-        <header className="rounded-[32px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.08)] sm:p-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase text-[#20A982]">제출·보고 센터</p>
-              <h1 className="mt-3 text-3xl font-semibold text-[#102047] sm:text-4xl">제출·보고 센터</h1>
-              <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-[#627083]">
-                교직원 제출과 학생 감염병 보고 항목을 한 화면에서 선택합니다.
-              </p>
-            </div>
-            <div className="rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-4 sm:min-w-64">
+    <PortalPageLayout>
+      <PortalBackToHome />
+      <PortalPageHeader
+        label="제출·보고 센터"
+        title="제출·보고 센터"
+        description="교직원 제출과 학생 감염병 보고 항목을 한 화면에서 선택합니다."
+        identity={(
+          <>
               <p className="text-sm font-semibold text-[#102047]">{displayName} 선생님</p>
-              <p className="mt-1 text-xs font-bold text-[#627083]">{CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기</p>
+              <p className="mt-1 text-xs font-normal text-[#627083]">{CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기</p>
               <div className="mt-3"><RoleBadges roles={assignment?.roles} /></div>
               <button
                 type="button"
                 onClick={handleSignOut}
                 disabled={isWorking}
-                className="mt-4 min-h-11 rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-xs font-semibold text-[#102047] transition hover:-translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 inline-flex min-h-9 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#0D4EA6] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 로그아웃
               </button>
-            </div>
-          </div>
-        </header>
+          </>
+        )}
+      />
 
         {assignmentResult?.status === "not-found" && (
-          <div className="rounded-[24px] border border-[#DDEAE7] bg-white/95 p-4 text-sm font-bold text-[#627083]">
+          <div className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 text-sm font-semibold text-[#627083]">
             <p>현재 학기 이용 권한이 없습니다.</p>
             <FirebaseAccessRequestAction user={user} />
           </div>
         )}
         {(authState.status === "error" || assignmentResult?.status === "permission-denied" || assignmentResult?.status === "error") && (
-          <p className="rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-sm font-semibold text-[#B42318]">
+          <p className="rounded-[16px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-sm font-semibold text-[#B42318]">
             {authState.message || assignmentResult?.message || "권한 정보를 확인하지 못했습니다."}
           </p>
         )}
 
-        <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
+        <section className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase text-[#20A982]">Active submissions</p>
-              <h2 className="mt-2 text-xl font-semibold text-[#102047]">제출 항목</h2>
+              <p className="text-[11px] font-semibold text-[#0D4EA6]">제출 항목</p>
+              <h2 className="mt-1 text-xl font-semibold text-[#102047]">제출 항목</h2>
             </div>
-            <span className="w-fit rounded-full bg-[#F0FBF7] px-3 py-1 text-xs font-semibold text-[#08754B]">
+            <span className="w-fit rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">
               {visibleItems.length}개 항목
             </span>
           </div>
@@ -377,14 +372,6 @@ export default function FirebaseSubmissionsPage() {
             </div>
           )}
         </section>
-
-        <Link
-          to="/firebase-dashboard"
-          className="inline-flex min-h-11 items-center rounded-2xl border border-[#DDEAE7] bg-white px-4 py-2 text-sm font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
-        >
-          대시보드로 돌아가기
-        </Link>
-      </div>
-    </section>
+    </PortalPageLayout>
   );
 }

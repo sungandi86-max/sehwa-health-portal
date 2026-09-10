@@ -6,6 +6,7 @@ import { uploadIntro } from "../data/fallbackData.js";
 import { auth } from "../lib/firebase.js";
 import { getStaffDisplayName, getStaffRoleDisplay, getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
 import { getUserAssignmentResult } from "../lib/userProfile.js";
+import { PortalBadge, PortalInfoBox, PortalTaskCard } from "./PortalSubpageLayout.jsx";
 import { SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
@@ -92,7 +93,7 @@ const SUBMIT_GROUP_LABELS = {
 };
 
 const actionButtonClass =
-  "mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-3.5 py-2 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F]";
+  "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-3.5 py-2 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15";
 
 function getStatusToneClass(item) {
   const status = String(item.status || "").trim();
@@ -276,71 +277,74 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
 
   return (
     <>
-      <section id="upload" className={`mx-auto max-w-6xl scroll-mt-24 px-4 ${publicMode ? "py-5" : "py-8"}`}>
-        <div className={`border-b border-[#DDEAE7] pb-4 ${publicMode ? "mb-4" : ""}`}>
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <section id="upload" className={`mx-auto w-full max-w-[1280px] scroll-mt-24 px-3 ${publicMode ? "py-4" : "py-3 sm:py-4"} sm:px-4`}>
+        <header className={`rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5 ${publicMode ? "mb-4" : ""}`}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold leading-tight text-[#102047] md:text-[1.65rem]">
+              <p className="text-[11px] font-semibold text-[#0D4EA6]">
+                {publicMode ? "결핵검진 진료회신 제출" : "제출·보고 센터"}
+              </p>
+              <h1 className="mt-1 text-[22px] font-bold leading-tight text-[#102047] sm:text-2xl">
                 {publicMode ? "결핵검진 진료회신 제출" : "제출·보고 센터"}
               </h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#627083]">
+              <p className="mt-2 max-w-3xl text-sm font-normal leading-6 text-[#627083]" style={{ wordBreak: "keep-all" }}>
                 {publicMode
                   ? "학생이 제출한 진료회신란 또는 진료확인서를 업로드하는 전용 페이지입니다."
                   : "교직원 제출과 학생 감염병 보고 항목을 확인합니다."}
               </p>
             </div>
             {!publicMode && (
-              <div className="inline-flex w-fit max-w-full items-center gap-2 rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm">
+              <div className="inline-flex w-fit max-w-full items-center gap-2 rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2 text-sm">
                 <SubmitterIdentity viewer={viewer} />
               </div>
             )}
           </div>
-        </div>
+        </header>
 
-        <div className="mt-5 rounded-[12px] border border-[#DDEAE7] bg-white">
+        <section className="mt-3 rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5">
           <div className="flex items-center justify-between gap-3 border-b border-[#DDEAE7] px-4 py-3">
             <div>
-              <h2 className="text-base font-bold text-[#102047]">제출 항목</h2>
+              <p className="text-[11px] font-semibold text-[#0D4EA6]">제출 항목</p>
+              <h2 className="mt-1 text-xl font-semibold text-[#102047]">제출 항목</h2>
               {!publicMode && <p className="mt-0.5 text-xs text-[#627083]">현재 접수 중인 제출·보고 항목</p>}
             </div>
-            <span className="shrink-0 text-xs font-semibold text-[#627083]">{rows.length}개</span>
+            <span className="shrink-0 rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">{rows.length}개 항목</span>
           </div>
 
-          <div className="grid gap-4 p-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             {rows.map(({ item: displayItem, submitType, group }) => {
               const handleClick = () => (
                 submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
               );
 
               return (
-                <article
+                <PortalTaskCard
                   key={displayItem.id || `${submitType}-${displayItem.title}`}
-                  className="flex min-h-[280px] flex-col rounded-[12px] border border-[#DDEAE7] bg-white p-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
+                  badges={(
+                    <>
                       <StatusChip item={displayItem} />
                       {!publicMode && (
-                        <span className="text-xs font-medium text-[#8A96A8]">
+                        <PortalBadge tone="audience">
                           {SUBMIT_GROUP_LABELS[group] || SUBMIT_GROUP_LABELS.other}
-                        </span>
+                        </PortalBadge>
                       )}
-                      {displayItem.deadline && (
-                        <span className="text-xs font-medium text-[#627083]">
-                          <SafeText>{displayItem.deadline}</SafeText>
-                        </span>
-                      )}
-                    </div>
-
-                    <h3 className="mt-1.5 text-[15px] font-semibold leading-6 text-[#102047] md:text-base">
-                      {displayItem.title}
-                    </h3>
-
-                    <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#627083]">
-                      <SafeText>{displayItem.description}</SafeText>
-                    </p>
-
-                    <dl className="mt-3 grid gap-1.5 text-xs leading-5">
+                      <PortalBadge tone="period">{displayItem.deadline}</PortalBadge>
+                    </>
+                  )}
+                  title={displayItem.title}
+                  description={<SafeText>{displayItem.description}</SafeText>}
+                  action={displayItem.buttonText && (
+                    <button
+                      type="button"
+                      onClick={handleClick}
+                      className={actionButtonClass}
+                    >
+                      {displayItem.buttonText}
+                    </button>
+                  )}
+                >
+                  <PortalInfoBox>
+                    <dl className="grid gap-1.5 text-xs leading-5">
                       {displayItem.target && (
                         <div className="grid grid-cols-[44px_minmax(0,1fr)] gap-2">
                           <dt className="font-semibold text-[#102047]">대상</dt>
@@ -360,38 +364,28 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                         </div>
                       )}
                     </dl>
+                  </PortalInfoBox>
 
-                    {(displayItem.documentType || displayItem.fileGuide) && (
-                      <details className="mt-2 text-xs leading-5 text-[#627083]">
-                        <summary className="cursor-pointer font-semibold text-[#0D4EA6]">
-                          제출자료·안내 보기
-                        </summary>
-                        <div className="mt-1.5 space-y-1 border-l border-[#DDEAE7] pl-3">
-                          {displayItem.documentType && (
-                            <p><span className="font-semibold text-[#102047]">제출자료 </span><SafeText>{displayItem.documentType}</SafeText></p>
-                          )}
-                          {displayItem.fileGuide && (
-                            <p className="whitespace-pre-line"><SafeText>{displayItem.fileGuide}</SafeText></p>
-                          )}
-                        </div>
-                      </details>
-                    )}
-                  </div>
-
-                  {displayItem.buttonText && (
-                    <button
-                      type="button"
-                      onClick={handleClick}
-                      className={actionButtonClass}
-                    >
-                      {displayItem.buttonText} →
-                    </button>
+                  {(displayItem.documentType || displayItem.fileGuide) && (
+                    <details className="text-xs leading-5 text-[#627083]">
+                      <summary className="cursor-pointer font-semibold text-[#0D4EA6]">
+                        제출자료·안내 보기
+                      </summary>
+                      <div className="mt-1.5 space-y-1 border-l border-[#DDEAE7] pl-3">
+                        {displayItem.documentType && (
+                          <p><span className="font-semibold text-[#102047]">제출자료 </span><SafeText>{displayItem.documentType}</SafeText></p>
+                        )}
+                        {displayItem.fileGuide && (
+                          <p className="whitespace-pre-line"><SafeText>{displayItem.fileGuide}</SafeText></p>
+                        )}
+                      </div>
+                    </details>
                   )}
-                </article>
+                </PortalTaskCard>
               );
             })}
           </div>
-        </div>
+        </section>
 
         {!publicMode && (
           <p className="mt-3 text-sm leading-6 text-[#627083]">

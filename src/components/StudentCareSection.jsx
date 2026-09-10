@@ -19,13 +19,14 @@ import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher, i
 import FirebaseAccessRequestAction from "./FirebaseAccessRequestAction.jsx";
 import FirebaseHomeroomAccessRequestAction from "./FirebaseHomeroomAccessRequestAction.jsx";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
-import { AppCard, Badge, SectionTitle } from "./ui.jsx";
+import { PortalBadge, PortalInfoBox, PortalTaskCard } from "./PortalSubpageLayout.jsx";
+import { Badge } from "./ui.jsx";
 
 const inputCls =
   "w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2.5 text-sm text-[#102047] outline-none transition focus:border-[#20A982] focus:ring-2 focus:ring-[#20A982]/10 placeholder:text-[#8A97A8]";
 
 const btnCls =
-  "mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 py-2 text-center text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F]";
+  "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 py-2 text-center text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15";
 
 const HEALTH_ROOM_BUTTON = "보건실 소재 확인하기";
 const HEALTH_ROOM_BUTTON_LEGACY = "蹂닿굔???낆떎?꾪솴 ?닿린";
@@ -257,7 +258,7 @@ function formatClassLabel(assignment) {
 function AccessNotice({ authState }) {
   if (authState.loading) {
     return (
-      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 text-center text-sm font-semibold text-[#627083]">
+      <div className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 text-center text-sm font-semibold text-[#627083] md:col-span-2 lg:col-span-3">
         로그인 상태와 현재 학기 권한을 확인하는 중입니다.
       </div>
     );
@@ -265,7 +266,7 @@ function AccessNotice({ authState }) {
 
   if (!authState.user) {
     return (
-      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 text-center">
+      <div className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 text-center md:col-span-2 lg:col-span-3">
         <p className="text-base font-semibold text-[#102047]">로그인이 필요한 기능입니다.</p>
         <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
           교사는 학교 Teams 계정을, 그 외 교직원은 등록된 Google 계정을 사용할 수 있습니다.
@@ -282,7 +283,7 @@ function AccessNotice({ authState }) {
 
   if (authState.assignmentResult?.status === "not-found") {
     return (
-      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 text-center">
+      <div className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 text-center md:col-span-2 lg:col-span-3">
         <p className="text-base font-semibold text-[#102047]">현재 학년도/학기 이용 권한이 등록되지 않았습니다.</p>
         <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
           등록된 Google 계정은 보건실에 현재 학기 이용 권한을 신청할 수 있습니다.
@@ -293,7 +294,7 @@ function AccessNotice({ authState }) {
   }
 
   return (
-    <div className="rounded-[12px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-center text-sm font-semibold text-[#B42318]">
+    <div className="rounded-[16px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-center text-sm font-semibold text-[#B42318] md:col-span-2 lg:col-span-3">
       {authState.message || authState.assignmentResult?.message || "학생 건강관리 접근 권한이 없습니다."}
     </div>
   );
@@ -892,22 +893,27 @@ export default function StudentCareSection({ items }) {
   ];
 
   return (
-    <section id="studentCare" className="mx-auto max-w-6xl scroll-mt-24 px-3 py-5 sm:px-4 md:py-8">
-      <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 md:p-5">
-        <SectionTitle
-          title={studentCareIntro.title}
-          description={studentCareIntro.description}
-        />
-        <div className="mb-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 text-xs font-semibold leading-5 text-[#627083] md:hidden" style={{ wordBreak: "keep-all" }}>
+    <section id="studentCare" className="mx-auto w-full max-w-[1280px] scroll-mt-24 px-3 py-3 sm:px-4 sm:py-4">
+      <div className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5">
+        <header className="mb-4 flex flex-col gap-2">
+          <p className="text-[11px] font-semibold text-[#0D4EA6]">학생 건강관리 안내</p>
+          <h1 className="text-[22px] font-bold leading-tight text-[#102047] sm:text-2xl">
+            {studentCareIntro.title}
+          </h1>
+          <p className="max-w-3xl text-sm font-normal leading-6 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+            {studentCareIntro.description}
+          </p>
+        </header>
+        <div className="mb-3 rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 text-xs font-semibold leading-5 text-[#627083] md:hidden" style={{ wordBreak: "keep-all" }}>
           학생 개인정보와 건강정보는 권한 있는 교직원에게만 최소한으로 표시합니다.
         </div>
         <div className="hidden gap-3 md:grid md:grid-cols-2">
-          <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 text-sm leading-6 text-[#102047]">
+          <PortalInfoBox className="text-[#102047]">
             {studentCareIntro.privacyNotice}
-          </div>
-          <div className="rounded-[10px] border border-[#DDEAE7] bg-white p-3 text-sm leading-6 text-[#627083]">
+          </PortalInfoBox>
+          <PortalInfoBox>
             {studentCareIntro.guide}
-          </div>
+          </PortalInfoBox>
         </div>
         {canShowHomeroomRequest && (
           <FirebaseHomeroomAccessRequestAction
@@ -919,32 +925,22 @@ export default function StudentCareSection({ items }) {
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {!visibleCards.length && <AccessNotice authState={authState} />}
           {visibleCards.map((card) => (
-            <article
+            <PortalTaskCard
               key={card.title}
-              className="flex min-h-[220px] flex-col rounded-[12px] border border-[#DDEAE7] bg-white p-4"
+              badges={<PortalBadge tone="period">{card.status}</PortalBadge>}
+              title={card.title}
+              description={card.description}
+              action={(
+                <button
+                  onClick={() => setActiveModal({ type: card.modalType })}
+                  className={btnCls}
+                >
+                  {card.buttonText}
+                </button>
+              )}
             >
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-[15px] font-semibold leading-6 text-[#102047] md:text-base">{card.title}</h3>
-                  <span className="inline-flex shrink-0 whitespace-nowrap rounded-[8px] border border-[#C8D8FF] bg-[#EEF4FF] px-2 py-0.5 text-[11px] font-semibold text-[#3154A3] md:hidden">
-                    {card.status}
-                  </span>
-                  <span className="hidden md:inline-flex">
-                    <Badge type="blue">{card.status}</Badge>
-                  </span>
-                </div>
-                <p className="student-care-card-description mt-1 text-sm leading-6 text-[#627083]">{card.description}</p>
-                <p className="mt-1 text-xs leading-5 text-[#627083]">
-                  {card.privacyNotice}
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveModal({ type: card.modalType })}
-                className={btnCls}
-              >
-                {card.buttonText}
-              </button>
-            </article>
+              <PortalInfoBox>{card.privacyNotice}</PortalInfoBox>
+            </PortalTaskCard>
           ))}
         </div>
       </div>
