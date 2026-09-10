@@ -33,3 +33,15 @@ export async function fetchPortalContent(type, signal) {
 
   return readPortalJson(response, "portal");
 }
+
+export async function fetchPortalUploads(signal) {
+  const response = await fetch(`${PORTAL_API_URL}?scope=upload`, { signal });
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json") && import.meta.env.DEV) {
+    const fallbackResponse = await fetch(`${DEV_PORTAL_API_FALLBACK}?scope=upload&preview=local`, { signal });
+    return readPortalJson(fallbackResponse, "fallback");
+  }
+
+  return readPortalJson(response, "portal");
+}

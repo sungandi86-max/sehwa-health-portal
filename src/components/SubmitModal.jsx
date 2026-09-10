@@ -640,10 +640,8 @@ function StudentTbReplyForm({ onSubmit, submitting, publicMode = false }) {
 
 // ───────── 교직원 결핵검진 유형 선택 폼 ─────────
 const TB_REGISTRATION_TYPES = [
-  "학교 단체검진 희망",
-  "개별 결핵검진 예정",
-  "건강검진/공단검진으로 대체 예정",
-  "채용검진 대체 확인 요청",
+  "단체검진 신청",
+  "개별검진 예정",
 ];
 
 function parseTbRegistrationDate(value, boundary) {
@@ -694,15 +692,97 @@ function parseTbRegistrationDate(value, boundary) {
   return new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
 }
 
+function isEnabledConfigValue(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return ["TRUE", "Y", "YES", "1", "사용"].includes(normalized);
+}
+
 function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
-  const [form, setForm] = useState({ name: "", dept: "", registrationType: "" });
+  const [identity, setIdentity] = useState(null);
+  const [identityStatus, setIdentityStatus] = useState("loading");
+  const [identityMessage, setIdentityMessage] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+  const [form, setForm] = useState({ registrationType: "" });
   const [errors, setErrors] = useState({});
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
+  useEffect(() => {
+    let ignore = false;
+
+    const loadIdentity = async (currentUser) => {
+      if (!currentUser) {
+        setIdentity(null);
+        setIdentityStatus("signed-out");
+        setIdentityMessage("");
+        return;
+      }
+
+      setIdentityStatus("loading");
+      setIdentityMessage("");
+
+      try {
+        const blockedMessage = getMicrosoftSchoolDomainBlockMessage(currentUser);
+        if (blockedMessage) {
+          await signOutFirebase();
+          if (!ignore) {
+            setIdentity(null);
+            setIdentityStatus("signed-out");
+            setIdentityMessage(blockedMessage);
+          }
+          return;
+        }
+
+        const nextIdentity = await getAuthenticatedStaffIdentity();
+        if (!ignore) {
+          setIdentity(nextIdentity);
+          setIdentityStatus("ready");
+          setIdentityMessage("");
+        }
+      } catch (error) {
+        if (!ignore) {
+          setIdentity(null);
+          setIdentityStatus(error?.status === 401 ? "signed-out" : "blocked");
+          setIdentityMessage(error?.message || "교직원 정보를 불러오지 못했습니다.");
+        }
+      }
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, loadIdentity);
+    return () => {
+      ignore = true;
+      unsubscribe();
+    };
+  }, []);
+
+  const handleMicrosoftSignIn = async () => {
+    setSigningIn(true);
+    setIdentityMessage("");
+    try {
+      await signInWithMicrosoft();
+    } catch (error) {
+      setIdentityMessage(getFriendlyAuthErrorMessage(error, "Microsoft Teams 로그인에 실패했습니다."));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setSigningIn(true);
+    setIdentityMessage("");
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      setIdentityMessage(getFriendlyAuthErrorMessage(error, "Google 계정으로 로그인하지 못했습니다."));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   const validate = () => {
     const e = {};
-    if (!form.name.trim()) e.name = "성명을 입력해주세요.";
-    if (!form.dept) e.dept = "소속/부서를 선택해주세요.";
+    if (!identity?.name || !identity?.department) {
+      e.identity = "교직원 정보가 연결되지 않아 신청할 수 없습니다. 관리자에게 문의해 주세요.";
+    }
     if (!form.registrationType) e.registrationType = "검진 유형을 선택해주세요.";
     return e;
   };
@@ -715,7 +795,7 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
     await onSubmit({
       sheetName: "응답_교직원결핵검진유형선택",
       folderId: null,
-      fields: { name: form.name, dept: form.dept, registrationType: form.registrationType },
+      fields: { name: identity.name, dept: identity.department, registrationType: form.registrationType },
       fileName: null,
       fileBase64: null,
       fileMimeType: null,
@@ -734,7 +814,7 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
     );
   }
 
-  if (tbConfig.enabled !== "TRUE") {
+  if (!isEnabledConfigValue(tbConfig.enabled)) {
     return (
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
         {tbConfig.closedMessage || "접수가 마감되었습니다."}
@@ -765,36 +845,65 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
         건강정보나 검진 결과지는 제출하지 않습니다. 교직원 결핵검진 진행 유형만 선택해 제출해주세요.
       </div>
-      <Field label="성명" required>
-        <input className={inputCls} placeholder="홍길동" value={form.name} onChange={set("name")} />
-        {errors.name && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.name}</p>}
-      </Field>
-      <Field label="소속/부서" required>
-        <select className={selectCls} value={form.dept} onChange={set("dept")}>
-          <option value="">선택해주세요</option>
-          {DEPT_TYPES.map((t) => <option key={t}>{t}</option>)}
-        </select>
-        {errors.dept && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.dept}</p>}
-      </Field>
-      <Field label="검진 유형" required>
-        <div className="space-y-2">
-          {TB_REGISTRATION_TYPES.map((rt) => (
-            <label key={rt} className="flex cursor-pointer items-center gap-3">
-              <input
-                type="radio"
-                name="registrationType"
-                value={rt}
-                checked={form.registrationType === rt}
-                onChange={set("registrationType")}
-                className="h-4 w-4 accent-[#1A3B8B]"
-              />
-              <span className="text-sm text-[#263238]">{rt}</span>
-            </label>
-          ))}
+      {identityStatus === "loading" && (
+        <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3.5 py-3 text-sm font-semibold text-[#627083]">
+          로그인된 교직원 정보를 확인하는 중입니다.
         </div>
-        {errors.registrationType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.registrationType}</p>}
-      </Field>
-      <SubmitButton onClick={handleSubmit} submitting={submitting} />
+      )}
+      {identityStatus === "signed-out" && (
+        <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3.5 py-3">
+          <p className="text-sm font-semibold text-[#102047]">결핵검진 단체검진 신청은 교직원 로그인 후 이용할 수 있습니다.</p>
+          <FirebaseSignInActions
+            compact
+            isWorking={signingIn}
+            message={identityMessage}
+            onGoogleSignIn={handleGoogleSignIn}
+            onMicrosoftSignIn={handleMicrosoftSignIn}
+          />
+        </div>
+      )}
+      {identityStatus === "blocked" && (
+        <div className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3.5 py-3 text-sm font-semibold leading-6 text-[#B42318]">
+          {identityMessage || "교직원 정보가 연결되지 않아 신청할 수 없습니다. 관리자에게 문의해 주세요."}
+        </div>
+      )}
+      {identityStatus === "ready" && (
+        <>
+          <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3.5 py-3">
+            <p className="text-xs font-semibold text-[#627083]">신청자 정보</p>
+            <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold text-[#627083]">성명</dt>
+                <dd className="mt-0.5 text-sm font-bold text-[#102047]">{identity.name}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold text-[#627083]">소속/부서</dt>
+                <dd className="mt-0.5 text-sm font-bold text-[#102047]">{identity.department}</dd>
+              </div>
+            </dl>
+          </div>
+          {errors.identity && <p className="text-xs font-bold text-[#D94F70]">{errors.identity}</p>}
+          <Field label="검진 유형" required>
+            <div className="space-y-2">
+              {TB_REGISTRATION_TYPES.map((rt) => (
+                <label key={rt} className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="radio"
+                    name="registrationType"
+                    value={rt}
+                    checked={form.registrationType === rt}
+                    onChange={set("registrationType")}
+                    className="h-4 w-4 accent-[#1A3B8B]"
+                  />
+                  <span className="text-sm text-[#263238]">{rt}</span>
+                </label>
+              ))}
+            </div>
+            {errors.registrationType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.registrationType}</p>}
+          </Field>
+          <SubmitButton onClick={handleSubmit} submitting={submitting} />
+        </>
+      )}
     </div>
   );
 }
@@ -1136,7 +1245,7 @@ const MODAL_META = {
   tb: { title: "결핵검진 확인증 제출", icon: "🩺", color: "text-[#1A3B8B]" },
   recruit: { title: "채용검진 대체 인정 확인 요청", icon: "📋", color: "text-[#1A3B8B]" },
   other: { title: "기타 보건 관련 자료 제출", icon: "📂", color: "text-slate-600" },
-  tb_registration: { title: "교직원 결핵검진 유형 선택", icon: "🫁", color: "text-[#1A3B8B]" },
+  tb_registration: { title: "교직원 결핵검진 단체검진 신청", icon: "", color: "text-[#1A3B8B]" },
   inbody: { title: "인바디 측정 신청", icon: "", color: "text-[#1A3B8B]" },
   student_tb_reply: { title: "결핵검진 진료회신 제출", icon: "📄", color: "text-[#1A3B8B]" },
   infection: { title: "감염병 발생 보고", icon: "📝", color: "text-[#1A3B8B]" },

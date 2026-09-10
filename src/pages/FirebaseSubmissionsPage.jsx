@@ -4,6 +4,7 @@ import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { firebaseV2SubmissionItems } from "../data/firebaseV2Navigation.js";
 import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
+import SubmitModal from "../components/SubmitModal.jsx";
 import {
   PortalAction,
   PortalBackToHome,
@@ -22,6 +23,7 @@ import {
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
+import { fetchPortalUploads } from "../lib/portalContent.js";
 import { getActiveSubmissionItems } from "../lib/submissionItems.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher, isHomeroom } from "../lib/userProfile.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
@@ -38,12 +40,44 @@ const SUBMISSION_ACTION_LABELS = {
   tb: "확인증 제출하기",
   recruit: "확인 요청하기",
   infection: "발생 보고하기",
+  tb_registration: "단체검진 신청하기",
 };
+
+const SHEET_SUBMISSION_TYPES = {
+  cpr: {
+    sheetName: "응답_심폐소생술이수증",
+    aliases: ["cpr", "cpr_certificate", "심폐소생술", "심폐소생술이수증"],
+    keywords: ["심폐소생술", "cpr", "이수증"],
+  },
+  tb_registration: {
+    sheetName: "응답_교직원결핵검진유형선택",
+    aliases: ["tb_registration", "tb-registration", "tb_reply", "tb_response", "결핵검진유형선택"],
+    keywords: ["교직원 결핵검진 단체검진", "교직원 결핵검진 유형", "단체검진 신청", "결핵검진 유형 선택"],
+  },
+  tb: {
+    sheetName: "응답_결핵검진확인증",
+    aliases: ["tb", "tb_certificate", "tuberculosis_certificate", "결핵검진확인증"],
+    keywords: ["결핵검진 확인증", "결핵검진확인증", "흉부 x-ray", "흉부x-ray"],
+  },
+  recruit: {
+    sheetName: "응답_채용검진확인요청",
+    aliases: ["recruit", "recruit_checkup", "employment_checkup", "채용검진"],
+    keywords: ["채용검진", "대체 인정", "확인 요청"],
+  },
+  infection: {
+    sheetName: "응답_감염병발생보고",
+    aliases: ["infection", "infection_report", "감염병"],
+    keywords: ["감염병"],
+  },
+};
+
+const SHEET_SUBMISSION_TYPE_ORDER = ["cpr", "tb_registration", "tb", "recruit", "infection"];
+const STAFF_SUBMISSION_TYPES = new Set(["cpr", "tb_registration", "tb", "recruit"]);
 
 function getCanonicalSubmissionItems(items) {
   const remoteItemsByType = new Map(items.map((item) => [item.submissionType, item]));
 
-  return firebaseV2SubmissionItems.flatMap((baseItem) => {
+  const fixedItems = firebaseV2SubmissionItems.flatMap((baseItem) => {
     const remoteItem = remoteItemsByType.get(baseItem.submissionType);
     if (!remoteItem) return [];
 
@@ -54,6 +88,69 @@ function getCanonicalSubmissionItems(items) {
       deadlineLabel: remoteItem?.deadlineLabel || baseItem.deadlineLabel,
     };
   });
+
+  const extraItems = items.filter((item) => item.submissionType === "tb_registration");
+
+  return [...fixedItems, ...extraItems].sort((left, right) => {
+    if (left.order !== right.order) return left.order - right.order;
+    return left.title.localeCompare(right.title, "ko");
+  });
+}
+
+function normalizeSubmitValue(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function resolveSheetSubmissionType(item) {
+  const explicitType = normalizeSubmitValue(item.uploadType || item.submissionType || item.type);
+  if (SHEET_SUBMISSION_TYPE_ORDER.includes(explicitType)) return explicitType;
+
+  const sheetName = normalizeSubmitValue(item.sheetName);
+  const sheetMatch = SHEET_SUBMISSION_TYPE_ORDER.find(
+    (type) => normalizeSubmitValue(SHEET_SUBMISSION_TYPES[type].sheetName) === sheetName,
+  );
+  if (sheetMatch) return sheetMatch;
+
+  const identityText = [item.submitType, item.id, item.key, item.url].map(normalizeSubmitValue);
+  const aliasMatch = SHEET_SUBMISSION_TYPE_ORDER.find((type) =>
+    SHEET_SUBMISSION_TYPES[type].aliases.some((alias) => identityText.includes(normalizeSubmitValue(alias))),
+  );
+  if (aliasMatch) return aliasMatch;
+
+  const searchableText = normalizeSubmitValue(
+    [item.title, ...(item.titleLines || []), item.documentType, item.buttonText, item.fileGuide, item.url]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  const keywordMatch = SHEET_SUBMISSION_TYPE_ORDER.find((type) =>
+    SHEET_SUBMISSION_TYPES[type].keywords.some((keyword) => searchableText.includes(normalizeSubmitValue(keyword))),
+  );
+  if (keywordMatch) return keywordMatch;
+
+  if (normalizeSubmitValue(item.uploadType) === "request") return "recruit";
+  return "";
+}
+
+function normalizePortalSubmissionItem(item, index) {
+  const submissionType = resolveSheetSubmissionType(item);
+  if (!submissionType) return null;
+
+  return {
+    id: item.id || `${submissionType}-${index}`,
+    title: item.title || (submissionType === "tb_registration" ? "교직원 결핵검진 단체검진 신청" : ""),
+    description:
+      item.description ||
+      (submissionType === "tb_registration" ? "교직원 단체 결핵검진 참여 여부를 신청합니다." : ""),
+    target: item.target || (submissionType === "tb_registration" ? "교직원" : ""),
+    documentType: item.documentType || (submissionType === "tb_registration" ? "선택형 신청" : ""),
+    deadlineLabel: item.deadline || item.deadlineLabel || "상시",
+    guideText: item.fileGuide || item.guideText || "",
+    buttonLabel: item.buttonText || item.buttonLabel || "",
+    status: item.status || "접수 중",
+    submissionType,
+    order: Number.isFinite(Number(item.order)) ? Number(item.order) : index,
+  };
 }
 
 function isActiveAssignment(assignment) {
@@ -74,7 +171,7 @@ function canUseInfection(assignment) {
 
 function canShowSubmissionItem(item, assignment) {
   if (item.submissionType === "infection") return canUseInfection(assignment);
-  return ["cpr", "tb", "recruit", "infection"].includes(item.submissionType);
+  return STAFF_SUBMISSION_TYPES.has(item.submissionType);
 }
 
 function AccessMessage({ title, description, action, message }) {
@@ -107,6 +204,7 @@ function RoleBadges({ roles }) {
 
 function SubmissionCard({ item }) {
   const href = SUBMISSION_ROUTES[item.submissionType];
+  const buttonLabel = SUBMISSION_ACTION_LABELS[item.submissionType] || item.buttonLabel || "제출하기";
 
   return (
     <PortalTaskCard
@@ -118,7 +216,13 @@ function SubmissionCard({ item }) {
       )}
       title={item.title}
       description={item.description}
-      action={<PortalAction href={href}>{SUBMISSION_ACTION_LABELS[item.submissionType] || item.buttonLabel || "제출하기"}</PortalAction>}
+      action={
+        item.onOpen ? (
+          <PortalAction onClick={item.onOpen}>{buttonLabel}</PortalAction>
+        ) : (
+          <PortalAction href={href}>{buttonLabel}</PortalAction>
+        )
+      }
     >
       <PortalInfoBox>
         <dl className="grid gap-2 sm:grid-cols-2">
@@ -151,13 +255,22 @@ export default function FirebaseSubmissionsPage() {
   const [profile, setProfile] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
   const [items, setItems] = useState([]);
+  const [tbConfig, setTbConfig] = useState(null);
+  const [modalType, setModalType] = useState(null);
   const [authState, setAuthState] = useState({ status: "loading", message: "" });
   const [itemsState, setItemsState] = useState({ status: "idle", message: "" });
   const [isWorking, setIsWorking] = useState(false);
 
   const assignment = assignmentResult?.assignment || null;
   const visibleItems = useMemo(
-    () => getCanonicalSubmissionItems(items).filter((item) => canShowSubmissionItem(item, assignment)),
+    () =>
+      getCanonicalSubmissionItems(items)
+        .filter((item) => canShowSubmissionItem(item, assignment))
+        .map((item) =>
+          item.submissionType === "tb_registration"
+            ? { ...item, onOpen: () => setModalType("tb_registration") }
+            : item,
+        ),
     [assignment, items],
   );
   const displayName = user?.displayName || profile?.displayName || "교직원";
@@ -215,20 +328,34 @@ export default function FirebaseSubmissionsPage() {
     async function loadItems() {
       setItemsState({ status: "loading", message: "" });
       try {
-        const nextItems = await getActiveSubmissionItems();
+        const portal = await fetchPortalUploads();
+        const nextItems = (portal?.uploads || [])
+          .map(normalizePortalSubmissionItem)
+          .filter(Boolean);
         if (shouldIgnore) return;
         setItems(nextItems);
+        setTbConfig(portal?.tbConfig || null);
         setItemsState({ status: "success", message: "" });
       } catch (error) {
         if (shouldIgnore) return;
-        setItems([]);
-        setItemsState({
-          status: error?.code === "permission-denied" ? "permission-denied" : "error",
-          message:
-            error?.code === "permission-denied"
-              ? "제출 항목을 읽을 수 없습니다. Firestore 보안 규칙을 확인해 주세요."
-              : "제출 항목을 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
-        });
+        try {
+          const fallbackItems = await getActiveSubmissionItems();
+          if (shouldIgnore) return;
+          setItems(fallbackItems);
+          setTbConfig(null);
+          setItemsState({ status: "success", message: "" });
+        } catch (fallbackError) {
+          if (shouldIgnore) return;
+          setItems([]);
+          setTbConfig(null);
+          setItemsState({
+            status: fallbackError?.code === "permission-denied" ? "permission-denied" : "error",
+            message:
+              fallbackError?.code === "permission-denied"
+                ? "제출 항목을 읽을 수 없습니다. Firestore 보안 규칙을 확인해 주세요."
+                : "제출 항목을 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+          });
+        }
       }
     }
 
@@ -372,6 +499,9 @@ export default function FirebaseSubmissionsPage() {
             </div>
           )}
         </section>
+        {modalType && (
+          <SubmitModal type={modalType} onClose={() => setModalType(null)} tbConfig={tbConfig} />
+        )}
     </PortalPageLayout>
   );
 }

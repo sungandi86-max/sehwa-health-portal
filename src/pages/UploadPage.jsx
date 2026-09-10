@@ -2,7 +2,7 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import { PortalBackToHome } from "../components/PortalSubpageLayout.jsx";
 import UploadCenter from "../components/UploadCenter.jsx";
 
-export default function UploadPage({ items }) {
+export default function UploadPage({ items, tbConfig }) {
   const [searchParams] = useSearchParams();
   const isPublicTbReply =
     searchParams.get("mode") === "public" &&
@@ -22,7 +22,12 @@ export default function UploadPage({ items }) {
           <PortalBackToHome />
         </div>
       )}
-      <UploadCenter items={items} publicMode={isPublicTbReply} publicType={isPublicTbReply ? "tbreply" : ""} />
+      <UploadCenter
+        items={items}
+        publicMode={isPublicTbReply}
+        publicType={isPublicTbReply ? "tbreply" : ""}
+        tbConfig={tbConfig}
+      />
     </>
   );
 }

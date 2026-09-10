@@ -188,7 +188,7 @@ function SubmitterIdentity({ viewer }) {
   return <span className="text-[#627083]">로그인 후 제출</span>;
 }
 
-export default function UploadCenter({ items, publicMode = false, publicType = "" }) {
+export default function UploadCenter({ items, publicMode = false, publicType = "", tbConfig = null }) {
   const navigate = useNavigate();
   const [modalType, setModalType] = useState(null);
   const [viewer, setViewer] = useState({ status: publicMode ? "hidden" : "loading", name: "", role: "" });
@@ -395,7 +395,12 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
       </section>
 
       {modalType && (
-        <SubmitModal type={modalType} onClose={() => setModalType(null)} publicMode={publicMode} />
+        <SubmitModal
+          type={modalType}
+          onClose={() => setModalType(null)}
+          publicMode={publicMode}
+          tbConfig={modalType === "tb_registration" ? tbConfig : null}
+        />
       )}
     </>
   );

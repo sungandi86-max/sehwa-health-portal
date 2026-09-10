@@ -213,7 +213,7 @@ export default function App() {
               <Routes>
                 <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
                 <Route path="/today"       element={<TodayPage       items={liveNotices} />} />
-                <Route path="/upload"      element={<UploadPage      items={liveUploads} />} />
+                <Route path="/upload"      element={<UploadPage      items={liveUploads} tbConfig={tbConfig} />} />
                 <Route path="/checkup"     element={<CheckupPage     items={liveCheckups} tbConfig={tbConfig} />} />
                 <Route path="/education"   element={<EducationPage   items={liveEducations} />} />
                 <Route path="/homeroom"    element={<HomeroomPage />} />
