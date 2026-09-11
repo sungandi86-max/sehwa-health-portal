@@ -465,7 +465,7 @@ export default function FirebaseDashboardPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-[16px] font-semibold text-[#102047]">최근 제출</h2>
-              <p className="mt-1 text-xs font-medium text-[#627083]">새로 접수된 제출과 감염병 보고를 확인합니다.</p>
+              <p className="mt-1 text-xs font-medium text-[#627083]">최근 접수된 제출 중 확인이 필요한 항목입니다.</p>
             </div>
             <Link
               to="/firebase-admin/submissions"
@@ -496,7 +496,7 @@ export default function FirebaseDashboardPage() {
 
           {summaryState.status === "success" && dashboardSummary?.recentSubmissions.length === 0 && (
             <div className="mt-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
-              <p className="text-sm font-semibold text-[#627083]">최근 제출 내역이 없습니다.</p>
+              <p className="text-sm font-semibold text-[#627083]">확인할 최근 제출이 없습니다.</p>
             </div>
           )}
 

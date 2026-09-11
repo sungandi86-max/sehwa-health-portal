@@ -5,6 +5,7 @@ import {
   limit,
   orderBy,
   query,
+  startAfter,
   Timestamp,
   where,
 } from "firebase/firestore";
@@ -31,10 +32,10 @@ const STAFF_SUBMISSION_LABELS = {
 };
 
 const STATUS_LABELS = {
-  submitted: "접수됨",
+  submitted: "처리 대기",
   reviewing: "확인 중",
   completed: "처리 완료",
-  rejected: "반려",
+  rejected: "보완 필요",
 };
 
 export function getKstTodayRange(now = new Date()) {
@@ -130,6 +131,32 @@ function normalizeInfectionSubmission(documentSnapshot) {
   };
 }
 
+async function getActionableRecentItems(collectionName, normalize, acceptsDocument = () => true) {
+  const items = [];
+  let cursor = null;
+
+  while (items.length < RECENT_LIMIT) {
+    const constraints = [orderBy("submittedAt", "desc")];
+    if (cursor) constraints.push(startAfter(cursor));
+    constraints.push(limit(RECENT_LIMIT));
+
+    const snapshot = await getDocs(query(collection(db, collectionName), ...constraints));
+    if (snapshot.empty) break;
+
+    snapshot.docs.forEach((documentSnapshot) => {
+      if (items.length >= RECENT_LIMIT || !acceptsDocument(documentSnapshot.data())) return;
+
+      const item = normalize(documentSnapshot);
+      if (item.status !== "completed") items.push(item);
+    });
+
+    if (snapshot.docs.length < RECENT_LIMIT) break;
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+  }
+
+  return items;
+}
+
 export function getInfectionDashboardCounts(documents = []) {
   return documents.reduce(
     (counts, documentData) => {
@@ -166,26 +193,14 @@ export function getInfectionDashboardCounts(documents = []) {
 }
 
 export async function getRecentSubmissions() {
-  const staffRecentQuery = query(
-    collection(db, STAFF_SUBMISSIONS),
-    orderBy("submittedAt", "desc"),
-    limit(RECENT_LIMIT)
-  );
-  const studentRecentQuery = query(
-    collection(db, STUDENT_HEALTH_SUBMISSIONS),
-    orderBy("submittedAt", "desc"),
-    limit(RECENT_LIMIT)
-  );
-
-  const [staffSnapshot, studentSnapshot] = await Promise.all([
-    getDocs(staffRecentQuery),
-    getDocs(studentRecentQuery),
+  const [staffItems, infectionItems] = await Promise.all([
+    getActionableRecentItems(STAFF_SUBMISSIONS, normalizeStaffSubmission),
+    getActionableRecentItems(
+      STUDENT_HEALTH_SUBMISSIONS,
+      normalizeInfectionSubmission,
+      isCurrentTermInfection
+    ),
   ]);
-
-  const staffItems = staffSnapshot.docs.map(normalizeStaffSubmission);
-  const infectionItems = studentSnapshot.docs
-    .filter((documentSnapshot) => isCurrentTermInfection(documentSnapshot.data()))
-    .map(normalizeInfectionSubmission);
 
   return [...staffItems, ...infectionItems]
     .sort((left, right) => right.submittedAtMillis - left.submittedAtMillis)
