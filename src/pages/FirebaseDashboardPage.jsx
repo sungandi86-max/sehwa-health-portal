@@ -5,7 +5,6 @@ import AdminNotificationPanel from "../components/AdminNotificationPanel.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
-import { formatAnnouncementEndDate, getActiveAnnouncements } from "../lib/announcements.js";
 import { getDashboardSummary } from "../lib/dashboardSummary.js";
 import { auth } from "../lib/firebase.js";
 import { getPendingAccessRequestCount } from "../lib/accessRequests.js";
@@ -21,16 +20,13 @@ import { ensureUserProfile, getInternalDisplayName, getUserAssignmentResult, isA
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 const QUICK_MENUS = [
-  { title: "오늘의 보건실", description: "진행 중인 보건실 안내", status: "연결됨", href: "/firebase-dashboard" },
-  { title: "검진·검사", description: "검진 일정과 확인 사항", status: "연결됨", href: "/firebase-checkups" },
-  { title: "교육자료", description: "수업·연수용 보건 자료", status: "연결됨", href: "/firebase-education" },
-  { title: "FAQ", description: "자주 묻는 보건실 질문", status: "연결됨", href: "/firebase-faq" },
-  { title: "제출·보고 센터", description: "CPR, 결핵검진, 채용검진, 감염병 보고", status: "연결됨", href: "/firebase-submissions" },
   { title: "제출·보고 관리", description: "제출 확인과 감염병 보고 처리", status: "관리자", href: "/firebase-admin/submissions" },
   { title: "제출 현황", description: "대상자별 제출·미제출 확인", status: "관리자", href: "/firebase-admin/submission-status" },
   { title: "교직원 제출·이수 현황", description: "결핵검진·CPR 이수 상태", status: "관리자", href: "/firebase-admin/staff-submission-status" },
   { title: "권한 신청", description: "기본·담임 권한 신청 승인", status: "관리자", href: "/firebase-admin/access-requests" },
   { title: "교직원 권한 관리", description: "역할·담임·보직 학기별 관리", status: "관리자", href: "/firebase-admin/users" },
+  { title: "사용자 관리", description: "계정·staffId·표시 이름 관리", status: "관리자", href: "/firebase-admin/users" },
+  { title: "감염병 사례관리", description: "감염병 보고 사례와 복귀 상태 관리", status: "관리자", href: "/firebase-admin/infections" },
 ];
 
 const SUMMARY_LINKS = {
@@ -68,13 +64,6 @@ function AccessMessage({ title, description, action }) {
       </div>
     </section>
   );
-}
-
-function announcementBadgeClassName(badgeType) {
-  if (badgeType === "pink") return "rounded-[8px] border border-[#F6D8D8] bg-[#FFF7F7] px-2.5 py-1 text-xs font-semibold text-[#B42318]";
-  if (badgeType === "green") return "rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]";
-  if (badgeType === "blue") return "rounded-[8px] border border-[#C8D8FF] bg-[#EEF4FF] px-2.5 py-1 text-xs font-semibold text-[#3154A3]";
-  return "rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]";
 }
 
 function SummarySkeleton() {
@@ -118,8 +107,6 @@ export default function FirebaseDashboardPage() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
-  const [announcements, setAnnouncements] = useState([]);
-  const [announcementsState, setAnnouncementsState] = useState({ status: "idle", message: "" });
   const [dashboardSummary, setDashboardSummary] = useState(null);
   const [pendingAccessCount, setPendingAccessCount] = useState(null);
   const [summaryState, setSummaryState] = useState({ status: "idle", message: "" });
@@ -182,50 +169,8 @@ export default function FirebaseDashboardPage() {
 
   useEffect(() => {
     if (!hasAdminAccess) {
-      setAnnouncements([]);
-      setAnnouncementsState({ status: "idle", message: "" });
       setDashboardSummary(null);
       setPendingAccessCount(null);
-      setSummaryState({ status: "idle", message: "" });
-      return;
-    }
-
-    let shouldIgnore = false;
-
-    async function loadAnnouncements() {
-      setAnnouncementsState({ status: "loading", message: "" });
-
-      try {
-        const activeAnnouncements = await getActiveAnnouncements();
-        if (shouldIgnore) return;
-
-        setAnnouncements(activeAnnouncements);
-        setAnnouncementsState({ status: "success", message: "" });
-      } catch (error) {
-        if (shouldIgnore) return;
-
-        console.error("[firebase-dashboard] announcements load failed", error);
-        setAnnouncements([]);
-        setAnnouncementsState({
-          status: error?.code === "permission-denied" ? "permission-denied" : "error",
-          message:
-            error?.code === "permission-denied"
-              ? "공지 정보를 읽을 수 없습니다. Firestore 보안 규칙을 확인해 주세요."
-              : "공지 정보를 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
-        });
-      }
-    }
-
-    loadAnnouncements();
-
-    return () => {
-      shouldIgnore = true;
-    };
-  }, [hasAdminAccess]);
-
-  useEffect(() => {
-    if (!hasAdminAccess) {
-      setDashboardSummary(null);
       setSummaryState({ status: "idle", message: "" });
       return;
     }
@@ -541,89 +486,6 @@ export default function FirebaseDashboardPage() {
                     </p>
                   </div>
                   <p className="shrink-0 text-xs font-bold text-[#8A96A8]">{submission.submittedAtLabel}</p>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold text-[#20A982]">보건실 안내</p>
-              <h2 className="mt-1 text-lg font-bold text-[#102047]">진행 중인 안내</h2>
-            </div>
-            <span className="w-fit rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B]">
-              {announcements.length}건
-            </span>
-          </div>
-
-          {announcementsState.status === "loading" && (
-            <div className="mt-4 space-y-2">
-              {[0, 1].map((item) => (
-                <div
-                  key={item}
-                  className="h-28 animate-pulse rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6]"
-                />
-              ))}
-            </div>
-          )}
-
-          {(announcementsState.status === "permission-denied" || announcementsState.status === "error") && (
-            <div className="mt-4 rounded-[12px] border border-[#F6D8D8] bg-[#FFF7F7] p-4">
-              <p className="text-sm font-semibold text-[#9F2525]">{announcementsState.message}</p>
-            </div>
-          )}
-
-          {announcementsState.status === "success" && announcements.length === 0 && (
-            <div className="mt-4 rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6] p-4">
-              <p className="text-sm font-semibold text-[#627083]">현재 진행 중인 보건실 안내가 없습니다.</p>
-            </div>
-          )}
-
-          {announcementsState.status === "success" && announcements.length > 0 && (
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {announcements.map((announcement) => (
-                <article
-                  key={announcement.id}
-                  className="rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] p-3"
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[#627083]">
-                        <span>{announcement.target || "전체"}</span>
-                        {announcement.status && (
-                          <span className={announcementBadgeClassName(announcement.badgeType)}>
-                            {announcement.status}
-                          </span>
-                        )}
-                        <span>{announcement.dateLabel || formatAnnouncementEndDate(announcement)}</span>
-                      </div>
-                      <h3 className="mt-2 text-[15px] font-semibold leading-6 text-[#102047]">
-                        {announcement.title || "제목 없는 안내"}
-                      </h3>
-                      {announcement.description && (
-                        <p className="mt-1 line-clamp-2 text-sm font-medium leading-5 text-[#627083]">
-                          {announcement.description}
-                        </p>
-                      )}
-                    </div>
-                    {announcement.linkUrl && (
-                      <a
-                        href={announcement.linkUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex min-h-10 shrink-0 items-center rounded-[9px] bg-[#20A982] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#178C6C]"
-                      >
-                        {announcement.linkLabel || "링크 열기"}
-                      </a>
-                    )}
-                  </div>
-                  {announcement.actionText && (
-                    <p className="mt-2 rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2 text-xs font-semibold text-[#08754B]">
-                      {announcement.actionText}
-                    </p>
-                  )}
                 </article>
               ))}
             </div>
