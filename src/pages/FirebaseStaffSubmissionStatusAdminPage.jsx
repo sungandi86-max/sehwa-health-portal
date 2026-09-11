@@ -229,7 +229,7 @@ function AdminStatusContent({ displayName }) {
           {overview.directoryStatus === "success" && selectedTask.summary.directoryLinked < selectedTask.summary.total && (
             <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4">
               <p className="text-[13px] font-semibold leading-5 text-[#627083]">
-                이름·부서 표시는 현재 학기 staffId가 연결된 계정에 한해 표시됩니다. 나머지는 교직원 directory projection이 준비된 뒤 보강할 수 있습니다.
+                일부 대상자의 staffId가 현재 교직원명단과 일치하지 않습니다. 상태 집계는 task snapshot 기준으로 유지하며, 이름·부서 표시는 확인 가능한 정보만 보강합니다.
               </p>
             </section>
           )}

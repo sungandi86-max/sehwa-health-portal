@@ -1,6 +1,6 @@
 import { collection, getDocs, limit, query, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
-import { db } from "./firebase.js";
+import { auth, db } from "./firebase.js";
 import {
   STAFF_STATUS_LABELS,
   STAFF_STATUS_TASK_IDS,
@@ -8,6 +8,7 @@ import {
 } from "./staffSubmissionStatus.js";
 
 const ASSIGNMENT_LIMIT = 500;
+const STAFF_DIRECTORY_API = "/api/firebase/staff-directory";
 const STATUS_ORDER = {
   incomplete: 10,
   unknown: 20,
@@ -88,6 +89,49 @@ function normalizeDirectoryItem(documentSnapshot) {
   };
 }
 
+function normalizeCanonicalDirectoryItem(item) {
+  return {
+    staffId: normalizeText(item?.staffId),
+    realName: normalizeText(item?.name || item?.realName),
+    department: normalizeText(item?.department),
+    position: normalizeText(item?.position),
+  };
+}
+
+async function getCanonicalStaffDirectory() {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    return { directory: new Map(), status: "error" };
+  }
+
+  try {
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch(STAFF_DIRECTORY_API, {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+      cache: "no-store",
+    });
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || result?.ok !== true || !Array.isArray(result.directory)) {
+      return {
+        directory: new Map(),
+        status: response.status === 403 ? "permission-denied" : "error",
+      };
+    }
+
+    const directory = new Map();
+    result.directory.map(normalizeCanonicalDirectoryItem).forEach((item) => {
+      if (item.staffId) directory.set(item.staffId, item);
+    });
+
+    return { directory, status: "success" };
+  } catch {
+    return { directory: new Map(), status: "error" };
+  }
+}
+
 async function getCurrentAssignmentDirectory() {
   try {
     const assignmentSnapshot = await getDocs(
@@ -114,15 +158,18 @@ async function getCurrentAssignmentDirectory() {
   }
 }
 
-function decorateStatus(statusItem, directory) {
+function decorateStatus(statusItem, directory, assignmentDirectory) {
   const directoryItem = directory.get(statusItem.staffId) || null;
+  const assignmentItem = assignmentDirectory.get(statusItem.staffId) || null;
   const hasDirectory = Boolean(directoryItem?.realName || directoryItem?.department || directoryItem?.position);
+  const displayItem = directoryItem || assignmentItem;
   return {
     ...statusItem,
-    realName: directoryItem?.realName || "",
-    department: directoryItem?.department || "",
-    position: directoryItem?.position || "",
+    realName: displayItem?.realName || "",
+    department: displayItem?.department || "",
+    position: displayItem?.position || "",
     hasDirectory,
+    hasDisplayIdentity: Boolean(displayItem?.realName || displayItem?.department || displayItem?.position),
   };
 }
 
@@ -150,7 +197,8 @@ export async function getAdminStaffSubmissionStatusOverview() {
       return left.title.localeCompare(right.title, "ko");
     });
 
-  const [directoryResult, ...statusSnapshots] = await Promise.all([
+  const [directoryResult, assignmentDirectoryResult, ...statusSnapshots] = await Promise.all([
+    getCanonicalStaffDirectory(),
     getCurrentAssignmentDirectory(),
     ...tasks.map((task) =>
       getDocs(query(collection(db, "staff_submission_status"), where("taskId", "==", task.taskId)))
@@ -161,7 +209,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
     const items = statusSnapshots[index].docs
       .map(normalizeStatus)
       .filter((item) => item.taskId === task.taskId)
-      .map((item) => decorateStatus(item, directoryResult.directory))
+      .map((item) => decorateStatus(item, directoryResult.directory, assignmentDirectoryResult.directory))
       .sort(sortStatusItems);
     const summary = countStatuses(items);
     const latestSyncedAt = items.reduce((latest, item) => (toMillis(item.syncedAt) > toMillis(latest) ? item.syncedAt : latest), null);
@@ -173,6 +221,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
         ...summary,
         total: items.length,
         directoryLinked: items.filter((item) => item.hasDirectory).length,
+        displayIdentityLinked: items.filter((item) => item.hasDisplayIdentity).length,
         latestSyncedAtLabel: formatSyncedAt(latestSyncedAt),
       },
     };
@@ -181,5 +230,6 @@ export async function getAdminStaffSubmissionStatusOverview() {
   return {
     tasks: taskSummaries,
     directoryStatus: directoryResult.status,
+    assignmentDirectoryStatus: assignmentDirectoryResult.status,
   };
 }
