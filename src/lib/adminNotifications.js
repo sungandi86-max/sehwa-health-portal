@@ -94,6 +94,22 @@ export async function markAdminNotificationRead(firebaseUser, notificationId) {
   });
 }
 
+export async function fetchAdminNoticeAcknowledgement(firebaseUser, notificationId) {
+  const result = await requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
+    method: "POST",
+    body: JSON.stringify({ action: "getNoticeAcknowledgement", notificationId }),
+  });
+
+  return { acknowledged: result.acknowledged === true };
+}
+
+export async function acknowledgeAdminNotice(firebaseUser, notificationId) {
+  return requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
+    method: "POST",
+    body: JSON.stringify({ action: "acknowledgeNotice", notificationId }),
+  });
+}
+
 export async function registerAdminPushToken(firebaseUser) {
   const capability = getPushCapability();
   if (!capability.supported) throw new Error("이 브라우저는 알림을 지원하지 않습니다.");

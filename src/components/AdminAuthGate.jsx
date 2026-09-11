@@ -2,6 +2,7 @@ import { cloneElement, isValidElement, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "./AdminLayout.jsx";
 import FirebaseAdminRoleAccessGate from "./FirebaseAdminRoleAccessGate.jsx";
+import { acknowledgeAdminNotice, fetchAdminNoticeAcknowledgement } from "../lib/adminNotifications.js";
 
 const ADMIN_AUTH_API = "/api/health-room-status";
 const DEV_ADMIN_AUTH_FALLBACK = "https://sehwa-health-portal.vercel.app/api/health-room-status";
@@ -38,12 +39,69 @@ async function loadAdminDashboard(firebaseUser) {
   throw new Error(`HTTP ${response.status}`);
 }
 
-function AdminReceiptAlert({ alert }) {
+function getKstDateKey(now = new Date()) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+function buildReceiptAlertNoticeId(alert) {
+  const totalToday = Number(alert?.totalToday || 0);
+  if (totalToday < 1) return "";
+
+  const items = Array.isArray(alert?.items) ? alert.items : [];
+  const itemKey = items
+    .map((item) => `${String(item.id || "item").replace(/[^a-z0-9_-]/gi, "")}:${Number(item.todayCount || 0)}`)
+    .join("_");
+
+  return `receipt-alert:${getKstDateKey()}:${totalToday}:${itemKey}`;
+}
+
+function AdminReceiptAlert({ alert, user }) {
   const navigate = useNavigate();
+  const [acknowledged, setAcknowledged] = useState(false);
   const totalToday = Number(alert?.totalToday || 0);
   const items = Array.isArray(alert?.items) ? alert.items : [];
+  const noticeId = buildReceiptAlertNoticeId(alert);
 
-  if (totalToday < 1) return null;
+  useEffect(() => {
+    let ignore = false;
+    setAcknowledged(false);
+
+    if (!user || !noticeId) return () => {
+      ignore = true;
+    };
+
+    fetchAdminNoticeAcknowledgement(user, noticeId)
+      .then((result) => {
+        if (!ignore) setAcknowledged(result.acknowledged);
+      })
+      .catch(() => {
+        if (!ignore) setAcknowledged(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [noticeId, user]);
+
+  if (totalToday < 1 || acknowledged) return null;
+
+  const handleOpenReceipts = async () => {
+    try {
+      if (noticeId) {
+        await acknowledgeAdminNotice(user, noticeId);
+        setAcknowledged(true);
+      }
+    } catch {
+      setAcknowledged(false);
+    } finally {
+      navigate("/admin/receipts");
+    }
+  };
 
   return (
     <section className="mb-4">
@@ -64,7 +122,7 @@ function AdminReceiptAlert({ alert }) {
         </div>
         <button
           type="button"
-          onClick={() => navigate("/admin/receipts")}
+          onClick={handleOpenReceipts}
           className="mt-4 min-h-11 w-full rounded-2xl bg-[#1A3B8B] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:shadow-md md:mt-0 md:w-auto"
         >
           접수 현황 확인하기
@@ -127,7 +185,7 @@ function AdminAuthorizedShell({ adminContext, children }) {
     : children;
 
   return (
-    <AdminLayout alert={<AdminReceiptAlert alert={receiptAlert} />}>
+    <AdminLayout alert={<AdminReceiptAlert alert={receiptAlert} user={user} />}>
       {message && (
         <p className="mb-4 rounded-[14px] border border-[#DDEAE7] bg-white px-4 py-3 text-[13px] font-semibold leading-5 text-[#627083]">
           {message}

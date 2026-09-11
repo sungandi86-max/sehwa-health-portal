@@ -39,6 +39,14 @@ function normalizeUserAgent(value) {
   return String(value || "").trim().replace(/\s+/g, " ").slice(0, 180);
 }
 
+function normalizeNoticeId(value) {
+  return String(value || "").trim().replace(/\s+/g, "-").slice(0, 120);
+}
+
+function isValidNoticeId(value) {
+  return /^[a-z0-9:_-]{1,120}$/.test(value);
+}
+
 async function getUnreadCount(uid) {
   const inboxRef = getFirebaseAdminDb().collection("admin_notification_inboxes").doc(uid).collection("items");
   const unreadSnapshot = await inboxRef.where("read", "==", false).limit(100).get();
@@ -74,6 +82,42 @@ async function markNotificationRead(res, uid, body) {
       read: true,
       readAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
+    }, { merge: true });
+
+  return res.status(200).json({ ok: true });
+}
+
+async function getNoticeAcknowledgement(res, uid, body) {
+  const notificationId = normalizeNoticeId(body.notificationId);
+  if (!isValidNoticeId(notificationId)) {
+    return res.status(400).json({ ok: false, message: "알림 정보를 확인하지 못했습니다." });
+  }
+
+  const snapshot = await getFirebaseAdminDb()
+    .collection("admin_notification_inboxes")
+    .doc(uid)
+    .collection("acknowledgements")
+    .doc(notificationId)
+    .get();
+
+  return res.status(200).json({ ok: true, acknowledged: snapshot.exists });
+}
+
+async function acknowledgeNotice(res, uid, body) {
+  const notificationId = normalizeNoticeId(body.notificationId);
+  if (!isValidNoticeId(notificationId)) {
+    return res.status(400).json({ ok: false, message: "알림 정보를 확인하지 못했습니다." });
+  }
+
+  await getFirebaseAdminDb()
+    .collection("admin_notification_inboxes")
+    .doc(uid)
+    .collection("acknowledgements")
+    .doc(notificationId)
+    .set({
+      notificationId,
+      uid,
+      acknowledgedAt: Timestamp.now(),
     }, { merge: true });
 
   return res.status(200).json({ ok: true });
@@ -159,6 +203,8 @@ async function handlePost(req, res, uid) {
   if (action === "getRegistrationStatus") return getRegistrationStatus(res, uid, body);
   if (action === "removeToken") return removeToken(res, uid, body);
   if (action === "markNotificationRead") return markNotificationRead(res, uid, body);
+  if (action === "getNoticeAcknowledgement") return getNoticeAcknowledgement(res, uid, body);
+  if (action === "acknowledgeNotice") return acknowledgeNotice(res, uid, body);
 
   return res.status(400).json({ ok: false, message: "지원하지 않는 알림 요청입니다." });
 }
