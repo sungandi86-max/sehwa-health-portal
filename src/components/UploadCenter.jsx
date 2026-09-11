@@ -6,6 +6,7 @@ import { uploadIntro } from "../data/fallbackData.js";
 import { auth } from "../lib/firebase.js";
 import { getStaffDisplayName, getStaffRoleDisplay, getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
 import { getUserAssignmentResult } from "../lib/userProfile.js";
+import { applyIndividualHealthCheckupDisplay } from "../data/individualHealthCheckupSubmission.js";
 import { PortalSubmissionCard } from "./PortalSubpageLayout.jsx";
 import { SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
@@ -196,7 +197,12 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
   const groupedItems = uploadItems.reduce((groups, item) => {
     const submitType = resolveSubmitCardType(item);
     const group = publicMode ? "homeroom" : getSubmitGroup(submitType);
-    const nextItem = submitType === "infection" ? { ...item, ...INFECTION_REPORT_CARD } : item;
+    const nextItem =
+      submitType === "infection"
+        ? { ...item, ...INFECTION_REPORT_CARD }
+        : submitType === "tb"
+          ? applyIndividualHealthCheckupDisplay(item)
+          : item;
     return {
       ...groups,
       [group]: [...(groups[group] || []), { item: nextItem, submitType }],

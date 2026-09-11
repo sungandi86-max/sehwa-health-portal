@@ -12,7 +12,7 @@ const quickLinks = [
     label: "접수 현황",
     path: "/admin/receipts",
     tone: "blue",
-    description: "확인증 제출, 채용검진 요청, 인바디 신청 현황을 확인합니다.",
+    description: "개별 건강검진 확인서 제출, 채용검진 요청, 인바디 신청 현황을 확인합니다.",
   },
   {
     label: "감염병 사례관리",
@@ -75,7 +75,7 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
           <SummaryCard
             label="오늘 신규 접수"
             value={countText(todayReceiptCount)}
-            description="확인증 제출, 채용검진 요청, 인바디 신청의 오늘 신규 합계입니다."
+            description="개별 건강검진 확인서 제출, 채용검진 요청, 인바디 신청의 오늘 신규 합계입니다."
             tone="blue"
           />
           <SummaryCard
@@ -87,7 +87,7 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
           <SummaryCard
             label="최근 제출 현황"
             value={recentReceiptAt || "최근 접수 없음"}
-            description="결핵검진 확인증, 심폐소생술 이수증, 채용검진 요청, 인바디 신청 기준입니다."
+            description="개별 건강검진 확인서, 심폐소생술 이수증, 채용검진 요청, 인바디 신청 기준입니다."
             tone="green"
           />
           <SummaryCard

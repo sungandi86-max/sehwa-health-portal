@@ -1,5 +1,6 @@
 import { collection, getDocs, limit, query, where } from "firebase/firestore";
 import { STAFF_STATUS_LABELS, formatSubmissionDateTime } from "./adminSubmissions.js";
+import { applyIndividualHealthCheckupDisplay } from "../data/individualHealthCheckupSubmission.js";
 import { db } from "./firebase.js";
 import { getActiveSubmissionItems } from "./submissionItems.js";
 import { getUsersWithAssignments } from "./userAssignmentsAdmin.js";
@@ -39,7 +40,7 @@ function isActiveStaff(user) {
 
 function normalizeItem(itemId, items) {
   const item = items.find((currentItem) => currentItem.submissionType === itemId || currentItem.id === itemId);
-  return {
+  const normalizedItem = {
     id: itemId,
     title: item?.title || itemId,
     description: item?.description || "",
@@ -50,6 +51,8 @@ function normalizeItem(itemId, items) {
     buttonLabel: item?.buttonLabel || "",
     order: item?.order ?? 999,
   };
+
+  return itemId === "tb" ? applyIndividualHealthCheckupDisplay(normalizedItem) : normalizedItem;
 }
 
 function normalizeSubmission(documentSnapshot) {

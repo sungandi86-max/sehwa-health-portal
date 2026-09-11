@@ -227,7 +227,7 @@ Provider never determines authority by itself. Firebase Auth identifies the user
 The Firebase v2 Submission and Report Center keeps exactly four operational actions:
 
 1. 심폐소생술 이수증 제출
-2. 결핵검진 확인증 제출
+2. 개별 건강검진 확인서 제출
 3. 채용검진 대체 인정 확인 요청
 4. 감염병 발생 보고
 

@@ -3,6 +3,10 @@ import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { firebaseV2SubmissionItems } from "../data/firebaseV2Navigation.js";
+import {
+  INDIVIDUAL_HEALTH_CHECKUP_UPLOAD_BUTTON_LABEL,
+  applyIndividualHealthCheckupDisplay,
+} from "../data/individualHealthCheckupSubmission.js";
 import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
 import SubmitModal from "../components/SubmitModal.jsx";
@@ -34,7 +38,7 @@ const SUBMISSION_ROUTES = {
 
 const SUBMISSION_ACTION_LABELS = {
   cpr: "이수증 제출하기",
-  tb: "확인증 제출하기",
+  tb: INDIVIDUAL_HEALTH_CHECKUP_UPLOAD_BUTTON_LABEL,
   recruit: "확인 요청하기",
   infection: "발생 보고하기",
   tb_registration: "단체검진 신청하기",
@@ -141,8 +145,7 @@ function normalizePortalSubmissionItem(item, index) {
   const submissionType = resolveSheetSubmissionType(item);
   if (!submissionType) return null;
   const guideText = item.fileGuide || item.guideText || "";
-
-  return {
+  const normalizedItem = {
     id: item.id || `${submissionType}-${index}`,
     title: item.title || (submissionType === "tb_registration" ? "교직원 결핵검진 단체검진 신청" : ""),
     description:
@@ -161,6 +164,8 @@ function normalizePortalSubmissionItem(item, index) {
     submissionType,
     order: Number.isFinite(Number(item.order)) ? Number(item.order) : index,
   };
+
+  return submissionType === "tb" ? applyIndividualHealthCheckupDisplay(normalizedItem) : normalizedItem;
 }
 
 function isActiveAssignment(assignment) {

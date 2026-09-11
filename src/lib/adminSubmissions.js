@@ -11,6 +11,7 @@ import {
   getInfectionStatusUpdate,
   getInfectionSubmissionStatus,
 } from "./infectionStatus.js";
+import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
 export { INFECTION_STATUS_LABELS } from "./infectionStatus.js";
 
 const STAFF_COLLECTION = "staff_submissions";
@@ -29,7 +30,7 @@ export const INFECTION_STATUS_OPTIONS = INFECTION_LEGACY_STATUS_OPTIONS;
 
 export const STAFF_TYPE_LABELS = {
   cpr: "심폐소생술 이수증",
-  tb: "결핵검진 확인증",
+  tb: INDIVIDUAL_HEALTH_CHECKUP_TITLE,
   recruit: "채용검진 확인 요청",
 };
 

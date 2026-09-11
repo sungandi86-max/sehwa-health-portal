@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
 import {
   STATUS_FILTER_LABELS,
   STATUS_FILTERS,
@@ -13,7 +14,7 @@ import {
 
 const ITEM_LABELS = {
   cpr: "심폐소생술 이수증",
-  tb: "결핵검진 확인증",
+  tb: INDIVIDUAL_HEALTH_CHECKUP_TITLE,
   recruit: "채용검진 확인 요청",
 };
 

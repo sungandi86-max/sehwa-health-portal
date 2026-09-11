@@ -1,22 +1,32 @@
 import { useEffect, useState } from "react";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import {
+  INDIVIDUAL_HEALTH_CHECKUP_DESCRIPTION,
+  INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_GUIDE,
+  INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS,
+  INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE,
+  INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
+  INDIVIDUAL_HEALTH_CHECKUP_TARGET,
+  INDIVIDUAL_HEALTH_CHECKUP_TITLE,
+  INDIVIDUAL_HEALTH_CHECKUP_UPLOAD_BUTTON_LABEL,
+  applyIndividualHealthCheckupDisplay,
+} from "../data/individualHealthCheckupSubmission.js";
 import { getStaffDisplayName, getStaffRoleDisplay } from "../lib/staffIdentity.js";
 import { createTbSubmission, validateSubmissionFile } from "../lib/staffSubmissions.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
 
 const DEFAULT_ITEM = {
-  title: "결핵검진 확인증 제출",
-  description: "개별적으로 결핵검진 또는 흉부 X-ray 검진을 완료하신 교직원은 확인 가능한 자료를 제출해주세요.",
-  target: "결핵검진 확인증 제출 대상 교직원",
-  documentType: "결핵검진 확인증 또는 흉부 X-ray 확인 자료",
+  title: INDIVIDUAL_HEALTH_CHECKUP_TITLE,
+  description: INDIVIDUAL_HEALTH_CHECKUP_DESCRIPTION,
+  target: INDIVIDUAL_HEALTH_CHECKUP_TARGET,
+  documentType: INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_GUIDE,
   deadlineLabel: "별도 안내일까지",
-  guideText: "권장 파일명: 성명_결핵검진확인증\n확인 필요 항목: 성명, 검진일자, 검진 항목",
-  buttonLabel: "확인증 업로드하기",
+  guideText: INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
+  buttonLabel: INDIVIDUAL_HEALTH_CHECKUP_UPLOAD_BUTTON_LABEL,
   status: "접수 중",
 };
 
-const DOCUMENT_TYPES = ["결핵검진 확인증", "흉부 X-ray 확인 자료", "기타 동등 자료"];
 const STAFF_TYPES = ["교사", "강사", "행정직원"];
 
 function Field({ label, children }) {
@@ -52,7 +62,7 @@ export default function FirebaseTbSubmitPage() {
       try {
         const tbItem = await getSubmissionItem("tb");
         if (shouldIgnore) return;
-        setItem(tbItem || DEFAULT_ITEM);
+        setItem(tbItem ? applyIndividualHealthCheckupDisplay(tbItem) : DEFAULT_ITEM);
         setLoadState({ status: tbItem ? "success" : "empty", message: "" });
       } catch (error) {
         if (shouldIgnore) return;
@@ -103,7 +113,7 @@ export default function FirebaseTbSubmitPage() {
       formElement.reset();
       setSubmitState({
         status: "success",
-        message: `결핵검진 확인증 제출이 완료되었습니다. 접수번호: ${result.id}`,
+        message: `개별 건강검진 확인서 제출이 완료되었습니다. 접수번호: ${result.id}`,
       });
     } catch (error) {
       setSubmitState({
@@ -125,8 +135,8 @@ export default function FirebaseTbSubmitPage() {
         return (
           <FirebaseV2PageShell
             label="제출"
-            title="결핵검진 확인증 제출"
-            description="검진일자와 확인 가능한 자료를 제출합니다."
+            title={INDIVIDUAL_HEALTH_CHECKUP_TITLE}
+            description="검진일자와 확인 가능한 최소 자료를 제출합니다."
             displayName={displayName}
           >
           <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -187,9 +197,9 @@ export default function FirebaseTbSubmitPage() {
                     className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"
                   >
                     <option value="">선택 안 함</option>
-                    {DOCUMENT_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
+                    {INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
                       </option>
                     ))}
                   </select>
@@ -208,7 +218,7 @@ export default function FirebaseTbSubmitPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="확인증 파일">
+                <Field label="확인서 파일">
                   <input
                     type="file"
                     accept="application/pdf,image/jpeg,image/png"
@@ -219,7 +229,7 @@ export default function FirebaseTbSubmitPage() {
               </div>
 
               <p className="mt-5 rounded-[22px] bg-[#F0FBF7] p-4 text-sm font-bold leading-6 text-[#08754B]">
-                PDF, JPG, PNG 파일만 제출할 수 있으며 파일 크기는 10MB 이하로 제한됩니다.
+                {INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE} PDF, JPG, PNG 파일만 제출할 수 있으며 파일 크기는 10MB 이하로 제한됩니다.
               </p>
 
               {submitState.message && (
@@ -241,7 +251,7 @@ export default function FirebaseTbSubmitPage() {
                 disabled={isSubmitDisabled}
                 className="mt-5 min-h-12 w-full rounded-2xl bg-[#20A982] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.22)] transition hover:-translate-y-[1px] hover:bg-[#178C6C] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {submitState.status === "submitting" ? "제출 중..." : item.buttonLabel || "확인증 업로드하기"}
+                {submitState.status === "submitting" ? "제출 중..." : INDIVIDUAL_HEALTH_CHECKUP_UPLOAD_BUTTON_LABEL}
               </button>
             </form>
           </section>

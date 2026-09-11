@@ -16,6 +16,7 @@ import {
   getInfectionCaseStatus,
   getInfectionSubmissionStatus,
 } from "./infectionStatus.js";
+import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
 
 const STAFF_SUBMISSIONS = "staff_submissions";
 const STUDENT_HEALTH_SUBMISSIONS = "student_health_submissions";
@@ -25,7 +26,7 @@ const RECENT_LIMIT = 5;
 
 const STAFF_SUBMISSION_LABELS = {
   cpr: "심폐소생술 이수증",
-  tb: "결핵검진 확인증",
+  tb: INDIVIDUAL_HEALTH_CHECKUP_TITLE,
   recruit: "채용검진 확인 요청",
 };
 

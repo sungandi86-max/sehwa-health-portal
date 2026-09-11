@@ -11,6 +11,11 @@ import {
 } from "../lib/firebaseAuth.js";
 import { getFixedTbRegistrationType, getTbRegistrationWindowState } from "../lib/portalContent.js";
 import { getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
+import {
+  INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE,
+  INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
+  INDIVIDUAL_HEALTH_CHECKUP_TITLE,
+} from "../data/individualHealthCheckupSubmission.js";
 const SCRIPT_URL = "/api/submit";
 
 const FOLDER_IDS = {
@@ -21,7 +26,6 @@ const FOLDER_IDS = {
 
 const STAFF_TYPES = ["교사", "강사", "행정직원"];
 const DEPT_TYPES = ["교무교육과정부", "진로진학홍보부", "연구정보부", "창의인성부", "생활안전부", "1학년부", "2학년부", "3학년부", "행정실", "관리자"];
-const TB_DOC_TYPES = ["결핵검진 확인증", "흉부 X-ray 확인 자료", "기타 동등 자료"];
 const INFECTION_TYPES = ["코로나19", "인플루엔자", "수두", "장염", "기타"];
 
 // ───────── 공통 입력 필드 스타일 ─────────
@@ -178,7 +182,6 @@ function CprForm({ onSubmit, submitting }) {
   );
 }
 
-// ───────── 결핵검진 확인증 폼 ─────────
 function TbForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({
     name: "", dept: "", checkupDate: ""
@@ -235,10 +238,10 @@ function TbForm({ onSubmit, submitting }) {
         <input type="date" className={inputCls} value={form.checkupDate} onChange={set("checkupDate")} />
         {errors.checkupDate && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.checkupDate}</p>}
       </Field>
-      <Field label="확인증 파일 업로드" required>
+      <Field label="확인서 파일 업로드" required>
         <div className="mb-3 rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
-          <p>결핵검진 확인증 또는 흉부 X-ray 검진 확인 자료를 업로드해주세요.</p>
-          <p className="mt-1 font-semibold">확인 필요 항목: 성명, 검진일자, 검진 항목</p>
+          <p>{INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE}</p>
+          <p className="mt-1 font-semibold">{INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE}</p>
         </div>
         <FileUploadArea file={file} onChange={setFile} error={errors.file} />
       </Field>
@@ -788,7 +791,7 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
-        학교에서 진행하는 교직원 결핵검진 단체검진 참여 신청만 받습니다. 개별검진을 받으시는 경우 별도의 결핵검진 확인증 제출 메뉴를 이용해주세요.
+        학교에서 진행하는 교직원 결핵검진 단체검진 참여 신청만 받습니다. 개별검진을 받으시는 경우 별도의 개별 건강검진 확인서 제출 메뉴를 이용해주세요.
       </div>
       {identityStatus === "loading" && (
         <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3.5 py-3 text-sm font-semibold text-[#627083]">
@@ -1169,7 +1172,7 @@ function InfectionReportForm({ onSubmit, submitting }) {
 // ───────── 모달 타입 → 제목 ─────────
 const MODAL_META = {
   cpr: { title: "심폐소생술 이수증 제출", icon: "💚", color: "text-[#2E7D32]" },
-  tb: { title: "결핵검진 확인증 제출", icon: "🩺", color: "text-[#1A3B8B]" },
+  tb: { title: INDIVIDUAL_HEALTH_CHECKUP_TITLE, icon: "🩺", color: "text-[#1A3B8B]" },
   recruit: { title: "채용검진 대체 인정 확인 요청", icon: "📋", color: "text-[#1A3B8B]" },
   other: { title: "기타 보건 관련 자료 제출", icon: "📂", color: "text-slate-600" },
   tb_registration: { title: "교직원 결핵검진 단체검진 신청", icon: "", color: "text-[#1A3B8B]" },

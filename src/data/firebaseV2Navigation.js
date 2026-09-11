@@ -1,3 +1,12 @@
+import {
+  INDIVIDUAL_HEALTH_CHECKUP_BUTTON_LABEL,
+  INDIVIDUAL_HEALTH_CHECKUP_DESCRIPTION,
+  INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_GUIDE,
+  INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
+  INDIVIDUAL_HEALTH_CHECKUP_TARGET,
+  INDIVIDUAL_HEALTH_CHECKUP_TITLE,
+} from "./individualHealthCheckupSubmission.js";
+
 export const firebaseV2MenuItems = [
   {
     id: "upload",
@@ -49,13 +58,13 @@ export const firebaseV2SubmissionItems = [
   {
     id: "tb",
     submissionType: "tb",
-    title: "결핵검진 확인증 제출",
-    description: "개별 결핵검진 또는 흉부 X-ray 확인 자료를 제출합니다.",
-    target: "개별 검진 완료 교직원",
-    documentType: "결핵검진 확인증 또는 흉부 X-ray 확인 자료",
+    title: INDIVIDUAL_HEALTH_CHECKUP_TITLE,
+    description: INDIVIDUAL_HEALTH_CHECKUP_DESCRIPTION,
+    target: INDIVIDUAL_HEALTH_CHECKUP_TARGET,
+    documentType: INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_GUIDE,
     deadlineLabel: "별도 안내일까지",
-    guideText: "성명, 검진일자, 검진 항목 확인",
-    buttonLabel: "확인증 제출",
+    guideText: INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
+    buttonLabel: INDIVIDUAL_HEALTH_CHECKUP_BUTTON_LABEL,
     status: "접수 중",
   },
   {
