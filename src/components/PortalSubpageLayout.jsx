@@ -134,3 +134,53 @@ export function PortalTaskCard({ badges, title, description, children, action })
     </article>
   );
 }
+
+export function PortalTaskRow({
+  icon,
+  title,
+  description,
+  status,
+  meta,
+  details,
+  action,
+}) {
+  return (
+    <article className="rounded-[12px] border border-[#DDEAE7] bg-white px-3.5 py-3 transition hover:border-[#C8D8FF] hover:bg-[#FCFDFE] sm:px-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          {icon && (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] text-sm font-bold text-[#0D4EA6]">
+              {icon}
+            </div>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold leading-6 text-[#102047]">{title}</h2>
+            {description && (
+              <p className="mt-0.5 line-clamp-2 text-sm leading-6 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+                {description}
+              </p>
+            )}
+            {meta && (
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium leading-5 text-[#627083]">
+                {meta}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+          {status && (
+            <span className="inline-flex min-h-7 items-center rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 text-xs font-semibold text-[#627083]">
+              {status}
+            </span>
+          )}
+          {action}
+        </div>
+      </div>
+      {details && (
+        <div className="mt-2 border-t border-[#EEF3F1] pt-2 text-xs leading-5 text-[#627083]">
+          {details}
+        </div>
+      )}
+    </article>
+  );
+}

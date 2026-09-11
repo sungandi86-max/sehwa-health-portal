@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
+import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { firebaseV2SubmissionItems } from "../data/firebaseV2Navigation.js";
 import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
 import SubmitModal from "../components/SubmitModal.jsx";
 import {
-  PortalAction,
   PortalBackToHome,
-  PortalBadge,
-  PortalInfoBox,
   PortalPageHeader,
   PortalPageLayout,
-  PortalTaskCard,
+  PortalTaskRow,
 } from "../components/PortalSubpageLayout.jsx";
 import { auth } from "../lib/firebase.js";
 import {
@@ -41,6 +39,9 @@ const SUBMISSION_ACTION_LABELS = {
   infection: "발생 보고하기",
   tb_registration: "단체검진 신청하기",
 };
+
+const rowActionClass =
+  "inline-flex min-h-9 shrink-0 items-center justify-center rounded-[9px] border border-[#0D4EA6] bg-[#0D4EA6] px-3 py-1.5 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15";
 
 const SHEET_SUBMISSION_TYPES = {
   cpr: {
@@ -201,51 +202,60 @@ function RoleBadges({ roles }) {
   );
 }
 
+function getSubmissionIcon(type) {
+  if (type === "cpr") return "CPR";
+  if (type === "tb_registration") return "신청";
+  if (type === "tb") return "검진";
+  if (type === "recruit") return "확인";
+  if (type === "infection") return "보고";
+  return "제출";
+}
+
+function SubmissionMeta({ item }) {
+  const values = [
+    item.target ? `대상 ${item.target}` : "",
+    item.deadlineLabel ? `마감 ${item.deadlineLabel}` : "",
+    item.documentType ? `자료 ${item.documentType}` : "",
+  ].filter(Boolean);
+
+  return values.map((value) => <span key={value}>{value}</span>);
+}
+
+function SubmissionDetails({ item }) {
+  if (!item.guideText) return null;
+
+  return (
+    <details>
+      <summary className="w-fit cursor-pointer font-semibold text-[#0D4EA6]">안내 보기</summary>
+      <p className="mt-1.5 line-clamp-3 whitespace-pre-line">{item.guideText}</p>
+    </details>
+  );
+}
+
 function SubmissionCard({ item }) {
   const href = SUBMISSION_ROUTES[item.submissionType];
   const buttonLabel = SUBMISSION_ACTION_LABELS[item.submissionType] || item.buttonLabel || "제출하기";
 
   return (
-    <PortalTaskCard
-      badges={(
-        <>
-          <PortalBadge tone="status">{item.status}</PortalBadge>
-          <PortalBadge tone="period">{item.deadlineLabel}</PortalBadge>
-        </>
-      )}
+    <PortalTaskRow
+      icon={getSubmissionIcon(item.submissionType)}
       title={item.title}
       description={item.description}
+      status={item.status}
+      meta={<SubmissionMeta item={item} />}
+      details={<SubmissionDetails item={item} />}
       action={
         item.onOpen ? (
-          <PortalAction onClick={item.onOpen}>{buttonLabel}</PortalAction>
+          <button type="button" onClick={item.onOpen} className={rowActionClass}>
+            {buttonLabel} →
+          </button>
         ) : (
-          <PortalAction href={href}>{buttonLabel}</PortalAction>
+          <Link to={href} className={rowActionClass}>
+            {buttonLabel} →
+          </Link>
         )
       }
-    >
-      <PortalInfoBox>
-        <dl className="grid gap-2 sm:grid-cols-2">
-          {item.target && (
-            <div>
-              <dt className="text-xs font-semibold text-[#102047]">대상</dt>
-              <dd className="mt-0.5">{item.target}</dd>
-            </div>
-          )}
-          {item.documentType && (
-            <div>
-              <dt className="text-xs font-semibold text-[#102047]">제출자료</dt>
-              <dd className="mt-0.5">{item.documentType}</dd>
-            </div>
-          )}
-          {item.guideText && (
-            <div className="sm:col-span-2">
-              <dt className="text-xs font-semibold text-[#102047]">안내</dt>
-              <dd className="mt-0.5 line-clamp-2 whitespace-pre-line">{item.guideText}</dd>
-            </div>
-          )}
-        </dl>
-      </PortalInfoBox>
-    </PortalTaskCard>
+    />
   );
 }
 
@@ -420,7 +430,7 @@ export default function FirebaseSubmissionsPage() {
       <PortalPageHeader
         label="제출·보고 센터"
         title="제출·보고 센터"
-        description="교직원 제출과 학생 감염병 보고 항목을 한 화면에서 선택합니다."
+        description="교직원 제출 및 학생 관련 보고 업무를 확인할 수 있습니다."
         identity={(
           <>
               <p className="text-sm font-semibold text-[#102047]">{displayName} 선생님</p>
@@ -450,11 +460,11 @@ export default function FirebaseSubmissionsPage() {
           </p>
         )}
 
-        <section className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5">
+        <section className="rounded-[14px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[11px] font-semibold text-[#0D4EA6]">제출 항목</p>
-              <h2 className="mt-1 text-xl font-semibold text-[#102047]">제출 항목</h2>
+              <h2 className="text-base font-semibold text-[#102047]">제출 업무</h2>
+              <p className="mt-0.5 text-xs text-[#627083]">현재 접수 중인 제출·보고 항목</p>
             </div>
             <span className="w-fit rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">
               {visibleItems.length}개 항목
@@ -462,27 +472,27 @@ export default function FirebaseSubmissionsPage() {
           </div>
 
           {itemsState.status === "loading" && (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-4 grid gap-2.5">
               {[0, 1, 2, 3].map((item) => (
-                <div key={item} className="h-64 animate-pulse rounded-[30px] border border-[#DDEAE7] bg-[#F7FBF9]" />
+                <div key={item} className="h-[82px] animate-pulse rounded-[12px] border border-[#DDEAE7] bg-[#F7FBF9]" />
               ))}
             </div>
           )}
 
           {(itemsState.status === "permission-denied" || itemsState.status === "error") && (
-            <p className="mt-5 rounded-[24px] border border-[#F6D8D8] bg-[#FFF7F7] p-5 text-sm font-semibold text-[#B42318]">
+            <p className="mt-4 rounded-[12px] border border-[#F6D8D8] bg-[#FFF7F7] p-4 text-sm font-semibold text-[#B42318]">
               {itemsState.message}
             </p>
           )}
 
           {itemsState.status === "success" && visibleItems.length === 0 && (
-            <p className="mt-5 rounded-[24px] border border-[#DDEAE7] bg-[#F7FBF9] p-5 text-sm font-semibold text-[#627083]">
+            <p className="mt-4 rounded-[12px] border border-[#DDEAE7] bg-[#F7FBF9] p-4 text-sm font-semibold text-[#627083]">
               현재 표시할 제출 항목이 없습니다.
             </p>
           )}
 
           {itemsState.status === "success" && visibleItems.length > 0 && (
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-2.5">
               {visibleItems.map((item) => <SubmissionCard key={item.id} item={item} />)}
             </div>
           )}
