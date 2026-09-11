@@ -13,6 +13,7 @@ import {
   applyIndividualHealthCheckupDisplay,
 } from "../data/individualHealthCheckupSubmission.js";
 import { getStaffDisplayName, getStaffRoleDisplay } from "../lib/staffIdentity.js";
+import { inferSubmissionStaffType } from "../lib/staffType.js";
 import { createTbSubmission, validateSubmissionFile } from "../lib/staffSubmissions.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
 
@@ -27,8 +28,6 @@ const DEFAULT_ITEM = {
   status: "접수 중",
 };
 
-const STAFF_TYPES = ["교사", "강사", "행정직원"];
-
 function Field({ label, children }) {
   return (
     <label className="block">
@@ -41,7 +40,7 @@ function Field({ label, children }) {
 function getFormError({ checkupDate, documentType, staffType, file }) {
   if (!checkupDate) return "검진일자를 선택해 주세요.";
   if (!documentType) return "제출자료유형을 선택해 주세요.";
-  if (!staffType) return "교직원 구분을 선택해 주세요.";
+  if (!staffType) return "교직원 정보 확인이 필요합니다. 관리자에게 문의해 주세요.";
   return validateSubmissionFile(file);
 }
 
@@ -49,7 +48,6 @@ export default function FirebaseTbSubmitPage() {
   const [item, setItem] = useState(DEFAULT_ITEM);
   const [checkupDate, setCheckupDate] = useState("");
   const [documentType, setDocumentType] = useState("");
-  const [staffType, setStaffType] = useState("");
   const [file, setFile] = useState(null);
   const [loadState, setLoadState] = useState({ status: "loading", message: "" });
   const [submitState, setSubmitState] = useState({ status: "idle", message: "" });
@@ -88,7 +86,7 @@ export default function FirebaseTbSubmitPage() {
     setSubmitState({ status: "idle", message: selectedFile ? validateSubmissionFile(selectedFile) : "" });
   };
 
-  const handleSubmit = async (event, user, displayName) => {
+  const handleSubmit = async (event, user, displayName, staffType) => {
     event.preventDefault();
     const formElement = event.currentTarget;
     const formError = getFormError({ checkupDate, documentType, staffType, file });
@@ -108,7 +106,6 @@ export default function FirebaseTbSubmitPage() {
       });
       setCheckupDate("");
       setDocumentType("");
-      setStaffType("");
       setFile(null);
       formElement.reset();
       setSubmitState({
@@ -123,14 +120,14 @@ export default function FirebaseTbSubmitPage() {
     }
   };
 
-  const isSubmitDisabled =
-    submitState.status === "submitting" || Boolean(getFormError({ checkupDate, documentType, staffType, file }));
-
   return (
     <FirebaseStaffSubmissionAccessGate>
       {({ user, assignment, staffIdentity, displayName }) => {
         const submitterName = getStaffDisplayName({ identity: staffIdentity, displayName, user });
         const submitterRole = getStaffRoleDisplay({ assignment, identity: staffIdentity });
+        const staffType = inferSubmissionStaffType({ assignment, identity: staffIdentity });
+        const isSubmitDisabled =
+          submitState.status === "submitting" || Boolean(getFormError({ checkupDate, documentType, staffType, file }));
 
         return (
           <FirebaseV2PageShell
@@ -173,13 +170,19 @@ export default function FirebaseTbSubmitPage() {
             </aside>
 
             <form
-              onSubmit={(event) => handleSubmit(event, user, submitterName)}
+              onSubmit={(event) => handleSubmit(event, user, submitterName, staffType)}
               className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]"
             >
               <p className="rounded-2xl bg-[#F7FBF9] px-4 py-3 text-sm font-bold leading-6 text-[#627083]">
                 제출자: <span className="text-[#102047]">{submitterName}</span>
                 <span> · {submitterRole}</span>
               </p>
+
+              {!staffType && (
+                <p className="mt-4 rounded-[18px] border border-[#F6D8D8] bg-[#FFF7F7] px-4 py-3 text-sm font-semibold leading-6 text-[#B42318]">
+                  교직원 정보 확인이 필요합니다. 관리자에게 문의해 주세요.
+                </p>
+              )}
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <Field label="검진일자">
@@ -200,20 +203,6 @@ export default function FirebaseTbSubmitPage() {
                     {INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS.map((type) => (
                       <option key={type.value} value={type.value}>
                         {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="교직원 구분">
-                  <select
-                    value={staffType}
-                    onChange={(event) => setStaffType(event.target.value)}
-                    className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"
-                  >
-                    <option value="">선택 안 함</option>
-                    {STAFF_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
                       </option>
                     ))}
                   </select>

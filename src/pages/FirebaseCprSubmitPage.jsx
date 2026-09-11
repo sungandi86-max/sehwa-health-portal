@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { getStaffDisplayName, getStaffRoleDisplay } from "../lib/staffIdentity.js";
+import { inferSubmissionStaffType } from "../lib/staffType.js";
 import { createCprSubmission, validateCprFile } from "../lib/staffSubmissions.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
 
@@ -29,7 +30,6 @@ export default function FirebaseCprSubmitPage() {
   const [item, setItem] = useState(DEFAULT_ITEM);
   const [trainingDate, setTrainingDate] = useState("");
   const [institution, setInstitution] = useState("");
-  const [staffType, setStaffType] = useState("");
   const [file, setFile] = useState(null);
   const [loadState, setLoadState] = useState({ status: "loading", message: "" });
   const [submitState, setSubmitState] = useState({ status: "idle", message: "" });
@@ -68,12 +68,16 @@ export default function FirebaseCprSubmitPage() {
     setSubmitState({ status: "idle", message: selectedFile ? validateCprFile(selectedFile) : "" });
   };
 
-  const handleSubmit = async (event, user, displayName) => {
+  const handleSubmit = async (event, user, displayName, staffType) => {
     event.preventDefault();
     const formElement = event.currentTarget;
     const fileError = validateCprFile(file);
     if (fileError) {
       setSubmitState({ status: "error", message: fileError });
+      return;
+    }
+    if (!staffType) {
+      setSubmitState({ status: "error", message: "교직원 정보 확인이 필요합니다. 관리자에게 문의해 주세요." });
       return;
     }
 
@@ -88,7 +92,6 @@ export default function FirebaseCprSubmitPage() {
       });
       setTrainingDate("");
       setInstitution("");
-      setStaffType("");
       setFile(null);
       formElement.reset();
       setSubmitState({
@@ -103,13 +106,14 @@ export default function FirebaseCprSubmitPage() {
     }
   };
 
-  const isSubmitDisabled = submitState.status === "submitting" || Boolean(validateCprFile(file));
-
   return (
     <FirebaseStaffSubmissionAccessGate>
       {({ user, assignment, staffIdentity, displayName }) => {
         const submitterName = getStaffDisplayName({ identity: staffIdentity, displayName, user });
         const submitterRole = getStaffRoleDisplay({ assignment, identity: staffIdentity });
+        const staffType = inferSubmissionStaffType({ assignment, identity: staffIdentity });
+        const staffTypeError = staffType ? "" : "교직원 정보 확인이 필요합니다. 관리자에게 문의해 주세요.";
+        const isSubmitDisabled = submitState.status === "submitting" || Boolean(validateCprFile(file)) || Boolean(staffTypeError);
 
         return (
         <FirebaseV2PageShell
@@ -152,13 +156,19 @@ export default function FirebaseCprSubmitPage() {
             </aside>
 
             <form
-              onSubmit={(event) => handleSubmit(event, user, submitterName)}
+              onSubmit={(event) => handleSubmit(event, user, submitterName, staffType)}
               className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]"
             >
               <p className="rounded-2xl bg-[#F7FBF9] px-4 py-3 text-sm font-bold leading-6 text-[#627083]">
                 제출자: <span className="text-[#102047]">{submitterName}</span>
                 <span> · {submitterRole}</span>
               </p>
+
+              {staffTypeError && (
+                <p className="mt-4 rounded-[18px] border border-[#F6D8D8] bg-[#FFF7F7] px-4 py-3 text-sm font-semibold leading-6 text-[#B42318]">
+                  {staffTypeError}
+                </p>
+              )}
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <Field label="이수일자">
@@ -177,19 +187,6 @@ export default function FirebaseCprSubmitPage() {
                     placeholder="예: 대한심폐소생협회"
                     className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"
                   />
-                </Field>
-                <Field label="교직원 구분">
-                  <select
-                    value={staffType}
-                    onChange={(event) => setStaffType(event.target.value)}
-                    className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"
-                  >
-                    <option value="">선택 안 함</option>
-                    <option value="교원">교원</option>
-                    <option value="직원">직원</option>
-                    <option value="강사">강사</option>
-                    <option value="기타">기타</option>
-                  </select>
                 </Field>
                 <Field label="이수증 파일">
                   <input
