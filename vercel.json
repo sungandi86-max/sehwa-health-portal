@@ -6,6 +6,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/__/auth/:path*",
+      "destination": "https://sehwa-health-portal-v2.firebaseapp.com/__/auth/:path*"
+    },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/" }
   ]

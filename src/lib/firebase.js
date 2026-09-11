@@ -2,9 +2,20 @@ import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider, OAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+const DEFAULT_FIREBASE_AUTH_DOMAIN = "sehwa-health-portal-v2.firebaseapp.com";
+const PRODUCTION_APP_DOMAIN = "sehwa-health-portal.vercel.app";
+
+function getFirebaseAuthDomain() {
+  if (typeof window !== "undefined" && window.location.hostname === PRODUCTION_APP_DOMAIN) {
+    return PRODUCTION_APP_DOMAIN;
+  }
+
+  return import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || DEFAULT_FIREBASE_AUTH_DOMAIN;
+}
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCSIwxcdU2x5g8BhNLUckWoNFU7uWSHU94",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "sehwa-health-portal-v2.firebaseapp.com",
+  authDomain: getFirebaseAuthDomain(),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "sehwa-health-portal-v2",
   storageBucket:
     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "sehwa-health-portal-v2.firebasestorage.app",
