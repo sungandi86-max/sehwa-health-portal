@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatContentEndDate } from "../lib/contentVisibility.js";
+import { isTbRegistrationWindowOpen } from "../lib/portalContent.js";
 import { PortalAction, PortalBadge, PortalInfoBox, PortalNoticeBox, PortalTaskCard } from "./PortalSubpageLayout.jsx";
 import { isValidUrl } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
@@ -63,38 +64,6 @@ function DetailsDisclosure({ item }) {
       </div>
     </details>
   );
-}
-
-function parseDateBoundary(value, boundary) {
-  const text = String(value || "").trim();
-  if (!text) return null;
-
-  const dateMatch = text.match(/^(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?/);
-  if (dateMatch) {
-    const [, year, month, day] = dateMatch;
-    return boundary === "end"
-      ? new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999)
-      : new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
-  }
-
-  const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  return boundary === "end"
-    ? new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 23, 59, 59, 999)
-    : new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
-}
-
-function isTbRegistrationPeriodOpen(tbConfig) {
-  if (String(tbConfig?.enabled || "").trim().toUpperCase() !== "TRUE") return false;
-
-  const now = new Date();
-  const startDate = parseDateBoundary(tbConfig?.startDate, "start");
-  const endDate = parseDateBoundary(tbConfig?.endDate, "end");
-
-  if (startDate && now < startDate) return false;
-  if (endDate && now > endDate) return false;
-  return true;
 }
 
 function CheckupModal({ modal, onClose }) {
@@ -167,7 +136,7 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
   const navigate = useNavigate();
   const [tbRegistrationOpen, setTbRegistrationOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
-  const shouldShowTbRegistrationCard = isTbRegistrationPeriodOpen(tbConfig);
+  const shouldShowTbRegistrationCard = isTbRegistrationWindowOpen(tbConfig);
 
   const openPrimaryAction = (item) => {
     const configuredMode = String(item.displayMode || "link").trim().toLowerCase();
@@ -341,11 +310,11 @@ export default function CheckupSection({ items, tbConfig, isLoading = false, loa
                   <PortalBadge tone="period">접수기간 내</PortalBadge>
                 </>
               )}
-              title="교직원 결핵검진 유형 선택"
-              description="학교 단체검진, 개별검진, 공단검진, 채용검진 대체 확인 중 해당 유형을 선택해 제출해주세요."
+              title="교직원 결핵검진 단체검진 신청"
+              description="교직원 단체 결핵검진 참여 여부를 신청합니다."
               action={(
                 <button type="button" onClick={() => setTbRegistrationOpen(true)} className={btnCls}>
-                  유형 선택하기
+                  단체검진 신청하기
                 </button>
               )}
             />

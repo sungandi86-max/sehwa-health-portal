@@ -9,6 +9,7 @@ import {
   signInWithMicrosoft,
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
+import { getFixedTbRegistrationType, getTbRegistrationWindowState } from "../lib/portalContent.js";
 import { getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
 const SCRIPT_URL = "/api/submit";
 
@@ -638,73 +639,13 @@ function StudentTbReplyForm({ onSubmit, submitting, publicMode = false }) {
   );
 }
 
-// ───────── 교직원 결핵검진 유형 선택 폼 ─────────
-const TB_REGISTRATION_TYPES = [
-  "단체검진 신청",
-  "개별검진 예정",
-];
-
-function parseTbRegistrationDate(value, boundary) {
-  if (!value) return null;
-
-  const raw = String(value).trim();
-  if (!raw) return null;
-
-  const normalized = raw.replace(/\s+/g, " ");
-  const match = normalized.match(
-    /^(\d{4})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/
-  );
-
-  if (!match) {
-    const fallback = new Date(raw);
-    if (Number.isNaN(fallback.getTime())) return null;
-    if (
-      boundary === "end" &&
-      fallback.getHours() === 0 &&
-      fallback.getMinutes() === 0 &&
-      fallback.getSeconds() === 0 &&
-      fallback.getMilliseconds() === 0
-    ) {
-      fallback.setHours(23, 59, 59, 999);
-    }
-    return fallback;
-  }
-
-  const [, year, month, day, hour, minute, second] = match;
-  const hasTime = hour !== undefined;
-
-  if (hasTime) {
-    return new Date(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-      Number(second || 0),
-      0
-    );
-  }
-
-  if (boundary === "end") {
-    return new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999);
-  }
-
-  return new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
-}
-
-function isEnabledConfigValue(value) {
-  const normalized = String(value || "").trim().toUpperCase();
-  return ["TRUE", "Y", "YES", "1", "사용"].includes(normalized);
-}
-
+// ───────── 교직원 결핵검진 단체검진 신청 폼 ─────────
 function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
   const [identity, setIdentity] = useState(null);
   const [identityStatus, setIdentityStatus] = useState("loading");
   const [identityMessage, setIdentityMessage] = useState("");
   const [signingIn, setSigningIn] = useState(false);
-  const [form, setForm] = useState({ registrationType: "" });
   const [errors, setErrors] = useState({});
-  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
   useEffect(() => {
     let ignore = false;
@@ -783,7 +724,6 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
     if (!identity?.name || !identity?.department) {
       e.identity = "교직원 정보가 연결되지 않아 신청할 수 없습니다. 관리자에게 문의해 주세요.";
     }
-    if (!form.registrationType) e.registrationType = "검진 유형을 선택해주세요.";
     return e;
   };
 
@@ -795,7 +735,7 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
     await onSubmit({
       sheetName: "응답_교직원결핵검진유형선택",
       folderId: null,
-      fields: { name: identity.name, dept: identity.department, registrationType: form.registrationType },
+      fields: { name: identity.name, dept: identity.department, registrationType: getFixedTbRegistrationType() },
       fileName: null,
       fileBase64: null,
       fileMimeType: null,
@@ -814,25 +754,30 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
     );
   }
 
-  if (!isEnabledConfigValue(tbConfig.enabled)) {
+  const windowState = getTbRegistrationWindowState(tbConfig);
+
+  if (windowState === "disabled") {
     return (
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
         {tbConfig.closedMessage || "접수가 마감되었습니다."}
       </div>
     );
   }
-
-  const now = new Date();
-  const startDate = parseTbRegistrationDate(tbConfig.startDate, "start");
-  if (startDate && now < startDate) {
+  if (windowState === "missing-period") {
+    return (
+      <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
+        접수 기간이 설정되지 않아 현재 신청할 수 없습니다.
+      </div>
+    );
+  }
+  if (windowState === "before") {
     return (
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
         접수 시작 전입니다. 접수 기간에 다시 이용해주세요.
       </div>
     );
   }
-  const endDate = parseTbRegistrationDate(tbConfig.endDate, "end");
-  if (endDate && now > endDate) {
+  if (windowState === "closed") {
     return (
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
         {tbConfig.closedMessage || "접수 기한이 지났습니다."}
@@ -843,7 +788,7 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl bg-[#EAF3FF] p-4 text-sm leading-6 text-[#1A3B8B]">
-        건강정보나 검진 결과지는 제출하지 않습니다. 교직원 결핵검진 진행 유형만 선택해 제출해주세요.
+        학교에서 진행하는 교직원 결핵검진 단체검진 참여 신청만 받습니다. 개별검진을 받으시는 경우 별도의 결핵검진 확인증 제출 메뉴를 이용해주세요.
       </div>
       {identityStatus === "loading" && (
         <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3.5 py-3 text-sm font-semibold text-[#627083]">
@@ -883,25 +828,7 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
             </dl>
           </div>
           {errors.identity && <p className="text-xs font-bold text-[#D94F70]">{errors.identity}</p>}
-          <Field label="검진 유형" required>
-            <div className="space-y-2">
-              {TB_REGISTRATION_TYPES.map((rt) => (
-                <label key={rt} className="flex cursor-pointer items-center gap-3">
-                  <input
-                    type="radio"
-                    name="registrationType"
-                    value={rt}
-                    checked={form.registrationType === rt}
-                    onChange={set("registrationType")}
-                    className="h-4 w-4 accent-[#1A3B8B]"
-                  />
-                  <span className="text-sm text-[#263238]">{rt}</span>
-                </label>
-              ))}
-            </div>
-            {errors.registrationType && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.registrationType}</p>}
-          </Field>
-          <SubmitButton onClick={handleSubmit} submitting={submitting} />
+          <SubmitButton onClick={handleSubmit} submitting={submitting}>단체검진 신청하기</SubmitButton>
         </>
       )}
     </div>

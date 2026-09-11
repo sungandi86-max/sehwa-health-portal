@@ -692,6 +692,7 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
     const notStartedMsg = "접수 시작 전입니다. 접수 기간에 다시 이용해주세요.";
 
     if (!isTrue_(config.enabled)) throw new Error(closedMsg);
+    if (!startDateRaw || !endDateRaw) throw new Error("접수 기간이 설정되지 않아 현재 신청할 수 없습니다.");
 
     const nowDate = new Date();
 
@@ -2821,7 +2822,13 @@ function getLegacyTbRegistrationConfig_() {
 }
 
 function getTbRegistrationConfig_() {
-  return getTbRegistrationUploadConfig_() || getLegacyTbRegistrationConfig_();
+  return getTbRegistrationUploadConfig_() || {
+    enabled: "FALSE",
+    startDate: "",
+    endDate: "",
+    closedButton: "",
+    closedMessage: "접수 기간이 설정되지 않아 현재 신청할 수 없습니다."
+  };
 }
 
 function parseExposureDateBoundary_(value, boundary) {
@@ -2902,6 +2909,17 @@ function isVisibleByExposure_(row, now) {
   return getExposureState_(row, now || new Date()) === "visible";
 }
 
+function isVisiblePortalUpload_(row, now) {
+  if (!isTbRegistrationUploadRow_(row)) return isVisibleByExposure_(row, now);
+  if (!isTrue_(getValue_(row, ["사용여부"]))) return false;
+
+  const startRaw = getValue_(row, ["노출시작일"]);
+  const endRaw = getValue_(row, ["노출종료일"]);
+  if (!startRaw || !endRaw) return false;
+
+  return isVisibleByExposure_(row, now);
+}
+
 function splitLines_(text) {
   if (!text) return [];
   return String(text).split(/\r?\n|<br\s*\/?>/i).map(v => v.trim()).filter(Boolean);
@@ -2931,7 +2949,7 @@ function getNotices_(ss) {
 
 function getUploads_(ss) {
   const now = new Date();
-  return getRows_(ss, SHEET_NAMES.portalUploads).filter(r => isVisibleByExposure_(r, now)).map(r => ({
+  return getRows_(ss, SHEET_NAMES.portalUploads).filter(r => isVisiblePortalUpload_(r, now)).map(r => ({
     title:        getValue_(r, ["제목"]),
     titleLines:   getTitleLines_(r),
     description:  getValue_(r, ["설명"]),

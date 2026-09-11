@@ -8,6 +8,7 @@ import {
   studentCareItems,
   uploadItems,
 } from "./data/fallbackData.js";
+import { filterPortalUploads } from "./lib/portalContent.js";
 
 const PORTAL_API_URL = "/api/portal";
 const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
@@ -58,7 +59,7 @@ function portalUrlForScope(scope) {
 }
 
 async function fetchPortalData(signal, scope = "") {
-  const response = await fetch(portalUrlForScope(scope), { signal });
+  const response = await fetch(portalUrlForScope(scope), { signal, cache: "no-store" });
   const contentType = response.headers.get("content-type") || "";
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -69,7 +70,7 @@ async function fetchPortalData(signal, scope = "") {
   if (import.meta.env.DEV) {
     const separator = scope ? "&" : "?";
     const fallbackUrl = `${DEV_PORTAL_API_FALLBACK}${scope ? `?scope=${encodeURIComponent(scope)}` : ""}${separator}preview=local`;
-    const fallbackResponse = await fetch(fallbackUrl, { signal });
+    const fallbackResponse = await fetch(fallbackUrl, { signal, cache: "no-store" });
     if (!fallbackResponse.ok) throw new Error(`fallback HTTP ${fallbackResponse.status}`);
     return fallbackResponse.json();
   }
@@ -161,8 +162,9 @@ export default function App() {
         if (portal?.success === false || portal?.result === "error") {
           throw new Error(portal.message || "Portal API error");
         }
-        setPortalData(portal);
-        setTbConfig(portal?.tbConfig || { enabled: "FALSE" });
+        const nextPortal = filterPortalUploads(portal);
+        setPortalData(nextPortal);
+        setTbConfig(nextPortal?.tbConfig || { enabled: "FALSE" });
         setIsLoading(false);
       })
       .catch((error) => {
@@ -182,7 +184,7 @@ export default function App() {
     ? { ...fallbackAppConfig, ...portalData.appConfig }
     : fallbackAppConfig;
 
-  const liveUploads     = portalData ? (portalData.uploads    || []) : uploadItems;
+  const liveUploads     = portalData ? (portalData.uploads    || []) : (portalScope === "upload" ? [] : uploadItems);
   const liveStudentCare = portalData ? (portalData.studentCare|| []) : studentCareItems;
   const liveRoadmap     = portalData?.roadmap || { enabled: false, adminOnly: true, items: [] };
 

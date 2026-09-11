@@ -24,7 +24,6 @@ import {
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { fetchPortalUploads } from "../lib/portalContent.js";
-import { getActiveSubmissionItems } from "../lib/submissionItems.js";
 import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher, isHomeroom } from "../lib/userProfile.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
@@ -338,24 +337,13 @@ export default function FirebaseSubmissionsPage() {
         setItemsState({ status: "success", message: "" });
       } catch (error) {
         if (shouldIgnore) return;
-        try {
-          const fallbackItems = await getActiveSubmissionItems();
-          if (shouldIgnore) return;
-          setItems(fallbackItems);
-          setTbConfig(null);
-          setItemsState({ status: "success", message: "" });
-        } catch (fallbackError) {
-          if (shouldIgnore) return;
-          setItems([]);
-          setTbConfig(null);
-          setItemsState({
-            status: fallbackError?.code === "permission-denied" ? "permission-denied" : "error",
-            message:
-              fallbackError?.code === "permission-denied"
-                ? "제출 항목을 읽을 수 없습니다. Firestore 보안 규칙을 확인해 주세요."
-                : "제출 항목을 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
-          });
-        }
+        console.error("[firebase-submissions] portal upload load failed", error);
+        setItems([]);
+        setTbConfig(null);
+        setItemsState({
+          status: "error",
+          message: "제출 항목을 불러오지 못했습니다. 잠시 후 다시 확인해주세요.",
+        });
       }
     }
 
