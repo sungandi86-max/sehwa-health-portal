@@ -82,6 +82,9 @@ const SUBMIT_SHEET_HEADERS = {
   "응답_결핵검진진료회신": ["제출일시","학년","반","번호","학생 이름","진료일","의료기관명","파일명","파일링크"],
 };
 
+const TB_GROUP_REQUEST_RESPONSE_VALUE = "단체검진 신청";
+const TB_GROUP_SCREENING_MASTER_TYPE = "학교 단체검진";
+
 // ════════════════════════════════════════════════════════════════
 // onEdit
 // ════════════════════════════════════════════════════════════════
@@ -667,6 +670,47 @@ function getOrCreateSubmitSheet_(ss, sheetName) {
   return sheet;
 }
 
+function findTbScreeningMasterRow_(sheet, name) {
+  const targetName = String(name || "").trim();
+  if (!targetName) throw new Error("신청자 이름을 확인할 수 없습니다.");
+
+  const data = sheet.getDataRange().getValues();
+  const matches = [];
+  for (let i = 5; i < data.length; i++) {
+    if (String(data[i][2] || "").trim() === targetName) {
+      matches.push(i + 1);
+    }
+  }
+
+  if (matches.length > 1) {
+    throw new Error("동명이인으로 인해 교직원 결핵검진현황 행을 특정할 수 없습니다. 보건실에서 명단을 확인해주세요.");
+  }
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function assertTbScreeningMasterTypeAllowed_(range, value) {
+  const rule = range.getDataValidation();
+  if (!rule) return;
+
+  const criteria = rule.getCriteriaType();
+  const criteriaValues = rule.getCriteriaValues();
+  let allowedValues = null;
+
+  if (criteria === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+    allowedValues = criteriaValues[0];
+  } else if (criteria === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) {
+    allowedValues = criteriaValues[0].getDisplayValues().flat();
+  }
+
+  if (!allowedValues) return;
+
+  const normalizedAllowed = allowedValues.map((item) => String(item || "").trim());
+  if (normalizedAllowed.indexOf(value) === -1) {
+    throw new Error("교직원 결핵검진현황의 검진유형 허용값에 학교 단체검진이 없습니다.");
+  }
+}
+
 function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
   if (sheetName === "응답_심폐소생술이수증") {
     sheet.appendRow([now, fields.name, fields.dept, fields.staffType,
@@ -706,25 +750,26 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
       if (endDate && nowDate > endDate) throw new Error(closedMsg);
     }
 
+    const responseRegistrationType = TB_GROUP_REQUEST_RESPONSE_VALUE;
+    const masterRegistrationType = TB_GROUP_SCREENING_MASTER_TYPE;
     const masterSheet = getSpreadsheet_().getSheetByName("교직원 결핵검진현황");
+    let masterRow = null;
+
     if (masterSheet) {
-      const data  = masterSheet.getDataRange().getValues();
-      let found   = false;
-      for (let i = 5; i < data.length; i++) {
-        if (data[i][2] === fields.name) {
-          masterSheet.getRange(i + 1, 4).setValue(fields.registrationType);
-          masterSheet.getRange(i + 1, 5).setValue("응답완료");
-          masterSheet.getRange(i + 1, 8).setValue(now);
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        sheet.appendRow([now, fields.name, fields.dept, fields.registrationType, "명단 확인 필요"]);
+      masterRow = findTbScreeningMasterRow_(masterSheet, fields.name);
+      if (masterRow) {
+        assertTbScreeningMasterTypeAllowed_(masterSheet.getRange(masterRow, 5), masterRegistrationType);
+      } else {
+        sheet.appendRow([now, fields.name, fields.dept, responseRegistrationType, "명단 확인 필요"]);
         return;
       }
     }
-    sheet.appendRow([now, fields.name, fields.dept, fields.registrationType, ""]);
+
+    if (masterSheet && masterRow) {
+      masterSheet.getRange(masterRow, 5).setValue(masterRegistrationType);
+    }
+
+    sheet.appendRow([now, fields.name, fields.dept, responseRegistrationType, ""]);
   } else if (sheetName === "응답_인바디측정신청") {
     sheet.appendRow([now, fields.name, fields.dept, fields.preferredDate, fields.preferredTime]);
   } else if (sheetName === "응답_결핵검진진료회신") {
