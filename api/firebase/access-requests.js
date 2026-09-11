@@ -1,11 +1,19 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
 import { notifyAdminPushSubscribers } from "../../server/lib/adminPushNotifications.js";
+import {
+  buildGoogleSignupApprovalUpdate,
+  getStaffIdAutoLinkClaimId,
+  GOOGLE_PROVIDER_ID,
+  isActiveStaffIdClaim,
+  isPendingGoogleSignupAssignment,
+  resolveNewSignupStaffId,
+} from "../../server/lib/newSignupStaffId.js";
+import { readStaffDirectory } from "../../server/lib/staffDirectory.js";
 import { getAccessRequestPosition, normalizeAccessRequestApplicant } from "../../src/lib/accessRequestApplicant.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
-const GOOGLE_PROVIDER_ID = "google.com";
 const MICROSOFT_PROVIDER_ID = "microsoft.com";
 const ACCESS_REQUEST_LIMIT = 200;
 const ACCESS_REQUEST_TYPES = {
@@ -204,7 +212,9 @@ async function submitBaseAccessRequest(res, decodedToken, body) {
 
   const result = await db.runTransaction(async (transaction) => {
     const assignmentSnapshot = await transaction.get(assignmentRef);
-    if (assignmentSnapshot.exists) return { status: "has-assignment" };
+    if (assignmentSnapshot.exists && !isPendingGoogleSignupAssignment(assignmentSnapshot.data())) {
+      return { status: "has-assignment" };
+    }
 
     const requestSnapshot = await transaction.get(requestRef);
     if (requestSnapshot.exists) {
@@ -450,6 +460,25 @@ async function reviewRequest(req, res, decodedToken) {
   }
 
   const requestRef = db.collection("access_requests").doc(requestId);
+  let signupDirectory = null;
+  if (action === "approve") {
+    const preliminaryRequestSnapshot = await requestRef.get();
+    const preliminaryRequest = preliminaryRequestSnapshot.data();
+    const preliminaryRequestType = preliminaryRequest?.requestType || ACCESS_REQUEST_TYPES.BASE_ACCESS;
+    if (preliminaryRequestSnapshot.exists && preliminaryRequestType === ACCESS_REQUEST_TYPES.BASE_ACCESS) {
+      const preliminaryAssignmentRef = db
+        .collection("user_assignments")
+        .doc(getAssignmentId(preliminaryRequest.uid, preliminaryRequest.schoolYear, preliminaryRequest.semester));
+      const preliminaryAssignmentSnapshot = await preliminaryAssignmentRef.get();
+      if (preliminaryAssignmentSnapshot.exists && isPendingGoogleSignupAssignment(preliminaryAssignmentSnapshot.data())) {
+        try {
+          signupDirectory = (await readStaffDirectory()).directory;
+        } catch (error) {
+          console.error("[google-signup-staff-id] directory lookup failed", error instanceof Error ? error.name : "UnknownError");
+        }
+      }
+    }
+  }
   const now = Timestamp.now();
   const reviewer = {
     uid: decodedToken.uid,
@@ -495,10 +524,59 @@ async function reviewRequest(req, res, decodedToken) {
         return { status: "approved" };
       }
 
-      if (!assignmentSnapshot.exists) {
-        const assignmentScope = getBaseAccessAssignmentScope(accessRequest);
-        if (!assignmentScope) return { status: "invalid-homeroom-request" };
+      const assignmentScope = getBaseAccessAssignmentScope(accessRequest);
+      if (!assignmentScope) return { status: "invalid-homeroom-request" };
 
+      let autoStaffId = "";
+      let autoStaffIdClaimRef = null;
+      if (
+        assignmentSnapshot.exists &&
+        isPendingGoogleSignupAssignment(assignmentSnapshot.data()) &&
+        Array.isArray(signupDirectory)
+      ) {
+        const signupUserRef = db.collection("users").doc(accessRequest.uid);
+        const signupUserSnapshot = await transaction.get(signupUserRef);
+        const signupUser = signupUserSnapshot.data();
+        const match = resolveNewSignupStaffId({
+          providerId: GOOGLE_PROVIDER_ID,
+          providerDisplayName: signupUser?.displayName || accessRequest.displayName,
+          displayNameOverride: signupUser?.displayNameOverride,
+          directory: signupDirectory,
+        });
+        if (match.status === "matched" && match.staffId) {
+          autoStaffIdClaimRef = db.collection("staff_id_auto_link_claims").doc(
+            getStaffIdAutoLinkClaimId(match.staffId, accessRequest.schoolYear, accessRequest.semester)
+          );
+          const linkedAssignmentsQuery = db.collection("user_assignments").where("staffId", "==", match.staffId);
+          const [claimSnapshot, linkedAssignmentsSnapshot] = await Promise.all([
+            transaction.get(autoStaffIdClaimRef),
+            transaction.get(linkedAssignmentsQuery),
+          ]);
+          const claimData = claimSnapshot.exists ? claimSnapshot.data() : null;
+          const claimedAssignmentSnapshot = claimData?.assignmentId
+            ? await transaction.get(db.collection("user_assignments").doc(claimData.assignmentId))
+            : null;
+          const hasActiveClaim = isActiveStaffIdClaim({
+            claim: claimData,
+            assignment: claimedAssignmentSnapshot?.exists ? claimedAssignmentSnapshot.data() : null,
+            staffId: match.staffId,
+            schoolYear: accessRequest.schoolYear,
+            semester: accessRequest.semester,
+          });
+          const hasActiveDuplicate = linkedAssignmentsSnapshot.docs.some((documentSnapshot) => {
+            const linkedAssignment = documentSnapshot.data();
+            return (
+              linkedAssignment.active === true &&
+              Number(linkedAssignment.schoolYear) === Number(accessRequest.schoolYear) &&
+              Number(linkedAssignment.semester) === Number(accessRequest.semester) &&
+              linkedAssignment.uid !== accessRequest.uid
+            );
+          });
+          if (!hasActiveClaim && !hasActiveDuplicate) autoStaffId = match.staffId;
+        }
+      }
+
+      if (!assignmentSnapshot.exists) {
         transaction.set(assignmentRef, {
           uid: accessRequest.uid,
           schoolYear: accessRequest.schoolYear,
@@ -511,6 +589,23 @@ async function reviewRequest(req, res, decodedToken) {
           createdAt: now,
           updatedAt: now,
         });
+      } else if (isPendingGoogleSignupAssignment(assignmentSnapshot.data())) {
+        const approvalUpdate = buildGoogleSignupApprovalUpdate({
+          assignmentScope,
+          position: getAccessRequestPosition(accessRequest.applicant),
+          updatedAt: now,
+        });
+        transaction.update(
+          assignmentRef,
+          autoStaffId ? { ...approvalUpdate, staffId: autoStaffId } : approvalUpdate
+        );
+        if (autoStaffId) {
+          transaction.set(autoStaffIdClaimRef, {
+            uid: accessRequest.uid,
+            assignmentId: assignmentRef.id,
+            createdAt: now,
+          });
+        }
       }
 
       transaction.update(requestRef, {
