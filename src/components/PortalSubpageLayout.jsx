@@ -135,50 +135,60 @@ export function PortalTaskCard({ badges, title, description, children, action })
   );
 }
 
-export function PortalTaskRow({
-  icon,
+export function PortalSubmissionCard({
   title,
   description,
   status,
-  meta,
-  details,
+  deadline,
+  target,
+  documentType,
+  guideText,
   action,
 }) {
+  const details = [
+    target ? ["대상", target] : null,
+    documentType ? ["제출자료", documentType] : null,
+    guideText ? ["안내", guideText] : null,
+  ].filter(Boolean);
+
   return (
-    <article className="rounded-[12px] border border-[#DDEAE7] bg-white px-3.5 py-3 transition hover:border-[#C8D8FF] hover:bg-[#FCFDFE] sm:px-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 gap-3">
-          {icon && (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] text-sm font-bold text-[#0D4EA6]">
-              {icon}
-            </div>
-          )}
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold leading-6 text-[#102047]">{title}</h2>
-            {description && (
-              <p className="mt-0.5 line-clamp-2 text-sm leading-6 text-[#627083]" style={{ wordBreak: "keep-all" }}>
-                {description}
-              </p>
-            )}
-            {meta && (
-              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium leading-5 text-[#627083]">
-                {meta}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-          {status && (
-            <span className="inline-flex min-h-7 items-center rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 text-xs font-semibold text-[#627083]">
-              {status}
-            </span>
-          )}
-          {action}
-        </div>
+    <article className="flex min-h-[214px] flex-col rounded-[14px] border border-[#DDEAE7] bg-white p-4 shadow-[0_6px_18px_rgba(16,32,71,0.035)] transition hover:border-[#C8D8FF] hover:shadow-[0_10px_24px_rgba(16,32,71,0.055)]">
+      <div className="mb-3 flex flex-wrap gap-2">
+        {status && (
+          <span className="inline-flex min-h-7 items-center rounded-[8px] border border-[#C8D8FF] bg-[#EEF4FF] px-2.5 text-xs font-semibold text-[#3154A3]">
+            {status}
+          </span>
+        )}
+        {deadline && (
+          <span className="inline-flex min-h-7 items-center rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 text-xs font-semibold text-[#627083]">
+            {deadline}
+          </span>
+        )}
       </div>
-      {details && (
-        <div className="mt-2 border-t border-[#EEF3F1] pt-2 text-xs leading-5 text-[#627083]">
-          {details}
+
+      <h2 className="text-base font-semibold leading-6 text-[#102047]">{title}</h2>
+      {description && (
+        <p className="mt-1.5 line-clamp-2 text-sm font-normal leading-6 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+          {description}
+        </p>
+      )}
+
+      {details.length > 0 && (
+        <dl className="mt-3 grid gap-1.5 text-xs leading-5 text-[#627083]">
+          {details.map(([label, value]) => (
+            <div key={label} className="grid grid-cols-[64px_minmax(0,1fr)] gap-2">
+              <dt className="font-semibold text-[#102047]">{label}</dt>
+              <dd className="min-w-0 line-clamp-2 whitespace-pre-line" style={{ wordBreak: "keep-all" }}>
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {action && (
+        <div className="mt-auto pt-4">
+          {action}
         </div>
       )}
     </article>

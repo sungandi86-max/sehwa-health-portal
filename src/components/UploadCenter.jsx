@@ -6,7 +6,7 @@ import { uploadIntro } from "../data/fallbackData.js";
 import { auth } from "../lib/firebase.js";
 import { getStaffDisplayName, getStaffRoleDisplay, getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
 import { getUserAssignmentResult } from "../lib/userProfile.js";
-import { PortalTaskRow } from "./PortalSubpageLayout.jsx";
+import { PortalSubmissionCard } from "./PortalSubpageLayout.jsx";
 import { SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
@@ -86,14 +86,8 @@ const SUBMIT_TYPE_CONFIG = {
 const SUBMIT_TYPE_ORDER = ["cpr", "tb_registration", "student_tb_reply", "tb", "recruit", "infection", "other"];
 const VALID_MODAL_TYPES = new Set(SUBMIT_TYPE_ORDER);
 
-const SUBMIT_GROUP_LABELS = {
-  staff: "교직원 제출",
-  homeroom: "학생·담임 제출",
-  other: "기타 제출",
-};
-
 const actionButtonClass =
-  "inline-flex min-h-9 shrink-0 items-center justify-center rounded-[9px] border border-[#0D4EA6] bg-[#0D4EA6] px-3 py-1.5 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15";
+  "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15 sm:w-fit";
 
 function getSubmitGroup(type) {
   if (["cpr", "tb_registration", "tb", "recruit"].includes(type)) return "staff";
@@ -169,53 +163,9 @@ function SubmitterIdentity({ viewer }) {
   return <span className="text-[#627083]">로그인 후 제출</span>;
 }
 
-function getRowIcon(submitType) {
-  if (submitType === "cpr") return "CPR";
-  if (submitType === "tb_registration") return "신청";
-  if (submitType === "student_tb_reply") return "회신";
-  if (submitType === "tb") return "검진";
-  if (submitType === "recruit") return "확인";
-  if (submitType === "infection") return "보고";
-  return "자료";
-}
-
 function getCompactActionLabel(item) {
   const label = String(item.buttonText || "제출하기");
   return label.endsWith("→") ? label : `${label} →`;
-}
-
-function RowMeta({ item, group, publicMode }) {
-  const values = [
-    !publicMode ? SUBMIT_GROUP_LABELS[group] : "",
-    item.target ? `대상 ${item.target}` : "",
-    item.deadline ? `마감 ${item.deadline}` : "",
-  ].filter(Boolean);
-
-  return values.map((value) => (
-    <span key={value} className="min-w-0">
-      <SafeText>{value}</SafeText>
-    </span>
-  ));
-}
-
-function RowDetails({ item }) {
-  if (!item.documentType && !item.fileGuide) return null;
-
-  return (
-    <details>
-      <summary className="w-fit cursor-pointer font-semibold text-[#0D4EA6]">
-        제출자료·안내 보기
-      </summary>
-      <div className="mt-1.5 space-y-1">
-        {item.documentType && (
-          <p><span className="font-semibold text-[#102047]">제출자료 </span><SafeText>{item.documentType}</SafeText></p>
-        )}
-        {item.fileGuide && (
-          <p className="whitespace-pre-line"><SafeText>{item.fileGuide}</SafeText></p>
-        )}
-      </div>
-    </details>
-  );
 }
 
 export default function UploadCenter({ items, publicMode = false, publicType = "", tbConfig = null }) {
@@ -338,27 +288,28 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
         <section className="mt-3 rounded-[14px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
           <div className="flex items-center justify-between gap-3 px-1 pb-3">
             <div>
-              <h2 className="text-base font-semibold text-[#102047]">제출 업무</h2>
+              <h2 className="text-base font-semibold text-[#102047]">제출 항목</h2>
               {!publicMode && <p className="mt-0.5 text-xs text-[#627083]">현재 접수 중인 제출·보고 항목</p>}
             </div>
             <span className="shrink-0 rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">{rows.length}개 항목</span>
           </div>
 
-          <div className="grid gap-2.5">
-            {rows.map(({ item: displayItem, submitType, group }) => {
+          <div className="grid gap-3 md:grid-cols-2">
+            {rows.map(({ item: displayItem, submitType }) => {
               const handleClick = () => (
                 submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
               );
 
               return (
-                <PortalTaskRow
+                <PortalSubmissionCard
                   key={displayItem.id || `${submitType}-${displayItem.title}`}
-                  icon={getRowIcon(submitType)}
                   title={displayItem.title}
-                  description={<SafeText>{displayItem.description}</SafeText>}
+                  description={displayItem.description ? <SafeText>{displayItem.description}</SafeText> : null}
                   status={displayItem.status}
-                  meta={<RowMeta item={displayItem} group={group} publicMode={publicMode} />}
-                  details={<RowDetails item={displayItem} />}
+                  deadline={displayItem.deadline}
+                  target={displayItem.target ? <SafeText>{displayItem.target}</SafeText> : null}
+                  documentType={displayItem.documentType ? <SafeText>{displayItem.documentType}</SafeText> : null}
+                  guideText={displayItem.fileGuide ? <SafeText>{displayItem.fileGuide}</SafeText> : null}
                   action={displayItem.buttonText && (
                     <button
                       type="button"

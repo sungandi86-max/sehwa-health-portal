@@ -10,7 +10,7 @@ import {
   PortalBackToHome,
   PortalPageHeader,
   PortalPageLayout,
-  PortalTaskRow,
+  PortalSubmissionCard,
 } from "../components/PortalSubpageLayout.jsx";
 import { auth } from "../lib/firebase.js";
 import {
@@ -40,8 +40,8 @@ const SUBMISSION_ACTION_LABELS = {
   tb_registration: "단체검진 신청하기",
 };
 
-const rowActionClass =
-  "inline-flex min-h-9 shrink-0 items-center justify-center rounded-[9px] border border-[#0D4EA6] bg-[#0D4EA6] px-3 py-1.5 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15";
+const cardActionClass =
+  "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15 sm:w-fit";
 
 const SHEET_SUBMISSION_TYPES = {
   cpr: {
@@ -202,55 +202,26 @@ function RoleBadges({ roles }) {
   );
 }
 
-function getSubmissionIcon(type) {
-  if (type === "cpr") return "CPR";
-  if (type === "tb_registration") return "신청";
-  if (type === "tb") return "검진";
-  if (type === "recruit") return "확인";
-  if (type === "infection") return "보고";
-  return "제출";
-}
-
-function SubmissionMeta({ item }) {
-  const values = [
-    item.target ? `대상 ${item.target}` : "",
-    item.deadlineLabel ? `마감 ${item.deadlineLabel}` : "",
-    item.documentType ? `자료 ${item.documentType}` : "",
-  ].filter(Boolean);
-
-  return values.map((value) => <span key={value}>{value}</span>);
-}
-
-function SubmissionDetails({ item }) {
-  if (!item.guideText) return null;
-
-  return (
-    <details>
-      <summary className="w-fit cursor-pointer font-semibold text-[#0D4EA6]">안내 보기</summary>
-      <p className="mt-1.5 line-clamp-3 whitespace-pre-line">{item.guideText}</p>
-    </details>
-  );
-}
-
 function SubmissionCard({ item }) {
   const href = SUBMISSION_ROUTES[item.submissionType];
   const buttonLabel = SUBMISSION_ACTION_LABELS[item.submissionType] || item.buttonLabel || "제출하기";
 
   return (
-    <PortalTaskRow
-      icon={getSubmissionIcon(item.submissionType)}
+    <PortalSubmissionCard
       title={item.title}
       description={item.description}
       status={item.status}
-      meta={<SubmissionMeta item={item} />}
-      details={<SubmissionDetails item={item} />}
+      deadline={item.deadlineLabel}
+      target={item.target}
+      documentType={item.documentType}
+      guideText={item.guideText}
       action={
         item.onOpen ? (
-          <button type="button" onClick={item.onOpen} className={rowActionClass}>
+          <button type="button" onClick={item.onOpen} className={cardActionClass}>
             {buttonLabel} →
           </button>
         ) : (
-          <Link to={href} className={rowActionClass}>
+          <Link to={href} className={cardActionClass}>
             {buttonLabel} →
           </Link>
         )
@@ -463,7 +434,7 @@ export default function FirebaseSubmissionsPage() {
         <section className="rounded-[14px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold text-[#102047]">제출 업무</h2>
+              <h2 className="text-base font-semibold text-[#102047]">제출 항목</h2>
               <p className="mt-0.5 text-xs text-[#627083]">현재 접수 중인 제출·보고 항목</p>
             </div>
             <span className="w-fit rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">
@@ -472,9 +443,9 @@ export default function FirebaseSubmissionsPage() {
           </div>
 
           {itemsState.status === "loading" && (
-            <div className="mt-4 grid gap-2.5">
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               {[0, 1, 2, 3].map((item) => (
-                <div key={item} className="h-[82px] animate-pulse rounded-[12px] border border-[#DDEAE7] bg-[#F7FBF9]" />
+                <div key={item} className="h-[214px] animate-pulse rounded-[14px] border border-[#DDEAE7] bg-[#F7FBF9]" />
               ))}
             </div>
           )}
@@ -492,7 +463,7 @@ export default function FirebaseSubmissionsPage() {
           )}
 
           {itemsState.status === "success" && visibleItems.length > 0 && (
-            <div className="mt-4 grid gap-2.5">
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               {visibleItems.map((item) => <SubmissionCard key={item.id} item={item} />)}
             </div>
           )}
