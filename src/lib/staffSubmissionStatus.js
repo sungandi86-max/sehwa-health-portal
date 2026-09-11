@@ -2,6 +2,7 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "./firebase.js";
 
 export const STAFF_STATUS_TASK_IDS = ["tb-screening-2026", "cpr-training-2026", "health-mandatory-training-2026"];
+export const HEALTH_MANDATORY_TRAINING_TASK_ID = "health-mandatory-training-2026";
 
 export const STAFF_STATUS_LABELS = {
   incomplete: "미완료",
@@ -9,6 +10,12 @@ export const STAFF_STATUS_LABELS = {
   unknown: "상태 확인 필요",
   completed: "완료",
   not_applicable: "해당없음",
+};
+
+const HEALTH_MANDATORY_TRAINING_STATUS_LABELS = {
+  ...STAFF_STATUS_LABELS,
+  unknown: "미이수",
+  completed: "이수완료",
 };
 
 const STATUS_ORDER = {
@@ -71,7 +78,15 @@ export function getStaffSubmissionStatusEligibility(assignment) {
   return { status: "eligible" };
 }
 
-export function getStaffStatusLabel(status) {
+export function isHealthMandatoryTrainingTask(taskId) {
+  return taskId === HEALTH_MANDATORY_TRAINING_TASK_ID;
+}
+
+export function getStaffStatusLabel(status, taskId = "") {
+  if (isHealthMandatoryTrainingTask(taskId)) {
+    return HEALTH_MANDATORY_TRAINING_STATUS_LABELS[status] || HEALTH_MANDATORY_TRAINING_STATUS_LABELS.unknown;
+  }
+
   return STAFF_STATUS_LABELS[status] || STAFF_STATUS_LABELS.unknown;
 }
 
@@ -104,7 +119,7 @@ export async function getMyStaffSubmissionStatus(staffId) {
       return {
         ...task,
         status,
-        statusLabel: getStaffStatusLabel(status),
+        statusLabel: getStaffStatusLabel(status, task.taskId),
         action: TASK_ACTIONS[task.taskId] || null,
         syncedAt: statusItem?.syncedAt || null,
       };

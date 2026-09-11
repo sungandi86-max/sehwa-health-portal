@@ -5,6 +5,7 @@ import { FirebaseContentState, FirebaseV2PageShell } from "../components/Firebas
 import {
   getMyStaffSubmissionStatus,
   getStaffSubmissionStatusEligibility,
+  isHealthMandatoryTrainingTask,
 } from "../lib/staffSubmissionStatus.js";
 
 const STATUS_TONES = {
@@ -39,6 +40,8 @@ function StatusBadge({ status, label }) {
 }
 
 function StatusRow({ item }) {
+  const isResearchTask = isHealthMandatoryTrainingTask(item.taskId);
+
   return (
     <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -53,7 +56,12 @@ function StatusRow({ item }) {
           </div>
           <h2 className="mt-2 text-[15px] font-semibold leading-5 text-[#102047]">{item.title}</h2>
           {item.description && <p className="mt-1 text-[13px] font-medium leading-5 text-[#627083]">{item.description}</p>}
-          {item.status === "unknown" && (
+          {item.status === "unknown" && isResearchTask && (
+            <p className="mt-1.5 text-[12px] font-medium leading-5 text-[#9A5B00]">
+              연구부 시트에서 이수완료로 표시되지 않아 미이수로 표시됩니다.
+            </p>
+          )}
+          {item.status === "unknown" && !isResearchTask && (
             <p className="mt-1.5 text-[12px] font-medium leading-5 text-[#9A5B00]">
               아직 이 항목의 확인 결과가 준비되지 않았습니다.
             </p>

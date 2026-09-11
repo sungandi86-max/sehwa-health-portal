@@ -41,7 +41,7 @@ function normalizeStatus(documentSnapshot) {
     staffId: data.staffId || "",
     taskId: data.taskId || "",
     status,
-    statusLabel: getStaffStatusLabel(status),
+    statusLabel: getStaffStatusLabel(status, data.taskId || ""),
     sourceType: data.sourceType || "",
     syncedAt: data.syncedAt || null,
   };

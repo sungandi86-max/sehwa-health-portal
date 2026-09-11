@@ -3,12 +3,19 @@ import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGa
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPanel.jsx";
 import { getAdminStaffSubmissionStatusOverview } from "../lib/staffSubmissionStatusAdmin.js";
+import { isHealthMandatoryTrainingTask } from "../lib/staffSubmissionStatus.js";
 
 const STATUS_FILTERS = [
   { value: "incomplete", label: "미완료" },
   { value: "all", label: "전체" },
   { value: "completed", label: "완료" },
   { value: "needs_check", label: "확인 필요" },
+];
+
+const RESEARCH_STATUS_FILTERS = [
+  { value: "all", label: "전체" },
+  { value: "completed", label: "이수완료" },
+  { value: "unknown", label: "미이수" },
 ];
 
 const STATUS_TONES = {
@@ -39,6 +46,8 @@ function SummaryCell({ label, value, tone = "text-[#102047]" }) {
 }
 
 function TaskSummary({ task, selected, onSelect }) {
+  const isResearchTask = isHealthMandatoryTrainingTask(task.taskId);
+
   return (
     <button
       type="button"
@@ -56,16 +65,24 @@ function TaskSummary({ task, selected, onSelect }) {
           {task.category === "screening" ? "검진" : "연수"}
         </span>
       </div>
-      <div className="mt-2 grid gap-2 sm:grid-cols-3">
-        <SummaryCell label="완료" value={task.summary.completed} tone="text-[#08754B]" />
-        <SummaryCell label="미완료" value={task.summary.incomplete} tone="text-[#9A5B00]" />
-        <SummaryCell label="확인필요" value={task.summary.unknown + task.summary.pending} tone="text-[#3154A3]" />
+      <div className={`mt-2 grid gap-2 ${isResearchTask ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+        <SummaryCell label={isResearchTask ? "이수완료" : "완료"} value={task.summary.completed} tone="text-[#08754B]" />
+        {isResearchTask ? (
+          <SummaryCell label="미이수" value={task.summary.unknown} tone="text-[#9A5B00]" />
+        ) : (
+          <>
+            <SummaryCell label="미완료" value={task.summary.incomplete} tone="text-[#9A5B00]" />
+            <SummaryCell label="확인필요" value={task.summary.unknown + task.summary.pending} tone="text-[#3154A3]" />
+          </>
+        )}
       </div>
     </button>
   );
 }
 
-function FilterBar({ filters, options, onChange }) {
+function FilterBar({ filters, options, selectedTask, onChange }) {
+  const statusFilters = isHealthMandatoryTrainingTask(selectedTask?.taskId) ? RESEARCH_STATUS_FILTERS : STATUS_FILTERS;
+
   return (
     <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
       <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_1fr_1.4fr]">
@@ -75,7 +92,7 @@ function FilterBar({ filters, options, onChange }) {
           className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
           aria-label="상태 필터"
         >
-          {STATUS_FILTERS.map((filter) => (
+          {statusFilters.map((filter) => (
             <option key={filter.value} value={filter.value}>{filter.label}</option>
           ))}
         </select>
@@ -148,6 +165,10 @@ function filterItems(items, filters) {
 
 function getDefaultStatusFilter(task) {
   if (!task) return "incomplete";
+  if (isHealthMandatoryTrainingTask(task.taskId)) {
+    if (task.summary.unknown > 0) return "unknown";
+    return "all";
+  }
   if (task.summary.incomplete > 0) return "incomplete";
   if (task.summary.unknown + task.summary.pending > 0) return "needs_check";
   return "all";
@@ -234,7 +255,15 @@ function AdminStatusContent({ displayName }) {
             </section>
           )}
 
-          <FilterBar filters={filters} options={filterOptions} onChange={setFilters} />
+          {isHealthMandatoryTrainingTask(selectedTask.taskId) && (
+            <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3">
+              <p className="text-[12px] font-semibold leading-5 text-[#627083]">
+                연구부 시트에서 '이수완료'로 표시되지 않은 경우 미이수로 표시됩니다.
+              </p>
+            </section>
+          )}
+
+          <FilterBar filters={filters} options={filterOptions} selectedTask={selectedTask} onChange={setFilters} />
 
           <section className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white shadow-[var(--shh-soft-shadow)]">
             <div className="flex flex-col gap-2 border-b border-[#DDEAE7] bg-[#F3F8F6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
