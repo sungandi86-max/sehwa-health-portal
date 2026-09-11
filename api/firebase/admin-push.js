@@ -30,6 +30,26 @@ function serializeNotification(docSnapshot) {
   };
 }
 
+async function getAcknowledgedNotificationIds(uid, notificationIds) {
+  if (!notificationIds.length) return new Set();
+
+  const db = getFirebaseAdminDb();
+  const acknowledgementRefs = notificationIds.map((notificationId) =>
+    db
+      .collection("admin_notification_inboxes")
+      .doc(uid)
+      .collection("acknowledgements")
+      .doc(notificationId)
+  );
+  const acknowledgementSnapshots = await db.getAll(...acknowledgementRefs);
+
+  return new Set(
+    acknowledgementSnapshots
+      .filter((snapshot) => snapshot.exists)
+      .map((snapshot) => snapshot.id)
+  );
+}
+
 function normalizePlatform(value) {
   const platform = String(value || "").trim().replace(/\s+/g, " ");
   return platform.slice(0, 40) || "web";
@@ -50,20 +70,30 @@ function isValidNoticeId(value) {
 async function getUnreadCount(uid) {
   const inboxRef = getFirebaseAdminDb().collection("admin_notification_inboxes").doc(uid).collection("items");
   const unreadSnapshot = await inboxRef.where("read", "==", false).limit(100).get();
-  return unreadSnapshot.size;
+  const acknowledgedIds = await getAcknowledgedNotificationIds(uid, unreadSnapshot.docs.map((doc) => doc.id));
+  return unreadSnapshot.docs.filter((doc) => !acknowledgedIds.has(doc.id)).length;
 }
 
-async function listNotifications(res, uid) {
+async function listNotifications(req, res, uid) {
+  const includeAcknowledged = String(req.query?.includeAcknowledged || "") === "true";
   const inboxRef = getFirebaseAdminDb().collection("admin_notification_inboxes").doc(uid).collection("items");
   const [recentSnapshot, unreadCount] = await Promise.all([
-    inboxRef.orderBy("createdAt", "desc").limit(5).get(),
+    inboxRef.orderBy("createdAt", "desc").limit(100).get(),
     getUnreadCount(uid),
   ]);
+  const acknowledgedIds = await getAcknowledgedNotificationIds(uid, recentSnapshot.docs.map((doc) => doc.id));
+  const notifications = recentSnapshot.docs
+    .map((doc) => ({
+      ...serializeNotification(doc),
+      acknowledged: acknowledgedIds.has(doc.id),
+    }))
+    .filter((notification) => includeAcknowledged || !notification.acknowledged)
+    .slice(0, 5);
 
   return res.status(200).json({
     ok: true,
     unreadCount,
-    notifications: recentSnapshot.docs.map(serializeNotification),
+    notifications,
   });
 }
 
@@ -73,15 +103,27 @@ async function markNotificationRead(res, uid, body) {
     return res.status(400).json({ ok: false, message: "알림 정보를 확인하지 못했습니다." });
   }
 
-  await getFirebaseAdminDb()
+  const db = getFirebaseAdminDb();
+  const now = Timestamp.now();
+  await db
     .collection("admin_notification_inboxes")
     .doc(uid)
     .collection("items")
     .doc(notificationId)
     .set({
       read: true,
-      readAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
+      readAt: now,
+      updatedAt: now,
+    }, { merge: true });
+  await db
+    .collection("admin_notification_inboxes")
+    .doc(uid)
+    .collection("acknowledgements")
+    .doc(notificationId)
+    .set({
+      notificationId,
+      uid,
+      acknowledgedAt: now,
     }, { merge: true });
 
   return res.status(200).json({ ok: true });
@@ -190,7 +232,7 @@ async function handleGet(req, res, uid) {
   if (action === "getUnreadCount") {
     return res.status(200).json({ ok: true, unreadCount: await getUnreadCount(uid) });
   }
-  if (action === "listNotifications") return listNotifications(res, uid);
+  if (action === "listNotifications") return listNotifications(req, res, uid);
 
   return res.status(400).json({ ok: false, message: "지원하지 않는 알림 요청입니다." });
 }

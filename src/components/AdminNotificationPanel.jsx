@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminNotifications } from "../hooks/useAdminNotifications.js";
 
@@ -18,7 +19,7 @@ function formatDate(value) {
 
 function notificationStatusText(permission, unreadCount) {
   if (permission === "denied") return "브라우저에서 차단됨";
-  if (unreadCount > 0) return `${unreadCount}건 미확인`;
+  if (unreadCount > 0) return `새 알림 ${unreadCount}건`;
   return "새 알림 없음";
 }
 
@@ -36,7 +37,8 @@ export function AdminNotificationBadge({ user, enabled }) {
 
 export default function AdminNotificationPanel({ user, enabled, compact = false }) {
   const navigate = useNavigate();
-  const notifications = useAdminNotifications({ user, enabled });
+  const [showAcknowledged, setShowAcknowledged] = useState(false);
+  const notifications = useAdminNotifications({ user, enabled, includeAcknowledged: showAcknowledged });
 
   if (!enabled) return null;
 
@@ -48,7 +50,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
     : isRegistered
       ? "알림 켜짐 ✓"
       : "알림 받기";
-  const firstUnreadNotification = notifications.notifications.find((notification) => !notification.read);
+  const firstUnreadNotification = notifications.notifications.find((notification) => !notification.acknowledged);
   const hasUnreadNotification = notifications.unreadCount > 0;
 
   const openNotification = async (notification) => {
@@ -191,7 +193,13 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2 text-[11px] font-medium text-[#8A96A8]">
-                {!notification.read && <span className="rounded-[7px] bg-[#B42318] px-1.5 py-0.5 text-white">미확인</span>}
+                {notification.acknowledged ? (
+                  <span className="rounded-[7px] border border-[#DDEAE7] bg-white px-1.5 py-0.5 text-[#8A96A8]">
+                    확인됨
+                  </span>
+                ) : (
+                  <span className="rounded-[7px] bg-[#B42318] px-1.5 py-0.5 text-white">미확인</span>
+                )}
                 {formatDate(notification.createdAt)}
               </span>
             </button>
@@ -212,6 +220,16 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
           className="mt-3 inline-flex min-h-9 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#C8D8FF]"
         >
           {hasUnreadNotification ? "미확인 알림 확인" : "권한 신청 확인"}
+        </button>
+      )}
+
+      {!compact && (
+        <button
+          type="button"
+          onClick={() => setShowAcknowledged((current) => !current)}
+          className="ml-2 mt-3 inline-flex min-h-9 items-center rounded-[9px] border border-[#C8D8FF] bg-[#FBFCFF] px-3 py-1.5 text-xs font-semibold text-[#0D4EA6] transition hover:bg-[#EEF4FF]"
+        >
+          {showAcknowledged ? "미확인만 보기" : "읽은 알림 보기"}
         </button>
       )}
     </section>

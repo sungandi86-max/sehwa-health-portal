@@ -67,8 +67,11 @@ async function getCurrentAdminPushToken() {
   return token;
 }
 
-export async function fetchAdminNotifications(firebaseUser) {
-  const result = await requestAdminJson(`${ADMIN_PUSH_API_PATH}?action=listNotifications`, firebaseUser);
+export async function fetchAdminNotifications(firebaseUser, options = {}) {
+  const query = options.includeAcknowledged === true
+    ? "?action=listNotifications&includeAcknowledged=true"
+    : "?action=listNotifications";
+  const result = await requestAdminJson(`${ADMIN_PUSH_API_PATH}${query}`, firebaseUser);
   return {
     unreadCount: Number(result.unreadCount || 0),
     notifications: Array.isArray(result.notifications) ? result.notifications : [],

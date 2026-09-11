@@ -16,7 +16,7 @@ function notifyAdminNotificationsChanged() {
   window.dispatchEvent(new Event(ADMIN_NOTIFICATIONS_CHANGED_EVENT));
 }
 
-export function useAdminNotifications({ user, enabled }) {
+export function useAdminNotifications({ user, enabled, includeAcknowledged = false }) {
   const [state, setState] = useState({ status: "idle", message: "" });
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -37,7 +37,7 @@ export function useAdminNotifications({ user, enabled }) {
 
     setState({ status: "loading", message: "" });
     try {
-      const result = await fetchAdminNotifications(user);
+      const result = await fetchAdminNotifications(user, { includeAcknowledged });
       setNotifications(result.notifications);
       setUnreadCount(result.unreadCount);
       const nextPermission = getBrowserNotificationPermission();
@@ -60,7 +60,7 @@ export function useAdminNotifications({ user, enabled }) {
       setRegistrationStatus("unknown");
       setState({ status: "error", message: error?.message || "관리자 알림을 불러오지 못했습니다." });
     }
-  }, [capability.supported, enabled, user]);
+  }, [capability.supported, enabled, includeAcknowledged, user]);
 
   useEffect(() => {
     void refresh();
