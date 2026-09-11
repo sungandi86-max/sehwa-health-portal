@@ -43,6 +43,11 @@ const SUBMISSION_ACTION_LABELS = {
 const cardActionClass =
   "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15 sm:w-fit";
 
+const INTERNAL_TB_REGISTRATION_GUIDE_MARKERS = [
+  "노출시작일",
+  "노출종료일",
+];
+
 const SHEET_SUBMISSION_TYPES = {
   cpr: {
     sheetName: "응답_심폐소생술이수증",
@@ -135,6 +140,7 @@ function resolveSheetSubmissionType(item) {
 function normalizePortalSubmissionItem(item, index) {
   const submissionType = resolveSheetSubmissionType(item);
   if (!submissionType) return null;
+  const guideText = item.fileGuide || item.guideText || "";
 
   return {
     id: item.id || `${submissionType}-${index}`,
@@ -145,7 +151,11 @@ function normalizePortalSubmissionItem(item, index) {
     target: item.target || (submissionType === "tb_registration" ? "교직원" : ""),
     documentType: item.documentType || (submissionType === "tb_registration" ? "선택형 신청" : ""),
     deadlineLabel: item.deadline || item.deadlineLabel || "상시",
-    guideText: item.fileGuide || item.guideText || "",
+    guideText:
+      submissionType === "tb_registration" &&
+      INTERNAL_TB_REGISTRATION_GUIDE_MARKERS.some((marker) => String(guideText).includes(marker))
+        ? ""
+        : guideText,
     buttonLabel: item.buttonText || item.buttonLabel || "",
     status: item.status || "접수 중",
     submissionType,

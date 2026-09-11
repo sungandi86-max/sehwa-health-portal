@@ -89,6 +89,11 @@ const VALID_MODAL_TYPES = new Set(SUBMIT_TYPE_ORDER);
 const actionButtonClass =
   "inline-flex min-h-10 w-full items-center justify-center rounded-[10px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#183B8F] hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15 sm:w-fit";
 
+const INTERNAL_TB_REGISTRATION_GUIDE_MARKERS = [
+  "노출시작일",
+  "노출종료일",
+];
+
 function getSubmitGroup(type) {
   if (["cpr", "tb_registration", "tb", "recruit"].includes(type)) return "staff";
   if (["infection", "student_tb_reply"].includes(type)) return "homeroom";
@@ -166,6 +171,15 @@ function SubmitterIdentity({ viewer }) {
 function getCompactActionLabel(item) {
   const label = String(item.buttonText || "제출하기");
   return label.endsWith("→") ? label : `${label} →`;
+}
+
+function getUserFacingFileGuide(item, submitType) {
+  const guide = String(item.fileGuide || "").trim();
+  if (submitType !== "tb_registration") return guide;
+
+  return INTERNAL_TB_REGISTRATION_GUIDE_MARKERS.some((marker) => guide.includes(marker))
+    ? ""
+    : guide;
 }
 
 export default function UploadCenter({ items, publicMode = false, publicType = "", tbConfig = null }) {
@@ -296,6 +310,7 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
 
           <div className="grid gap-3 md:grid-cols-2">
             {rows.map(({ item: displayItem, submitType }) => {
+              const fileGuide = getUserFacingFileGuide(displayItem, submitType);
               const handleClick = () => (
                 submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
               );
@@ -309,7 +324,7 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                   deadline={displayItem.deadline}
                   target={displayItem.target ? <SafeText>{displayItem.target}</SafeText> : null}
                   documentType={displayItem.documentType ? <SafeText>{displayItem.documentType}</SafeText> : null}
-                  guideText={displayItem.fileGuide ? <SafeText>{displayItem.fileGuide}</SafeText> : null}
+                  guideText={fileGuide ? <SafeText>{fileGuide}</SafeText> : null}
                   action={displayItem.buttonText && (
                     <button
                       type="button"
