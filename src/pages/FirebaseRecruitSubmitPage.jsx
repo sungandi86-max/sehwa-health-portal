@@ -63,7 +63,7 @@ export default function FirebaseRecruitSubmitPage() {
     };
   }, []);
 
-  const handleSubmit = async (event, user) => {
+  const handleSubmit = async (event, user, displayName) => {
     event.preventDefault();
     const formElement = event.currentTarget;
     const requestError = validateRecruitRequest({
@@ -80,7 +80,7 @@ export default function FirebaseRecruitSubmitPage() {
     setSubmitState({ status: "submitting", message: "제출 중..." });
     try {
       const result = await createRecruitSubmission({
-        user,
+        user: { uid: user.uid, email: user.email, displayName },
         staffType,
         submittedToAdminOffice,
         xrayDateCheckAcknowledged,
@@ -155,7 +155,7 @@ export default function FirebaseRecruitSubmitPage() {
             </aside>
 
             <form
-              onSubmit={(event) => handleSubmit(event, user)}
+              onSubmit={(event) => handleSubmit(event, user, submitterName)}
               className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]"
             >
               <p className="rounded-2xl bg-[#F7FBF9] px-4 py-3 text-sm font-bold leading-6 text-[#627083]">

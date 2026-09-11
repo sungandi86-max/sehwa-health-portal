@@ -77,7 +77,7 @@ export default async function handler(req, res) {
 
       return {
         status: "created",
-        displayName: userData.displayName || decodedToken.name || "교직원",
+        displayName: userData.displayNameOverride || userData.displayName || decodedToken.name || "교직원",
         position: "교사",
       };
     });

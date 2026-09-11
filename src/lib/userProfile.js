@@ -97,6 +97,27 @@ export async function getUserAssignmentResult(uid, schoolYear, semester) {
   }
 }
 
+function normalizeDisplayName(value) {
+  return String(value || "").trim();
+}
+
+export function getInternalDisplayName({ profile, user, displayName, email } = {}) {
+  const override = normalizeDisplayName(profile?.displayNameOverride);
+  if (override) return override;
+
+  const profileName = normalizeDisplayName(profile?.displayName);
+  if (profileName) return profileName;
+
+  const providedName = normalizeDisplayName(displayName);
+  if (providedName) return providedName;
+
+  const userName = normalizeDisplayName(user?.displayName);
+  if (userName) return userName;
+
+  const fallbackEmail = normalizeDisplayName(email || user?.email);
+  return fallbackEmail ? fallbackEmail.split("@")[0] : "";
+}
+
 export function hasRole(assignment, role) {
   return Array.isArray(assignment?.roles) && assignment.roles.includes(role);
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { confirmTeamsHomeroomStatus, getCurrentHomeroomAccessRequest, submitHomeroomAccessRequest } from "../lib/accessRequests.js";
+import { getInternalDisplayName } from "../lib/userProfile.js";
 
 const GRADE_OPTIONS = [1, 2, 3];
 const CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -38,7 +39,7 @@ export default function FirebaseHomeroomAccessRequestAction({
   const [state, setState] = useState({ status: "loading", message: "" });
 
   const identityText = useMemo(() => {
-    const displayName = normalizeText(user?.displayName || profile?.displayName) || "교직원";
+    const displayName = getInternalDisplayName({ profile, user }) || "교직원";
     const position = normalizeText(assignment?.position) || "교직원";
     return `${displayName} · ${position}`;
   }, [assignment, profile, user]);

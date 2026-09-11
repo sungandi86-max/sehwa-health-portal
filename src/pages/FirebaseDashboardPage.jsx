@@ -17,7 +17,7 @@ import {
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
-import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
+import { ensureUserProfile, getInternalDisplayName, getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 const QUICK_MENUS = [
@@ -131,7 +131,7 @@ export default function FirebaseDashboardPage() {
   const hasAdminAccess = assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
 
   const displayName = useMemo(() => {
-    return user?.displayName || profile?.displayName || "교직원";
+    return getInternalDisplayName({ profile, user }) || "교직원";
   }, [profile, user]);
 
   useEffect(() => {

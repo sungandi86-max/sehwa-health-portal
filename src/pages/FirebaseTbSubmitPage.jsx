@@ -78,7 +78,7 @@ export default function FirebaseTbSubmitPage() {
     setSubmitState({ status: "idle", message: selectedFile ? validateSubmissionFile(selectedFile) : "" });
   };
 
-  const handleSubmit = async (event, user) => {
+  const handleSubmit = async (event, user, displayName) => {
     event.preventDefault();
     const formElement = event.currentTarget;
     const formError = getFormError({ checkupDate, documentType, staffType, file });
@@ -89,7 +89,13 @@ export default function FirebaseTbSubmitPage() {
 
     setSubmitState({ status: "submitting", message: "제출 중..." });
     try {
-      const result = await createTbSubmission({ user, checkupDate, documentType, staffType, file });
+      const result = await createTbSubmission({
+        user: { uid: user.uid, email: user.email, displayName },
+        checkupDate,
+        documentType,
+        staffType,
+        file,
+      });
       setCheckupDate("");
       setDocumentType("");
       setStaffType("");
@@ -157,7 +163,7 @@ export default function FirebaseTbSubmitPage() {
             </aside>
 
             <form
-              onSubmit={(event) => handleSubmit(event, user)}
+              onSubmit={(event) => handleSubmit(event, user, submitterName)}
               className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]"
             >
               <p className="rounded-2xl bg-[#F7FBF9] px-4 py-3 text-sm font-bold leading-6 text-[#627083]">

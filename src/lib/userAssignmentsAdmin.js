@@ -34,6 +34,17 @@ function sortByDisplayName(a, b) {
   return aName.localeCompare(bName, "ko");
 }
 
+export function getResolvedDisplayName(user) {
+  const override = String(user?.displayNameOverride || "").trim();
+  if (override) return override;
+
+  const displayName = String(user?.accountDisplayName || user?.displayName || "").trim();
+  if (displayName) return displayName;
+
+  const email = String(user?.email || "").trim();
+  return email ? email.split("@")[0] : "";
+}
+
 export function getNextTerm(schoolYear, semester) {
   if (Number(semester) === 1) {
     return { schoolYear: Number(schoolYear), semester: 2 };
@@ -86,7 +97,13 @@ function normalizeUser(documentSnapshot, assignmentMap) {
     id: documentSnapshot.id,
     uid,
     email: data.email || "",
-    displayName: data.displayName || "",
+    accountDisplayName: data.displayName || "",
+    displayNameOverride: data.displayNameOverride || "",
+    displayName: getResolvedDisplayName({
+      displayNameOverride: data.displayNameOverride || "",
+      displayName: data.displayName || "",
+      email: data.email || "",
+    }),
     active: data.active === true,
     assignment,
     assignmentId: assignment ? getAssignmentId(uid, assignment.schoolYear, assignment.semester) : null,

@@ -17,7 +17,7 @@ import {
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
-import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher, isHomeroom, isStaff } from "../lib/userProfile.js";
+import { ensureUserProfile, getInternalDisplayName, getUserAssignmentResult, isAdmin, isHealthTeacher, isHomeroom, isStaff } from "../lib/userProfile.js";
 
 const HOURLY_INSTRUCTOR_POSITIONS = new Set(["강사", "시간강사"]);
 
@@ -66,7 +66,7 @@ export default function FirebaseHomeAuthPanel({ className = "" }) {
   const [message, setMessage] = useState("");
 
   const assignment = assignmentResult?.assignment || null;
-  const displayName = user?.displayName || profile?.displayName || "교직원";
+  const displayName = getInternalDisplayName({ profile, user }) || "교직원";
   const roleLabel = getPrimaryRoleLabel(assignment);
   const canOpenDashboard = useMemo(() => assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment)), [assignment]);
   const canOpenMyStatus = useMemo(() => canOpenMySubmissionStatus(assignment), [assignment]);

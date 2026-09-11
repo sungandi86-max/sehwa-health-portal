@@ -1,13 +1,18 @@
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAssignmentId, readJsonBody, sendCors, verifyDirectoryAdmin } from "../../../server/lib/staffDirectory.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
 const SCAN_LIMIT = 500;
 const DELETE_CONFIRM_TEXT = "삭제";
+const MAX_DISPLAY_NAME_OVERRIDE_LENGTH = 60;
 
 function normalizeUid(value) {
   return String(value || "").trim();
+}
+
+function normalizeDisplayNameOverride(value) {
+  return String(value || "").normalize("NFKC").trim().replace(/\s+/g, " ");
 }
 
 function isValidTerm(value) {
@@ -94,8 +99,7 @@ async function checkDeletion(req, res, db) {
   });
 }
 
-async function deactivateUser(req, res, access) {
-  const body = await readJsonBody(req);
+async function deactivateUser(body, res, access) {
   const targetUid = normalizeUid(body.uid);
   const schoolYear = Number(body.schoolYear || CURRENT_SCHOOL_YEAR);
   const semester = Number(body.semester || CURRENT_SEMESTER);
@@ -130,6 +134,28 @@ async function deactivateUser(req, res, access) {
   await batch.commit();
 
   return res.status(200).json({ ok: true, message: "계정 접근을 비활성화했습니다." });
+}
+
+async function updateDisplayNameOverride(body, res, access) {
+  const targetUid = normalizeUid(body.uid);
+  if (!targetUid) return res.status(400).json({ ok: false, message: "수정할 계정을 선택해 주세요." });
+
+  const displayNameOverride = normalizeDisplayNameOverride(body.displayNameOverride);
+  if (displayNameOverride.length > MAX_DISPLAY_NAME_OVERRIDE_LENGTH) {
+    return res.status(400).json({ ok: false, message: "표시 이름은 60자 이내로 입력해 주세요." });
+  }
+  const updateData = {
+    displayNameOverride: displayNameOverride || FieldValue.delete(),
+    updatedAt: Timestamp.now(),
+  };
+
+  await access.db.collection("users").doc(targetUid).set(updateData, { merge: true });
+
+  return res.status(200).json({
+    ok: true,
+    displayNameOverride,
+    message: displayNameOverride ? "표시 이름을 저장했습니다." : "표시 이름 override를 제거했습니다.",
+  });
 }
 
 async function deleteUser(req, res, access) {
@@ -186,7 +212,13 @@ export default async function handler(req, res) {
     if (!access.ok) return res.status(access.status).json({ ok: false, message: access.message });
 
     if (req.method === "GET") return checkDeletion(req, res, access.db);
-    if (req.method === "PATCH") return deactivateUser(req, res, access);
+    if (req.method === "PATCH") {
+      const body = await readJsonBody(req);
+      if (body.action === "updateDisplayNameOverride") {
+        return updateDisplayNameOverride(body, res, access);
+      }
+      return deactivateUser(body, res, access);
+    }
     if (req.method === "DELETE") return deleteUser(req, res, access);
 
     return res.status(405).json({ ok: false, message: "지원하지 않는 요청입니다." });

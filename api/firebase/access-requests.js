@@ -80,6 +80,10 @@ function hasRole(assignment, role) {
   return Array.isArray(assignment?.roles) && assignment.roles.includes(role);
 }
 
+function getProfileDisplayName(profile, fallback = "") {
+  return profile?.displayNameOverride || profile?.displayName || fallback || "";
+}
+
 async function hasReviewerAccess(db, uid) {
   const assignmentSnapshot = await db.collection("user_assignments").doc(getAssignmentId(uid)).get();
   if (!assignmentSnapshot.exists) return false;
@@ -287,7 +291,7 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
       if (requestData.status === "approved") return { status: "already-approved" };
       if (requestData.status === "rejected") {
         const requester = {
-          displayName: userSnapshot.data()?.displayName || decodedToken.name || "",
+          displayName: getProfileDisplayName(userSnapshot.data(), decodedToken.name),
           department: assignment.department || "",
           position: assignment.position || "",
           staffId: assignment.staffId || "",
@@ -313,7 +317,7 @@ async function submitHomeroomAccessRequest(res, decodedToken, body) {
     }
 
     const requester = {
-      displayName: userSnapshot.data()?.displayName || decodedToken.name || "",
+      displayName: getProfileDisplayName(userSnapshot.data(), decodedToken.name),
       department: assignment.department || "",
       position: assignment.position || "",
       staffId: assignment.staffId || "",

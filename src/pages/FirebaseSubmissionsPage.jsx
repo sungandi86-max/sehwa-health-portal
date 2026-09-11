@@ -24,7 +24,7 @@ import {
 } from "../lib/firebaseAuth.js";
 import { getRoleLabels } from "../lib/firebaseRoles.js";
 import { fetchPortalUploads } from "../lib/portalContent.js";
-import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher, isHomeroom } from "../lib/userProfile.js";
+import { ensureUserProfile, getInternalDisplayName, getUserAssignmentResult, isHealthTeacher, isHomeroom } from "../lib/userProfile.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 const SUBMISSION_ROUTES = {
@@ -272,7 +272,7 @@ export default function FirebaseSubmissionsPage() {
         ),
     [assignment, items],
   );
-  const displayName = user?.displayName || profile?.displayName || "교직원";
+  const displayName = getInternalDisplayName({ profile, user }) || "교직원";
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {

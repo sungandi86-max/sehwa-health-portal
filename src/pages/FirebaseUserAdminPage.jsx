@@ -4,7 +4,7 @@ import FirebaseUserDangerActions from "../components/FirebaseUserDangerActions.j
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { getRoleLabel, getRoleLabels } from "../lib/firebaseRoles.js";
-import { checkUserDeletion, deactivateUserAccount, deleteUserAccount } from "../lib/adminUserAccounts.js";
+import { checkUserDeletion, deactivateUserAccount, deleteUserAccount, updateUserDisplayNameOverride } from "../lib/adminUserAccounts.js";
 import {
   ASSIGNMENT_FILTERS,
   ASSIGNMENT_ROLES,
@@ -336,6 +336,7 @@ function UserAssignmentCard({
   linkedStaffIdCounts,
   pendingId,
   onSave,
+  onSaveDisplayNameOverride,
   onLinkStaffId,
   onCheckDeletion,
   onDeactivateUser,
@@ -343,6 +344,7 @@ function UserAssignmentCard({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(() => createDraft(user, schoolYear, semester));
+  const [displayNameDraft, setDisplayNameDraft] = useState(user.displayNameOverride || user.accountDisplayName || "");
   const [localMessage, setLocalMessage] = useState("");
   const assignment = user.assignment;
   const isSelf = user.uid === currentUid;
@@ -352,6 +354,7 @@ function UserAssignmentCard({
   useEffect(() => {
     if (!isEditing) {
       setDraft(createDraft(user, schoolYear, semester));
+      setDisplayNameDraft(user.displayNameOverride || user.accountDisplayName || "");
       setLocalMessage("");
     }
   }, [isEditing, schoolYear, semester, user]);
@@ -391,6 +394,17 @@ function UserAssignmentCard({
     setLocalMessage(result?.message || "권한을 저장하지 못했습니다.");
   };
 
+  const handleSaveDisplayNameOverride = async () => {
+    setLocalMessage("");
+    const result = await onSaveDisplayNameOverride({
+      uid: user.uid,
+      displayNameOverride: displayNameDraft,
+    });
+
+    if (result?.ok) return;
+    setLocalMessage(result?.message || "표시 이름을 저장하지 못했습니다.");
+  };
+
   return (
     <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
@@ -412,6 +426,11 @@ function UserAssignmentCard({
             <h2 className="break-keep text-base font-semibold text-[#102047]">{user.displayName || "이름 미등록"}</h2>
             <p className="break-all text-sm font-medium text-[#627083]">{user.email || "이메일 없음"}</p>
           </div>
+          {user.displayNameOverride && (
+            <p className="mt-1 text-xs font-semibold text-[#627083]">
+              계정 이름 · {user.accountDisplayName || "이름 미등록"}
+            </p>
+          )}
           <div className="mt-2">
             <RoleBadges roles={assignment?.roles} />
           </div>
@@ -482,6 +501,35 @@ function UserAssignmentCard({
 
       {isEditing && (
         <div className="mt-4 space-y-4 rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-4">
+          <div className="grid gap-3 rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] sm:items-end">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-[#627083]">계정 이름</p>
+              <p className="mt-1 break-keep text-sm font-semibold text-[#102047]">{user.accountDisplayName || "이름 미등록"}</p>
+            </div>
+            <label className="min-w-0 text-sm font-semibold text-[#102047]">
+              표시 이름
+              <input
+                value={displayNameDraft}
+                onChange={(event) => setDisplayNameDraft(event.target.value)}
+                disabled={isPending}
+                maxLength={60}
+                placeholder={user.accountDisplayName || "예: 하진산"}
+                className="mt-2 min-h-10 w-full rounded-[10px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#102047] placeholder:text-[#9AA6B6] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:opacity-50"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleSaveDisplayNameOverride}
+              disabled={isPending}
+              className="min-h-10 rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] px-4 py-2 text-sm font-semibold text-[#0D4EA6] transition hover:bg-[#DDE8FF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              표시 이름 저장
+            </button>
+            <p className="text-xs font-semibold leading-5 text-[#627083] sm:col-span-3">
+              온라인 보건실에서 표시되는 이름입니다. 로그인 계정의 원본 이름은 변경되지 않습니다. 비워서 저장하면 표시 이름 override가 제거됩니다.
+            </p>
+          </div>
+
           <div>
             <p className="text-xs font-semibold text-[#102047]">역할</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -801,7 +849,7 @@ function FirebaseUserAdminContent({ user, displayName }) {
       if (!matchesFilter) return false;
       if (!normalizedSearch) return true;
 
-      return [userItem.displayName, userItem.email, assignment?.position, assignment?.staffId]
+      return [userItem.displayName, userItem.accountDisplayName, userItem.email, assignment?.position, assignment?.staffId]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
     });
@@ -845,6 +893,23 @@ function FirebaseUserAdminContent({ user, displayName }) {
       const message = error?.message || "교직원ID를 연결하지 못했습니다.";
       setActionState({ status: "error", message });
       return { ok: false, message, code: error?.code || "" };
+    } finally {
+      setPendingId("");
+    }
+  };
+
+  const handleSaveDisplayNameOverride = async (payload) => {
+    setPendingId(payload.uid);
+    setActionState({ status: "loading", message: "표시 이름을 저장하는 중입니다." });
+    try {
+      const result = await updateUserDisplayNameOverride(payload);
+      await loadUsers();
+      setActionState({ status: "success", message: result.message || "표시 이름을 저장했습니다." });
+      return { ok: true };
+    } catch (error) {
+      const message = error?.message || "표시 이름을 저장하지 못했습니다.";
+      setActionState({ status: "error", message });
+      return { ok: false, message };
     } finally {
       setPendingId("");
     }
@@ -1005,6 +1070,7 @@ function FirebaseUserAdminContent({ user, displayName }) {
               linkedStaffIdCounts={linkedStaffIdCounts}
               pendingId={pendingId}
               onSave={handleSave}
+              onSaveDisplayNameOverride={handleSaveDisplayNameOverride}
               onLinkStaffId={handleLinkStaffId}
               onCheckDeletion={handleCheckDeletion}
               onDeactivateUser={handleDeactivateUser}

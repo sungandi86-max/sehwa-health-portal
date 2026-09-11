@@ -11,7 +11,7 @@ import {
   signInWithMicrosoft,
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
-import { ensureUserProfile, getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
+import { ensureUserProfile, getInternalDisplayName, getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 function AccessMessage({ title, description, action }) {
@@ -36,7 +36,7 @@ export default function FirebaseV2AccessGate({ children }) {
 
   const assignment = assignmentResult?.assignment || null;
   const hasAdminAccess = assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
-  const displayName = useMemo(() => user?.displayName || profile?.displayName || "교직원", [profile, user]);
+  const displayName = useMemo(() => getInternalDisplayName({ profile, user }) || "교직원", [profile, user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {

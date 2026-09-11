@@ -10,7 +10,7 @@ import {
   signInWithMicrosoft,
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
-import { getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
+import { getInternalDisplayName, getUserAssignmentResult, getUserProfile, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
 
 function AccessMessage({ title, description, action }) {
   return (
@@ -39,6 +39,7 @@ function SignOutButton({ disabled, onClick }) {
 
 export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "관리자 권한이 없습니다." }) {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
@@ -46,11 +47,12 @@ export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "�
 
   const assignment = assignmentResult?.assignment || null;
   const hasAdminAccess = assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
-  const displayName = useMemo(() => user?.displayName || "교직원", [user]);
+  const displayName = useMemo(() => getInternalDisplayName({ profile, user }) || "교직원", [profile, user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      setProfile(null);
       setAssignmentResult(null);
       if (currentUser) setMessage("");
       setIsLoading(false);
@@ -72,7 +74,9 @@ export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "�
           CURRENT_SCHOOL_YEAR,
           CURRENT_SEMESTER
         );
+        const currentProfile = await getUserProfile(currentUser.uid);
 
+        setProfile(currentProfile);
         setAssignmentResult(currentAssignmentResult);
       } catch (error) {
         console.error("[firebase-admin-role] access load failed", error);

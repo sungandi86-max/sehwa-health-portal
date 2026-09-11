@@ -41,6 +41,16 @@ export function deactivateUserAccount(payload) {
   });
 }
 
+export function updateUserDisplayNameOverride(payload) {
+  return requestJson(USER_ACCOUNT_API_PATH, {
+    method: "PATCH",
+    body: JSON.stringify({
+      action: "updateDisplayNameOverride",
+      ...payload,
+    }),
+  });
+}
+
 export function deleteUserAccount(payload) {
   return requestJson(USER_ACCOUNT_API_PATH, {
     method: "DELETE",

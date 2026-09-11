@@ -13,7 +13,7 @@ import {
 } from "../lib/firebaseAuth.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 import { getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
-import { ensureUserProfile, getUserAssignmentResult } from "../lib/userProfile.js";
+import { ensureUserProfile, getInternalDisplayName, getUserAssignmentResult } from "../lib/userProfile.js";
 
 function AccessMessage({ title, description, action }) {
   return (
@@ -51,7 +51,7 @@ export default function FirebaseStaffSubmissionAccessGate({ children }) {
 
   const assignment = assignmentResult?.assignment || null;
   const hasActiveStaffAccess = assignment?.active === true;
-  const displayName = useMemo(() => user?.displayName || profile?.displayName || "교직원", [profile, user]);
+  const displayName = useMemo(() => getInternalDisplayName({ profile, user }) || "교직원", [profile, user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {

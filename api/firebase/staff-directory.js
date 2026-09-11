@@ -14,8 +14,12 @@ function hasStaffAccess(assignment) {
   return assignment?.active === true && roles.some((role) => STAFF_ROLES.includes(role));
 }
 
-function safeIdentity(directoryItem, assignment) {
-  const name = directoryItem?.name || "";
+function normalizeDisplayNameOverride(value) {
+  return String(value || "").normalize("NFKC").trim().replace(/\s+/g, " ");
+}
+
+function safeIdentity(directoryItem, assignment, displayNameOverride = "") {
+  const name = displayNameOverride || directoryItem?.name || "";
   const department = directoryItem?.department || assignment?.department || "";
 
   if (!name || !department) return null;
@@ -57,7 +61,8 @@ async function handleStaffIdentity(req, res) {
 
   const { directory } = await readStaffDirectory();
   const directoryItem = directory.find((item) => item.staffId === assignment.staffId);
-  const identity = safeIdentity(directoryItem, assignment);
+  const userSnapshot = await db.collection("users").doc(decodedToken.uid).get();
+  const identity = safeIdentity(directoryItem, assignment, normalizeDisplayNameOverride(userSnapshot.data()?.displayNameOverride));
 
   if (!identity) {
     return res.status(409).json({

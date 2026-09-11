@@ -11,7 +11,7 @@ import {
   signInWithMicrosoft,
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
-import { ensureUserProfile, getUserAssignmentResult, isHealthTeacher, isHomeroom } from "../lib/userProfile.js";
+import { ensureUserProfile, getInternalDisplayName, getUserAssignmentResult, isHealthTeacher, isHomeroom } from "../lib/userProfile.js";
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 
 function AccessMessage({ title, description, action }) {
@@ -41,7 +41,7 @@ export default function FirebaseStudentHealthAccessGate({ children }) {
     assignment?.active === true &&
     Number.isFinite(Number(assignment.grade)) &&
     Number.isFinite(Number(assignment.classNo));
-  const displayName = useMemo(() => user?.displayName || profile?.displayName || "교직원", [profile, user]);
+  const displayName = useMemo(() => getInternalDisplayName({ profile, user }) || "교직원", [profile, user]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
