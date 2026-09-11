@@ -9,6 +9,8 @@ export const INDIVIDUAL_HEALTH_CHECKUP_TARGET =
 export const INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_GUIDE =
   "개별 병·의원 검진: 검진 날짜와 의료기관명이 확인되는 페이지\n국민건강보험공단 검진: 국민건강보험공단에서 발급한 건강검진확인서";
 
+export const INDIVIDUAL_HEALTH_CHECKUP_DEADLINE_LABEL = "12월 30일까지";
+
 export const INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE =
   "검진 여부 확인에 필요한 최소 정보만 제출해 주세요. 검사 결과 수치 등 불필요한 건강정보는 제출하지 마세요.";
 
@@ -31,6 +33,8 @@ export function applyIndividualHealthCheckupDisplay(item) {
     description: INDIVIDUAL_HEALTH_CHECKUP_DESCRIPTION,
     target: INDIVIDUAL_HEALTH_CHECKUP_TARGET,
     documentType: INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_GUIDE,
+    deadline: INDIVIDUAL_HEALTH_CHECKUP_DEADLINE_LABEL,
+    deadlineLabel: INDIVIDUAL_HEALTH_CHECKUP_DEADLINE_LABEL,
     guideText: INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
     buttonLabel: INDIVIDUAL_HEALTH_CHECKUP_BUTTON_LABEL,
     buttonText: INDIVIDUAL_HEALTH_CHECKUP_BUTTON_LABEL,
