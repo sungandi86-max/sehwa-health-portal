@@ -29,9 +29,31 @@ const QUICK_MENUS = [
   { title: "감염병 사례관리", description: "감염병 보고 사례와 복귀 상태 관리", status: "관리자", href: "/firebase-admin/infections" },
 ];
 
+const MENU_GROUPS = [
+  {
+    title: "제출·이수 관리",
+    items: QUICK_MENUS.filter((menu) =>
+      ["제출·보고 관리", "제출 현황", "교직원 제출·이수 현황"].includes(menu.title)
+    ),
+  },
+  {
+    title: "권한·사용자 관리",
+    items: QUICK_MENUS.filter((menu) => ["권한 신청", "교직원 권한 관리", "사용자 관리"].includes(menu.title)),
+  },
+  {
+    title: "학생 건강관리",
+    items: QUICK_MENUS.filter((menu) => menu.title === "감염병 사례관리"),
+  },
+];
+
 const SUMMARY_LINKS = {
   "처리 대기 제출": "/firebase-admin/submissions?tab=staff&status=submitted",
 };
+
+function getSummaryCount(summaryItem) {
+  const parsed = Number.parseInt(String(summaryItem?.value || "0").replace(/[^\d-]/g, ""), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 function RoleBadges({ roles }) {
   const roleLabels = getRoleLabels(roles);
@@ -328,36 +350,34 @@ export default function FirebaseDashboardPage() {
   return (
     <section className="firebase-v2-surface min-h-full bg-[#F8FAFA] px-3 py-4 text-[#102047] sm:px-5 sm:py-5">
       <div className="mx-auto w-full max-w-6xl space-y-3">
-        <header className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <header className="border-b border-[#DDEAE7] bg-transparent pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-semibold text-[#20A982]">보건교사 대시보드</p>
-              <h1 className="mt-1 text-2xl font-bold text-[#102047] sm:text-[1.7rem]">
-                온라인 보건실
+              <h1 className="text-2xl font-bold text-[#102047] sm:text-[1.625rem]">
+                보건교사 대시보드
               </h1>
-              <p className="mt-2 text-sm font-medium leading-6 text-[#627083]">
-                {displayName} 선생님, 오늘 확인할 보건 업무를 차분하게 점검하세요.
+              <p className="mt-1 text-sm font-medium leading-5 text-[#627083]">
+                오늘 확인할 보건업무와 관리 항목을 확인합니다.
               </p>
             </div>
 
-            <div className="rounded-[10px] border border-[#DDEAE7] bg-[#F3F8F6] p-3 sm:min-w-64">
+            <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 sm:min-w-64">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-[#102047]">{displayName}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#20A982]">보건교사</p>
+                  <p className="mt-0.5 text-xs font-medium text-[#627083]">
+                    {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleSignOut}
                   disabled={isWorking}
-                  className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#20A982] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="min-h-9 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#0D4EA6] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   로그아웃
                 </button>
               </div>
-              <p className="mt-3 rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm font-semibold text-[#102047]">
-                {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
-              </p>
             </div>
           </div>
         </header>
@@ -380,13 +400,28 @@ export default function FirebaseDashboardPage() {
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {dashboardSummary.cards.map((item) => {
                 const summaryLink = item.href || SUMMARY_LINKS[item.label];
+                const count = getSummaryCount(item);
+                const needsAttention = count > 0 && ["처리 대기 제출", "감염병 관리"].includes(item.label);
                 const content = (
                   <>
-                    <p className="text-sm font-semibold text-[#102047]">{item.label}</p>
-                    <p className="mt-2 text-2xl font-bold text-[#20A982]">{item.value}</p>
-                    <p className="mt-1.5 text-xs font-semibold text-[#8A96A8]">{item.note}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-semibold text-[#102047]">{item.label}</p>
+                      {needsAttention ? (
+                        <span className="rounded-[7px] border border-[#C8D8FF] bg-[#EEF4FF] px-2 py-0.5 text-[11px] font-semibold text-[#0D4EA6]">
+                          확인
+                        </span>
+                      ) : null}
+                    </div>
+                    <p
+                      className={`mt-1 text-xl font-semibold tabular-nums ${
+                        needsAttention ? "text-[#0D4EA6]" : "text-[#102047]"
+                      }`}
+                    >
+                      {item.value}
+                    </p>
+                    <p className="mt-1 text-xs font-medium leading-4 text-[#8A96A8]">{item.note}</p>
                     {item.metrics && (
-                      <dl className="mt-3 grid gap-1.5 text-xs font-semibold text-[#627083]">
+                      <dl className="mt-2 grid gap-1 text-xs font-medium text-[#627083]">
                         {item.metrics.map((metric) => (
                           <div key={metric.label} className="flex items-center justify-between gap-3">
                             <dt>{metric.label}</dt>
@@ -398,7 +433,7 @@ export default function FirebaseDashboardPage() {
                       </dl>
                     )}
                     {summaryLink && (
-                      <span className="mt-3 inline-flex text-xs font-semibold text-[#08754B]">
+                      <span className="mt-2 inline-flex text-xs font-semibold text-[#0D4EA6]">
                         관리 화면 열기
                       </span>
                     )}
@@ -409,14 +444,14 @@ export default function FirebaseDashboardPage() {
                   <Link
                     key={item.label}
                     to={summaryLink}
-                    className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)] transition hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+                    className="rounded-[10px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)] transition hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15"
                   >
                     {content}
                   </Link>
                 ) : (
                   <article
                     key={item.label}
-                    className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]"
+                    className="rounded-[10px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]"
                   >
                     {content}
                   </article>
@@ -426,15 +461,15 @@ export default function FirebaseDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
+        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-semibold text-[#20A982]">제출 확인</p>
-              <h2 className="mt-1 text-lg font-bold text-[#102047]">최근 제출</h2>
+              <h2 className="text-[16px] font-semibold text-[#102047]">최근 제출</h2>
+              <p className="mt-1 text-xs font-medium text-[#627083]">새로 접수된 제출과 감염병 보고를 확인합니다.</p>
             </div>
             <Link
               to="/firebase-admin/submissions"
-              className="w-fit rounded-[8px] border border-[#BFEBDC] bg-[#F0FBF7] px-2.5 py-1 text-xs font-semibold text-[#08754B] transition hover:border-[#20A982] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
+              className="w-fit rounded-[8px] border border-[#C8D8FF] bg-white px-2.5 py-1 text-xs font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15"
             >
               관리 화면
             </Link>
@@ -460,17 +495,17 @@ export default function FirebaseDashboardPage() {
           )}
 
           {summaryState.status === "success" && dashboardSummary?.recentSubmissions.length === 0 && (
-            <div className="mt-4 rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6] p-4">
+            <div className="mt-3 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2">
               <p className="text-sm font-semibold text-[#627083]">최근 제출 내역이 없습니다.</p>
             </div>
           )}
 
           {summaryState.status === "success" && dashboardSummary?.recentSubmissions.length > 0 && (
-            <div className="mt-4 space-y-2">
+            <div className="mt-3 space-y-2">
               {dashboardSummary.recentSubmissions.map((submission) => (
                 <article
                   key={`${submission.source}-${submission.id}`}
-                  className="flex flex-col gap-3 rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -492,94 +527,83 @@ export default function FirebaseDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold text-[#20A982]">관리 바로가기</p>
-              <h2 className="mt-1 text-lg font-bold text-[#102047]">빠른 메뉴</h2>
+        <section aria-label="관리 메뉴" className="space-y-3">
+          <div>
+            <h2 className="px-1 text-[16px] font-semibold text-[#102047]">관리 메뉴</h2>
+            <p className="mt-1 px-1 text-xs font-medium text-[#627083]">조회·처리·관리 업무별로 바로 이동합니다.</p>
+          </div>
+
+          {MENU_GROUPS.map((group) => (
+            <div key={group.title}>
+              <p className="px-1 text-xs font-semibold text-[#627083]">{group.title}</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {group.items.map((menu) => {
+                  const statusText =
+                    menu.href === "/firebase-admin/access-requests" && typeof pendingAccessCount === "number"
+                      ? `${pendingAccessCount}건 대기`
+                      : "";
+                  const content = (
+                    <>
+                      <span className="block text-[15px] font-semibold text-[#102047]">{menu.title}</span>
+                      <span className="mt-1 block truncate text-sm font-medium leading-5 text-[#627083]">
+                        {menu.description}
+                      </span>
+                      {statusText ? (
+                        <span className="mt-2 inline-flex rounded-[7px] border border-[#C8D8FF] bg-[#EEF4FF] px-2 py-0.5 text-[11px] font-semibold text-[#0D4EA6]">
+                          {statusText}
+                        </span>
+                      ) : null}
+                    </>
+                  );
+
+                  return menu.href ? (
+                    <Link
+                      key={menu.title}
+                      to={menu.href}
+                      className="rounded-[10px] border border-[#DDEAE7] bg-white p-3 text-left shadow-[var(--shh-soft-shadow)] transition hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15"
+                    >
+                      {content}
+                    </Link>
+                  ) : (
+                    <button
+                      key={menu.title}
+                      type="button"
+                      disabled
+                      className="cursor-not-allowed rounded-[10px] border border-[#DDEAE7] bg-white p-3 text-left opacity-80 shadow-[var(--shh-soft-shadow)]"
+                    >
+                      {content}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {QUICK_MENUS.map((menu) => {
-              const statusText =
-                menu.href === "/firebase-admin/access-requests" && typeof pendingAccessCount === "number"
-                  ? `${pendingAccessCount}건 대기`
-                  : menu.status;
-              const content = (
-                <>
-                <span className="rounded-[8px] border border-[#DDEAE7] bg-white px-2.5 py-1 text-xs font-semibold text-[#8A96A8]">
-                  {statusText}
-                </span>
-                <span className="mt-2 block text-[15px] font-semibold text-[#102047]">{menu.title}</span>
-                <span className="mt-1 block truncate text-sm font-medium leading-5 text-[#627083]">{menu.description}</span>
-                </>
-              );
-
-              return menu.href ? (
-                <Link
-                  key={menu.title}
-                  to={menu.href}
-                  className="min-h-24 rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] p-3 text-left transition hover:border-[#BFEBDC] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15"
-                >
-                  {content}
-                </Link>
-              ) : (
-                <button
-                  key={menu.title}
-                  type="button"
-                  disabled
-                  className="min-h-24 cursor-not-allowed rounded-[10px] border border-[#DDEAE7] bg-[#FAFDFC] p-3 text-left opacity-80"
-                >
-                  {content}
-                </button>
-              );
-            })}
-          </div>
+          ))}
         </section>
 
-        <section className="grid gap-3 lg:grid-cols-[1fr_320px]">
-          <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
-            <p className="text-xs font-semibold text-[#20A982]">권한 정보</p>
-            <h2 className="mt-1 text-lg font-bold text-[#102047]">이번 학기 권한</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-bold text-[#7B8797]">역할</p>
-                <div className="mt-2">
-                  <RoleBadges roles={assignment.roles} />
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-[#7B8797]">보직</p>
-                <p className="mt-2 text-sm font-semibold text-[#102047]">{assignment.position || "보직 미등록"}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-[#7B8797]">상태</p>
-                <p className="mt-2 text-sm font-semibold text-[#102047]">
+        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-[#627083]">현재 권한</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <RoleBadges roles={assignment.roles} />
+                <span className="rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">
+                  {assignment.position || "보직 미등록"}
+                </span>
+                <span className="rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">
                   {assignment.active === true ? "활성" : "비활성"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-[#7B8797]">학기</p>
-                <p className="mt-2 text-sm font-semibold text-[#102047]">
+                </span>
+                <span className="rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">
                   {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
-                </p>
+                </span>
               </div>
             </div>
-          </article>
-
-          <article className="rounded-[12px] border border-[#BFEBDC] bg-[#F0FBF7] p-4">
-            <p className="text-sm font-semibold text-[#08754B]">권한 관리</p>
-            <p className="mt-3 text-sm font-medium leading-6 text-[#31584C]">
-              교직원 목록, 역할 지정, 담임 학년·반, 활성 상태, 학년도/학기 선택은 권한 관리 화면에서 처리합니다.
-            </p>
             <Link
               to="/firebase-admin/users"
-              className="mt-4 inline-flex min-h-10 items-center rounded-[9px] bg-[#20A982] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#08754B] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
+              className="inline-flex min-h-9 w-fit items-center rounded-[9px] border border-[#C8D8FF] bg-white px-3 py-1.5 text-xs font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15"
             >
               교직원 권한 관리
             </Link>
-          </article>
+          </div>
         </section>
       </div>
     </section>
