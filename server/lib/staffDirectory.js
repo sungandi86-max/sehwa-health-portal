@@ -131,6 +131,31 @@ export async function readStaffDirectory() {
   }));
 }
 
+export async function findActiveStaffIdAssignments(
+  db,
+  staffId,
+  { excludeUid = "", schoolYear = CURRENT_SCHOOL_YEAR, semester = CURRENT_SEMESTER } = {}
+) {
+  if (!staffId) return [];
+
+  const snapshot = await db
+    .collection("user_assignments")
+    .where("staffId", "==", staffId)
+    .get();
+
+  return snapshot.docs
+    .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
+    .filter((assignment) => {
+      return (
+        assignment.active === true &&
+        assignment.staffId === staffId &&
+        Number(assignment.schoolYear) === Number(schoolYear) &&
+        Number(assignment.semester) === Number(semester) &&
+        assignment.uid !== excludeUid
+      );
+    });
+}
+
 export async function verifyDirectoryAdmin(req) {
   const idToken = getBearerToken(req);
   if (!idToken) return { ok: false, status: 401, message: "로그인이 필요합니다." };

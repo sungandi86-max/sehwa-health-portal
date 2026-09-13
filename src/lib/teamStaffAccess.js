@@ -2,15 +2,7 @@ import { getAuthProvider } from "./firebaseAuth.js";
 
 const TEAM_STAFF_API_PATH = "/api/firebase/ensure-team-staff";
 
-export async function ensureTeamStaffAssignment(firebaseUser, profile) {
-  if (!firebaseUser?.uid || getAuthProvider(firebaseUser) !== "microsoft") {
-    return { ok: true, status: "skipped" };
-  }
-
-  if (profile?.active === false) {
-    return { ok: false, status: "inactive-user", message: "비활성 계정은 기본 이용 권한을 설정할 수 없습니다." };
-  }
-
+async function requestStaffRegistration(firebaseUser) {
   const idToken = await firebaseUser.getIdToken();
   const response = await fetch(TEAM_STAFF_API_PATH, {
     method: "POST",
@@ -25,9 +17,29 @@ export async function ensureTeamStaffAssignment(firebaseUser, profile) {
     return {
       ok: false,
       status: result?.status || "error",
-      message: result?.message || "기본 이용 권한을 설정하지 못했습니다. 보건실에 문의해 주세요.",
+      message: result?.message || "사용자 등록 정보를 설정하지 못했습니다. 보건실에 문의해 주세요.",
     };
   }
 
   return result;
+}
+
+export function ensureNewUserRegistration(firebaseUser) {
+  if (!firebaseUser?.uid) {
+    return Promise.resolve({ ok: false, status: "missing-user", message: "로그인이 필요합니다." });
+  }
+
+  return requestStaffRegistration(firebaseUser);
+}
+
+export async function ensureTeamStaffAssignment(firebaseUser, profile) {
+  if (!firebaseUser?.uid || getAuthProvider(firebaseUser) !== "microsoft") {
+    return { ok: true, status: "skipped" };
+  }
+
+  if (profile?.active === false) {
+    return { ok: false, status: "inactive-user", message: "비활성 계정은 기본 이용 권한을 설정할 수 없습니다." };
+  }
+
+  return requestStaffRegistration(firebaseUser);
 }

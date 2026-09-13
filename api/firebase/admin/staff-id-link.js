@@ -1,13 +1,16 @@
 import { Timestamp } from "firebase-admin/firestore";
 import {
   getAssignmentId,
+  findActiveStaffIdAssignments,
   readJsonBody,
   readStaffDirectory,
   sendCors,
   verifyDirectoryAdmin,
 } from "../../../server/lib/staffDirectory.js";
-
-const ASSIGNMENT_LIMIT = 700;
+import {
+  getStaffIdAutoLinkClaimId,
+  isActiveStaffIdClaim,
+} from "../../../server/lib/newSignupStaffId.js";
 
 class StaffIdLinkTransactionError extends Error {
   constructor(status, message) {
@@ -31,21 +34,6 @@ function isActiveAssignment(data) {
 
 function findDirectoryItem(directory, staffId) {
   return directory.find((item) => item.staffId === staffId) || null;
-}
-
-async function findActiveDuplicateAssignments(db, staffId, targetUid, schoolYear, semester) {
-  const snapshot = await db
-    .collection("user_assignments")
-    .where("schoolYear", "==", Number(schoolYear))
-    .where("semester", "==", Number(semester))
-    .limit(ASSIGNMENT_LIMIT)
-    .get();
-
-  return snapshot.docs
-    .map((documentSnapshot) => ({ id: documentSnapshot.id, ...documentSnapshot.data() }))
-    .filter((assignment) => {
-      return assignment.active === true && assignment.staffId === staffId && assignment.uid !== targetUid;
-    });
 }
 
 export default async function handler(req, res) {
@@ -79,6 +67,9 @@ export default async function handler(req, res) {
     const db = access.db;
     const assignmentId = getAssignmentId(uid, schoolYear, semester);
     const assignmentRef = db.collection("user_assignments").doc(assignmentId);
+    const claimRef = db.collection("staff_id_auto_link_claims").doc(
+      getStaffIdAutoLinkClaimId(staffId, schoolYear, semester)
+    );
     const assignmentSnapshot = await assignmentRef.get();
     if (!assignmentSnapshot.exists) {
       return res.status(404).json({ ok: false, message: "연결할 권한 문서를 찾지 못했습니다." });
@@ -95,7 +86,11 @@ export default async function handler(req, res) {
       return res.status(409).json({ ok: false, message: "이미 교직원ID가 연결된 사용자입니다." });
     }
 
-    const duplicates = await findActiveDuplicateAssignments(db, staffId, uid, schoolYear, semester);
+    const duplicates = await findActiveStaffIdAssignments(db, staffId, {
+      excludeUid: uid,
+      schoolYear,
+      semester,
+    });
     if (duplicates.length > 0 && !confirmDuplicate) {
       return res.status(409).json({
         ok: false,
@@ -116,7 +111,16 @@ export default async function handler(req, res) {
     }
 
     await db.runTransaction(async (transaction) => {
-      const latestAssignmentSnapshot = await transaction.get(assignmentRef);
+      const linkedAssignmentsQuery = db.collection("user_assignments").where("staffId", "==", staffId);
+      const [latestAssignmentSnapshot, claimSnapshot, linkedAssignmentsSnapshot] = await Promise.all([
+        transaction.get(assignmentRef),
+        transaction.get(claimRef),
+        transaction.get(linkedAssignmentsQuery),
+      ]);
+      const claimData = claimSnapshot.exists ? claimSnapshot.data() : null;
+      const claimedAssignmentSnapshot = claimData?.assignmentId
+        ? await transaction.get(db.collection("user_assignments").doc(claimData.assignmentId))
+        : null;
       if (!latestAssignmentSnapshot.exists) {
         throw new StaffIdLinkTransactionError(404, "연결할 권한 문서를 찾지 못했습니다.");
       }
@@ -136,10 +140,37 @@ export default async function handler(req, res) {
         throw new StaffIdLinkTransactionError(409, "이미 교직원ID가 연결된 사용자입니다.");
       }
 
+      const latestDuplicates = linkedAssignmentsSnapshot.docs.filter((documentSnapshot) => {
+        const linkedAssignment = documentSnapshot.data();
+        return (
+          linkedAssignment.active === true &&
+          Number(linkedAssignment.schoolYear) === schoolYear &&
+          Number(linkedAssignment.semester) === semester &&
+          linkedAssignment.uid !== uid
+        );
+      });
+      const claimOwnedByAnotherActiveUser = isActiveStaffIdClaim({
+        claim: claimData,
+        assignment: claimedAssignmentSnapshot?.exists ? claimedAssignmentSnapshot.data() : null,
+        staffId,
+        schoolYear,
+        semester,
+      }) && claimData.uid !== uid;
+      if ((latestDuplicates.length > 0 || claimOwnedByAnotherActiveUser) && !confirmDuplicate) {
+        throw new StaffIdLinkTransactionError(409, "같은 교직원ID가 다른 활성 권한에 이미 연결되어 있습니다.");
+      }
+
       transaction.update(assignmentRef, {
         staffId,
         updatedAt: Timestamp.now(),
       });
+      if (!claimOwnedByAnotherActiveUser && latestDuplicates.length === 0) {
+        transaction.set(claimRef, {
+          uid,
+          assignmentId,
+          createdAt: Timestamp.now(),
+        });
+      }
     });
 
     return res.status(200).json({

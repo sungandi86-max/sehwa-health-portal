@@ -1,6 +1,9 @@
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase.js";
 import { getAssignmentId } from "../config/school.js";
+import { ensureNewUserRegistration } from "./teamStaffAccess.js";
+
+const GOOGLE_SIGNUP_PENDING_SOURCE = "google_signup_pending";
 
 export async function getUserProfile(uid) {
   if (!uid) return null;
@@ -21,22 +24,15 @@ export async function ensureUserProfile(firebaseUser) {
     return profileSnapshot.data();
   }
 
-  const profile = {
-    uid: firebaseUser.uid,
-    email: firebaseUser.email || "",
-    displayName: firebaseUser.displayName || "",
-    active: true,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
+  const registration = await ensureNewUserRegistration(firebaseUser);
+  if (registration.ok === false) throw new Error(registration.message);
 
-  await setDoc(profileRef, profile);
+  const registeredProfileSnapshot = await getDoc(profileRef);
+  if (!registeredProfileSnapshot.exists()) {
+    throw new Error("신규 사용자 기본 정보가 생성되지 않았습니다.");
+  }
 
-  return {
-    ...profile,
-    createdAt: null,
-    updatedAt: null,
-  };
+  return registeredProfileSnapshot.data();
 }
 
 export async function getUserAssignment(uid, schoolYear, semester) {
@@ -75,9 +71,23 @@ export async function getUserAssignmentResult(uid, schoolYear, semester) {
       };
     }
 
+    const assignment = assignmentSnapshot.data();
+    if (
+      assignment.assignmentSource === GOOGLE_SIGNUP_PENDING_SOURCE &&
+      (!Array.isArray(assignment.roles) || assignment.roles.length === 0)
+    ) {
+      return {
+        status: "not-found",
+        assignment: null,
+        assignmentId,
+        errorCode: null,
+        message: "현재 학기의 이용 권한이 아직 등록되지 않았습니다.",
+      };
+    }
+
     return {
       status: "found",
-      assignment: assignmentSnapshot.data(),
+      assignment,
       assignmentId,
       errorCode: null,
       message: "권한이 확인되었습니다.",
