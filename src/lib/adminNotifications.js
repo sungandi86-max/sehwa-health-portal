@@ -1,6 +1,7 @@
 import { app, auth } from "./firebase.js";
 
 const ADMIN_PUSH_API_PATH = "/api/firebase/admin-push";
+const registrationPromises = new Map();
 
 export function getBrowserNotificationPermission() {
   if (typeof Notification === "undefined") return "unsupported";
@@ -24,6 +25,12 @@ export function getPushCapability() {
 async function getIdToken(firebaseUser = auth.currentUser) {
   if (!firebaseUser) throw new Error("로그인이 필요합니다.");
   return firebaseUser.getIdToken();
+}
+
+function assertCurrentAdminUser(firebaseUser) {
+  if (!firebaseUser?.uid || auth.currentUser?.uid !== firebaseUser.uid) {
+    throw new Error("로그인 상태가 변경되었습니다.");
+  }
 }
 
 async function requestAdminJson(path, firebaseUser, options = {}) {
@@ -82,6 +89,10 @@ export async function fetchAdminPushRegistrationStatus(firebaseUser) {
   if (getBrowserNotificationPermission() !== "granted") return { registered: false };
 
   const token = await getCurrentAdminPushToken();
+  return fetchAdminPushRegistrationStatusForToken(firebaseUser, token);
+}
+
+async function fetchAdminPushRegistrationStatusForToken(firebaseUser, token) {
   const result = await requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
     method: "POST",
     body: JSON.stringify({ action: "getRegistrationStatus", token }),
@@ -114,27 +125,56 @@ export async function acknowledgeAdminNotice(firebaseUser, notificationId) {
 }
 
 export async function registerAdminPushToken(firebaseUser) {
+  return ensureAdminPushTokenRegistered(firebaseUser, { requestPermission: true });
+}
+
+export async function ensureAdminPushTokenRegistered(firebaseUser, options = {}) {
   const capability = getPushCapability();
   if (!capability.supported) throw new Error("이 브라우저는 알림을 지원하지 않습니다.");
   if (capability.iPhone && !capability.standalone) {
     throw new Error("iPhone에서는 홈 화면에 추가한 뒤 알림을 받을 수 있습니다.");
   }
 
-  const permission = await Notification.requestPermission();
+  const requestPermission = options.requestPermission === true;
+  const currentPermission = getBrowserNotificationPermission();
+  const permission = requestPermission && currentPermission === "default"
+    ? await Notification.requestPermission()
+    : currentPermission;
   if (permission !== "granted") throw new Error("브라우저 알림 권한이 필요합니다.");
 
-  const token = await getCurrentAdminPushToken();
+  const registrationKey = firebaseUser?.uid || "current-user";
+  const pendingRegistration = registrationPromises.get(registrationKey);
+  if (pendingRegistration) return pendingRegistration;
 
-  await requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
-    method: "POST",
-    body: JSON.stringify({
-      action: "registerToken",
-      token,
-      platform: getDevicePlatform(),
-    }),
-  });
+  const registrationPromise = (async () => {
+    assertCurrentAdminUser(firebaseUser);
+    const token = await getCurrentAdminPushToken();
+    const registration = await fetchAdminPushRegistrationStatusForToken(firebaseUser, token);
+    if (registration.registered) {
+      return { ok: true, registered: true, repaired: false };
+    }
 
-  return { ok: true };
+    assertCurrentAdminUser(firebaseUser);
+    await requestAdminJson(ADMIN_PUSH_API_PATH, firebaseUser, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "registerToken",
+        token,
+        platform: getDevicePlatform(),
+      }),
+    });
+
+    return { ok: true, registered: true, repaired: true };
+  })();
+
+  registrationPromises.set(registrationKey, registrationPromise);
+  try {
+    return await registrationPromise;
+  } finally {
+    if (registrationPromises.get(registrationKey) === registrationPromise) {
+      registrationPromises.delete(registrationKey);
+    }
+  }
 }
 
 export async function subscribeToForegroundAdminNotifications(onNotification) {

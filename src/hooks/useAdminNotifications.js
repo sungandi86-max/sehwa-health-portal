@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchAdminNotifications,
-  fetchAdminPushRegistrationStatus,
+  ensureAdminPushTokenRegistered,
   getBrowserNotificationPermission,
   getPushCapability,
   markAdminNotificationRead,
@@ -45,7 +45,7 @@ export function useAdminNotifications({ user, enabled, includeAcknowledged = fal
       if (nextPermission === "granted" && capability.supported) {
         setRegistrationStatus("checking");
         try {
-          const registration = await fetchAdminPushRegistrationStatus(user);
+          const registration = await ensureAdminPushTokenRegistered(user, { requestPermission: false });
           setRegistrationStatus(registration.registered ? "registered" : "unregistered");
         } catch {
           setRegistrationStatus("unknown");
