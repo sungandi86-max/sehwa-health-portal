@@ -326,6 +326,7 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                   key={displayItem.id || `${submitType}-${displayItem.title}`}
                   title={displayItem.title}
                   description={displayItem.description ? <SafeText>{displayItem.description}</SafeText> : null}
+                  expandDescription={submitType === "tb"}
                   status={displayItem.status}
                   deadline={displayItem.deadline}
                   target={displayItem.target ? <SafeText>{displayItem.target}</SafeText> : null}

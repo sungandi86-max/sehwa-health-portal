@@ -225,6 +225,7 @@ function SubmissionCard({ item }) {
     <PortalSubmissionCard
       title={item.title}
       description={item.description}
+      expandDescription={item.submissionType === "tb"}
       status={item.status}
       deadline={item.deadlineLabel}
       target={item.target}

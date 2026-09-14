@@ -138,6 +138,7 @@ export function PortalTaskCard({ badges, title, description, children, action })
 export function PortalSubmissionCard({
   title,
   description,
+  expandDescription = false,
   status,
   deadline,
   target,
@@ -168,7 +169,10 @@ export function PortalSubmissionCard({
 
       <h2 className="text-base font-semibold leading-6 text-[#102047]">{title}</h2>
       {description && (
-        <p className="mt-1.5 line-clamp-2 text-sm font-normal leading-6 text-[#627083]" style={{ wordBreak: "keep-all" }}>
+        <p
+          className={`mt-1.5 text-sm font-normal leading-6 text-[#627083] ${expandDescription ? "" : "line-clamp-2"}`}
+          style={{ wordBreak: "keep-all" }}
+        >
           {description}
         </p>
       )}
