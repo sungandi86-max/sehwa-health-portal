@@ -139,6 +139,7 @@ export function PortalSubmissionCard({
   title,
   description,
   expandDescription = false,
+  expandDocumentType = false,
   status,
   deadline,
   target,
@@ -182,7 +183,10 @@ export function PortalSubmissionCard({
           {details.map(([label, value]) => (
             <div key={label} className="grid grid-cols-[64px_minmax(0,1fr)] gap-2">
               <dt className="font-semibold text-[#102047]">{label}</dt>
-              <dd className="min-w-0 line-clamp-2 whitespace-pre-line" style={{ wordBreak: "keep-all" }}>
+              <dd
+                className={`min-w-0 whitespace-pre-line ${expandDocumentType && label === "제출자료" ? "" : "line-clamp-2"}`}
+                style={{ wordBreak: "keep-all" }}
+              >
                 {value}
               </dd>
             </div>

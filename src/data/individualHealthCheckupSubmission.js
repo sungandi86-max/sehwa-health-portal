@@ -1,7 +1,7 @@
 export const INDIVIDUAL_HEALTH_CHECKUP_TITLE = "개별 건강검진 확인서 제출";
 
 export const INDIVIDUAL_HEALTH_CHECKUP_DESCRIPTION =
-  "학교 단체검진 외에 개별적으로 건강검진을 받은 경우 확인 가능한 자료를 제출합니다. 먼저 ‘나의 제출·이수 현황’에서 올해 검진 완료 여부를 확인해 주세요. 이미 검진 완료로 표시되어 있다면 별도 확인서를 제출하지 않으셔도 됩니다.";
+  "학교 단체검진 외에 개별적으로 건강검진을 받은 경우 확인 가능한 자료를 제출합니다. 먼저 ‘나의 제출⁠·⁠이수 현황’에서 올해 검진 완료 여부를 확인해 주세요. 이미 검진 완료로 표시되어 있다면 별도 확인서를 제출하지 않으셔도 됩니다.";
 
 export const INDIVIDUAL_HEALTH_CHECKUP_TARGET =
   "개별 건강검진 또는 국민건강보험공단 건강검진을 받은 교직원";

@@ -226,6 +226,7 @@ function SubmissionCard({ item }) {
       title={item.title}
       description={item.description}
       expandDescription={item.submissionType === "tb"}
+      expandDocumentType={item.submissionType === "tb"}
       status={item.status}
       deadline={item.deadlineLabel}
       target={item.target}
