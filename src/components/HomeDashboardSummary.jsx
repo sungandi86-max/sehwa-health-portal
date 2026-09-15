@@ -95,7 +95,7 @@ export default function HomeDashboardSummary({ notices = [], schedules = [], isL
             </span>
             <h2 className="text-base font-semibold text-[#102047]">진행 중인 일정</h2>
           </div>
-          <Link to="/checkup" className="shrink-0 text-xs font-semibold text-[#0D4EA6] hover:text-[#183B8F]">
+          <Link to="/today" className="shrink-0 text-xs font-semibold text-[#0D4EA6] hover:text-[#183B8F]">
             더보기 →
           </Link>
         </div>

@@ -2954,6 +2954,58 @@ function isVisibleByExposure_(row, now) {
   return getExposureState_(row, now || new Date()) === "visible";
 }
 
+function getPortalDisplayDateRange_(value, now) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+
+  const currentYear = Number(Utilities.formatDate(now || new Date(), TIMEZONE, "yyyy"));
+  const matches = [];
+  const coveredRanges = [];
+  const fullDatePattern = /(\d{4})\s*(?:년|[.\/-])\s*(\d{1,2})\s*(?:월|[.\/-])\s*(\d{1,2})\s*일?/g;
+  let match;
+
+  while ((match = fullDatePattern.exec(text)) !== null) {
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    if (
+      date.getFullYear() === Number(match[1]) &&
+      date.getMonth() === Number(match[2]) - 1 &&
+      date.getDate() === Number(match[3])
+    ) {
+      matches.push(date);
+    }
+    coveredRanges.push([match.index, match.index + match[0].length]);
+  }
+
+  const shortDatePattern = /(\d{1,2})\s*(?:월|[.\/])\s*(\d{1,2})\s*일?/g;
+  while ((match = shortDatePattern.exec(text)) !== null) {
+    const overlapsFullDate = coveredRanges.some(function(range) {
+      return match.index >= range[0] && match.index < range[1];
+    });
+    if (overlapsFullDate) continue;
+
+    const date = new Date(currentYear, Number(match[1]) - 1, Number(match[2]));
+    if (date.getMonth() === Number(match[1]) - 1 && date.getDate() === Number(match[2])) {
+      matches.push(date);
+    }
+  }
+
+  if (matches.length === 0) return null;
+  return {
+    start: matches[0],
+    end: matches[matches.length - 1]
+  };
+}
+
+function isCurrentPortalDisplayDate_(value, now) {
+  const range = getPortalDisplayDateRange_(value, now);
+  if (!range) return true;
+
+  const todayText = Utilities.formatDate(now || new Date(), TIMEZONE, "yyyy-MM-dd");
+  const today = parseExposureDateBoundary_(todayText, "start");
+  range.end.setHours(23, 59, 59, 999);
+  return range.end.getTime() >= today.getTime();
+}
+
 function isVisiblePortalUpload_(row, now) {
   if (!isTbRegistrationUploadRow_(row)) return isVisibleByExposure_(row, now);
   if (!isTrue_(getValue_(row, ["사용여부"]))) return false;
@@ -2980,7 +3032,10 @@ function getTitleLines_(row) {
 
 function getNotices_(ss) {
   const now = new Date();
-  return getRows_(ss, SHEET_NAMES.portalNotices).filter(r => isVisibleByExposure_(r, now)).map(r => ({
+  return getRows_(ss, SHEET_NAMES.portalNotices).filter(r => (
+    isVisibleByExposure_(r, now) &&
+    isCurrentPortalDisplayDate_(getValue_(r, ["일시"]), now)
+  )).map(r => ({
     title:       getValue_(r, ["제목"]),
     titleLines:  getTitleLines_(r),
     date:        getValue_(r, ["일시"]),
@@ -3032,7 +3087,11 @@ function getCheckups_(ss) {
 }
 
 function getEducations_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalEducations).map(r => ({
+  const now = new Date();
+  return getRows_(ss, SHEET_NAMES.portalEducations).filter(r => (
+    isVisibleByExposure_(r, now) &&
+    isCurrentPortalDisplayDate_(getValue_(r, ["일정"]), now)
+  )).map(r => ({
     title:        getValue_(r, ["교육명","제목"]),
     target:       getValue_(r, ["대상"]),
     duration:     getValue_(r, ["소요시간","시간"]),

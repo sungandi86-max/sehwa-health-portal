@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TodaySection from "../components/TodaySection.jsx";
 import { fetchPortalContent } from "../lib/portalContent.js";
+import { filterCurrentPortalItems } from "../lib/portalSchedule.js";
 
 export default function TodayPage() {
   const navigate = useNavigate();
@@ -20,7 +21,7 @@ export default function TodayPage() {
         const portal = await fetchPortalContent("today", controller.signal);
         if (shouldIgnore) return;
 
-        setNotices(Array.isArray(portal?.notices) ? portal.notices : []);
+        setNotices(filterCurrentPortalItems(portal?.notices));
         setLoadFailed(false);
         setIsLoading(false);
       } catch (error) {

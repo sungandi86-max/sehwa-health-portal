@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FirebaseHomeAuthPanel from "../components/FirebaseHomeAuthPanel.jsx";
 import HeroSection from "../components/HeroSection.jsx";
 import HomeDashboardSummary from "../components/HomeDashboardSummary.jsx";
@@ -7,6 +7,7 @@ import QuickMenu from "../components/QuickMenu.jsx";
 import { firebaseV2MenuItems } from "../data/firebaseV2Navigation.js";
 import { quickMenuItems } from "../data/fallbackData.js";
 import { fetchPortalContent } from "../lib/portalContent.js";
+import { buildHomeSchedules, filterCurrentPortalItems } from "../lib/portalSchedule.js";
 
 const legacyMenuRoutes = {
   homeroom: "/homeroom",
@@ -17,19 +18,13 @@ const legacyMenuRoutes = {
 const portalHomePrivacyNotice =
   "학생 개인정보·민감정보는 화면에 직접 표시하지 않으며, 제출 자료는 보건교사가 관리자 화면에서 확인합니다.";
 
-function mergeDatedItems(...groups) {
-  return groups
-    .flat()
-    .filter((item) => item?.title && (item.schedule || item.period || item.date || item.deadline))
-    .slice(0, 6);
-}
-
 function formatHomeDate(date) {
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 (${weekdays[date.getDay()]})`;
 }
 
 export default function HomePage({ config }) {
+  const sourceContentRef = useRef({ notices: [], checkups: [], educations: [] });
   const [homeContent, setHomeContent] = useState({
     notices: [],
     schedules: [],
@@ -63,39 +58,59 @@ export default function HomePage({ config }) {
 
   useEffect(() => {
     let shouldIgnore = false;
-    const controller = new AbortController();
+    let activeController = null;
+    let requestId = 0;
 
     async function loadHomeContent() {
+      const currentRequestId = ++requestId;
+      activeController?.abort();
+      activeController = new AbortController();
+      const now = new Date();
       const [today, checkups, education] = await Promise.allSettled([
-        fetchPortalContent("today", controller.signal),
-        fetchPortalContent("checkups", controller.signal),
-        fetchPortalContent("education", controller.signal),
+        fetchPortalContent("today", activeController.signal),
+        fetchPortalContent("checkups", activeController.signal),
+        fetchPortalContent("education", activeController.signal),
       ]);
 
-      if (shouldIgnore) return;
+      if (shouldIgnore || currentRequestId !== requestId) return;
 
-      const notices = today.status === "fulfilled" && Array.isArray(today.value?.notices)
-        ? today.value.notices
-        : [];
-      const checkupItems = checkups.status === "fulfilled" && Array.isArray(checkups.value?.checkups)
-        ? checkups.value.checkups
-        : [];
-      const educationItems = education.status === "fulfilled" && Array.isArray(education.value?.educations)
-        ? education.value.educations
-        : [];
+      if (today.status === "fulfilled" && Array.isArray(today.value?.notices)) {
+        sourceContentRef.current.notices = today.value.notices;
+      }
+      if (checkups.status === "fulfilled" && Array.isArray(checkups.value?.checkups)) {
+        sourceContentRef.current.checkups = checkups.value.checkups;
+      }
+      if (education.status === "fulfilled" && Array.isArray(education.value?.educations)) {
+        sourceContentRef.current.educations = education.value.educations;
+      }
+
+      const notices = filterCurrentPortalItems(sourceContentRef.current.notices, now);
 
       setHomeContent({
         notices,
-        schedules: mergeDatedItems(educationItems, checkupItems, notices),
+        schedules: buildHomeSchedules([
+          sourceContentRef.current.educations,
+          sourceContentRef.current.checkups,
+          notices,
+        ], now),
         isLoading: false,
       });
     }
 
     loadHomeContent();
+    const handleFocus = () => loadHomeContent();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") loadHomeContent();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       shouldIgnore = true;
-      controller.abort();
+      activeController?.abort();
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
