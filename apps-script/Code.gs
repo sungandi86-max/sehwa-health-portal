@@ -2959,6 +2959,7 @@ function getPortalDisplayDateRange_(value, now) {
   if (!text) return null;
 
   const currentYear = Number(Utilities.formatDate(now || new Date(), TIMEZONE, "yyyy"));
+  const currentMonth = Number(Utilities.formatDate(now || new Date(), TIMEZONE, "M"));
   const matches = [];
   const coveredRanges = [];
   const abbreviatedRangePattern = /(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*[~～-]\s*(?:(\d{1,2})\s*월\s*)?(\d{1,2})\s*일/g;
@@ -3009,8 +3010,10 @@ function getPortalDisplayDateRange_(value, now) {
     });
     if (overlapsFullDate) continue;
 
-    const date = new Date(currentYear, Number(match[1]) - 1, Number(match[2]));
-    if (date.getMonth() === Number(match[1]) - 1 && date.getDate() === Number(match[2])) {
+    const month = Number(match[1]);
+    const year = currentMonth - month > 6 ? currentYear + 1 : currentYear;
+    const date = new Date(year, month - 1, Number(match[2]));
+    if (date.getMonth() === month - 1 && date.getDate() === Number(match[2])) {
       matches.push(date);
     }
   }
@@ -3124,8 +3127,7 @@ function getCheckups_(ss) {
 function getEducations_(ss) {
   const now = new Date();
   return getRows_(ss, SHEET_NAMES.portalEducations).filter(r => (
-    isVisibleByExposure_(r, now) &&
-    isCurrentPortalDisplayDate_(getValue_(r, ["일정"]), now)
+    isVisibleByExposure_(r, now)
   )).map(r => ({
     title:        getValue_(r, ["교육명","제목"]),
     target:       getValue_(r, ["대상"]),

@@ -68,6 +68,7 @@ export function getPortalItemDateRange(item, now = new Date()) {
 
   const today = getSeoulTodayParts(now);
   const currentYear = Number(today.year);
+  const currentMonth = Number(today.month);
   const matches = [];
   const coveredRanges = [];
   const abbreviatedRangePattern = /(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*[~～-]\s*(?:(\d{1,2})\s*월\s*)?(\d{1,2})\s*일/g;
@@ -101,7 +102,9 @@ export function getPortalItemDateRange(item, now = new Date()) {
     const overlapsFullDate = coveredRanges.some(([start, end]) => match.index >= start && match.index < end);
     if (overlapsFullDate) continue;
 
-    const key = dateKey(currentYear, Number(match[1]), Number(match[2]));
+    const month = Number(match[1]);
+    const year = currentMonth - month > 6 ? currentYear + 1 : currentYear;
+    const key = dateKey(year, month, Number(match[2]));
     if (key) matches.push(key);
   }
 
@@ -141,6 +144,8 @@ export function filterCurrentPortalItems(items, now = new Date()) {
 
 export function buildHomeSchedules(groups, now = new Date(), limit = 6) {
   const seen = new Set();
+  const today = getSeoulTodayParts(now);
+  const todayKey = dateKey(Number(today.year), Number(today.month), Number(today.day));
 
   return groups
     .flat()
@@ -158,7 +163,11 @@ export function buildHomeSchedules(groups, now = new Date(), limit = 6) {
       return true;
     })
     .sort((a, b) => {
-      if (a.range && b.range) return a.range.start - b.range.start || a.index - b.index;
+      if (a.range && b.range) {
+        const aRelevantDate = Math.max(a.range.start, todayKey);
+        const bRelevantDate = Math.max(b.range.start, todayKey);
+        return aRelevantDate - bRelevantDate || a.range.end - b.range.end || a.index - b.index;
+      }
       if (a.range) return -1;
       if (b.range) return 1;
       return a.index - b.index;
