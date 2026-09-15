@@ -2961,10 +2961,36 @@ function getPortalDisplayDateRange_(value, now) {
   const currentYear = Number(Utilities.formatDate(now || new Date(), TIMEZONE, "yyyy"));
   const matches = [];
   const coveredRanges = [];
-  const fullDatePattern = /(\d{4})\s*(?:년|[.\/-])\s*(\d{1,2})\s*(?:월|[.\/-])\s*(\d{1,2})\s*일?/g;
+  const abbreviatedRangePattern = /(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*[~～-]\s*(?:(\d{1,2})\s*월\s*)?(\d{1,2})\s*일/g;
   let match;
 
+  while ((match = abbreviatedRangePattern.exec(text)) !== null) {
+    const startMonth = Number(match[1]);
+    const startDay = Number(match[2]);
+    const endMonth = Number(match[3] || match[1]);
+    const endDay = Number(match[4]);
+    const endYear = endMonth < startMonth ? currentYear + 1 : currentYear;
+    const startDate = new Date(currentYear, startMonth - 1, startDay);
+    const endDate = new Date(endYear, endMonth - 1, endDay);
+    if (
+      startDate.getMonth() === startMonth - 1 &&
+      startDate.getDate() === startDay &&
+      endDate.getMonth() === endMonth - 1 &&
+      endDate.getDate() === endDay
+    ) {
+      matches.push(startDate, endDate);
+    }
+    coveredRanges.push([match.index, match.index + match[0].length]);
+  }
+
+  const fullDatePattern = /(\d{4})\s*(?:년|[.\/-])\s*(\d{1,2})\s*(?:월|[.\/-])\s*(\d{1,2})\s*일?/g;
+
   while ((match = fullDatePattern.exec(text)) !== null) {
+    const overlapsRange = coveredRanges.some(function(range) {
+      return match.index >= range[0] && match.index < range[1];
+    });
+    if (overlapsRange) continue;
+
     const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
     if (
       date.getFullYear() === Number(match[1]) &&
@@ -2990,6 +3016,7 @@ function getPortalDisplayDateRange_(value, now) {
   }
 
   if (matches.length === 0) return null;
+  matches.sort(function(a, b) { return a.getTime() - b.getTime(); });
   return {
     start: matches[0],
     end: matches[matches.length - 1]
@@ -3069,7 +3096,9 @@ function getCheckups_(ss) {
   const now = new Date();
   return getRows_(ss, SHEET_NAMES.portalCheckups).filter(r => isVisibleByExposure_(r, now)).map(r => {
     const details = splitLines_(getValue_(r, ["세부항목"]));
-    const firstDatedDetail = details.find(detail => /\d{1,2}\s*월\s*\d{1,2}\s*일/.test(detail)) || "";
+    const firstDatedDetail = details.find(detail => (
+      /(?:\d{4}\s*[.\/-]\s*)?\d{1,2}\s*(?:월|[.\/-])\s*\d{1,2}\s*일?/.test(detail)
+    )) || "";
 
     return {
       title:          getValue_(r, ["제목"]),

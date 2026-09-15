@@ -70,10 +70,27 @@ export function getPortalItemDateRange(item, now = new Date()) {
   const currentYear = Number(today.year);
   const matches = [];
   const coveredRanges = [];
-  const fullDatePattern = /(\d{4})\s*(?:년|[./-])\s*(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})\s*일?/g;
+  const abbreviatedRangePattern = /(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*[~～-]\s*(?:(\d{1,2})\s*월\s*)?(\d{1,2})\s*일/g;
   let match;
 
+  while ((match = abbreviatedRangePattern.exec(text)) !== null) {
+    const startMonth = Number(match[1]);
+    const startDay = Number(match[2]);
+    const endMonth = Number(match[3] || match[1]);
+    const endDay = Number(match[4]);
+    const endYear = endMonth < startMonth ? currentYear + 1 : currentYear;
+    const startKey = dateKey(currentYear, startMonth, startDay);
+    const endKey = dateKey(endYear, endMonth, endDay);
+    if (startKey && endKey) matches.push(startKey, endKey);
+    coveredRanges.push([match.index, match.index + match[0].length]);
+  }
+
+  const fullDatePattern = /(\d{4})\s*(?:년|[./-])\s*(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})\s*일?/g;
+
   while ((match = fullDatePattern.exec(text)) !== null) {
+    const overlapsRange = coveredRanges.some(([start, end]) => match.index >= start && match.index < end);
+    if (overlapsRange) continue;
+
     const key = dateKey(Number(match[1]), Number(match[2]), Number(match[3]));
     if (key) matches.push(key);
     coveredRanges.push([match.index, match.index + match[0].length]);
@@ -90,8 +107,8 @@ export function getPortalItemDateRange(item, now = new Date()) {
 
   if (matches.length === 0) return null;
   return {
-    start: matches[0],
-    end: matches[matches.length - 1],
+    start: Math.min(...matches),
+    end: Math.max(...matches),
   };
 }
 
