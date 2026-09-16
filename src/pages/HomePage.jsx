@@ -61,15 +61,15 @@ export default function HomePage({ config }) {
     let activeController = null;
     let requestId = 0;
 
-    async function loadHomeContent() {
+    async function loadHomeContent(forceRefresh = false) {
       const currentRequestId = ++requestId;
       activeController?.abort();
       activeController = new AbortController();
       const now = new Date();
       const [today, checkups, education] = await Promise.allSettled([
-        fetchPortalContent("today", activeController.signal),
-        fetchPortalContent("checkups", activeController.signal),
-        fetchPortalContent("education", activeController.signal),
+        fetchPortalContent("today", activeController.signal, { forceRefresh }),
+        fetchPortalContent("checkups", activeController.signal, { forceRefresh }),
+        fetchPortalContent("education", activeController.signal, { forceRefresh }),
       ]);
 
       if (shouldIgnore || currentRequestId !== requestId) return;
@@ -113,9 +113,9 @@ export default function HomePage({ config }) {
     }
 
     loadHomeContent();
-    const handleFocus = () => loadHomeContent();
+    const handleFocus = () => loadHomeContent(true);
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") loadHomeContent();
+      if (document.visibilityState === "visible") loadHomeContent(true);
     };
 
     window.addEventListener("focus", handleFocus);

@@ -6,9 +6,7 @@ import UploadPage from "./pages/UploadPage.jsx";
 import {
   appConfig as fallbackAppConfig,
   studentCareItems,
-  uploadItems,
 } from "./data/fallbackData.js";
-import { filterPortalUploads } from "./lib/portalContent.js";
 
 const PORTAL_API_URL = "/api/portal";
 const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
@@ -48,7 +46,6 @@ const StudentCarePage = lazy(() => import("./pages/StudentCarePage.jsx"));
 const TodayPage = lazy(() => import("./pages/TodayPage.jsx"));
 
 function portalScopeForPath(pathname) {
-  if (pathname === "/upload") return "upload";
   if (pathname === "/admin" || pathname === "/admin/roadmap") return "admin";
   return "";
 }
@@ -113,6 +110,7 @@ export default function App() {
   const portalScope = portalScopeForPath(window.location.pathname);
   const shouldSkipPortalPreload = [
     "/",
+    "/upload",
     "/firebase-test",
     "/firebase-dashboard",
     "/firebase-checkups",
@@ -162,9 +160,8 @@ export default function App() {
         if (portal?.success === false || portal?.result === "error") {
           throw new Error(portal.message || "Portal API error");
         }
-        const nextPortal = filterPortalUploads(portal);
-        setPortalData(nextPortal);
-        setTbConfig(nextPortal?.tbConfig || { enabled: "FALSE" });
+        setPortalData(portal);
+        setTbConfig(portal?.tbConfig || { enabled: "FALSE" });
         setIsLoading(false);
       })
       .catch((error) => {
@@ -184,7 +181,6 @@ export default function App() {
     ? { ...fallbackAppConfig, ...portalData.appConfig }
     : fallbackAppConfig;
 
-  const liveUploads     = portalData ? (portalData.uploads    || []) : (portalScope === "upload" ? [] : uploadItems);
   const liveStudentCare = portalData ? (portalData.studentCare|| []) : studentCareItems;
   const liveRoadmap     = portalData?.roadmap || { enabled: false, adminOnly: true, items: [] };
 
@@ -204,7 +200,7 @@ export default function App() {
               <Routes>
                 <Route path="/"            element={<HomePage        config={liveAppConfig} />} />
                 <Route path="/today"       element={<TodayPage />} />
-                <Route path="/upload"      element={<UploadPage      items={liveUploads} tbConfig={tbConfig} />} />
+                <Route path="/upload"      element={<UploadPage />} />
                 <Route path="/checkup"     element={<CheckupPage     tbConfig={tbConfig} />} />
                 <Route path="/education"   element={<EducationPage />} />
                 <Route path="/homeroom"    element={<HomeroomPage />} />

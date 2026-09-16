@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ResourceSection from "../components/ResourceSection.jsx";
-import { fetchPortalContent } from "../lib/portalContent.js";
+import { fetchPortalContent, getCachedPortalContent } from "../lib/portalContent.js";
 
 export default function ResourcesPage() {
   const navigate = useNavigate();
-  const [resources, setResources] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedPortal = getCachedPortalContent("resources");
+  const [resources, setResources] = useState(() => (
+    Array.isArray(cachedPortal?.resources) ? cachedPortal.resources : []
+  ));
+  const [isLoading, setIsLoading] = useState(!cachedPortal);
   const [resourceLoadFailed, setResourceLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -14,9 +17,11 @@ export default function ResourcesPage() {
     const controller = new AbortController();
 
     async function loadResources() {
-      setIsLoading(true);
+      if (!cachedPortal) setIsLoading(true);
       try {
-        const portal = await fetchPortalContent("resources", controller.signal);
+        const portal = await fetchPortalContent("resources", controller.signal, {
+          forceRefresh: Boolean(cachedPortal),
+        });
         if (shouldIgnore) return;
 
         setResources(Array.isArray(portal?.resources) ? portal.resources : []);

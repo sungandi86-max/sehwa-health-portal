@@ -1,10 +1,56 @@
 const PORTAL_API_URL = "/api/portal";
 const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
+const PORTAL_CACHE_TTL_MS = 45_000;
 const SEOUL_TIME_ZONE = "Asia/Seoul";
 const FIXED_TB_REGISTRATION_TYPE = "단체검진 신청";
+const portalCache = new Map();
+const portalRequests = new Map();
 
 function fetchNoStore(url, signal) {
   return fetch(url, { signal, cache: "no-store" });
+}
+
+function readCachedPortalValue(cacheKey) {
+  return portalCache.get(cacheKey)?.value || null;
+}
+
+function waitForPortalRequest(request, signal) {
+  if (!signal) return request;
+  if (signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+
+  return new Promise((resolve, reject) => {
+    const handleAbort = () => reject(new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", handleAbort, { once: true });
+    request.then(resolve, reject).finally(() => signal.removeEventListener("abort", handleAbort));
+  });
+}
+
+function requestPortalValue(cacheKey, loader) {
+  if (portalRequests.has(cacheKey)) return portalRequests.get(cacheKey);
+
+  const request = loader()
+    .then((value) => {
+      portalCache.set(cacheKey, { value, updatedAt: Date.now() });
+      return value;
+    })
+    .finally(() => portalRequests.delete(cacheKey));
+
+  portalRequests.set(cacheKey, request);
+  return request;
+}
+
+function loadCachedPortalValue(cacheKey, loader, signal, { forceRefresh = false } = {}) {
+  const cached = portalCache.get(cacheKey);
+  if (cached && !forceRefresh) {
+    if (Date.now() - cached.updatedAt >= PORTAL_CACHE_TTL_MS) {
+      requestPortalValue(cacheKey, loader).catch((error) => {
+        console.warn("[portal] background refresh failed", error);
+      });
+    }
+    return Promise.resolve(cached.value);
+  }
+
+  return waitForPortalRequest(requestPortalValue(cacheKey, loader), signal);
 }
 
 function portalContentUrl(type) {
@@ -137,27 +183,52 @@ export function filterPortalUploads(portal) {
   };
 }
 
-export async function fetchPortalContent(type, signal) {
-  const response = await fetchNoStore(portalContentUrl(type), signal);
-  const contentType = response.headers.get("content-type") || "";
-
-  if (!contentType.includes("application/json") && import.meta.env.DEV) {
-    const fallbackUrl = `${DEV_PORTAL_API_FALLBACK}?scope=fallback&type=${encodeURIComponent(type)}&preview=local`;
-    const fallbackResponse = await fetchNoStore(fallbackUrl, signal);
-    return readPortalJson(fallbackResponse, "fallback");
-  }
-
-  return readPortalJson(response, "portal");
+export function getCachedPortalContent(type) {
+  return readCachedPortalValue(`content:${type}`);
 }
 
-export async function fetchPortalUploads(signal) {
-  const response = await fetchNoStore(`${PORTAL_API_URL}?scope=upload`, signal);
-  const contentType = response.headers.get("content-type") || "";
+export async function fetchPortalContent(type, signal, options) {
+  return loadCachedPortalValue(
+    `content:${type}`,
+    async () => {
+      const response = await fetchNoStore(portalContentUrl(type));
+      const contentType = response.headers.get("content-type") || "";
 
-  if (!contentType.includes("application/json") && import.meta.env.DEV) {
-    const fallbackResponse = await fetchNoStore(`${DEV_PORTAL_API_FALLBACK}?scope=upload&preview=local`, signal);
-    return filterPortalUploads(await readPortalJson(fallbackResponse, "fallback"));
-  }
+      if (!contentType.includes("application/json") && import.meta.env.DEV) {
+        const fallbackUrl = `${DEV_PORTAL_API_FALLBACK}?scope=fallback&type=${encodeURIComponent(type)}&preview=local`;
+        const fallbackResponse = await fetchNoStore(fallbackUrl);
+        return readPortalJson(fallbackResponse, "fallback");
+      }
 
-  return filterPortalUploads(await readPortalJson(response, "portal"));
+      return readPortalJson(response, "portal");
+    },
+    signal,
+    options,
+  );
+}
+
+export function getCachedPortalUploads() {
+  const portal = readCachedPortalValue("uploads");
+  return portal ? filterPortalUploads(portal) : null;
+}
+
+export async function fetchPortalUploads(signal, options) {
+  const portal = await loadCachedPortalValue(
+    "uploads",
+    async () => {
+      const response = await fetchNoStore(`${PORTAL_API_URL}?scope=upload`);
+      const contentType = response.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json") && import.meta.env.DEV) {
+        const fallbackResponse = await fetchNoStore(`${DEV_PORTAL_API_FALLBACK}?scope=upload&preview=local`);
+        return readPortalJson(fallbackResponse, "fallback");
+      }
+
+      return readPortalJson(response, "portal");
+    },
+    signal,
+    options,
+  );
+
+  return filterPortalUploads(portal);
 }

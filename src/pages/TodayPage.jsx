@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import TodaySection from "../components/TodaySection.jsx";
-import { fetchPortalContent } from "../lib/portalContent.js";
+import { fetchPortalContent, getCachedPortalContent } from "../lib/portalContent.js";
 import { filterCurrentPortalItems } from "../lib/portalSchedule.js";
 
 export default function TodayPage() {
   const navigate = useNavigate();
-  const [notices, setNotices] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedPortal = getCachedPortalContent("today");
+  const [notices, setNotices] = useState(() => filterCurrentPortalItems(cachedPortal?.notices));
+  const [isLoading, setIsLoading] = useState(!cachedPortal);
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -15,10 +16,12 @@ export default function TodayPage() {
     const controller = new AbortController();
 
     async function loadNotices() {
-      setIsLoading(true);
+      if (!cachedPortal) setIsLoading(true);
 
       try {
-        const portal = await fetchPortalContent("today", controller.signal);
+        const portal = await fetchPortalContent("today", controller.signal, {
+          forceRefresh: Boolean(cachedPortal),
+        });
         if (shouldIgnore) return;
 
         setNotices(filterCurrentPortalItems(portal?.notices));

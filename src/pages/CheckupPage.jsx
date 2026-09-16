@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import CheckupSection from "../components/CheckupSection.jsx";
 import { PortalBackToHome } from "../components/PortalSubpageLayout.jsx";
-import { fetchPortalContent } from "../lib/portalContent.js";
+import { fetchPortalContent, getCachedPortalContent } from "../lib/portalContent.js";
 
 export default function CheckupPage({ tbConfig }) {
-  const [checkups, setCheckups] = useState([]);
-  const [effectiveTbConfig, setEffectiveTbConfig] = useState(tbConfig);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedPortal = getCachedPortalContent("checkups");
+  const [checkups, setCheckups] = useState(() => (
+    Array.isArray(cachedPortal?.checkups) ? cachedPortal.checkups : []
+  ));
+  const [effectiveTbConfig, setEffectiveTbConfig] = useState(cachedPortal?.tbConfig || tbConfig);
+  const [isLoading, setIsLoading] = useState(!cachedPortal);
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -14,10 +17,12 @@ export default function CheckupPage({ tbConfig }) {
     const controller = new AbortController();
 
     async function loadCheckups() {
-      setIsLoading(true);
+      if (!cachedPortal) setIsLoading(true);
 
       try {
-        const portal = await fetchPortalContent("checkups", controller.signal);
+        const portal = await fetchPortalContent("checkups", controller.signal, {
+          forceRefresh: Boolean(cachedPortal),
+        });
         if (shouldIgnore) return;
 
         setCheckups(Array.isArray(portal?.checkups) ? portal.checkups : []);

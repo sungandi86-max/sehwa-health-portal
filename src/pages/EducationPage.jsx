@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import EducationSection from "../components/EducationSection.jsx";
-import { fetchPortalContent } from "../lib/portalContent.js";
+import { fetchPortalContent, getCachedPortalContent } from "../lib/portalContent.js";
 
 export default function EducationPage() {
   const navigate = useNavigate();
-  const [educations, setEducations] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedPortal = getCachedPortalContent("education");
+  const [educations, setEducations] = useState(() => (
+    Array.isArray(cachedPortal?.educations) ? cachedPortal.educations : []
+  ));
+  const [isLoading, setIsLoading] = useState(!cachedPortal);
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -14,10 +17,12 @@ export default function EducationPage() {
     const controller = new AbortController();
 
     async function loadEducations() {
-      setIsLoading(true);
+      if (!cachedPortal) setIsLoading(true);
 
       try {
-        const portal = await fetchPortalContent("education", controller.signal);
+        const portal = await fetchPortalContent("education", controller.signal, {
+          forceRefresh: Boolean(cachedPortal),
+        });
         if (shouldIgnore) return;
 
         setEducations(Array.isArray(portal?.educations) ? portal.educations : []);

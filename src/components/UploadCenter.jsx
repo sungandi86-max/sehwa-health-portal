@@ -183,7 +183,14 @@ function getUserFacingFileGuide(item, submitType) {
     : guide;
 }
 
-export default function UploadCenter({ items, publicMode = false, publicType = "", tbConfig = null }) {
+export default function UploadCenter({
+  items,
+  publicMode = false,
+  publicType = "",
+  tbConfig = null,
+  isLoading = false,
+  loadFailed = false,
+}) {
   const navigate = useNavigate();
   const [modalType, setModalType] = useState(null);
   const [viewer, setViewer] = useState({ status: publicMode ? "hidden" : "loading", name: "", role: "" });
@@ -314,8 +321,23 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
             <span className="shrink-0 rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFA] px-2.5 py-1 text-xs font-semibold text-[#627083]">{rows.length}개 항목</span>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            {rows.map(({ item: displayItem, submitType }) => {
+          {isLoading ? (
+            <div className="grid gap-2 md:grid-cols-2" aria-label="제출 항목을 불러오는 중입니다.">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="animate-pulse rounded-[10px] border border-[#DDEAE7] px-4 py-3">
+                  <div className="h-4 w-2/3 rounded bg-slate-200" />
+                  <div className="mt-2 h-3 w-full rounded bg-slate-100" />
+                  <div className="mt-3 h-8 w-28 rounded-[8px] bg-slate-200" />
+                </div>
+              ))}
+            </div>
+          ) : loadFailed ? (
+            <p className="rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-4 py-3 text-sm text-[#627083]">
+              제출 항목을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {rows.map(({ item: displayItem, submitType }) => {
               const fileGuide = getUserFacingFileGuide(displayItem, submitType);
               const handleClick = () => (
                 submitType === "infection" ? navigate("/firebase-submit/infection") : setModalType(submitType)
@@ -344,8 +366,9 @@ export default function UploadCenter({ items, publicMode = false, publicType = "
                   )}
                 />
               );
-            })}
-          </div>
+              })}
+            </div>
+          )}
         </section>
       </section>
 

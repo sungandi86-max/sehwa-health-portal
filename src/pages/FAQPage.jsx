@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import FAQSection from "../components/FAQSection.jsx";
-import { fetchPortalContent } from "../lib/portalContent.js";
+import { fetchPortalContent, getCachedPortalContent } from "../lib/portalContent.js";
 
 export default function FAQPage() {
   const navigate = useNavigate();
-  const [faqs, setFaqs] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedPortal = getCachedPortalContent("faq");
+  const [faqs, setFaqs] = useState(() => (
+    Array.isArray(cachedPortal?.faqs) ? cachedPortal.faqs : []
+  ));
+  const [isLoading, setIsLoading] = useState(!cachedPortal);
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
@@ -14,10 +17,12 @@ export default function FAQPage() {
     const controller = new AbortController();
 
     async function loadFaqs() {
-      setIsLoading(true);
+      if (!cachedPortal) setIsLoading(true);
 
       try {
-        const portal = await fetchPortalContent("faq", controller.signal);
+        const portal = await fetchPortalContent("faq", controller.signal, {
+          forceRefresh: Boolean(cachedPortal),
+        });
         if (shouldIgnore) return;
 
         setFaqs(Array.isArray(portal?.faqs) ? portal.faqs : []);
