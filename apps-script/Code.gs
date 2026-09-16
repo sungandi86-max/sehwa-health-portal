@@ -2718,6 +2718,14 @@ function getPortalData_(options) {
     });
   }
 
+  if (scope === "home") {
+    return Object.assign({}, base, {
+      notices: getNotices_(ss),
+      checkups: getCheckups_(ss),
+      educations: getEducations_(ss)
+    });
+  }
+
   if (scope === "fallback") {
     return getPortalFallbackData_(ss, base, type);
   }

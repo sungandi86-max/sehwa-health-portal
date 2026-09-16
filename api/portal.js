@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import { buildHomeSchedules, filterCurrentPortalItems } from "../src/lib/portalSchedule.js";
 
 function getScriptUrl() {
   return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
@@ -20,6 +21,35 @@ function portalQuery(req) {
   if (scope) params.set("scope", scope);
   if (type) params.set("type", type);
   return params.toString();
+}
+
+function buildHomeResponse(portal, now = new Date()) {
+  const notices = filterCurrentPortalItems(portal?.notices, now).slice(0, 3);
+  const educationSchedules = (portal?.educations || []).map((item) => ({
+    ...item,
+    sourceType: "education",
+    href: "/education",
+  }));
+  const checkupSchedules = (portal?.checkups || []).map((item) => ({
+    ...item,
+    sourceType: "checkup",
+    href: "/checkup",
+  }));
+  const noticeSchedules = notices.map((item) => ({
+    ...item,
+    sourceType: "today",
+    href: "/today",
+  }));
+
+  return {
+    updatedAt: portal?.updatedAt || "",
+    notices,
+    schedules: buildHomeSchedules(
+      [educationSchedules, checkupSchedules, noticeSchedules],
+      now,
+      3,
+    ),
+  };
 }
 
 export default async function handler(req, res) {
@@ -95,7 +125,9 @@ export default async function handler(req, res) {
 
     try {
       const json = JSON.parse(text);
-      return res.status(200).json(json);
+      return res.status(200).json(
+        String(req.query?.scope || "").trim() === "home" ? buildHomeResponse(json) : json,
+      );
     } catch (error) {
       console.error("[portal] JSON parse failed", error);
       return jsonError(

@@ -6,7 +6,11 @@ import PwaInstallCard from "../components/PwaInstallCard.jsx";
 import QuickMenu from "../components/QuickMenu.jsx";
 import { firebaseV2MenuItems } from "../data/firebaseV2Navigation.js";
 import { quickMenuItems } from "../data/fallbackData.js";
-import { fetchPortalContent } from "../lib/portalContent.js";
+import {
+  fetchPortalContent,
+  fetchPortalHome,
+  getCachedPortalHome,
+} from "../lib/portalContent.js";
 import { buildHomeSchedules, filterCurrentPortalItems } from "../lib/portalSchedule.js";
 
 const legacyMenuRoutes = {
@@ -24,11 +28,12 @@ function formatHomeDate(date) {
 }
 
 export default function HomePage({ config }) {
+  const cachedHome = getCachedPortalHome();
   const sourceContentRef = useRef({ notices: [], checkups: [], educations: [] });
   const [homeContent, setHomeContent] = useState({
-    notices: [],
-    schedules: [],
-    isLoading: true,
+    notices: cachedHome?.notices || [],
+    schedules: cachedHome?.schedules || [],
+    isLoading: !cachedHome,
   });
 
   const portalHomeConfig = {
@@ -65,6 +70,20 @@ export default function HomePage({ config }) {
       const currentRequestId = ++requestId;
       activeController?.abort();
       activeController = new AbortController();
+      try {
+        const home = await fetchPortalHome(activeController.signal, { forceRefresh });
+        if (shouldIgnore || currentRequestId !== requestId) return;
+        setHomeContent({
+          notices: Array.isArray(home?.notices) ? home.notices : [],
+          schedules: Array.isArray(home?.schedules) ? home.schedules : [],
+          isLoading: false,
+        });
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        console.warn("[home] aggregate portal request failed; loading source sections", error);
+      }
+
       const now = new Date();
       const [today, checkups, education] = await Promise.allSettled([
         fetchPortalContent("today", activeController.signal, { forceRefresh }),

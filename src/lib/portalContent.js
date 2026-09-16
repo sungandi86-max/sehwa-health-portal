@@ -62,6 +62,10 @@ function portalContentUrl(type) {
   return `${PORTAL_API_URL}?${params.toString()}`;
 }
 
+function portalHomeUrl() {
+  return `${PORTAL_API_URL}?scope=home`;
+}
+
 async function readPortalJson(response, sourceLabel) {
   if (!response.ok) throw new Error(`${sourceLabel} HTTP ${response.status}`);
 
@@ -197,6 +201,29 @@ export async function fetchPortalContent(type, signal, options) {
       if (!contentType.includes("application/json") && import.meta.env.DEV) {
         const fallbackUrl = `${DEV_PORTAL_API_FALLBACK}?scope=fallback&type=${encodeURIComponent(type)}&preview=local`;
         const fallbackResponse = await fetchNoStore(fallbackUrl);
+        return readPortalJson(fallbackResponse, "fallback");
+      }
+
+      return readPortalJson(response, "portal");
+    },
+    signal,
+    options,
+  );
+}
+
+export function getCachedPortalHome() {
+  return readCachedPortalValue("home");
+}
+
+export async function fetchPortalHome(signal, options) {
+  return loadCachedPortalValue(
+    "home",
+    async () => {
+      const response = await fetchNoStore(portalHomeUrl());
+      const contentType = response.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json") && import.meta.env.DEV) {
+        const fallbackResponse = await fetchNoStore(`${DEV_PORTAL_API_FALLBACK}?scope=home&preview=local`);
         return readPortalJson(fallbackResponse, "fallback");
       }
 
