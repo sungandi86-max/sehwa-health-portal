@@ -2719,11 +2719,17 @@ function getPortalData_(options) {
   }
 
   if (scope === "home") {
-    return Object.assign({}, base, {
+    const cache = CacheService.getScriptCache();
+    const cached = cache.get("portal-home-v1");
+    if (cached) return JSON.parse(cached);
+
+    const home = Object.assign({}, base, {
       notices: getNotices_(ss),
       checkups: getCheckups_(ss),
       educations: getEducations_(ss)
     });
+    cache.put("portal-home-v1", JSON.stringify(home), 45);
+    return home;
   }
 
   if (scope === "fallback") {
