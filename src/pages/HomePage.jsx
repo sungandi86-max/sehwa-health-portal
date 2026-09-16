@@ -85,13 +85,28 @@ export default function HomePage({ config }) {
       }
 
       const notices = filterCurrentPortalItems(sourceContentRef.current.notices, now);
+      const educationSchedules = sourceContentRef.current.educations.map((item) => ({
+        ...item,
+        sourceType: "education",
+        href: "/education",
+      }));
+      const checkupSchedules = sourceContentRef.current.checkups.map((item) => ({
+        ...item,
+        sourceType: "checkup",
+        href: "/checkup",
+      }));
+      const noticeSchedules = notices.map((item) => ({
+        ...item,
+        sourceType: "today",
+        href: "/today",
+      }));
 
       setHomeContent({
         notices,
         schedules: buildHomeSchedules([
-          sourceContentRef.current.educations,
-          sourceContentRef.current.checkups,
-          notices,
+          educationSchedules,
+          checkupSchedules,
+          noticeSchedules,
         ], now),
         isLoading: false,
       });

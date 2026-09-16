@@ -88,22 +88,24 @@ export default function HomeDashboardSummary({ notices = [], schedules = [], isL
       </article>
 
       <article className="rounded-[14px] border border-[#DDEAE7] bg-white p-3 shadow-[0_5px_14px_rgba(16,32,71,0.035)]">
-        <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="mb-2 flex items-center gap-2">
           <div className="flex items-center gap-2">
             <span className="grid h-7 w-7 place-items-center rounded-[9px] border border-[#D7F1E8] bg-[#F0FBF7] text-[#20A982]">
               <SummaryIcon type="calendar" />
             </span>
             <h2 className="text-base font-semibold text-[#102047]">진행 중인 일정</h2>
           </div>
-          <Link to="/today" className="shrink-0 text-xs font-semibold text-[#0D4EA6] hover:text-[#183B8F]">
-            더보기 →
-          </Link>
         </div>
         <div className="divide-y divide-[#EEF2F5]">
           {visibleSchedules.length > 0 ? visibleSchedules.map((item) => {
             const schedule = findScheduleText(item);
             return (
-              <div key={`${item.title}-${schedule}`} className="grid grid-cols-[48px_minmax(0,1fr)] gap-2.5 py-1.5">
+              <Link
+                key={`${item.title}-${schedule}`}
+                to={item.href}
+                aria-label={`${item.title} 원본 메뉴로 이동`}
+                className="group grid min-h-11 grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-[8px] px-1 py-1.5 transition-colors duration-150 hover:bg-[#F5F8FC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#0D4EA6]"
+              >
                 <span className="rounded-[8px] border border-[#DDEAE7] bg-[#F8FAFC] px-1.5 py-1 text-center text-xs font-semibold tabular-nums text-[#3154A3]">
                   {formatCompactDate(schedule)}
                 </span>
@@ -111,7 +113,8 @@ export default function HomeDashboardSummary({ notices = [], schedules = [], isL
                   <span className="block truncate text-sm font-semibold text-[#102047]">{item.title}</span>
                   <span className="block truncate text-xs font-normal text-[#627083]">{schedule || getText(item.target) || "일정 확인"}</span>
                 </span>
-              </div>
+                <span className="px-1 text-sm font-semibold text-[#0D4EA6] transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">→</span>
+              </Link>
             );
           }) : isLoading ? (
             <p className="py-4 text-sm font-medium text-[#627083]">일정을 불러오는 중입니다.</p>
