@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import { isTbScreeningSubmission, verifyTbSubmissionAllowed } from "../server/lib/tbSubmissionGuard.js";
 
 const SCRIPT_URL =
   process.env.GAS_URL ||
@@ -23,7 +24,7 @@ function isLegacyInfectionSubmit(payload) {
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
@@ -41,6 +42,13 @@ export default async function handler(req, res) {
         message: "감염병 보고는 로그인 후 새 감염병 보고 화면에서 제출해 주세요.",
         redirectTo: "/firebase-submit/infection",
       });
+    }
+
+    if (isTbScreeningSubmission(payload)) {
+      const guard = await verifyTbSubmissionAllowed(req);
+      if (!guard.ok) {
+        return res.status(guard.status).json({ status: "error", success: false, message: guard.message });
+      }
     }
 
     const scriptRes = await fetch(SCRIPT_URL, {

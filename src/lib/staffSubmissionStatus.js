@@ -1,8 +1,9 @@
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "./firebase.js";
 
 export const STAFF_STATUS_TASK_IDS = ["tb-screening-2026", "cpr-training-2026", "health-mandatory-training-2026"];
 export const HEALTH_MANDATORY_TRAINING_TASK_ID = "health-mandatory-training-2026";
+export const TB_SCREENING_TASK_ID = "tb-screening-2026";
 
 export const STAFF_STATUS_LABELS = {
   incomplete: "미완료",
@@ -80,6 +81,17 @@ export function getStaffSubmissionStatusEligibility(assignment) {
 
 export function isHealthMandatoryTrainingTask(taskId) {
   return taskId === HEALTH_MANDATORY_TRAINING_TASK_ID;
+}
+
+export async function getStaffSubmissionTaskStatus(staffId, taskId) {
+  if (!staffId || !taskId) return "unknown";
+
+  const statusSnapshot = await getDoc(doc(db, "staff_submission_status", `${staffId}_${taskId}`));
+  if (!statusSnapshot.exists()) return "unknown";
+
+  const statusItem = normalizeStatus(statusSnapshot);
+  if (statusItem.staffId !== staffId || statusItem.taskId !== taskId) return "unknown";
+  return statusItem.status;
 }
 
 export function getStaffStatusLabel(status, taskId = "") {

@@ -1,5 +1,5 @@
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "./firebase.js";
+import { auth, db } from "./firebase.js";
 
 const CPR_FOLDER_ID = "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM";
 const TB_FOLDER_ID = "1MfxNVL1muROzpi1ZbV7WDWr4SKMU7ghm";
@@ -43,9 +43,13 @@ async function postWithTimeout(payload) {
   const timeoutId = window.setTimeout(() => controller.abort(), DRIVE_UPLOAD_TIMEOUT_MS);
 
   try {
+    const idToken = payload?.type === "tb" ? await auth.currentUser?.getIdToken() : "";
     const response = await fetch(SUBMIT_API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });

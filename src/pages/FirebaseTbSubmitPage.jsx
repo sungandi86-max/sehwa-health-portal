@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import {
@@ -16,6 +17,7 @@ import {
 import { getStaffDisplayName, getStaffRoleDisplay } from "../lib/staffIdentity.js";
 import { inferSubmissionStaffType } from "../lib/staffType.js";
 import { createTbSubmission, validateSubmissionFile } from "../lib/staffSubmissions.js";
+import { getStaffSubmissionTaskStatus, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
 
 const DEFAULT_ITEM = {
@@ -45,6 +47,69 @@ function getFormError({ checkupDate, documentType, staffType, file }) {
   return validateSubmissionFile(file);
 }
 
+function TbStatusGate({ staffId, forceCompleted, children }) {
+  const [statusState, setStatusState] = useState({ status: staffId ? "loading" : "ready", value: "unknown" });
+
+  useEffect(() => {
+    let shouldIgnore = false;
+
+    if (!staffId || forceCompleted) {
+      setStatusState({ status: "ready", value: forceCompleted ? "completed" : "unknown" });
+      return () => {
+        shouldIgnore = true;
+      };
+    }
+
+    setStatusState({ status: "loading", value: "unknown" });
+    getStaffSubmissionTaskStatus(staffId, TB_SCREENING_TASK_ID)
+      .then((status) => {
+        if (!shouldIgnore) setStatusState({ status: "ready", value: status });
+      })
+      .catch(() => {
+        if (!shouldIgnore) setStatusState({ status: "error", value: "unknown" });
+      });
+
+    return () => {
+      shouldIgnore = true;
+    };
+  }, [forceCompleted, staffId]);
+
+  if (statusState.status === "loading") {
+    return (
+      <div className="rounded-[12px] border border-[#DDEAE7] bg-white px-4 py-4 text-sm font-semibold text-[#627083]">
+        결핵검진 상태를 확인하는 중입니다.
+      </div>
+    );
+  }
+
+  if (statusState.status === "error") {
+    return (
+      <div className="rounded-[12px] border border-[#C8D8FF] bg-[#F5F8FF] px-4 py-4 text-sm leading-6 text-[#3154A3]">
+        결핵검진 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.
+      </div>
+    );
+  }
+
+  if (forceCompleted || statusState.value === "completed") {
+    return (
+      <div className="rounded-[12px] border border-[#C8D8FF] bg-[#F5F8FF] px-5 py-5 text-sm leading-6 text-[#3154A3]">
+        <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-[#0D4EA6]">검진 완료</span>
+        <h2 className="mt-3 text-lg font-semibold text-[#102047]">이미 결핵검진 완료가 확인되었습니다.</h2>
+        <p className="mt-2">현재 교직원 결핵검진 상태가 완료로 확인되어 추가 신청이 필요하지 않습니다.</p>
+        <p className="mt-1 text-[#627083]">검진 상태가 실제와 다르다면 보건실에 문의해 주세요.</p>
+        <Link
+          to="/my-submission-status"
+          className="mt-4 inline-flex min-h-10 items-center rounded-[10px] border border-[#0D4EA6] bg-white px-4 text-sm font-semibold text-[#0D4EA6] hover:bg-[#EEF4FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D4EA6] focus-visible:ring-offset-2"
+        >
+          나의 제출·이수 현황 보기
+        </Link>
+      </div>
+    );
+  }
+
+  return children;
+}
+
 export default function FirebaseTbSubmitPage() {
   const [item, setItem] = useState(DEFAULT_ITEM);
   const [checkupDate, setCheckupDate] = useState("");
@@ -52,6 +117,7 @@ export default function FirebaseTbSubmitPage() {
   const [file, setFile] = useState(null);
   const [loadState, setLoadState] = useState({ status: "loading", message: "" });
   const [submitState, setSubmitState] = useState({ status: "idle", message: "" });
+  const [completedAfterSubmit, setCompletedAfterSubmit] = useState(false);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -114,9 +180,11 @@ export default function FirebaseTbSubmitPage() {
         message: `개별 건강검진 확인서 제출이 완료되었습니다. 접수번호: ${result.id}`,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "제출 중 오류가 발생했습니다.";
+      if (message.includes("이미 결핵검진 완료가 확인")) setCompletedAfterSubmit(true);
       setSubmitState({
         status: "error",
-        message: error instanceof Error ? error.message : "제출 중 오류가 발생했습니다.",
+        message,
       });
     }
   };
@@ -137,6 +205,7 @@ export default function FirebaseTbSubmitPage() {
             description="검진일자와 확인 가능한 최소 자료를 제출합니다."
             displayName={displayName}
           >
+          <TbStatusGate staffId={assignment?.staffId || ""} forceCompleted={completedAfterSubmit}>
           <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
             <aside className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-6 shadow-[0_18px_48px_rgba(16,32,71,0.07)]">
               <div className="flex flex-wrap items-center gap-2">
@@ -245,6 +314,7 @@ export default function FirebaseTbSubmitPage() {
               </button>
             </form>
           </section>
+          </TbStatusGate>
         </FirebaseV2PageShell>
         );
       }}

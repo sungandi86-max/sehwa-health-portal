@@ -11,6 +11,7 @@ import {
 } from "../lib/firebaseAuth.js";
 import { getFixedTbRegistrationType, getTbRegistrationWindowState } from "../lib/portalContent.js";
 import { getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
+import { getStaffSubmissionTaskStatus, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
 import {
   INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE,
   INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
@@ -643,12 +644,13 @@ function StudentTbReplyForm({ onSubmit, submitting, publicMode = false }) {
 }
 
 // ───────── 교직원 결핵검진 단체검진 신청 폼 ─────────
-function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
+function TbRegistrationForm({ onSubmit, submitting, tbConfig, forceCompleted = false }) {
   const [identity, setIdentity] = useState(null);
   const [identityStatus, setIdentityStatus] = useState("loading");
   const [identityMessage, setIdentityMessage] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [errors, setErrors] = useState({});
+  const [tbStatusState, setTbStatusState] = useState({ status: "idle", value: "unknown", message: "" });
 
   useEffect(() => {
     let ignore = false;
@@ -679,8 +681,31 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
         const nextIdentity = await getAuthenticatedStaffIdentity();
         if (!ignore) {
           setIdentity(nextIdentity);
-          setIdentityStatus("ready");
-          setIdentityMessage("");
+          if (!nextIdentity?.staffId) {
+            setIdentityStatus("blocked");
+            setIdentityMessage("교직원 정보가 연결되지 않아 신청할 수 없습니다. 관리자에게 문의해 주세요.");
+            return;
+          }
+
+          setTbStatusState({ status: "loading", value: "unknown", message: "" });
+          try {
+            const nextStatus = await getStaffSubmissionTaskStatus(nextIdentity.staffId, TB_SCREENING_TASK_ID);
+            if (!ignore) {
+              setTbStatusState({ status: "ready", value: nextStatus, message: "" });
+              setIdentityStatus("ready");
+              setIdentityMessage("");
+            }
+          } catch {
+            if (!ignore) {
+              setTbStatusState({
+                status: "error",
+                value: "unknown",
+                message: "결핵검진 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+              });
+              setIdentityStatus("blocked");
+              setIdentityMessage("결핵검진 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+            }
+          }
         }
       } catch (error) {
         if (!ignore) {
@@ -744,6 +769,16 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig }) {
       fileMimeType: null,
     });
   };
+
+  if (forceCompleted || (tbStatusState.status === "ready" && tbStatusState.value === "completed")) {
+    return (
+      <div className="rounded-[10px] border border-[#C8D8FF] bg-[#F5F8FF] px-4 py-4 text-sm leading-6 text-[#3154A3]">
+        <p className="font-semibold text-[#102047]">이미 결핵검진 완료가 확인되었습니다.</p>
+        <p className="mt-1">현재 교직원 결핵검진 상태가 완료로 확인되어 추가 신청이 필요하지 않습니다.</p>
+        <p className="mt-1 text-[#627083]">검진 상태가 실제와 다르다면 보건실에 문의해 주세요.</p>
+      </div>
+    );
+  }
 
   // tbConfig prop으로 상태 동기 계산 (fetch 불필요)
   if (!tbConfig) {
@@ -1203,6 +1238,7 @@ export default function SubmitModal({ type, onClose, tbConfig, publicMode = fals
   const [status, setStatus] = useState("idle"); // idle | submitting | success
   const [submitError, setSubmitError] = useState("");
   const [successInfo, setSuccessInfo] = useState(null);
+  const [tbCompleted, setTbCompleted] = useState(false);
   const overlayRef = useRef(null);
   const meta = MODAL_META[type] || {};
 
@@ -1223,9 +1259,14 @@ export default function SubmitModal({ type, onClose, tbConfig, publicMode = fals
     setStatus("submitting");
     setSubmitError("");
     try {
+      const requiresTbAuth = type === "tb" || type === "tb_registration";
+      const idToken = requiresTbAuth ? await auth.currentUser?.getIdToken() : "";
       const res = await fetch(SCRIPT_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
       const json = await res.json();
@@ -1247,6 +1288,12 @@ export default function SubmitModal({ type, onClose, tbConfig, publicMode = fals
         });
         setStatus("success");
       } else {
+        if (res.status === 409 && String(json?.message || "").includes("이미 결핵검진 완료가 확인")) {
+          setTbCompleted(true);
+          setSubmitError("");
+          setStatus("idle");
+          return;
+        }
         throw new Error(json.message || "unknown error");
       }
     } catch (err) {
@@ -1302,7 +1349,14 @@ export default function SubmitModal({ type, onClose, tbConfig, publicMode = fals
               {type === "student_tb_reply" && <StudentTbReplyForm onSubmit={handleSubmit} submitting={status === "submitting"} publicMode={publicMode} />}
               {type === "recruit" && <RecruitForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "other" && <OtherForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
-              {type === "tb_registration" && <TbRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} tbConfig={tbConfig} />}
+              {type === "tb_registration" && (
+                <TbRegistrationForm
+                  onSubmit={handleSubmit}
+                  submitting={status === "submitting"}
+                  tbConfig={tbConfig}
+                  forceCompleted={tbCompleted}
+                />
+              )}
               {type === "inbody" && <InbodyRegistrationForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
               {type === "infection" && <InfectionReportForm onSubmit={handleSubmit} submitting={status === "submitting"} />}
             </>
