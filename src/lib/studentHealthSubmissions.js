@@ -2,6 +2,7 @@ import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from 
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
 import { INFECTION_CASE_STATUS, INFECTION_SUBMISSION_STATUS } from "./infectionStatus.js";
+import { projectInfectionCaseBestEffort } from "./infectionSheetProjection.js";
 import { isHealthTeacher, isHomeroom } from "./userProfile.js";
 
 const COLLECTION_NAME = "student_health_submissions";
@@ -82,6 +83,8 @@ export async function createInfectionReport({
     submittedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  await projectInfectionCaseBestEffort(user, submissionRef.id);
 
   return { id: submissionRef.id };
 }

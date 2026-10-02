@@ -382,3 +382,13 @@ dry-run, duplicate detection, count parity를 거쳐 미종결 또는 최근 사
 - migration, Apps Script disable, legacy route redirect는 수행하지 않음
 
 이 순서가 가장 안전하다. 상태 모델을 먼저 병행 저장하면 이후 UI, dashboard, migration을 작게 나누어 검증할 수 있다.
+
+## 22. Google Sheet 운영 projection
+
+- Firestore `student_health_submissions`가 감염병 사례의 유일한 원본(Source of Truth)이다.
+- Google Sheet `학생 감염병 관리 현황`은 Firestore 내용을 조회·집계하기 위한 단방향 운영 projection이다.
+- Sheet에서 수정한 값은 Firestore로 역동기화되지 않는다.
+- Firestore 제출 또는 관리자 상태 변경이 성공한 뒤 Sheet projection을 시도한다. Projection 실패는 이미 완료된 Firestore 제출이나 상태 변경을 무효화하지 않는다.
+- Projection 행은 Google Sheets developer metadata에 저장한 Firestore 문서 ID로 식별한다. ID가 없는 기존 수기 행은 수정하거나 삭제하지 않는다.
+- 관리자 권한의 `syncInfectionSheet` dry-run/apply 작업으로 전체 Firestore 사례를 다시 동기화할 수 있다. Dry-run은 건수만 반환하며 학생 개인정보를 반환하지 않는다.
+- A열 연번과 M열 월 수식, K열 보고완료 체크박스, O열 이후 집계 영역은 projection에서 덮어쓰지 않는다. 신규 행의 K열만 기존 입력 규칙에 맞춰 `false`로 초기화하며, metadata만 생성되고 값 쓰기가 중단된 신규 projection 행도 재시도 시 같은 초기화를 복구한다.

@@ -1,5 +1,9 @@
 import fetch from "node-fetch";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
+import {
+  projectInfectionDocument,
+  syncInfectionSheetProjection,
+} from "../server/lib/infectionSheetProjection.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
@@ -93,6 +97,10 @@ function isLegacyStudentCarePasswordRequest(params) {
   );
 }
 
+function isInfectionProjectionAction(params) {
+  return ["projectInfectionCase", "syncInfectionSheet"].includes(String(params.action || ""));
+}
+
 function canUseSubjectScope(assignment) {
   return isActiveAssignment(assignment) && hasAnyRole(assignment, ["staff", "homeroom", "health_teacher", "admin"]);
 }
@@ -119,6 +127,15 @@ function jsonError(res, status, message, debug) {
     message,
     debug: sanitizeDebugMessage(debug),
   });
+}
+
+function isFirebaseAuthenticationError(error) {
+  return [
+    "auth/argument-error",
+    "auth/id-token-expired",
+    "auth/id-token-revoked",
+    "auth/invalid-id-token",
+  ].includes(String(error?.code || ""));
 }
 
 async function getVerifiedStudentCareAccess(req) {
@@ -409,6 +426,55 @@ export default async function handler(req, res) {
     return jsonError(res, 405, "허용되지 않는 요청 방식입니다.", `method=${req.method}`);
   }
 
+  const params = await getRequestParams(req);
+  const token = getBearerToken(req);
+  if (isInfectionProjectionAction(params)) {
+    if (!token) return jsonError(res, 401, "Firebase 로그인이 필요한 요청입니다.");
+
+    try {
+      const access = await getVerifiedStudentCareAccess(req);
+      if (!access.ok) return jsonError(res, access.status, access.message);
+
+      if (params.action === "syncInfectionSheet") {
+        if (!isAdminAssignment(access.assignment)) {
+          return jsonError(res, 403, "감염병 현황 동기화 권한이 없습니다.");
+        }
+        const apply = params.apply === true || String(params.apply || "").toLowerCase() === "true";
+        if (apply && req.method !== "POST") {
+          return jsonError(res, 405, "감염병 현황 적용은 POST 요청만 허용됩니다.");
+        }
+        const result = await syncInfectionSheetProjection({ apply });
+        return res.status(200).json({ success: true, mode: apply ? "apply" : "dry-run", ...result });
+      }
+
+      const docId = String(params.docId || "").trim();
+      if (!docId) return jsonError(res, 400, "감염병 보고 식별자가 필요합니다.");
+      const documentSnapshot = await getFirebaseAdminDb()
+        .collection("student_health_submissions")
+        .doc(docId)
+        .get();
+      if (!documentSnapshot.exists || documentSnapshot.data()?.type !== "infection") {
+        return jsonError(res, 404, "감염병 보고를 찾을 수 없습니다.");
+      }
+      const isOwner = documentSnapshot.data()?.submittedBy?.uid === access.decodedToken.uid;
+      if (!isOwner && !isAdminAssignment(access.assignment)) {
+        return jsonError(res, 403, "이 감염병 보고를 동기화할 권한이 없습니다.");
+      }
+
+      const result = await projectInfectionDocument(docId);
+      return res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      console.error("[health-room-status] infection projection failed", {
+        action: params.action || "",
+        code: error?.code || "",
+      });
+      if (isFirebaseAuthenticationError(error)) {
+        return jsonError(res, 401, "로그인 인증 정보가 유효하지 않습니다.");
+      }
+      return jsonError(res, 500, "감염병 현황 시트 동기화에 실패했습니다.");
+    }
+  }
+
   const scriptUrl = getScriptUrl();
   if (!scriptUrl) {
     return jsonError(
@@ -428,8 +494,6 @@ export default async function handler(req, res) {
     );
   }
 
-  const params = await getRequestParams(req);
-  const token = getBearerToken(req);
   if (token) {
     try {
       const access = await getVerifiedStudentCareAccess(req);

@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
-import { db } from "./firebase.js";
+import { auth, db } from "./firebase.js";
+import { projectInfectionCaseBestEffort } from "./infectionSheetProjection.js";
 import {
   INFECTION_CASE_STATUS,
   INFECTION_CASE_STATUS_OPTIONS,
@@ -130,6 +131,7 @@ export async function updateInfectionCaseStatus({ caseId, caseStatus, reviewerUi
     "report.caseUpdatedBy": reviewerUid,
     updatedAt: serverTimestamp(),
   });
+  await projectInfectionCaseBestEffort(auth.currentUser, caseId);
 }
 
 export async function markInfectionSubmissionReviewed({ caseId, reviewerUid }) {
