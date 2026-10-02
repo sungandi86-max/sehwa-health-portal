@@ -110,7 +110,7 @@ function buildSummary(source, exceptions, plan, snapshotPlan, taskEnabled) {
   };
 }
 
-async function getResearchTrainingSummary({ db } = {}) {
+export async function getResearchTrainingSummary({ db } = {}) {
   const [directoryResult, researchValues, exceptionValues, taskSnapshot] = await Promise.all([
     readStaffDirectory({ allowInvalidEmploymentStatus: true }),
     readGoogleSheetValues({ spreadsheetId: RESEARCH_SPREADSHEET_ID, range: RESEARCH_RANGE }),
@@ -127,6 +127,7 @@ async function getResearchTrainingSummary({ db } = {}) {
   const taskEnabled = taskSnapshot ? taskSnapshot.exists && taskSnapshot.data()?.enabled === true : null;
   return {
     directory: directoryResult.directory,
+    directoryStats: directoryResult.stats,
     source,
     exceptions,
     plan,

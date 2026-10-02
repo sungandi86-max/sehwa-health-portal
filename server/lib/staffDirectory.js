@@ -16,6 +16,9 @@ const ROSTER_HEADERS = {
   department: ["소속부서", "부서", "소속/부서", "department"],
   target: ["제출대상", "대상", "target"],
   employmentStatus: ["재직상태", "employmentStatus", "employment_status"],
+  seniorLeader: ["고위직여부"],
+  newEmployee: ["신규자여부"],
+  nonRegular: ["비정규직여부"],
 };
 
 export function getAssignmentId(uid, schoolYear = CURRENT_SCHOOL_YEAR, semester = CURRENT_SEMESTER) {
@@ -113,6 +116,9 @@ export function normalizeDirectory(values, { allowInvalidEmploymentStatus = fals
       department: cell(row, indexes, "department"),
       target: cell(row, indexes, "target"),
       employmentStatus,
+      seniorLeader: cell(row, indexes, "seniorLeader"),
+      newEmployee: cell(row, indexes, "newEmployee"),
+      nonRegular: cell(row, indexes, "nonRegular"),
     });
     staffIdCounts.set(staffId, (staffIdCounts.get(staffId) || 0) + 1);
   });
@@ -124,6 +130,7 @@ export function normalizeDirectory(values, { allowInvalidEmploymentStatus = fals
       duplicateStaffIds: [...staffIdCounts.values()].filter((count) => count > 1).length,
       employmentStatus: employmentStatusCounts,
       invalidEmploymentStatus,
+      reportFlagColumnsPresent: ["seniorLeader", "newEmployee", "nonRegular"].every((key) => indexes[key] !== null),
     },
   };
 
@@ -184,6 +191,11 @@ export async function findActiveStaffIdAssignments(
     });
 }
 
+export function hasDirectoryAdminAccess(assignment) {
+  const roles = Array.isArray(assignment?.roles) ? assignment.roles : [];
+  return assignment?.active === true && (roles.includes("health_teacher") || roles.includes("admin"));
+}
+
 export async function verifyDirectoryAdmin(req) {
   const idToken = getBearerToken(req);
   if (!idToken) return { ok: false, status: 401, message: "로그인이 필요합니다." };
@@ -196,9 +208,7 @@ export async function verifyDirectoryAdmin(req) {
   }
 
   const assignment = assignmentSnapshot.data();
-  const roles = Array.isArray(assignment?.roles) ? assignment.roles : [];
-  const hasAccess = assignment.active === true && (roles.includes("health_teacher") || roles.includes("admin"));
-  if (!hasAccess) return { ok: false, status: 403, message: "관리자 권한이 없습니다." };
+  if (!hasDirectoryAdminAccess(assignment)) return { ok: false, status: 403, message: "관리자 권한이 없습니다." };
 
   return { ok: true, decodedToken, assignment, auth: getFirebaseAdminAuth(), db };
 }

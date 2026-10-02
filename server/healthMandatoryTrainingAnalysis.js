@@ -20,6 +20,7 @@ const RESEARCH_HEADERS = {
   department: ["소속부서", "부서", "부서명", "소속", "소속/부서", "department"],
   position: ["직책", "직위", "직급", "보직", "업무", "position"],
   completionNumber: ["이수번호", "이수 번호", "수료번호", "수료 번호"],
+  completionDate: ["교육수료일", "수료일", "이수일"],
   status: ["이수상태", "이수여부", "수료상태", "완료여부", "이수", "상태", "status"],
 };
 
@@ -98,6 +99,11 @@ function findResearchHeaderRow(rows) {
 function cell(row, indexes, key) {
   const index = indexes[key];
   return index === null || index === undefined ? "" : text(row[index]);
+}
+
+function rawCell(row, indexes, key) {
+  const index = indexes[key];
+  return index === null || index === undefined ? "" : String(row[index] ?? "");
 }
 
 function normalizeStatus(value) {
@@ -240,7 +246,7 @@ function resolveStaff(sourceRow, indexes) {
   return { kind: "unmatched", criterion: position ? "realName_position_exact" : "no_secondary_identifier" };
 }
 
-function buildPlan(sourceRows, directory, exceptionSummary, taskYear) {
+export function buildPlan(sourceRows, directory, exceptionSummary, taskYear) {
   const indexes = buildDirectoryIndexes(directory);
   const confirmedExceptionKeys = new Set(
     (exceptionSummary?.rows || []).filter((row) => row.isConfirmed).map((row) => row.key)
@@ -377,6 +383,8 @@ export function summarizeResearchRows(values) {
       department: cell(row, headerInfo.indexes, "department"),
       position,
       sourceStatus,
+      completionNumber: rawCell(row, headerInfo.indexes, "completionNumber"),
+      completionDate: cell(row, headerInfo.indexes, "completionDate"),
     });
   });
 

@@ -30,3 +30,16 @@ test("canonical reader fails closed on blank or unknown employment status", () =
   assert.equal(diagnostic.directory.length, 2);
   assert.equal(diagnostic.stats.invalidEmploymentStatus, 2);
 });
+
+test("canonical reader exposes report classification columns without changing staff identity", () => {
+  const values = [
+    [...header, "고위직여부", "신규자여부", "비정규직여부"],
+    ["T001", "대상", "교장", "가교장", "관리자", "재직", "O", "", ""],
+  ];
+  const result = normalizeDirectory(values);
+  assert.equal(result.stats.reportFlagColumnsPresent, true);
+  assert.equal(result.directory[0].staffId, "T001");
+  assert.equal(result.directory[0].seniorLeader, "O");
+  assert.equal(result.directory[0].newEmployee, "");
+  assert.equal(result.directory[0].nonRegular, "");
+});

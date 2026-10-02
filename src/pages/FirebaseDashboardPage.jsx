@@ -23,6 +23,7 @@ const QUICK_MENUS = [
   { title: "제출·보고 관리", description: "제출 확인과 감염병 보고 처리", status: "관리자", href: "/firebase-admin/submissions" },
   { title: "제출 현황", description: "대상자별 제출·미제출 확인", status: "관리자", href: "/firebase-admin/submission-status" },
   { title: "교직원 제출·이수 현황", description: "결핵검진·CPR 이수 상태", status: "관리자", href: "/firebase-admin/staff-submission-status" },
+  { title: "법정의무연수 보고서", description: "이수명부 미리보기와 Excel 다운로드", status: "관리자", href: "/firebase-admin/training-reports" },
   { title: "권한 신청", description: "기본·담임 권한 신청 승인", status: "관리자", href: "/firebase-admin/access-requests" },
   { title: "교직원 권한 관리", description: "역할·담임·보직 학기별 관리", status: "관리자", href: "/firebase-admin/users" },
   { title: "사용자 관리", description: "계정·staffId·표시 이름 관리", status: "관리자", href: "/firebase-admin/users" },
@@ -33,7 +34,7 @@ const MENU_GROUPS = [
   {
     title: "제출·이수 관리",
     items: QUICK_MENUS.filter((menu) =>
-      ["제출·보고 관리", "제출 현황", "교직원 제출·이수 현황"].includes(menu.title)
+      ["제출·보고 관리", "제출 현황", "교직원 제출·이수 현황", "법정의무연수 보고서"].includes(menu.title)
     ),
   },
   {

@@ -33,6 +33,7 @@ const FirebaseRecruitSubmitPage = lazy(() => import("./pages/FirebaseRecruitSubm
 const FirebaseStaffSubmissionStatusAdminPage = lazy(() =>
   import("./pages/FirebaseStaffSubmissionStatusAdminPage.jsx")
 );
+const FirebaseTrainingReportsPage = lazy(() => import("./pages/FirebaseTrainingReportsPage.jsx"));
 const FirebaseSubmissionStatusPage = lazy(() => import("./pages/FirebaseSubmissionStatusPage.jsx"));
 const FirebaseSubmissionsPage = lazy(() => import("./pages/FirebaseSubmissionsPage.jsx"));
 const FirebaseTbSubmitPage = lazy(() => import("./pages/FirebaseTbSubmitPage.jsx"));
@@ -123,6 +124,7 @@ export default function App() {
     "/firebase-admin/submissions",
     "/firebase-admin/submission-status",
     "/firebase-admin/staff-submission-status",
+    "/firebase-admin/training-reports",
     "/firebase-submit/cpr",
     "/firebase-submit/infection",
     "/firebase-submit/recruit",
@@ -219,6 +221,7 @@ export default function App() {
                 <Route path="/firebase-admin/submissions" element={<FirebaseAdminSubmissionsPage />} />
                 <Route path="/firebase-admin/submission-status" element={<FirebaseSubmissionStatusPage />} />
                 <Route path="/firebase-admin/staff-submission-status" element={<FirebaseStaffSubmissionStatusAdminPage />} />
+                <Route path="/firebase-admin/training-reports" element={<FirebaseTrainingReportsPage />} />
                 <Route path="/firebase-submit/cpr" element={<FirebaseCprSubmitPage />} />
                 <Route path="/firebase-submit/infection" element={<FirebaseInfectionSubmitPage />} />
                 <Route path="/firebase-submit/recruit" element={<FirebaseRecruitSubmitPage />} />
