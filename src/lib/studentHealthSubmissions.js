@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
+import { validateResolvedInfectionDiseaseName } from "./infectionDiseaseSelection.js";
 import { INFECTION_CASE_STATUS, INFECTION_SUBMISSION_STATUS } from "./infectionStatus.js";
 import { projectInfectionCaseBestEffort } from "./infectionSheetProjection.js";
 import { isHealthTeacher, isHomeroom } from "./userProfile.js";
@@ -28,7 +29,7 @@ export function canSubmitInfectionReport(assignment) {
   );
 }
 
-export function validateInfectionReport({ assignment, grade, classNo, studentNumber, studentName, diseaseName }) {
+export function validateInfectionReport({ assignment, grade, classNo, studentNumber, studentName, diseaseName, diseaseError = "" }) {
   if (!canSubmitInfectionReport(assignment)) return "감염병 보고 권한을 확인할 수 없습니다.";
   if (isHomeroom(assignment) && Number(grade) !== Number(assignment.grade)) return "담당 학년만 보고할 수 있습니다.";
   if (isHomeroom(assignment) && Number(classNo) !== Number(assignment.classNo)) return "담당 학급만 보고할 수 있습니다.";
@@ -36,7 +37,9 @@ export function validateInfectionReport({ assignment, grade, classNo, studentNum
   if (!Number.isFinite(Number(classNo)) || Number(classNo) < 1) return "반 정보를 확인해 주세요.";
   if (!Number.isFinite(Number(studentNumber)) || Number(studentNumber) < 1) return "학생 번호를 입력해 주세요.";
   if (!studentName.trim()) return "학생 이름을 입력해 주세요.";
-  if (!diseaseName.trim()) return "감염병명을 입력해 주세요.";
+  if (diseaseError) return diseaseError;
+  const diseaseNameError = validateResolvedInfectionDiseaseName(diseaseName);
+  if (diseaseNameError) return diseaseNameError;
   return "";
 }
 

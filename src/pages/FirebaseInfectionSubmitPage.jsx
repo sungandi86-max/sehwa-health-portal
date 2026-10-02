@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import FirebaseInfectionReportList from "../components/FirebaseInfectionReportList.jsx";
 import FirebaseStudentHealthAccessGate from "../components/FirebaseStudentHealthAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import InfectionDiseaseFields from "../components/InfectionDiseaseFields.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import {
+  OTHER_INFECTION_DISEASE,
+  resolveInfectionDiseaseName,
+  validateInfectionDiseaseSelection,
+} from "../lib/infectionDiseaseSelection.js";
 import {
   createInfectionReport,
   getAccessibleInfectionReports,
@@ -37,7 +43,8 @@ export default function FirebaseInfectionSubmitPage() {
   const [classNo, setClassNo] = useState("");
   const [studentNumber, setStudentNumber] = useState("");
   const [studentName, setStudentName] = useState("");
-  const [diseaseName, setDiseaseName] = useState("");
+  const [selectedDisease, setSelectedDisease] = useState("");
+  const [otherDiseaseName, setOtherDiseaseName] = useState("");
   const [diagnosisDate, setDiagnosisDate] = useState("");
   const [exclusionStartDate, setExclusionStartDate] = useState("");
   const [exclusionEndDate, setExclusionEndDate] = useState("");
@@ -94,6 +101,8 @@ export default function FirebaseInfectionSubmitPage() {
     const healthTeacher = isHealthTeacher(assignment);
     const reportGrade = healthTeacher ? grade : String(assignment.grade || "");
     const reportClassNo = healthTeacher ? classNo : String(assignment.classNo || "");
+    const diseaseSelection = { selectedDisease, otherDiseaseName };
+    const diseaseName = resolveInfectionDiseaseName(diseaseSelection);
     const reportError = validateInfectionReport({
       assignment,
       grade: reportGrade,
@@ -101,6 +110,7 @@ export default function FirebaseInfectionSubmitPage() {
       studentNumber,
       studentName,
       diseaseName,
+      diseaseError: validateInfectionDiseaseSelection(diseaseSelection),
     });
 
     if (reportError) {
@@ -125,7 +135,8 @@ export default function FirebaseInfectionSubmitPage() {
       });
       setStudentNumber("");
       setStudentName("");
-      setDiseaseName("");
+      setSelectedDisease("");
+      setOtherDiseaseName("");
       setDiagnosisDate("");
       setExclusionStartDate("");
       setExclusionEndDate("");
@@ -150,6 +161,8 @@ export default function FirebaseInfectionSubmitPage() {
         const healthTeacher = isHealthTeacher(assignment);
         const fixedGrade = healthTeacher ? grade : String(assignment.grade || "");
         const fixedClassNo = healthTeacher ? classNo : String(assignment.classNo || "");
+        const diseaseSelection = { selectedDisease, otherDiseaseName };
+        const diseaseName = resolveInfectionDiseaseName(diseaseSelection);
         const formError = validateInfectionReport({
           assignment,
           grade: fixedGrade,
@@ -157,6 +170,7 @@ export default function FirebaseInfectionSubmitPage() {
           studentNumber,
           studentName,
           diseaseName,
+          diseaseError: validateInfectionDiseaseSelection(diseaseSelection),
         });
 
         return (
@@ -171,8 +185,8 @@ export default function FirebaseInfectionSubmitPage() {
             loadState={loadState}
             reports={reports}
             listState={listState}
-            values={{ grade, classNo, studentNumber, studentName, diseaseName, diagnosisDate, exclusionStartDate, exclusionEndDate, note }}
-            setters={{ setGrade, setClassNo, setStudentNumber, setStudentName, setDiseaseName, setDiagnosisDate, setExclusionStartDate, setExclusionEndDate, setNote }}
+            values={{ grade, classNo, studentNumber, studentName, selectedDisease, otherDiseaseName, diagnosisDate, exclusionStartDate, exclusionEndDate, note }}
+            setters={{ setGrade, setClassNo, setStudentNumber, setStudentName, setSelectedDisease, setOtherDiseaseName, setDiagnosisDate, setExclusionStartDate, setExclusionEndDate, setNote }}
             submitState={submitState}
             onLoadReports={() => refreshReports(assignment)}
             onSubmit={(event) => handleSubmit(event, user, assignment)}
@@ -220,7 +234,15 @@ function InfectionForm(props) {
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="번호"><input type="number" min="1" value={values.studentNumber} onChange={(event) => setters.setStudentNumber(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
             <Field label="학생 이름"><input type="text" value={values.studentName} onChange={(event) => setters.setStudentName(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
-            <Field label="감염병명"><input type="text" value={values.diseaseName} onChange={(event) => setters.setDiseaseName(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
+            <InfectionDiseaseFields
+              selectedDisease={values.selectedDisease}
+              otherDiseaseName={values.otherDiseaseName}
+              onDiseaseChange={(nextDisease) => {
+                setters.setSelectedDisease(nextDisease);
+                if (nextDisease !== OTHER_INFECTION_DISEASE) setters.setOtherDiseaseName("");
+              }}
+              onOtherDiseaseNameChange={setters.setOtherDiseaseName}
+            />
             <Field label="진단일"><input type="date" value={values.diagnosisDate} onChange={(event) => setters.setDiagnosisDate(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
             <Field label="등교중지 시작일"><input type="date" value={values.exclusionStartDate} onChange={(event) => setters.setExclusionStartDate(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
             <Field label="등교중지 종료일"><input type="date" value={values.exclusionEndDate} onChange={(event) => setters.setExclusionEndDate(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20" /></Field>
