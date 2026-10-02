@@ -43,7 +43,7 @@ function ResultReport({ data }) {
   return (
     <section className="border-t border-[#DDEAE7] pt-4">
       <h3 className="text-sm font-semibold text-[#102047]">결과보고서 입력값 미리보기</h3>
-      <p className="mt-1 text-xs text-[#627083]">소재지·교육시간·교육방법은 공식 양식을 확인해 입력해야 합니다. HWPX 생성은 이번 단계에 포함되지 않습니다.</p>
+      <p className="mt-1 break-keep text-xs text-[#627083]">소재지·교육시간·교육방법은 공식 양식을 확인해 입력해야 합니다. HWPX 생성은 이번 단계에 포함되지 않습니다.</p>
       <dl className="mt-2 grid gap-x-5 gap-y-2 sm:grid-cols-2">{items.map(([label, value]) => <div key={label} className="flex justify-between gap-3 border-b border-[#DDEAE7] py-1 text-sm"><dt className="text-[#627083]">{label}</dt><dd className="text-right font-medium text-[#102047]">{value || "입력 필요"}</dd></div>)}</dl>
     </section>
   );
@@ -83,7 +83,7 @@ function ReportsContent({ displayName }) {
   }
 
   return (
-    <FirebaseV2PageShell label="관리자" title="법정의무연수 보고서" description="현재 재직 대상자와 연구부 원본을 대조해 이수명부를 만듭니다." displayName={displayName}>
+    <FirebaseV2PageShell label="관리자" title="법정의무연수 보고서" description="재직 대상자와 연구부 원본을 대조합니다." displayName={displayName}>
       <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
         <h2 className="text-[16px] font-semibold text-[#102047]">보고서 선택</h2>
         <div className="mt-2 divide-y divide-[#DDEAE7] border-y border-[#DDEAE7]">
@@ -105,7 +105,7 @@ function ReportsContent({ displayName }) {
           <Count label="현재 대상" value={preview.targetCount} /><Count label="이수완료" value={preview.completedCount} /><Count label="확인필요" value={preview.unknownCount} /><Count label="명시적 미이수" value={preview.incompleteCount} />
         </dl>
         {preview.unknownCount > 0 && <p className="text-[13px] text-[#9A5B00]">확인필요 {preview.unknownCount}명은 이수명부에서 제외됩니다.</p>}
-        {selected.id === "childAbuse" && preview.completionDateMissing > 0 && <p className="text-[13px] text-[#9A5B00]">완료자의 교육수료일 누락 {preview.completionDateMissing}건은 Excel에서 빈칸으로 표시됩니다.</p>}
+        {selected.id === "childAbuse" && preview.completionDateMissing > 0 && <p className="break-keep text-[13px] text-[#9A5B00]">완료자의 교육수료일 누락 {preview.completionDateMissing}건은 Excel에서 빈칸으로 표시됩니다.</p>}
         {preview.blockingReasons.length > 0 && <p role="alert" className="rounded-[9px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-[13px] font-medium text-[#B42318]">{preview.blockingReasons.join(" · ")}. 다운로드할 수 없습니다.</p>}
         {preview.performance && <Performance performance={preview.performance} />}
         {preview.resultReport && <ResultReport data={preview.resultReport} />}
