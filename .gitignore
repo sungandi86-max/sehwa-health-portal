@@ -6,3 +6,5 @@ dist
 firebase-service-account*.json
 .migration/
 .DS_Store
+.vercel/
+.env.*.local
