@@ -145,6 +145,9 @@ export function planInfectionSheetProjection(documents, sheetState) {
   }
 
   const rowsByNumber = new Map((sheetState.rows || []).map((row) => [row.rowNumber, row.values]));
+  const formulasByNumber = new Map(
+    (sheetState.formulaRows || []).map((row) => [row.rowNumber, row.values])
+  );
   const managedRows = new Set((sheetState.metadata || []).map((item) => item.rowNumber));
   const reservedRows = new Set(managedRows);
   const duplicateIds = new Set(
@@ -180,9 +183,19 @@ export function planInfectionSheetProjection(documents, sheetState) {
     if (existingRows.length === 1) {
       const rowNumber = existingRows[0];
       const rowValues = rowsByNumber.get(rowNumber) || [];
+      const formulaValues = formulasByNumber.get(rowNumber) || [];
       const initializeReportComplete = rowValues[10] === undefined || rowValues[10] === "";
-      if (!rowMatches(rowValues, desired) || initializeReportComplete) {
-        operations.push({ type: "update", rowNumber, desired, initializeReportComplete });
+      const initializeSequence = !String(formulaValues[0] || "").startsWith("=");
+      const initializeMonth = !String(formulaValues[12] || "").startsWith("=");
+      if (!rowMatches(rowValues, desired) || initializeReportComplete || initializeSequence || initializeMonth) {
+        operations.push({
+          type: "update",
+          rowNumber,
+          desired,
+          initializeReportComplete,
+          initializeSequence,
+          initializeMonth,
+        });
       }
       continue;
     }
@@ -270,6 +283,17 @@ function findFormulaSourceRow(sheetState, targetRow, columnIndex) {
   return null;
 }
 
+function targetHasFormula(sheetState, targetRow, columnIndex) {
+  const row = sheetState.formulaRows?.find((item) => item.rowNumber === targetRow);
+  return String(row?.values?.[columnIndex] || "").startsWith("=");
+}
+
+export function getInfectionSheetFallbackFormula(rowNumber, columnIndex) {
+  if (columnIndex === 0) return "=ROW()-4";
+  if (columnIndex === 12) return `=IF(H${rowNumber}="","",TEXT(H${rowNumber},"yyyy-mm"))`;
+  return "";
+}
+
 async function prepareOperationRow(auth, spreadsheetId, sheetState, operation) {
   const requests = [];
   if (operation.type === "insert" && operation.rowNumber > sheetState.rowCount) {
@@ -306,9 +330,17 @@ async function prepareOperationRow(auth, spreadsheetId, sheetState, operation) {
       });
     }
 
-    for (const columnIndex of [0, 12]) {
-      const sourceRow = findFormulaSourceRow(sheetState, operation.rowNumber, columnIndex);
-      if (!sourceRow) continue;
+  }
+
+  for (const columnIndex of [0, 12]) {
+    const shouldInitialize =
+      operation.type === "insert" ||
+      (columnIndex === 0 && operation.initializeSequence) ||
+      (columnIndex === 12 && operation.initializeMonth);
+    if (!shouldInitialize || targetHasFormula(sheetState, operation.rowNumber, columnIndex)) continue;
+
+    const sourceRow = findFormulaSourceRow(sheetState, operation.rowNumber, columnIndex);
+    if (sourceRow) {
       requests.push({
         copyPaste: {
           source: {
@@ -328,7 +360,30 @@ async function prepareOperationRow(auth, spreadsheetId, sheetState, operation) {
           pasteType: "PASTE_FORMULA",
         },
       });
+      continue;
     }
+
+    requests.push({
+      updateCells: {
+        start: {
+          sheetId: sheetState.sheetId,
+          rowIndex: operation.rowNumber - 1,
+          columnIndex,
+        },
+        rows: [
+          {
+            values: [
+              {
+                userEnteredValue: {
+                  formulaValue: getInfectionSheetFallbackFormula(operation.rowNumber, columnIndex),
+                },
+              },
+            ],
+          },
+        ],
+        fields: "userEnteredValue",
+      },
+    });
   }
 
   if (operation.type === "insert") {

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   INFECTION_CASE_STATUS_LABELS,
   buildInfectionSheetValues,
+  getInfectionSheetFallbackFormula,
   planInfectionSheetProjection,
 } from "./infectionSheetProjection.js";
 
@@ -21,6 +22,18 @@ function infectionDocument(id, caseStatus = "new") {
       report: { note: "", caseStatus },
     },
   };
+}
+
+function matchingRowValues(document) {
+  const desired = buildInfectionSheetValues(document);
+  const values = [];
+  desired.bToJ.forEach((value, index) => {
+    values[index + 1] = value;
+  });
+  values[10] = false;
+  values[11] = desired.note;
+  values[13] = desired.caseStatus;
+  return values;
 }
 
 test("new document plans an insert without touching unmanaged rows", () => {
@@ -120,6 +133,49 @@ test("partial insert recovery restores an empty report-complete checkbox", () =>
   });
   assert.equal(plan.operations.length, 1);
   assert.equal(plan.operations[0].initializeReportComplete, true);
+  assert.equal(plan.operations[0].initializeSequence, true);
+  assert.equal(plan.operations[0].initializeMonth, true);
+});
+
+test("managed rows with literal A and M values are repaired with formulas", () => {
+  const document = infectionDocument("doc-1");
+  const rowValues = matchingRowValues(document);
+  rowValues[0] = 1;
+  rowValues[12] = "2026-09";
+  const plan = planInfectionSheetProjection([document], {
+    rowCount: 10,
+    rows: [{ rowNumber: 5, values: rowValues }],
+    formulaRows: [{ rowNumber: 5, values: rowValues }],
+    metadata: [{ docId: "doc-1", rowNumber: 5 }],
+  });
+
+  assert.equal(plan.operations.length, 1);
+  assert.equal(plan.operations[0].initializeSequence, true);
+  assert.equal(plan.operations[0].initializeMonth, true);
+});
+
+test("managed rows preserve existing A and M formulas even when rendered values can be blank", () => {
+  const document = infectionDocument("doc-1");
+  const rowValues = matchingRowValues(document);
+  rowValues[0] = 1;
+  rowValues[12] = "";
+  const formulaValues = [...rowValues];
+  formulaValues[0] = "=ROW()-4";
+  formulaValues[12] = '=IF(H5="","",TEXT(H5,"yyyy-mm"))';
+  const plan = planInfectionSheetProjection([document], {
+    rowCount: 10,
+    rows: [{ rowNumber: 5, values: rowValues }],
+    formulaRows: [{ rowNumber: 5, values: formulaValues }],
+    metadata: [{ docId: "doc-1", rowNumber: 5 }],
+  });
+
+  assert.equal(plan.operations.length, 0);
+});
+
+test("missing infection row formula sources have deterministic safe fallbacks", () => {
+  assert.equal(getInfectionSheetFallbackFormula(5, 0), "=ROW()-4");
+  assert.equal(getInfectionSheetFallbackFormula(5, 12), '=IF(H5="","",TEXT(H5,"yyyy-mm"))');
+  assert.equal(getInfectionSheetFallbackFormula(5, 4), "");
 });
 
 test("projection planning leaves Firestore source data unchanged", () => {
