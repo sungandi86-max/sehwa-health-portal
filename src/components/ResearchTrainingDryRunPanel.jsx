@@ -54,7 +54,11 @@ function formatApplySyncedAt(value) {
 
 function ResultPanel({ data }) {
   const headerMissing = data.headerInfo?.parseStatus === "header_not_found";
+  const exceptionHeaderMissing = data.exceptions?.parseStatus === "header_not_found";
   const applySyncedAt = formatApplySyncedAt(data.apply?.syncedAt);
+  const applyAllowed = data.safety?.applyAllowed === true;
+  const exceptionErrors =
+    Number(data.matching?.invalidExceptionRows || 0) + Number(data.exceptions?.duplicateConfirmedRows || 0);
 
   return (
     <div className="mt-3 rounded-[12px] border border-[#DDEAE7] bg-[#F3F8F6] p-3">
@@ -63,13 +67,36 @@ function ResultPanel({ data }) {
           성명/이수상태 헤더를 자동 확인하지 못했습니다. 연구부 시트 구조를 확인해 주세요.
         </p>
       )}
-      <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {exceptionHeaderMissing && (
+        <p className="mb-3 rounded-[8px] border border-[#F3D8A8] bg-[#FFFDF7] px-3 py-2 text-[12px] font-semibold leading-5 text-[#9A5B00]">
+          법정의무연수 예외 시트 헤더를 확인하지 못했습니다.
+        </p>
+      )}
+      <p
+        className={`mb-3 rounded-[8px] border px-3 py-2 text-[12px] font-semibold leading-5 [word-break:keep-all] ${
+          applyAllowed
+            ? "border-[#BFEBDC] bg-white text-[#08754B]"
+            : "border-[#F3D8A8] bg-[#FFFDF7] text-[#9A5B00]"
+        }`}
+      >
+        {applyAllowed ? "안전조건을 충족해 현황 새로고침이 가능합니다." : "안전조건을 충족하지 않아 현황 새로고침이 차단됩니다."}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <CountItem label="원본 행" value={data.rows?.sourceRows} />
         <CountItem label="유효 행" value={data.rows?.validRows} />
-        <CountItem label="매칭" value={data.matching?.matched} tone="text-[#08754B]" />
-        <CountItem label="미매칭" value={data.matching?.unmatched} tone="text-[#9A5B00]" />
+        <CountItem label="원본 필수값 오류" value={data.rows?.missingNameRows} tone="text-[#9A5B00]" />
+        <CountItem label="현재 재직 매칭" value={data.matching?.matchedActive} tone="text-[#08754B]" />
+        <CountItem label="휴직 제외" value={data.matching?.excludedLeave} />
+        <CountItem label="퇴직 제외" value={data.matching?.excludedRetired} />
+        <CountItem label="직군·비대상 제외" value={data.matching?.excludedByTargetRule} />
+        <CountItem label="확인된 과거 직원 제외" value={data.matching?.confirmedSourceOnlyExcluded} />
+        <CountItem label="확인 필요한 source-only" value={data.matching?.unresolvedSourceOnly} tone="text-[#9A5B00]" />
+        <CountItem label="연구부 명단에 없는 재직자" value={data.matching?.canonicalActiveMissingFromSource} tone="text-[#9A5B00]" />
         <CountItem label="모호" value={data.matching?.ambiguous} tone="text-[#9A5B00]" />
         <CountItem label="중복 staffId" value={data.matching?.duplicateStaffIds} tone="text-[#3154A3]" />
+        <CountItem label="명단 중복 staffId" value={data.matching?.duplicateCanonicalStaffIds} tone="text-[#9A5B00]" />
+        <CountItem label="재직상태 오류" value={data.matching?.invalidEmploymentStatus} tone="text-[#9A5B00]" />
+        <CountItem label="예외 목록 오류" value={exceptionErrors} tone="text-[#9A5B00]" />
       </div>
       <div className="mt-2 grid gap-2 sm:grid-cols-4">
         <CountItem label="이수완료" value={data.status?.completed} tone="text-[#08754B]" />
@@ -93,8 +120,8 @@ function ResultPanel({ data }) {
         <p className="mb-2 text-[12px] font-bold text-[#102047]">이수상태 값 종류</p>
         <StatusValueList values={data.statusValues} />
       </div>
-      <p className="mt-3 text-[12px] font-semibold leading-5 text-[#627083]">
-        미매칭/모호가 0건이면 snapshot 후보로 검토할 수 있습니다. 확인필요는 원본 상태값이 공란이거나 예상 범위를 벗어난 경우입니다.
+      <p className="mt-3 text-[12px] font-semibold leading-5 text-[#627083] [word-break:keep-all]">
+        원본 필수값 오류, 미확인 원본 전용 행, 연구부 명단에 없는 재직자, 모호·중복·재직상태·예외 목록 오류가 모두 0건이어야 현황을 새로고침할 수 있습니다.
       </p>
     </div>
   );
@@ -135,6 +162,7 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
   };
 
   const isWorking = result.status === "loading" || result.status === "applying";
+  const applyBlocked = result.status === "success" && result.data?.safety?.applyAllowed === false;
 
   return (
     <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
@@ -158,7 +186,7 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
           <button
             type="button"
             onClick={handleApply}
-            disabled={isWorking}
+            disabled={isWorking || applyBlocked}
             className="min-h-10 rounded-[9px] border border-[#20A982] bg-[#20A982] px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-[#08754B] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {result.status === "applying" ? "새로고침 중..." : "연수 현황 새로고침"}

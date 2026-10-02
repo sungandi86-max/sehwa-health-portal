@@ -2,6 +2,17 @@ const COMPLETED_VALUE = "이수완료";
 const INCOMPLETE_VALUES = new Set(["미이수", "미완료", "미수료", "미완"]);
 const HEALTH_TRAINING_COLUMNS = ["감염병", "4대폭력", "아동학대", "장애인학대"];
 const HEALTH_MANDATORY_TRAINING_TASK_ID = "health-mandatory-training-2026";
+const ACTIVE_EMPLOYMENT_STATUS = "재직";
+const LEAVE_EMPLOYMENT_STATUS = "휴직";
+const RETIRED_EMPLOYMENT_STATUS = "퇴직";
+const VALID_EMPLOYMENT_STATUSES = new Set([
+  ACTIVE_EMPLOYMENT_STATUS,
+  LEAVE_EMPLOYMENT_STATUS,
+  RETIRED_EMPLOYMENT_STATUS,
+]);
+const HOURLY_INSTRUCTOR_POSITIONS = new Set(["강사", "시간강사"]);
+const ALLOWED_EXCEPTION_REASONS = new Set(["퇴직", "전출", "기타"]);
+const CONFIRMED_EXCEPTION_STATUS = "확인완료";
 
 const RESEARCH_HEADERS = {
   sequence: ["순", "순번", "번호", "no"],
@@ -10,6 +21,15 @@ const RESEARCH_HEADERS = {
   position: ["직책", "직위", "직급", "보직", "업무", "position"],
   completionNumber: ["이수번호", "이수 번호", "수료번호", "수료 번호"],
   status: ["이수상태", "이수여부", "수료상태", "완료여부", "이수", "상태", "status"],
+};
+
+const EXCEPTION_HEADERS = {
+  year: ["적용연도", "연도", "year"],
+  realName: ["성명", "이름", "실명", "name"],
+  position: ["직책", "직위", "position"],
+  reason: ["제외사유", "사유", "reason"],
+  confirmationStatus: ["확인상태", "상태", "confirmationStatus"],
+  note: ["비고", "메모", "note"],
 };
 
 function text(value) {
@@ -87,6 +107,87 @@ function normalizeStatus(value) {
   return "unknown";
 }
 
+function findExceptionHeaderRow(rows) {
+  for (let rowIndex = 0; rowIndex < Math.min(rows.length, 20); rowIndex += 1) {
+    const row = rows[rowIndex] || [];
+    const indexes = {};
+    for (const [field, aliases] of Object.entries(EXCEPTION_HEADERS)) {
+      const index = findHeaderIndex(row, aliases);
+      indexes[field] = index === -1 ? null : index;
+    }
+    if (
+      indexes.year !== null &&
+      indexes.realName !== null &&
+      indexes.position !== null &&
+      indexes.reason !== null &&
+      indexes.confirmationStatus !== null
+    ) {
+      return { headerRowIndex: rowIndex, dataStartRowIndex: rowIndex + 1, indexes, parseStatus: "success" };
+    }
+  }
+  return {
+    headerRowIndex: 0,
+    dataStartRowIndex: 1,
+    indexes: Object.fromEntries(Object.keys(EXCEPTION_HEADERS).map((key) => [key, null])),
+    parseStatus: "header_not_found",
+  };
+}
+
+function exceptionKey(year, realName, position) {
+  return `${Number(year)}|${exactText(realName)}|${exactText(position)}`;
+}
+
+export function summarizeSourceOnlyExceptions(values, taskYear) {
+  const headerInfo = findExceptionHeaderRow(values);
+  if (headerInfo.parseStatus !== "success") {
+    return {
+      headerInfo,
+      rows: [],
+      stats: { sourceRows: 0, currentYearRows: 0, confirmedRows: 0, invalidRows: 0, duplicateConfirmedRows: 0 },
+    };
+  }
+
+  const rows = [];
+  const confirmedKeys = new Set();
+  let invalidRows = 0;
+  let duplicateConfirmedRows = 0;
+
+  values.slice(headerInfo.dataStartRowIndex).forEach((row) => {
+    if (!row.some((value) => Boolean(text(value)))) return;
+    const year = Number(cell(row, headerInfo.indexes, "year"));
+    const realName = cell(row, headerInfo.indexes, "realName");
+    const position = cell(row, headerInfo.indexes, "position");
+    const reason = cell(row, headerInfo.indexes, "reason");
+    const confirmationStatus = cell(row, headerInfo.indexes, "confirmationStatus");
+    const isCurrentYear = year === Number(taskYear);
+    const isValid =
+      Number.isInteger(year) &&
+      Boolean(realName) &&
+      Boolean(position) &&
+      ALLOWED_EXCEPTION_REASONS.has(exactText(reason)) &&
+      [CONFIRMED_EXCEPTION_STATUS, "확인필요"].includes(exactText(confirmationStatus));
+    const isConfirmed = isCurrentYear && isValid && exactText(confirmationStatus) === CONFIRMED_EXCEPTION_STATUS;
+    const key = exceptionKey(year, realName, position);
+
+    if (isCurrentYear && !isValid) invalidRows += 1;
+    if (isConfirmed && confirmedKeys.has(key)) duplicateConfirmedRows += 1;
+    if (isConfirmed) confirmedKeys.add(key);
+    rows.push({ year, realName, position, reason, confirmationStatus, isCurrentYear, isValid, isConfirmed, key });
+  });
+
+  return {
+    headerInfo,
+    rows,
+    stats: {
+      sourceRows: rows.length,
+      currentYearRows: rows.filter((row) => row.isCurrentYear).length,
+      confirmedRows: rows.filter((row) => row.isConfirmed).length,
+      invalidRows,
+      duplicateConfirmedRows,
+    },
+  };
+}
+
 function addUnique(index, key, value) {
   if (!key.includes("|") || key.endsWith("|")) return;
   const existing = index.get(key) || [];
@@ -108,6 +209,20 @@ function buildDirectoryIndexes(directory) {
   };
 }
 
+function targetEnabled(value) {
+  const normalized = headerKey(value);
+  if (!normalized) return true;
+  return !["false", "n", "no", "0", "제외", "미대상", "퇴직", "전출"].includes(normalized);
+}
+
+function isCurrentTarget(item) {
+  return (
+    exactText(item?.employmentStatus) === ACTIVE_EMPLOYMENT_STATUS &&
+    targetEnabled(item?.target) &&
+    !HOURLY_INSTRUCTOR_POSITIONS.has(exactText(item?.position))
+  );
+}
+
 function uniqueLookup(index, key) {
   if (!key || key.endsWith("|")) return { kind: "missing" };
   const matches = index.get(key) || [];
@@ -123,6 +238,96 @@ function resolveStaff(sourceRow, indexes) {
   if (byPosition.kind === "matched") return { kind: "matched", match: byPosition.match, criterion: "realName_position_exact" };
   if (byPosition.kind === "ambiguous") return { kind: "ambiguous", criterion: "realName_position_exact" };
   return { kind: "unmatched", criterion: position ? "realName_position_exact" : "no_secondary_identifier" };
+}
+
+function buildPlan(sourceRows, directory, exceptionSummary, taskYear) {
+  const indexes = buildDirectoryIndexes(directory);
+  const confirmedExceptionKeys = new Set(
+    (exceptionSummary?.rows || []).filter((row) => row.isConfirmed).map((row) => row.key)
+  );
+  const sourceKeys = new Set();
+  const matchedActiveItems = [];
+  const seenStaffIds = new Set();
+  const duplicateStaffIds = new Set();
+  const counts = {
+    matchedActive: 0,
+    excludedLeave: 0,
+    excludedRetired: 0,
+    excludedByTargetRule: 0,
+    confirmedSourceOnlyExcluded: 0,
+    unresolvedSourceOnly: 0,
+    canonicalActiveMissingFromSource: 0,
+    ambiguous: 0,
+    completed: 0,
+    incomplete: 0,
+    unknown: 0,
+  };
+  const matchCriteria = {};
+  const issueReasons = {};
+
+  sourceRows.forEach((sourceRow) => {
+    const sourceKey = `${exactText(sourceRow.realName)}|${exactText(sourceRow.position)}`;
+    sourceKeys.add(sourceKey);
+    const resolved = resolveStaff(sourceRow, indexes);
+    if (resolved.kind === "ambiguous") {
+      counts.ambiguous += 1;
+      issueReasons[resolved.criterion] = (issueReasons[resolved.criterion] || 0) + 1;
+      return;
+    }
+    if (resolved.kind === "unmatched") {
+      const key = exceptionKey(taskYear, sourceRow.realName, sourceRow.position);
+      if (confirmedExceptionKeys.has(key)) {
+        counts.confirmedSourceOnlyExcluded += 1;
+      } else {
+        counts.unresolvedSourceOnly += 1;
+        issueReasons.source_only_unresolved = (issueReasons.source_only_unresolved || 0) + 1;
+      }
+      return;
+    }
+
+    const employmentStatus = exactText(resolved.match.employmentStatus);
+    if (employmentStatus === LEAVE_EMPLOYMENT_STATUS) {
+      counts.excludedLeave += 1;
+      return;
+    }
+    if (employmentStatus === RETIRED_EMPLOYMENT_STATUS) {
+      counts.excludedRetired += 1;
+      return;
+    }
+    if (!isCurrentTarget(resolved.match)) {
+      counts.excludedByTargetRule += 1;
+      return;
+    }
+
+    counts.matchedActive += 1;
+    matchCriteria[resolved.criterion] = (matchCriteria[resolved.criterion] || 0) + 1;
+    if (seenStaffIds.has(resolved.match.staffId)) duplicateStaffIds.add(resolved.match.staffId);
+    seenStaffIds.add(resolved.match.staffId);
+    counts[normalizeStatus(sourceRow.sourceStatus)] += 1;
+    matchedActiveItems.push({ sourceRow, match: resolved.match });
+  });
+
+  const canonicalActiveMissingFromSource = directory.filter((item) => {
+    if (!isCurrentTarget(item)) return false;
+    return !sourceKeys.has(`${exactText(item.name)}|${exactText(item.position)}`);
+  });
+  counts.canonicalActiveMissingFromSource = canonicalActiveMissingFromSource.length;
+
+  return {
+    ...counts,
+    matchedActiveItems,
+    canonicalActiveMissingFromSourceItems: canonicalActiveMissingFromSource,
+    duplicateStaffIds: duplicateStaffIds.size,
+    duplicateCanonicalStaffIds: indexes.duplicateCanonicalStaffIds,
+    invalidEmploymentStatus: directory.filter(
+      (item) => !VALID_EMPLOYMENT_STATUSES.has(exactText(item.employmentStatus))
+    ).length,
+    invalidExceptionRows: exceptionSummary?.stats?.invalidRows || 0,
+    duplicateConfirmedExceptions: exceptionSummary?.stats?.duplicateConfirmedRows || 0,
+    canonicalCurrentTarget: directory.filter(isCurrentTarget).length,
+    matchCriteria,
+    issueReasons,
+  };
 }
 
 export function summarizeResearchRows(values) {
@@ -190,49 +395,24 @@ export function summarizeResearchRows(values) {
   };
 }
 
-export function summarizePlan(sourceRows, directory) {
-  const indexes = buildDirectoryIndexes(directory);
-  const seenStaffIds = new Set();
-  const duplicateStaffIds = new Set();
-  const counts = { matched: 0, unmatched: 0, ambiguous: 0, completed: 0, incomplete: 0, unknown: 0 };
-  const matchCriteria = {};
-  const issueReasons = {};
-
-  sourceRows.forEach((sourceRow) => {
-    const resolved = resolveStaff(sourceRow, indexes);
-    if (resolved.kind !== "matched") {
-      counts[resolved.kind] += 1;
-      issueReasons[resolved.criterion] = (issueReasons[resolved.criterion] || 0) + 1;
-      return;
-    }
-
-    counts.matched += 1;
-    matchCriteria[resolved.criterion] = (matchCriteria[resolved.criterion] || 0) + 1;
-    if (seenStaffIds.has(resolved.match.staffId)) duplicateStaffIds.add(resolved.match.staffId);
-    seenStaffIds.add(resolved.match.staffId);
-    counts[normalizeStatus(sourceRow.sourceStatus)] += 1;
-  });
-
+export function summarizePlan(sourceRows, directory, exceptionSummary = null, { taskYear = 2026 } = {}) {
+  const plan = buildPlan(sourceRows, directory, exceptionSummary, taskYear);
+  const { matchedActiveItems, canonicalActiveMissingFromSourceItems, ...summary } = plan;
   return {
-    ...counts,
-    duplicateStaffIds: duplicateStaffIds.size,
-    duplicateCanonicalStaffIds: indexes.duplicateCanonicalStaffIds,
-    matchCriteria,
-    issueReasons,
+    ...summary,
+    matched: summary.matchedActive,
+    unmatched: summary.unresolvedSourceOnly,
   };
 }
 
-export function buildSnapshotPlan(sourceRows, directory) {
-  const indexes = buildDirectoryIndexes(directory);
+export function buildSnapshotPlan(sourceRows, directory, exceptionSummary = null, { taskYear = 2026 } = {}) {
+  const plan = buildPlan(sourceRows, directory, exceptionSummary, taskYear);
   const docs = [];
   const seenStaffIds = new Set();
   const duplicateStaffIds = new Set();
 
-  sourceRows.forEach((sourceRow) => {
-    const resolved = resolveStaff(sourceRow, indexes);
-    if (resolved.kind !== "matched") return;
-
-    const staffId = resolved.match.staffId;
+  plan.matchedActiveItems.forEach(({ sourceRow, match }) => {
+    const staffId = match.staffId;
     if (seenStaffIds.has(staffId)) duplicateStaffIds.add(staffId);
     seenStaffIds.add(staffId);
     docs.push({
@@ -251,6 +431,7 @@ export function buildSnapshotPlan(sourceRows, directory) {
   return {
     docs,
     duplicateStaffIds: duplicateStaffIds.size,
+    matchedActive: plan.matchedActive,
   };
 }
 

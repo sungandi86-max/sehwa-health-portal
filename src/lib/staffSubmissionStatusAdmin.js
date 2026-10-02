@@ -2,10 +2,12 @@ import { collection, getDocs, limit, query, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { auth, db } from "./firebase.js";
 import {
+  HEALTH_MANDATORY_TRAINING_TASK_ID,
   STAFF_STATUS_LABELS,
   STAFF_STATUS_TASK_IDS,
   getStaffStatusLabel,
 } from "./staffSubmissionStatus.js";
+import { reconcileCurrentTaskStatusItems } from "./staffSubmissionStatusCurrentSummary.js";
 
 const ASSIGNMENT_LIMIT = 500;
 const STAFF_DIRECTORY_API = "/api/firebase/staff-directory";
@@ -132,6 +134,37 @@ async function getCanonicalStaffDirectory() {
   }
 }
 
+async function getHealthMandatoryTrainingCurrentTargetStaffIds() {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("법정의무연수 현재 대상을 확인할 수 없습니다.");
+
+  const idToken = await currentUser.getIdToken();
+  const response = await fetch(`${STAFF_DIRECTORY_API}?resource=health-mandatory-training-current-targets`, {
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+    },
+    cache: "no-store",
+  });
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok || result?.ok !== true || !Array.isArray(result.currentTargetStaffIds)) {
+    throw new Error("법정의무연수 현재 대상을 확인할 수 없습니다.");
+  }
+
+  return result.currentTargetStaffIds;
+}
+
+async function getHealthMandatoryTrainingCurrentTargetsResult(required) {
+  if (!required) return { status: "not-required", staffIds: [] };
+
+  try {
+    const staffIds = await getHealthMandatoryTrainingCurrentTargetStaffIds();
+    return { status: "success", staffIds };
+  } catch {
+    return { status: "error", staffIds: null };
+  }
+}
+
 async function getCurrentAssignmentDirectory() {
   try {
     const assignmentSnapshot = await getDocs(
@@ -197,24 +230,36 @@ export async function getAdminStaffSubmissionStatusOverview() {
       return left.title.localeCompare(right.title, "ko");
     });
 
-  const [directoryResult, assignmentDirectoryResult, ...statusSnapshots] = await Promise.all([
+  const hasHealthMandatoryTrainingTask = tasks.some((task) => task.taskId === HEALTH_MANDATORY_TRAINING_TASK_ID);
+  const [directoryResult, assignmentDirectoryResult, currentTargetsResult, ...statusSnapshots] = await Promise.all([
     getCanonicalStaffDirectory(),
     getCurrentAssignmentDirectory(),
+    getHealthMandatoryTrainingCurrentTargetsResult(hasHealthMandatoryTrainingTask),
     ...tasks.map((task) =>
       getDocs(query(collection(db, "staff_submission_status"), where("taskId", "==", task.taskId)))
     ),
   ]);
 
-  const taskSummaries = tasks.map((task, index) => {
-    const items = statusSnapshots[index].docs
+  const taskSummaries = tasks.flatMap((task, index) => {
+    if (task.taskId === HEALTH_MANDATORY_TRAINING_TASK_ID && currentTargetsResult.status !== "success") {
+      return [];
+    }
+
+    const allItems = statusSnapshots[index].docs
       .map(normalizeStatus)
-      .filter((item) => item.taskId === task.taskId)
+      .filter((item) => item.taskId === task.taskId);
+    const currentSummary = reconcileCurrentTaskStatusItems({
+      taskId: task.taskId,
+      items: allItems,
+      currentTargetStaffIds: currentTargetsResult.staffIds,
+    });
+    const items = currentSummary.items
       .map((item) => decorateStatus(item, directoryResult.directory, assignmentDirectoryResult.directory))
       .sort(sortStatusItems);
     const summary = countStatuses(items);
     const latestSyncedAt = items.reduce((latest, item) => (toMillis(item.syncedAt) > toMillis(latest) ? item.syncedAt : latest), null);
 
-    return {
+    return [{
       ...task,
       items,
       summary: {
@@ -223,13 +268,15 @@ export async function getAdminStaffSubmissionStatusOverview() {
         directoryLinked: items.filter((item) => item.hasDirectory).length,
         displayIdentityLinked: items.filter((item) => item.hasDisplayIdentity).length,
         latestSyncedAtLabel: formatSyncedAt(latestSyncedAt),
+        preservedOrphans: currentSummary.preservedOrphans,
       },
-    };
+    }];
   });
 
   return {
     tasks: taskSummaries,
     directoryStatus: directoryResult.status,
     assignmentDirectoryStatus: assignmentDirectoryResult.status,
+    healthMandatoryTrainingTargetStatus: currentTargetsResult.status,
   };
 }

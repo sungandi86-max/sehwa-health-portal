@@ -247,6 +247,14 @@ function AdminStatusContent({ displayName }) {
             </section>
           )}
 
+          {overview.healthMandatoryTrainingTargetStatus === "error" && (
+            <section className="rounded-[12px] border border-[#F3D8A8] bg-[#FFFDF7] p-4">
+              <p className="text-[13px] font-semibold leading-5 text-[#9A5B00]">
+                법정의무연수 현재 대상을 확인하지 못했습니다. 결핵검진과 심폐소생술 현황은 계속 확인할 수 있습니다.
+              </p>
+            </section>
+          )}
+
           {overview.directoryStatus === "success" && selectedTask.summary.directoryLinked < selectedTask.summary.total && (
             <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4">
               <p className="text-[13px] font-semibold leading-5 text-[#627083]">
@@ -260,6 +268,11 @@ function AdminStatusContent({ displayName }) {
               <p className="text-[12px] font-semibold leading-5 text-[#627083]">
                 연구부 시트에서 '이수완료'로 표시되지 않은 경우 미이수로 표시됩니다.
               </p>
+              {selectedTask.summary.preservedOrphans > 0 && (
+                <p className="mt-1 text-[12px] font-semibold leading-5 text-[#627083]">
+                  과거/비대상 기록 {selectedTask.summary.preservedOrphans}건을 보존하고 있으며 현재 대상 집계에서는 제외합니다.
+                </p>
+              )}
             </section>
           )}
 

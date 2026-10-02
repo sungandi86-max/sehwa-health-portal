@@ -7,11 +7,15 @@ const DEFAULT_HEALTH_SPREADSHEET_ID = "1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIB
 const STAFF_ROSTER_SHEET_NAME = "교직원명단";
 const STAFF_ROSTER_RANGE = `${STAFF_ROSTER_SHEET_NAME}!A1:Z1000`;
 
+export const EMPLOYMENT_STATUSES = new Set(["재직", "휴직", "퇴직"]);
+
 const ROSTER_HEADERS = {
   staffId: ["교직원ID", "교직원Id", "직원ID", "직원Id", "staffId", "staff_id"],
   name: ["성명", "이름", "실명", "name"],
   position: ["직책", "직위", "보직", "업무", "position"],
   department: ["소속부서", "부서", "소속/부서", "department"],
+  target: ["제출대상", "대상", "target"],
+  employmentStatus: ["재직상태", "employmentStatus", "employment_status"],
 };
 
 export function getAssignmentId(uid, schoolYear = CURRENT_SCHOOL_YEAR, semester = CURRENT_SEMESTER) {
@@ -65,12 +69,17 @@ function findHeaderRow(rows) {
       const index = findHeaderIndex(row, aliases);
       indexes[field] = index === -1 ? null : index;
     }
-    if (indexes.staffId !== null && indexes.name !== null && indexes.position !== null) {
+    if (
+      indexes.staffId !== null &&
+      indexes.name !== null &&
+      indexes.position !== null &&
+      indexes.employmentStatus !== null
+    ) {
       return { headerRowIndex: rowIndex, indexes };
     }
   }
 
-  throw new Error("교직원명단에서 교직원ID/성명/직책 헤더를 찾지 못했습니다.");
+  throw new Error("교직원명단에서 교직원ID/성명/직책/재직상태 헤더를 찾지 못했습니다.");
 }
 
 function cell(row, indexes, key) {
@@ -78,32 +87,51 @@ function cell(row, indexes, key) {
   return index === null || index === undefined ? "" : text(row[index]);
 }
 
-function normalizeDirectory(values) {
+export function normalizeDirectory(values, { allowInvalidEmploymentStatus = false } = {}) {
   const { headerRowIndex, indexes } = findHeaderRow(values);
   const rows = [];
   const staffIdCounts = new Map();
+  const employmentStatusCounts = { 재직: 0, 휴직: 0, 퇴직: 0 };
+  let invalidEmploymentStatus = 0;
 
   values.slice(headerRowIndex + 1).forEach((row) => {
     const staffId = cell(row, indexes, "staffId");
     const name = cell(row, indexes, "name");
     if (!staffId || !name) return;
 
+    const employmentStatus = cell(row, indexes, "employmentStatus");
+    if (EMPLOYMENT_STATUSES.has(employmentStatus)) {
+      employmentStatusCounts[employmentStatus] += 1;
+    } else {
+      invalidEmploymentStatus += 1;
+    }
+
     rows.push({
       staffId,
       name,
       position: cell(row, indexes, "position"),
       department: cell(row, indexes, "department"),
+      target: cell(row, indexes, "target"),
+      employmentStatus,
     });
     staffIdCounts.set(staffId, (staffIdCounts.get(staffId) || 0) + 1);
   });
 
-  return {
+  const result = {
     directory: rows,
     stats: {
       count: rows.length,
       duplicateStaffIds: [...staffIdCounts.values()].filter((count) => count > 1).length,
+      employmentStatus: employmentStatusCounts,
+      invalidEmploymentStatus,
     },
   };
+
+  if (!allowInvalidEmploymentStatus && invalidEmploymentStatus > 0) {
+    throw new Error("교직원명단의 재직상태에 공란 또는 허용되지 않은 값이 있습니다.");
+  }
+
+  return result;
 }
 
 export async function readGoogleSheetValues({ spreadsheetId, range }) {
@@ -124,11 +152,11 @@ export async function readGoogleSheetValues({ spreadsheetId, range }) {
   return Array.isArray(response.data.values) ? response.data.values : [];
 }
 
-export async function readStaffDirectory() {
+export async function readStaffDirectory({ allowInvalidEmploymentStatus = true } = {}) {
   return normalizeDirectory(await readGoogleSheetValues({
     spreadsheetId: process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || DEFAULT_HEALTH_SPREADSHEET_ID,
     range: STAFF_ROSTER_RANGE,
-  }));
+  }), { allowInvalidEmploymentStatus });
 }
 
 export async function findActiveStaffIdAssignments(

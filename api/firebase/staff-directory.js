@@ -1,4 +1,8 @@
-import { applyHealthMandatoryTrainingSnapshot, runHealthMandatoryTrainingDryRun } from "../../server/healthMandatoryTrainingDryRun.js";
+import {
+  applyHealthMandatoryTrainingSnapshot,
+  getHealthMandatoryTrainingCurrentTargets,
+  runHealthMandatoryTrainingDryRun,
+} from "../../server/healthMandatoryTrainingDryRun.js";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
 import { getAssignmentId, getBearerToken, readJsonBody, readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../../server/lib/staffDirectory.js";
 
@@ -97,8 +101,14 @@ export default async function handler(req, res) {
         return res.status(200).json(result);
       }
 
-      const summary = await runHealthMandatoryTrainingDryRun();
+      const summary = await runHealthMandatoryTrainingDryRun({ db: access.db });
       return res.status(200).json(summary);
+    }
+
+    if (req.query?.resource === "health-mandatory-training-current-targets") {
+      if (req.method !== "GET") return res.status(405).json({ ok: false, message: "지원하지 않는 요청입니다." });
+      const result = await getHealthMandatoryTrainingCurrentTargets({ db: access.db });
+      return res.status(200).json({ ok: true, ...result });
     }
 
     if (req.method !== "GET") return res.status(405).json({ ok: false, message: "지원하지 않는 요청입니다." });
@@ -114,6 +124,12 @@ export default async function handler(req, res) {
         return res.status(500).json({ ok: false, message: "연수 현황을 새로고침하지 못했습니다. 기존 현황은 유지됩니다." });
       }
       return res.status(500).json({ ok: false, message: "연구부 연수 시트 dry-run을 완료하지 못했습니다." });
+    }
+    if (req.query?.resource === "health-mandatory-training-current-targets") {
+      if (isPermissionError(error)) {
+        return res.status(403).json({ ok: false, message: "법정의무연수 현재 대상을 확인할 권한이 없습니다." });
+      }
+      return res.status(500).json({ ok: false, message: "법정의무연수 현재 대상을 확인하지 못했습니다." });
     }
     return res.status(500).json({ ok: false, message: "교직원명단을 불러오지 못했습니다." });
   }
