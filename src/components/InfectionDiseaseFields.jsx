@@ -5,7 +5,7 @@ import {
 } from "../lib/infectionDiseaseSelection.js";
 
 const controlClassName =
-  "min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20";
+  "min-h-[44px] w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20";
 
 function FieldLabel({ htmlFor, children }) {
   return <label htmlFor={htmlFor} className="text-sm font-semibold text-[#102047]">{children}</label>;

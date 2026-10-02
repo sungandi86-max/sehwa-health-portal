@@ -225,7 +225,7 @@ function InfectionForm(props) {
             <div><dt className="font-semibold text-[#102047]">학급</dt><dd className="mt-1 font-medium">{fixedGrade || "-"}학년 {fixedClassNo || "-"}반</dd></div>
             <div><dt className="font-semibold text-[#102047]">안내</dt><dd className="mt-1 whitespace-pre-line font-medium">{item.guideText || "-"}</dd></div>
           </dl>
-          <p className="mt-5 rounded-[22px] bg-[#F0FBF7] p-4 text-sm font-bold leading-6 text-[#08754B]">주민등록번호, 연락처, 상세 진료내용은 입력하지 않습니다.</p>
+          <p className="mt-5 break-keep rounded-[22px] bg-[#F0FBF7] p-4 text-sm font-bold leading-6 text-[#08754B]">주민등록번호, 연락처, 상세 진료내용은 입력하지 않습니다.</p>
           {loadState.status === "permission-denied" || loadState.status === "error" ? <p className="mt-4 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-semibold text-[#B42318]">{loadState.message}</p> : null}
         </aside>
 
@@ -266,8 +266,8 @@ function TeacherClassFields({ values, setters }) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="학년"><select value={values.grade} onChange={(event) => setters.setGrade(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"><option value="">선택</option>{grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></Field>
-      <Field label="반"><select value={values.classNo} onChange={(event) => setters.setClassNo(event.target.value)} className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"><option value="">선택</option>{classes.map((classNo) => <option key={classNo} value={classNo}>{classNo}</option>)}</select></Field>
+      <Field label="학년"><select value={values.grade} onChange={(event) => setters.setGrade(event.target.value)} className="min-h-[44px] w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"><option value="">선택</option>{grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></Field>
+      <Field label="반"><select value={values.classNo} onChange={(event) => setters.setClassNo(event.target.value)} className="min-h-[44px] w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"><option value="">선택</option>{classes.map((classNo) => <option key={classNo} value={classNo}>{classNo}</option>)}</select></Field>
     </div>
   );
 }
