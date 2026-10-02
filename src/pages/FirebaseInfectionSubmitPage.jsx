@@ -266,8 +266,8 @@ function TeacherClassFields({ values, setters }) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="학년"><select value={values.grade} onChange={(event) => setters.setGrade(event.target.value)} className="min-h-[44px] w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"><option value="">선택</option>{grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></Field>
-      <Field label="반"><select value={values.classNo} onChange={(event) => setters.setClassNo(event.target.value)} className="min-h-[44px] w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"><option value="">선택</option>{classes.map((classNo) => <option key={classNo} value={classNo}>{classNo}</option>)}</select></Field>
+      <Field label="학년"><select value={values.grade} onChange={(event) => setters.setGrade(event.target.value)} className="!min-h-[44px] w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"><option value="">선택</option>{grades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></Field>
+      <Field label="반"><select value={values.classNo} onChange={(event) => setters.setClassNo(event.target.value)} className="!min-h-[44px] w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"><option value="">선택</option>{classes.map((classNo) => <option key={classNo} value={classNo}>{classNo}</option>)}</select></Field>
     </div>
   );
 }
