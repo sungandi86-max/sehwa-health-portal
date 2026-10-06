@@ -3,7 +3,8 @@ import test from "node:test";
 import { DEFAULT_FIREBASE_AUTH_DOMAIN, resolveFirebaseAuthDomain } from "./firebaseAuthDomain.js";
 
 const PRODUCTION_HOST = "sehwa-health-portal.vercel.app";
-const QA_HOST = "sehwa-health-portal-git-feature-217fc6-sungandi86-maxs-projects.vercel.app";
+const QA_HOST = "sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app";
+const FEATURE_HOST = "sehwa-health-portal-git-feature-217fc6-sungandi86-maxs-projects.vercel.app";
 
 test("production uses its same-origin auth handler before the configured fallback", () => {
   assert.equal(resolveFirebaseAuthDomain(PRODUCTION_HOST, "custom.example"), PRODUCTION_HOST);
@@ -11,6 +12,10 @@ test("production uses its same-origin auth handler before the configured fallbac
 
 test("fixed QA preview uses its same-origin auth handler", () => {
   assert.equal(resolveFirebaseAuthDomain(QA_HOST, "custom.example"), QA_HOST);
+});
+
+test("existing feature preview remains authorized during QA transition", () => {
+  assert.equal(resolveFirebaseAuthDomain(FEATURE_HOST, "custom.example"), FEATURE_HOST);
 });
 
 test("localhost keeps the configured auth domain or Firebase default", () => {

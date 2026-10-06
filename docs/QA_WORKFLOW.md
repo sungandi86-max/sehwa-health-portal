@@ -15,9 +15,9 @@ feature 브랜치 Preview는 필요할 때 빌드와 비인증 UI를 점검하�
 ## 고정 환경과 보안
 
 - Production: `sehwa-health-portal.vercel.app` (`main`). Production 환경변수와 배포는 QA 설정과 분리합니다.
-- QA: Vercel이 생성한 `qa` 브랜치 고정 alias (아래 실제 주소 확인 후 기록). 새 `qa` commit마다 이 alias가 최신 Ready 배포를 가리키는지 확인합니다.
+- QA: `https://sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app` (`qa` 브랜치 고정 alias). 새 `qa` commit마다 이 alias가 최신 Ready 배포를 가리키는지 확인합니다.
 - Firebase Authentication Authorized domains에는 정확한 QA alias 한 개만 추가합니다. `*.vercel.app` 같은 wildcard는 사용하지 않습니다.
-- OAuth 제공자에서 custom `authDomain`의 `https://<QA_HOST>/__/auth/handler`가 필요한 경우 Google·Microsoft redirect URI를 각각 확인합니다.
+- OAuth 제공자에서 custom `authDomain`의 `https://sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app/__/auth/handler`가 필요한 경우 Google·Microsoft redirect URI를 각각 확인합니다.
 - Vercel의 `FIREBASE_SERVICE_ACCOUNT_BASE64`는 `Preview / Git Branch: qa`에만 설정합니다. 모든 Preview 공통이나 Development에는 설정하지 않습니다. Vercel Preview 보호를 유지합니다.
 - Firebase ID token, current assignment, canonical staffId, 서버 role gate는 QA에서도 동일하게 검증합니다. QA 중 운영 Sheet/Firestore를 임의 수정하지 않습니다.
 - Hobby 플랜의 serverless function 한도에 맞춰 `api/**/*.js`를 12개 이하로 유지합니다.
