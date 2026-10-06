@@ -6,6 +6,7 @@ import {
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
 import { getAssignmentId, getBearerToken, readJsonBody, readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../../server/lib/staffDirectory.js";
 import { handleTrainingResource } from "../../server/lib/trainingCenterApi.js";
+import { TRAINING_PHASE2_RESOURCES } from "../../server/lib/trainingCenterPhase2Resources.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
 
@@ -80,7 +81,7 @@ async function handleStaffIdentity(req, res) {
   return res.status(200).json({ ok: true, identity });
 }
 
-export async function staffDirectoryHandler(req, res, { trainingHandler = handleTrainingResource } = {}) {
+export async function staffDirectoryHandler(req, res, { trainingHandler = handleTrainingResource, trainingPhase2Handler = null } = {}) {
   sendCors(res, "GET, POST, OPTIONS");
 
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -93,6 +94,11 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
 
     if (["training-list", "training-detail"].includes(req.query?.resource)) {
       return await trainingHandler(req, res);
+    }
+
+    if (TRAINING_PHASE2_RESOURCES.has(req.query?.resource)) {
+      const handler = trainingPhase2Handler || (await import("../../server/lib/trainingCenterPhase2Api.js")).handleTrainingPhase2Resource;
+      return await handler(req, res);
     }
 
     const access = await verifyDirectoryAdmin(req);

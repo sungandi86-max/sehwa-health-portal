@@ -12,6 +12,10 @@ export const TARGET_HEADERS = ["eventId", "교직원ID", "대상상태", "필수
 
 const DEFAULT_SPREADSHEET_ID = "1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs";
 
+export function getTrainingSpreadsheetId() {
+  return process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+}
+
 export class TrainingSourceNotReadyError extends Error {
   constructor() {
     super("교직원 교육 자료가 아직 준비되지 않았습니다.");
@@ -89,7 +93,7 @@ export function buildTrainingView({ trainings, materials, targets }, staffId, { 
 }
 
 export async function readTrainingSheets() {
-  const spreadsheetId = process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+  const spreadsheetId = getTrainingSpreadsheetId();
   try {
     const [trainings, materials, targets] = await Promise.all([
       readGoogleSheetValues({ spreadsheetId, range: `'${TRAINING_SHEETS.trainings}'!A1:Z2000` }),

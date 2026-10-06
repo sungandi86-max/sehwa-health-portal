@@ -250,6 +250,13 @@ body {
 }
 
 @media (max-width: 640px) {
+  .firebase-v2-surface.training-phase2-surface button,
+  .firebase-v2-surface.training-phase2-surface a,
+  .firebase-v2-surface.training-phase2-surface input:not([type="checkbox"]),
+  .firebase-v2-surface.training-phase2-surface select {
+    min-height: 44px;
+  }
+
   body {
     min-width: 0;
   }

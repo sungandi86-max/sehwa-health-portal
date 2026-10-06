@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 
-export function FirebaseV2PageShell({ label, title, description, displayName, children }) {
+export function FirebaseV2PageShell({ label, title, description, displayName, className = "", children }) {
   return (
-    <section className="firebase-v2-surface min-h-full bg-[#F8FAFA] px-3 py-4 text-[#102047] sm:px-4 sm:py-5">
+    <section className={`firebase-v2-surface min-h-full bg-[#F8FAFA] px-3 py-4 text-[#102047] sm:px-4 sm:py-5 ${className}`}>
       <div className="mx-auto w-full max-w-[1280px] space-y-3">
         <header className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-none sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -47,6 +47,11 @@ const StudentCarePage = lazy(() => import("./pages/StudentCarePage.jsx"));
 const TodayPage = lazy(() => import("./pages/TodayPage.jsx"));
 const TrainingCenterPage = lazy(() => import("./pages/TrainingCenterPage.jsx"));
 const TrainingDetailPage = lazy(() => import("./pages/TrainingCenterPage.jsx").then((module) => ({ default: module.TrainingDetailPage })));
+const TrainingAttendancePage = lazy(() => import("./pages/TrainingAttendancePage.jsx"));
+const FirebaseTrainingAdminPage = lazy(() => import("./pages/FirebaseTrainingAdminPage.jsx"));
+const FirebaseTrainingTargetsPage = lazy(() => import("./pages/FirebaseTrainingTargetsPage.jsx"));
+const FirebaseTrainingQrPage = lazy(() => import("./pages/FirebaseTrainingQrPage.jsx"));
+const FirebaseTrainingAttendanceAdminPage = lazy(() => import("./pages/FirebaseTrainingAttendanceAdminPage.jsx"));
 
 function portalScopeForPath(pathname) {
   if (pathname === "/admin" || pathname === "/admin/roadmap") return "admin";
@@ -231,6 +236,13 @@ export default function App() {
                 <Route path="/my-submission-status" element={<MySubmissionStatusPage />} />
                 <Route path="/training" element={<TrainingCenterPage />} />
                 <Route path="/training/:eventId" element={<TrainingDetailPage />} />
+                <Route path="/training/attendance/group/:eventGroupId" element={<TrainingAttendancePage group />} />
+                <Route path="/training/attendance/:eventId" element={<TrainingAttendancePage />} />
+                <Route path="/firebase-admin/trainings" element={<FirebaseTrainingAdminPage />} />
+                <Route path="/firebase-admin/trainings/:eventId/targets" element={<FirebaseTrainingTargetsPage />} />
+                <Route path="/firebase-admin/trainings/:eventId/qr" element={<FirebaseTrainingQrPage />} />
+                <Route path="/firebase-admin/trainings/:eventId/attendance" element={<FirebaseTrainingAttendanceAdminPage />} />
+                <Route path="/firebase-admin/trainings/:eventId/final-sheet" element={<FirebaseTrainingAttendanceAdminPage finalSheet />} />
                 <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
                 <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
                 <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
