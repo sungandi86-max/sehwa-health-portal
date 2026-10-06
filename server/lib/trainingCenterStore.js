@@ -17,6 +17,11 @@ export function assertPrivatePermissions(permissions) {
   }
 }
 
+export function hasSignatureSheetSchema(sheets, values) {
+  const sheet = sheets?.find((item) => item.properties?.title === SIGNATURE_SHEET);
+  return sheet?.properties?.hidden === true && SIGNATURE_HEADERS.every((header, index) => values?.[0]?.[index] === header);
+}
+
 function googleAuth(scopes) {
   const account = getFirebaseServiceAccount();
   if (!account?.client_email || !account?.private_key) throw new Error("교육센터 Google 서비스 계정 설정이 필요합니다.");
@@ -50,6 +55,34 @@ export class TrainingCenterStore {
 
   assertSignatureFolderConfigured() {
     if (!/^[A-Za-z0-9_-]{5,}$/.test(this.folderId)) throw new TrainingSourceNotReadyError();
+  }
+
+  async inspectSignatureFolder() {
+    const result = { accessible: false, writable: false, private: false };
+    try {
+      this.assertSignatureFolderConfigured();
+      const item = await this.driveJson(`files/${this.folderId}?fields=id,mimeType,parents,driveId,capabilities(canAddChildren)&supportsAllDrives=true`);
+      if (item.mimeType !== "application/vnd.google-apps.folder") return result;
+      result.accessible = true;
+      result.writable = item.capabilities?.canAddChildren === true;
+      if (!result.writable) return result;
+      await this.assertPrivateDriveItem(this.folderId, { mimeType: "application/vnd.google-apps.folder" });
+      result.private = true;
+    } catch {}
+    return result;
+  }
+
+  async isSignatureSheetReady() {
+    try {
+      const auth = googleAuth(["https://www.googleapis.com/auth/spreadsheets.readonly"]);
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}?fields=sheets(properties(title,hidden))`;
+      const metadata = await auth.request({ url });
+      if (!metadata.data.sheets?.some((item) => item.properties?.title === SIGNATURE_SHEET && item.properties.hidden === true)) return false;
+      const values = await readGoogleSheetValues({ spreadsheetId: this.spreadsheetId, range: `'${SIGNATURE_SHEET}'!A1:M1` });
+      return hasSignatureSheetSchema(metadata.data.sheets, values);
+    } catch {
+      return false;
+    }
   }
 
   async driveJson(path, scope = "https://www.googleapis.com/auth/drive.readonly") {

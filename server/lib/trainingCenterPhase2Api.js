@@ -66,6 +66,21 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (!access.ok) return bad(res, access.status, access.message);
       const adminOnly = !["training-attendance-check", "training-attendance-submit"].includes(resource);
       if (adminOnly && !access.isAdmin) return bad(res, 403, "교육 관리자 권한이 없습니다.");
+      if (resource === "training-runtime-preflight") {
+        if (req.method !== "GET") return bad(res, 405, "지원하지 않는 요청입니다.");
+        const qrSecret = secret();
+        const qrSecretConfigured = Boolean(qrSecret);
+        const qrSecretValid = qrSecretConfigured && Buffer.byteLength(qrSecret, "utf8") >= 32;
+        const driveFolderConfigured = Boolean(store.folderId);
+        const folder = driveFolderConfigured ? await store.inspectSignatureFolder() : { accessible: false, writable: false, private: false };
+        const checks = {
+          qrSecretConfigured, qrSecretValid, driveFolderConfigured,
+          driveFolderAccessible: folder.accessible, driveFolderWritable: folder.writable, driveFolderPrivate: folder.private,
+          signatureSheetReady: await store.isSignatureSheetReady(), firebaseAdminReady: true,
+        };
+        return res.status(200).json({ ok: Object.values(checks).every(Boolean), checks });
+      }
+
       const body = req.method === "POST" ? await readJsonBody(req, { maxBytes: 400000 }) : null;
       const eventId = param(req.query?.eventId || body?.eventId);
 

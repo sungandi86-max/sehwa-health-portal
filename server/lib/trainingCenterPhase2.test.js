@@ -6,7 +6,7 @@ import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
 import { MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { createTrainingPhase2Handler } from "./trainingCenterPhase2Api.js";
 import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
-import { DrivePrivacyError, managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
+import { DrivePrivacyError, hasSignatureSheetSchema, managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
 import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingFinalSheetXlsx } from "./trainingFinalSheet.js";
 
@@ -86,7 +86,10 @@ function fakeStore({ appendMode = "success" } = {}) {
   const calls = { uploads: 0, appended: 0, saved: 0 };
   return {
     calls, values,
+    folderId: "FOLDER123",
     assertSignatureFolderConfigured: () => {},
+    inspectSignatureFolder: async () => ({ accessible: true, writable: true, private: true }),
+    isSignatureSheetReady: async () => true,
     listSignatureFilesByRequest: async () => [],
     readBase: async () => values,
     readSource: async () => values,
@@ -122,7 +125,7 @@ function harness(options = {}) {
     } }),
     db: () => db,
     directory: async () => ({ directory, stats: { duplicateStaffIds: 0 } }),
-    store, secret: () => options.secret || secret, now: options.now || now,
+    store, secret: () => options.secret ?? secret, now: options.now || now,
   });
   async function call(resource, { token = "admin", method = "GET", query = {}, body = null } = {}) {
     const res = response();
@@ -600,4 +603,72 @@ test("existing staff-directory router preserves admin-only default and dispatche
   const res = response();
   await staffDirectoryHandler({ method: "GET", query: { resource: "training-admin-list" }, headers: { authorization: "Bearer staff" } }, res, { trainingPhase2Handler: handler });
   assert.equal(res.statusCode, 403);
+});
+
+test("runtime preflight is admin-only, GET-only, redacted, and write-free", async () => {
+  const { call, store, db } = harness();
+  assert.equal((await call("training-runtime-preflight", { token: "" })).statusCode, 401);
+  assert.equal((await call("training-runtime-preflight", { token: "staff" })).statusCode, 403);
+  assert.equal((await call("training-runtime-preflight", { token: "homeroom" })).statusCode, 403);
+  assert.equal((await call("training-runtime-preflight", { method: "POST" })).statusCode, 405);
+  for (const token of ["admin", "admin2"]) {
+    const res = await call("training-runtime-preflight", { token });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.headers["Cache-Control"], "private, no-store");
+    assert.equal(res.body.ok, true);
+    assert.equal(Object.values(res.body.checks).every(Boolean), true);
+    assert.deepEqual(Object.keys(res.body.checks), ["qrSecretConfigured", "qrSecretValid", "driveFolderConfigured",
+      "driveFolderAccessible", "driveFolderWritable", "driveFolderPrivate", "signatureSheetReady", "firebaseAdminReady"]);
+    assert.equal(JSON.stringify(res.body).includes(secret), false);
+    assert.equal(JSON.stringify(res.body).includes(store.folderId), false);
+  }
+  assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0 });
+  assert.equal(db.records.size, 0);
+});
+
+test("runtime preflight reports invalid config and source without exposing values", async () => {
+  const short = await harness({ secret: "짧음" }).call("training-runtime-preflight");
+  assert.equal(short.body.checks.qrSecretConfigured, true);
+  assert.equal(short.body.checks.qrSecretValid, false);
+  assert.equal(short.body.ok, false);
+  const missing = harness();
+  missing.store.folderId = "";
+  const noFolder = await missing.call("training-runtime-preflight");
+  assert.equal(noFolder.body.checks.driveFolderConfigured, false);
+  assert.equal(noFolder.body.checks.driveFolderAccessible, false);
+  const inaccessible = harness();
+  inaccessible.store.inspectSignatureFolder = async () => ({ accessible: false, writable: false, private: false });
+  assert.equal((await inaccessible.call("training-runtime-preflight")).body.checks.driveFolderAccessible, false);
+  const publicFolder = harness();
+  publicFolder.store.inspectSignatureFolder = async () => ({ accessible: true, writable: true, private: false });
+  assert.equal((await publicFolder.call("training-runtime-preflight")).body.checks.driveFolderPrivate, false);
+  const badSheet = harness();
+  badSheet.store.isSignatureSheetReady = async () => false;
+  assert.equal((await badSheet.call("training-runtime-preflight")).body.checks.signatureSheetReady, false);
+});
+
+test("runtime folder inspection accepts private My Drive and rejects broad ACL without writes", async () => {
+  const calls = [];
+  const makeStore = (permissionType, metadataStatus = 200) => new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input, options = {}) => {
+    const url = new URL(input);
+    calls.push({ url, method: options.method || "GET" });
+    if (url.pathname.endsWith("/files/FOLDER123")) return metadataStatus === 200
+      ? Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } })
+      : new Response(null, { status: metadataStatus });
+    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ id: "OWNER", type: permissionType, role: "owner" }] });
+    throw new Error("unexpected request");
+  } });
+  assert.deepEqual(await makeStore("user").inspectSignatureFolder(), { accessible: true, writable: true, private: true });
+  assert.deepEqual(await makeStore("anyone").inspectSignatureFolder(), { accessible: true, writable: true, private: false });
+  assert.deepEqual(await makeStore("domain").inspectSignatureFolder(), { accessible: true, writable: true, private: false });
+  assert.deepEqual(await makeStore("user", 403).inspectSignatureFolder(), { accessible: false, writable: false, private: false });
+  assert.equal(calls.every(({ method }) => method === "GET"), true);
+});
+
+test("runtime signature Sheet requires a hidden tab and exact A:M headers", () => {
+  const hidden = [{ properties: { title: "교직원교육전자서명", hidden: true } }];
+  assert.equal(hasSignatureSheetSchema(hidden, [SIGNATURE_HEADERS]), true);
+  assert.equal(hasSignatureSheetSchema(hidden, [[...SIGNATURE_HEADERS.slice(0, 12), "wrong"]]), false);
+  assert.equal(hasSignatureSheetSchema([{ properties: { title: "교직원교육전자서명", hidden: false } }], [SIGNATURE_HEADERS]), false);
+  assert.equal(hasSignatureSheetSchema([], [SIGNATURE_HEADERS]), false);
 });
