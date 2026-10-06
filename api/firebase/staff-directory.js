@@ -5,6 +5,7 @@ import {
 } from "../../server/healthMandatoryTrainingDryRun.js";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
 import { getAssignmentId, getBearerToken, readJsonBody, readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../../server/lib/staffDirectory.js";
+import { handleTrainingResource } from "../../server/lib/trainingCenterApi.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
 
@@ -79,7 +80,7 @@ async function handleStaffIdentity(req, res) {
   return res.status(200).json({ ok: true, identity });
 }
 
-export default async function handler(req, res) {
+export async function staffDirectoryHandler(req, res, { trainingHandler = handleTrainingResource } = {}) {
   sendCors(res, "GET, POST, OPTIONS");
 
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -88,6 +89,10 @@ export default async function handler(req, res) {
   try {
     if (req.query?.resource === "staff-identity") {
       return await handleStaffIdentity(req, res);
+    }
+
+    if (["training-list", "training-detail"].includes(req.query?.resource)) {
+      return await trainingHandler(req, res);
     }
 
     const access = await verifyDirectoryAdmin(req);
@@ -134,3 +139,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, message: "교직원명단을 불러오지 못했습니다." });
   }
 }
+
+export default staffDirectoryHandler;

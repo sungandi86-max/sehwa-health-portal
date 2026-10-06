@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildTrainingView, MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
-import { createTrainingHandler } from "../../api/firebase/training.js";
+import { createTrainingHandler } from "./trainingCenterApi.js";
+import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
 
 const row = (headers, fields) => headers.map((header) => fields[header] ?? "");
 const training = (eventId, extra = {}) => row(TRAINING_HEADERS, {
@@ -53,19 +54,19 @@ function response() {
   };
 }
 
-function handlerFor({ assignment = { active: true, uid: "uid-1", schoolYear: 2026, semester: 2, staffId: "T001", roles: ["staff"] }, sourceValue = source } = {}) {
+function handlerFor({ assignment = { active: true, uid: "uid-1", schoolYear: 2026, semester: 2, staffId: "T001", roles: ["staff"] }, sourceValue = source, directoryValue = [{ staffId: "T001", employmentStatus: "재직" }] } = {}) {
   return createTrainingHandler({
     auth: () => ({ verifyIdToken: async (token) => {
       if (token !== "valid") throw new Error("bad token");
       return { uid: "uid-1" };
     } }),
     db: () => ({ collection: () => ({ doc: () => ({ get: async () => ({ exists: Boolean(assignment), data: () => assignment }) }) }) }),
-    directory: async () => ({ directory: [{ staffId: "T001", employmentStatus: "재직" }], stats: { duplicateStaffIds: 0 } }),
+    directory: async () => ({ directory: directoryValue, stats: { duplicateStaffIds: 0 } }),
     sheets: async () => sourceValue,
   });
 }
 
-async function call(handler, query = { resource: "list" }, token = "valid") {
+async function call(handler, query = { resource: "training-list" }, token = "valid") {
   const res = response();
   await handler({ method: "GET", headers: token ? { authorization: `Bearer ${token}` } : {}, query }, res);
   return res;
@@ -78,6 +79,9 @@ test("training API requires Firebase login and current assignment", async () => 
   assert.equal((await call(handlerFor({ assignment: { active: false, uid: "uid-1", schoolYear: 2026, semester: 2, staffId: "T001", roles: ["staff"] } }))).statusCode, 403);
   assert.equal((await call(handlerFor({ assignment: { active: true, uid: "uid-1", schoolYear: 2026, semester: 2, staffId: "T001", roles: [] } }))).statusCode, 403);
   assert.equal((await call(handlerFor({ assignment: { active: true, uid: "other", schoolYear: 2026, semester: 2, staffId: "T001", roles: ["staff"] } }))).statusCode, 403);
+  assert.equal((await call(handlerFor({ assignment: { active: true, uid: "uid-1", schoolYear: 2026, semester: 2, staffId: "", roles: ["staff"] } }))).statusCode, 403);
+  assert.equal((await call(handlerFor({ directoryValue: [] }))).statusCode, 403);
+  assert.equal((await call(handlerFor({ directoryValue: [{ staffId: "T001", employmentStatus: "휴직" }] }))).statusCode, 403);
 });
 
 test("training API returns list/detail without other staff data", async () => {
@@ -86,11 +90,31 @@ test("training API returns list/detail without other staff data", async () => {
   assert.equal(list.statusCode, 200);
   assert.equal(list.body.items.length, 1);
   assert.equal(JSON.stringify(list.body).includes("T002"), false);
-  const detail = await call(handler, { resource: "detail", eventId: "event-1" });
+  const detail = await call(handler, { resource: "training-detail", eventId: "event-1" });
   assert.equal(detail.statusCode, 200);
   assert.equal(detail.body.item.materials[0].title, "안내문");
   assert.equal(JSON.stringify(detail.body).includes("T002"), false);
-  assert.equal((await call(handler, { resource: "detail", eventId: "missing" })).statusCode, 404);
+  assert.equal((await call(handler, { resource: "training-detail", eventId: "missing" })).statusCode, 404);
+  assert.equal((await call(handler, { resource: "training-detail" })).statusCode, 404);
+  assert.equal((await call(handler, { resource: "invalid" })).statusCode, 400);
+});
+
+test("valid staff receives an empty list from header-only sheets", async () => {
+  const empty = { trainings: [TRAINING_HEADERS], materials: [MATERIAL_HEADERS], targets: [TARGET_HEADERS] };
+  const result = await call(handlerFor({ sourceValue: empty }));
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(result.body, { ok: true, items: [] });
+});
+
+test("staff-directory dispatches training before admin gate and preserves admin gate", async () => {
+  const training = handlerFor();
+  const router = (req, res) => staffDirectoryHandler(req, res, { trainingHandler: training });
+  assert.equal((await call(router)).statusCode, 200);
+  assert.equal((await call(router, { resource: "training-detail", eventId: "event-1" })).statusCode, 200);
+  assert.equal((await call(router, { resource: "staff-identity" }, "")).statusCode, 401);
+  assert.equal((await call(router, { resource: "health-mandatory-training-sync" }, "")).statusCode, 401);
+  assert.equal((await call(router, { resource: "health-mandatory-training-current-targets" }, "")).statusCode, 401);
+  assert.equal((await call(router, {}, "")).statusCode, 401);
 });
 
 test("training API reports absent sheets without exposing source data", async () => {

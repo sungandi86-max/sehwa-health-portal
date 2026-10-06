@@ -1,11 +1,11 @@
-import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
-import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER, getAssignmentId, getBearerToken, readStaffDirectory, sendCors } from "../../server/lib/staffDirectory.js";
-import { buildTrainingView, readTrainingSheets, TrainingSourceNotReadyError } from "../../server/lib/trainingCenter.js";
+import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
+import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER, getAssignmentId, getBearerToken, readStaffDirectory, sendCors } from "./staffDirectory.js";
+import { buildTrainingView, readTrainingSheets, TrainingSourceNotReadyError } from "./trainingCenter.js";
 
 const STAFF_ROLES = new Set(["staff", "homeroom", "health_teacher", "admin"]);
 
 export function createTrainingHandler({ auth = getFirebaseAdminAuth, db = getFirebaseAdminDb, directory = readStaffDirectory, sheets = readTrainingSheets } = {}) {
-  return async function handler(req, res) {
+  return async function handleTrainingResource(req, res) {
     sendCors(res);
     res.setHeader("Cache-Control", "private, no-store");
     if (req.method === "OPTIONS") return res.status(200).end();
@@ -35,14 +35,14 @@ export function createTrainingHandler({ auth = getFirebaseAdminAuth, db = getFir
       }
 
       const resource = req.query?.resource;
-      if (!["list", "detail"].includes(resource)) return res.status(400).json({ ok: false, message: "요청한 교육 자료 종류가 올바르지 않습니다." });
+      if (!["training-list", "training-detail"].includes(resource)) return res.status(400).json({ ok: false, message: "요청한 교육 자료 종류가 올바르지 않습니다." });
       const eventId = typeof req.query?.eventId === "string" ? req.query.eventId.trim() : "";
-      if (resource === "detail" && (!eventId || eventId.length > 120)) return res.status(404).json({ ok: false, message: "교육을 찾을 수 없습니다." });
+      if (resource === "training-detail" && (!eventId || eventId.length > 120)) return res.status(404).json({ ok: false, message: "교육을 찾을 수 없습니다." });
 
       const source = await sheets();
-      const view = buildTrainingView(source, assignment.staffId, { eventId: resource === "detail" ? eventId : "" });
-      if (resource === "detail" && !view) return res.status(404).json({ ok: false, message: "교육을 찾을 수 없습니다." });
-      return res.status(200).json(resource === "detail" ? { ok: true, item: view } : { ok: true, items: view });
+      const view = buildTrainingView(source, assignment.staffId, { eventId: resource === "training-detail" ? eventId : "" });
+      if (resource === "training-detail" && !view) return res.status(404).json({ ok: false, message: "교육을 찾을 수 없습니다." });
+      return res.status(200).json(resource === "training-detail" ? { ok: true, item: view } : { ok: true, items: view });
     } catch (error) {
       if (error instanceof TrainingSourceNotReadyError) {
         return res.status(503).json({ ok: false, code: error.code, message: error.message });
@@ -52,4 +52,4 @@ export function createTrainingHandler({ auth = getFirebaseAdminAuth, db = getFir
   };
 }
 
-export default createTrainingHandler();
+export const handleTrainingResource = createTrainingHandler();

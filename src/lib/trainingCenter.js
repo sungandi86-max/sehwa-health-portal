@@ -4,7 +4,7 @@ async function requestTraining(params) {
   const user = auth.currentUser;
   if (!user) throw new Error("로그인이 필요합니다.");
   const token = await user.getIdToken();
-  const response = await fetch(`/api/firebase/training?${new URLSearchParams(params)}`, {
+  const response = await fetch(`/api/firebase/staff-directory?${new URLSearchParams(params)}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
@@ -18,9 +18,9 @@ async function requestTraining(params) {
 }
 
 export async function getTrainingList() {
-  return (await requestTraining({ resource: "list" })).items;
+  return (await requestTraining({ resource: "training-list" })).items;
 }
 
 export async function getTrainingDetail(eventId) {
-  return (await requestTraining({ resource: "detail", eventId })).item;
+  return (await requestTraining({ resource: "training-detail", eventId })).item;
 }
