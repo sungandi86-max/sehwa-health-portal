@@ -27,7 +27,7 @@
 ## 서버 설정과 권한
 
 - `TRAINING_QR_SECRET`: 32바이트 이상의 임의 비밀값을 서버 환경에만 설정한다. QR HMAC 검증에 사용한다. 브라우저의 `VITE_` 변수에 두지 않는다.
-- `TRAINING_SIGNATURE_DRIVE_FOLDER_ID`: 서비스 계정이 파일을 만들 수 있는 비공개 My Drive 또는 공유 드라이브 폴더 ID. 공개 공유를 하지 않는다.
+- `TRAINING_SIGNATURE_DRIVE_FOLDER_ID`: 서비스 계정이 파일을 만들 수 있는 **비공개 공유 드라이브(Shared Drive) 폴더** ID. 서비스 계정의 `canAddChildren` 권한과 폴더·상위 경로의 비공개 ACL을 확인한다. 비공개 My Drive 폴더는 권한 검사에는 통과할 수 있어도 서비스 계정 업로드 저장소로는 지원하지 않는다. 사용자 OAuth 위임 업로드는 현재 구현되지 않았다.
 - Firebase Admin 서비스 계정은 해당 워크북 편집 권한과 이 Drive 폴더의 파일 생성/읽기 권한이 필요하다. 실제 권한은 운영 승인 후 별도 확인한다.
 - Firestore `training_attendance_locks`는 Admin SDK만 사용한다. 현행 `firestore.rules`의 최종 deny 규칙으로 클라이언트 직접 읽기·쓰기는 허용되지 않는다.
 - `api/firebase/staff-directory.js`의 기존 함수에 resource를 추가했으므로 Vercel function 수는 증가하지 않는다.

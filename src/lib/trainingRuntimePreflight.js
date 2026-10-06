@@ -5,6 +5,7 @@ export const TRAINING_RUNTIME_CHECKS = [
   { key: "driveFolderAccessible", label: "Drive 접근" },
   { key: "driveFolderWritable", label: "Drive 쓰기 가능" },
   { key: "driveFolderPrivate", label: "Drive 비공개" },
+  { key: "driveStorageSupported", label: "서명 저장소 지원" },
   { key: "signatureSheetReady", label: "서명 Sheet 준비" },
   { key: "firebaseAdminReady", label: "Firebase Admin 준비" },
 ];

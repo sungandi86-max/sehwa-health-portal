@@ -2,7 +2,7 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { readJsonBody, readStaffDirectory, sendCors } from "./staffDirectory.js";
 import { TARGET_HEADERS, TRAINING_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { resolveTrainingAccess } from "./trainingCenterAccess.js";
-import { DrivePrivacyError, trainingCenterStore } from "./trainingCenterStore.js";
+import { DriveApiError, DrivePrivacyError, trainingCenterStore } from "./trainingCenterStore.js";
 import { AttendanceConflictError, assertCompletedAttendanceLock, attachAttendanceFile, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { applyAttendanceRecovery, inspectAttendanceRecovery, listAttendanceRecoveryCandidates, RecoveryConflictError } from "./trainingAttendanceRecovery.js";
 import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, SIGNATURE_HEADERS, SIGNATURE_SHEET, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
@@ -11,6 +11,18 @@ import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 
 function bad(res, status, message, code = "") {
   return res.status(status).json({ ok: false, ...(code ? { code } : {}), message });
+}
+
+const ATTENDANCE_FAILURE_STAGES = new Set(["DRIVE_FOLDER_CHECK", "DRIVE_CREATE", "DRIVE_FILE_PRIVACY", "SHEET_APPEND", "LOCK_FINALIZE"]);
+
+function logAttendanceFailure(error, fallbackStage, eventCount) {
+  const stage = ATTENDANCE_FAILURE_STAGES.has(error?.stage) ? error.stage : fallbackStage;
+  const driveError = error instanceof DriveApiError;
+  console.error(JSON.stringify({ event: "training_attendance_failure", stage,
+    status: driveError ? error.status : 0, code: driveError ? error.code : "", reason: driveError ? error.reason : "",
+    errorName: driveError ? "DriveApiError" : error instanceof DrivePrivacyError ? "DrivePrivacyError" :
+      error instanceof TrainingSourceNotReadyError ? "TrainingSourceNotReadyError" : "Error", eventCount }));
+  return stage;
 }
 
 function param(value) {
@@ -72,10 +84,11 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const qrSecretConfigured = Boolean(qrSecret);
         const qrSecretValid = qrSecretConfigured && Buffer.byteLength(qrSecret, "utf8") >= 32;
         const driveFolderConfigured = Boolean(store.folderId);
-        const folder = driveFolderConfigured ? await store.inspectSignatureFolder() : { accessible: false, writable: false, private: false };
+        const folder = driveFolderConfigured ? await store.inspectSignatureFolder() : { accessible: false, writable: false, private: false, storageSupported: false };
         const checks = {
           qrSecretConfigured, qrSecretValid, driveFolderConfigured,
           driveFolderAccessible: folder.accessible, driveFolderWritable: folder.writable, driveFolderPrivate: folder.private,
+          driveStorageSupported: folder.storageSupported === true && folder.writable === true && folder.private === true,
           signatureSheetReady: await store.isSignatureSheetReady(), firebaseAdminReady: true,
         };
         return res.status(200).json({ ok: Object.values(checks).every(Boolean), checks });
@@ -175,14 +188,18 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         let fileId = "";
         let records = [];
         let appendStarted = false;
+        let stage = "DRIVE_FOLDER_CHECK";
         try {
           fileId = await store.uploadSignature(bytes, events[0].eventId, now(), reservation.requestId);
+          stage = "LOCK_FINALIZE";
           await attachAttendanceFile(reservation, fileId, now().getTime());
           records = events.map((event) => createSignatureRecord(event, access.assignment.staffId, { fileId, now: now() }));
+          stage = "SHEET_APPEND";
           await markAttendanceAppendStarted(reservation, now().getTime());
           appendStarted = true;
           await store.appendSignatures(records);
         } catch (error) {
+          const failureCategory = logAttendanceFailure(error, stage, events.length);
           if (!fileId && error?.fileId) fileId = error.fileId;
           let committed = false;
           let certain = !records.length;
@@ -195,7 +212,11 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
             } catch { certain = false; }
           }
           if (!committed && certain) {
-            await finishAttendance(reservation, "failed", { orphanFileIds: fileId ? [fileId] : [] });
+            try { await finishAttendance(reservation, "failed", { orphanFileIds: fileId ? [fileId] : [], failureCategory }); }
+            catch (lockError) {
+              logAttendanceFailure(lockError, "LOCK_FINALIZE", events.length);
+              return bad(res, 503, "출석 저장 결과를 확인 중입니다. 관리자에게 문의해 주세요.");
+            }
           }
           if (error instanceof DrivePrivacyError) {
             if (error.requiresImmediateIsolation) console.error("[training] signature permission isolation requires administrator attention");
@@ -205,7 +226,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         }
         let coordinationReconciled = true;
         try { await finishAttendance(reservation, "completed", { signatureIds: records.map((record) => record.signatureId) }); }
-        catch { coordinationReconciled = false; console.warn("[training] attendance coordination reconciliation needed"); }
+        catch (error) { coordinationReconciled = false; logAttendanceFailure(error, "LOCK_FINALIZE", events.length); }
         return res.status(200).json({ ok: true, eventIds: events.map((event) => event.eventId), signedAt: records[0]["서명일시"], coordinationReconciled });
       }
       if (["training-attendance-summary", "training-final-sheet"].includes(resource) && req.method === "GET") {

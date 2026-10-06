@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { summarizeTrainingRuntimePreflight, TRAINING_RUNTIME_CHECKS } from "./trainingRuntimePreflight.js";
 
-test("all eight successful runtime checks are shown as ready", () => {
+test("all nine successful runtime checks are shown as ready", () => {
   const checks = Object.fromEntries(TRAINING_RUNTIME_CHECKS.map(({ key }) => [key, true]));
   const result = summarizeTrainingRuntimePreflight({ ok: true, checks });
   assert.equal(result.ready, true);
-  assert.equal(result.checks.length, 8);
+  assert.equal(result.checks.length, 9);
   assert.equal(result.checks.every(({ passed }) => passed), true);
 });
 
@@ -18,4 +18,7 @@ test("partial or malformed runtime results show only known failed check names", 
   assert.deepEqual(result.checks.filter(({ passed }) => !passed).map(({ label }) => label), ["Drive 비공개"]);
   assert.equal(JSON.stringify(result).includes("DO_NOT_RENDER"), false);
   assert.equal(summarizeTrainingRuntimePreflight({ ok: true, checks: {} }).ready, false);
+  checks.driveFolderPrivate = true;
+  checks.driveStorageSupported = false;
+  assert.deepEqual(summarizeTrainingRuntimePreflight({ ok: false, checks }).checks.filter(({ passed }) => !passed).map(({ label }) => label), ["서명 저장소 지원"]);
 });
