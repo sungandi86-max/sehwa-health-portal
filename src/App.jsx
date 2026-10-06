@@ -45,6 +45,8 @@ const MySubmissionStatusPage = lazy(() => import("./pages/MySubmissionStatusPage
 const ResourcesPage = lazy(() => import("./pages/ResourcesPage.jsx"));
 const StudentCarePage = lazy(() => import("./pages/StudentCarePage.jsx"));
 const TodayPage = lazy(() => import("./pages/TodayPage.jsx"));
+const TrainingCenterPage = lazy(() => import("./pages/TrainingCenterPage.jsx"));
+const TrainingDetailPage = lazy(() => import("./pages/TrainingCenterPage.jsx").then((module) => ({ default: module.TrainingDetailPage })));
 
 function portalScopeForPath(pathname) {
   if (pathname === "/admin" || pathname === "/admin/roadmap") return "admin";
@@ -227,6 +229,8 @@ export default function App() {
                 <Route path="/firebase-submit/recruit" element={<FirebaseRecruitSubmitPage />} />
                 <Route path="/firebase-submit/tb" element={<FirebaseTbSubmitPage />} />
                 <Route path="/my-submission-status" element={<MySubmissionStatusPage />} />
+                <Route path="/training" element={<TrainingCenterPage />} />
+                <Route path="/training/:eventId" element={<TrainingDetailPage />} />
                 <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
                 <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
                 <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />

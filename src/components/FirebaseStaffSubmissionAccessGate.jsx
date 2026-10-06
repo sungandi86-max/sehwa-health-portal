@@ -40,7 +40,7 @@ function SignOutButton({ disabled, onClick }) {
   );
 }
 
-export default function FirebaseStaffSubmissionAccessGate({ children }) {
+export default function FirebaseStaffSubmissionAccessGate({ children, accessTitle = "교직원 제출", readOnly = false }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [staffIdentity, setStaffIdentity] = useState(null);
@@ -74,11 +74,13 @@ export default function FirebaseStaffSubmissionAccessGate({ children }) {
           return;
         }
 
-        const ensuredProfile = await ensureUserProfile(currentUser);
-        const teamStaffResult = await ensureTeamStaffAssignment(currentUser, ensuredProfile);
-        if (teamStaffResult.ok === false) {
-          setMessage(teamStaffResult.message);
-          return;
+        const ensuredProfile = readOnly ? null : await ensureUserProfile(currentUser);
+        if (!readOnly) {
+          const teamStaffResult = await ensureTeamStaffAssignment(currentUser, ensuredProfile);
+          if (teamStaffResult.ok === false) {
+            setMessage(teamStaffResult.message);
+            return;
+          }
         }
 
         const currentAssignmentResult = await getUserAssignmentResult(
@@ -88,7 +90,7 @@ export default function FirebaseStaffSubmissionAccessGate({ children }) {
         );
 
         let currentStaffIdentity = null;
-        if (currentAssignmentResult.assignment?.staffId) {
+        if (!readOnly && currentAssignmentResult.assignment?.staffId) {
           try {
             currentStaffIdentity = await getAuthenticatedStaffIdentity();
           } catch (error) {
@@ -108,7 +110,7 @@ export default function FirebaseStaffSubmissionAccessGate({ children }) {
     });
 
     return unsubscribe;
-  }, []);
+  }, [readOnly]);
 
   const handleMicrosoftSignIn = async () => {
     setIsWorking(true);
@@ -159,7 +161,7 @@ export default function FirebaseStaffSubmissionAccessGate({ children }) {
   if (!user) {
     return (
       <AccessMessage
-        title="교직원 제출"
+        title={accessTitle}
         description="교사: Teams · 그 외 교직원: Google"
         action={
           <FirebaseSignInActions

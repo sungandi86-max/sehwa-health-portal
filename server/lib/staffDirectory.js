@@ -1,8 +1,8 @@
 import { JWT } from "google-auth-library";
 import { getFirebaseAdminAuth, getFirebaseAdminDb, getFirebaseServiceAccount } from "./firebaseAdmin.js";
 
-const CURRENT_SCHOOL_YEAR = 2026;
-const CURRENT_SEMESTER = 2;
+export const CURRENT_SCHOOL_YEAR = 2026;
+export const CURRENT_SEMESTER = 2;
 const DEFAULT_HEALTH_SPREADSHEET_ID = "1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs";
 const STAFF_ROSTER_SHEET_NAME = "교직원명단";
 const STAFF_ROSTER_RANGE = `${STAFF_ROSTER_SHEET_NAME}!A1:Z1000`;
