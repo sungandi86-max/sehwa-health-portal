@@ -13,12 +13,14 @@ const ROUTE_MAP = {
   faq: "/faq",
 };
 
+const schoolBlueMenuTone = {
+  card: "border-[#D7E8FF] bg-[#F1F7FF]",
+  tile: "border-[#D7E8FF] bg-[#E4F1FF] text-[#0D4EA6]",
+  cta: "text-[#3154A3]",
+};
+
 const MENU_TONES = {
-  today: {
-    card: "border-[#D7E8FF] bg-[#F1F7FF]",
-    tile: "border-[#D7E8FF] bg-[#E4F1FF] text-[#0D4EA6]",
-    cta: "text-[#3154A3]",
-  },
+  today: schoolBlueMenuTone,
   upload: {
     card: "border-[#D7F1E8] bg-[#F0FBF7]",
     tile: "border-[#C8F0E2] bg-[#DDF8EE] text-[#08754B]",
@@ -39,6 +41,7 @@ const MENU_TONES = {
     tile: "border-[#F4D6AB] bg-[#FFF0DB] text-[#D97706]",
     cta: "text-[#B45309]",
   },
+  educationCenter: schoolBlueMenuTone,
   studentCare: {
     card: "border-[#D8F0D8] bg-[#F2FBF2]",
     tile: "border-[#C8EBC8] bg-[#E5F8E5] text-[#169A36]",
@@ -124,11 +127,12 @@ export default function QuickMenu({ items = quickMenuItems, className = "", vari
           return (
             <button
               key={item.id}
+              disabled={item.disabled}
               onClick={() => navigate(target)}
               className={
                 isPortalCompact
-                  ? `group flex h-full min-h-[100px] min-w-0 flex-col rounded-[14px] border p-3 text-left shadow-[0_6px_16px_rgba(16,32,71,0.035)] transition hover:-translate-y-0.5 hover:border-[#C8D8FF] hover:shadow-[0_8px_20px_rgba(16,32,71,0.06)] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:min-h-[108px] ${tone.card}`
-                  : `group flex h-full min-h-32 min-w-0 flex-col rounded-[12px] border p-4 text-left shadow-none transition hover:border-[#C8D8FF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:p-4 lg:min-h-36 ${tone.card}`
+                  ? `group flex h-full min-h-[100px] min-w-0 flex-col rounded-[14px] border p-3 text-left shadow-[0_6px_16px_rgba(16,32,71,0.035)] transition enabled:hover:-translate-y-0.5 enabled:hover:border-[#C8D8FF] enabled:hover:shadow-[0_8px_20px_rgba(16,32,71,0.06)] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:min-h-[108px] disabled:cursor-default ${tone.card}`
+                  : `group flex h-full min-h-32 min-w-0 flex-col rounded-[12px] border p-4 text-left shadow-none transition enabled:hover:border-[#C8D8FF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 sm:p-4 lg:min-h-36 disabled:cursor-default ${tone.card}`
               }
             >
               <div className={`${isPortalCompact ? "mb-1.5 flex items-start justify-between gap-2" : "mb-2.5 flex items-start justify-between gap-3 sm:mb-3"}`}>
@@ -140,8 +144,8 @@ export default function QuickMenu({ items = quickMenuItems, className = "", vari
                   <MenuIcon id={item.id} />
                 </span>
                 {isPortalCompact ? (
-                  <span className={`text-sm font-semibold ${isPriority ? "text-[#0D4EA6]" : tone.cta}`}>→</span>
-                ) : item.featured ? <Badge type="blue">핵심</Badge> : <span className={`text-base font-semibold ${tone.cta}`}>→</span>}
+                  <span className={`text-sm font-semibold ${isPriority ? "text-[#0D4EA6]" : tone.cta}`}>{item.disabled ? "준비 중" : "→"}</span>
+                ) : item.disabled ? <Badge type="blue">준비 중</Badge> : item.featured ? <Badge type="blue">핵심</Badge> : <span className={`text-base font-semibold ${tone.cta}`}>→</span>}
               </div>
               <h3 className={`${isPortalCompact ? "text-base font-semibold leading-6" : "text-[15px] font-semibold leading-5"} text-[#0F1F4B]`} style={{ wordBreak: "keep-all" }}>
                 {item.title}
@@ -149,7 +153,7 @@ export default function QuickMenu({ items = quickMenuItems, className = "", vari
               <p className={`${isPortalCompact ? "mt-1 line-clamp-2 text-sm font-normal leading-5" : "menu-card-description mt-1.5 text-xs font-medium leading-5 sm:text-sm sm:leading-6"} text-slate-600`}>
                 {item.description}
               </p>
-              {!isPortalCompact && (
+              {!isPortalCompact && !item.disabled && (
                 <p className={`mt-auto flex items-center pt-3 text-xs font-semibold ${tone.cta}`}>
                   열기 <span className="ml-1">→</span>
                 </p>

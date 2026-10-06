@@ -14,7 +14,6 @@ import {
 import { buildHomeSchedules, filterCurrentPortalItems } from "../lib/portalSchedule.js";
 
 const legacyMenuRoutes = {
-  homeroom: "/homeroom",
   studentCare: "/student-care",
   resources: "/resources",
 };
@@ -47,10 +46,15 @@ export default function HomePage({ config }) {
 
     return [
       firebaseMenuById.get("today"),
-      firebaseMenuById.get("upload"),
+      { ...firebaseMenuById.get("upload"), description: "보건서류 제출 · 감염병 보고" },
       firebaseMenuById.get("checkup"),
-      firebaseMenuById.get("education"),
-      { ...legacyMenuById.get("homeroom"), href: legacyMenuRoutes.homeroom },
+      { ...firebaseMenuById.get("education"), description: "학생 보건교육 자료와 안내 문서" },
+      {
+        id: "educationCenter",
+        title: "교직원 교육센터",
+        description: "교육 일정 · QR 출석 · 이수증 제출 · 내 이수현황",
+        disabled: true,
+      },
       {
         ...legacyMenuById.get("studentCare"),
         href: legacyMenuRoutes.studentCare,

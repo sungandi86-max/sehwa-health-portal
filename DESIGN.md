@@ -20,7 +20,7 @@ The home menu remains exactly these eight areas unless a product task says other
 2. 제출·보고 센터
 3. 검진·검사 안내
 4. 교육 자료실
-5. 담임 협조 요청
+5. 교직원 교육센터
 6. 학생 건강관리 확인
 7. 건강정보/이벤트
 8. FAQ
