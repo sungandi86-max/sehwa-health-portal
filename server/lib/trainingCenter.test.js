@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildTrainingView, MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { createTrainingHandler } from "./trainingCenterApi.js";
 import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
+import { expectedTrainingDetail, expectedTrainingList, trainingCenterSheetFixture } from "../../tests/fixtures/trainingCenterFixture.js";
 
 const row = (headers, fields) => headers.map((header) => fields[header] ?? "");
 const training = (eventId, extra = {}) => row(TRAINING_HEADERS, {
@@ -97,6 +98,30 @@ test("training API returns list/detail without other staff data", async () => {
   assert.equal((await call(handler, { resource: "training-detail", eventId: "missing" })).statusCode, 404);
   assert.equal((await call(handler, { resource: "training-detail" })).statusCode, 404);
   assert.equal((await call(handler, { resource: "invalid" })).statusCode, 400);
+});
+
+test("data-filled QA fixture returns only current staff fields in list and detail", async () => {
+  const assignment = { active: true, uid: "uid-1", schoolYear: 2026, semester: 2, staffId: "QA001", roles: ["staff"] };
+  const handler = handlerFor({
+    assignment,
+    directoryValue: [{ staffId: "QA001", employmentStatus: "재직" }],
+    sourceValue: trainingCenterSheetFixture,
+  });
+  const list = await call(handler);
+  assert.equal(list.statusCode, 200);
+  assert.deepEqual(list.body, { ok: true, items: expectedTrainingList });
+
+  const detail = await call(handler, { resource: "training-detail", eventId: "QA-TRAINING-001" });
+  assert.equal(detail.statusCode, 200);
+  assert.deepEqual(detail.body, { ok: true, item: expectedTrainingDetail });
+
+  for (const payload of [list.body, detail.body]) {
+    const serialized = JSON.stringify(payload);
+    for (const privateValue of ["QA001", "QA002", "테스트 타인", "타인 출석", "타인 제출", "타인 이수", "미사용 QA 교육"]) {
+      assert.equal(serialized.includes(privateValue), false, `${privateValue} must not appear in the response`);
+    }
+    assert.equal(serialized.includes("targets"), false);
+  }
 });
 
 test("valid staff receives an empty list from header-only sheets", async () => {

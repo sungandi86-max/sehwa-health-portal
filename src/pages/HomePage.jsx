@@ -52,8 +52,8 @@ export default function HomePage({ config }) {
       {
         id: "educationCenter",
         title: "교직원 교육센터",
-        description: "교육 일정 · QR 출석 · 이수증 제출 · 내 이수현황",
-        disabled: true,
+        description: "교육 일정 · 교육 대상 확인",
+        href: "/training",
       },
       {
         ...legacyMenuById.get("studentCare"),

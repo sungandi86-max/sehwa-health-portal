@@ -52,6 +52,10 @@ function TrainingListContent({ displayName }) {
     return () => { active = false; };
   }, []);
 
+  return <TrainingListView displayName={displayName} state={state} />;
+}
+
+export function TrainingListView({ displayName, state }) {
   const currentTrainings = state.items.filter((item) => item.status === "진행중" || item.status === "예정");
 
   return (
@@ -95,6 +99,10 @@ function TrainingDetailContent({ displayName }) {
     return () => { active = false; };
   }, [eventId]);
 
+  return <TrainingDetailView displayName={displayName} state={state} />;
+}
+
+export function TrainingDetailView({ displayName, state }) {
   const item = state.item;
   return (
     <FirebaseV2PageShell label="교직원 교육" title="교육 상세" description="교육 정보와 본인의 대상 여부를 확인합니다." displayName={displayName}>
@@ -112,7 +120,7 @@ function TrainingDetailContent({ displayName }) {
         </article>
         <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
           <h3 className="text-sm font-bold text-[#102047]">교육자료</h3>
-          {item.materials.length ? <ul className="mt-2 space-y-2">{item.materials.map((material, index) => <li key={`${material.title}-${index}`} className="min-w-0 break-words text-[13px]">{material.url ? <a href={material.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#0D4EA6] underline underline-offset-2">{material.title}</a> : <span className="text-[#627083]">{material.title} · 자료 준비 중</span>}</li>)}</ul> : <p className="mt-1 text-[13px] text-[#627083]">등록된 자료가 없습니다.</p>}
+          {item.materials.length ? <ul className="mt-2 space-y-2">{item.materials.map((material, index) => <li key={`${material.title}-${index}`} className="min-w-0 break-keep break-words text-[13px]">{material.url ? <a href={material.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#0D4EA6] underline underline-offset-2">{material.title}</a> : <span className="text-[#627083]">{material.title} · 자료 준비 중</span>}</li>)}</ul> : <p className="mt-1 text-[13px] text-[#627083]">등록된 자료가 없습니다.</p>}
         </section>
         <p className="rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 break-keep text-[13px] text-[#627083]">QR 출석과 이수증 제출은 추후 이 화면에서 제공할 예정입니다.</p>
       </>}
