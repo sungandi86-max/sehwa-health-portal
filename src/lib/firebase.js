@@ -1,16 +1,11 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider, OAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-
-const DEFAULT_FIREBASE_AUTH_DOMAIN = "sehwa-health-portal-v2.firebaseapp.com";
-const PRODUCTION_APP_DOMAIN = "sehwa-health-portal.vercel.app";
+import { resolveFirebaseAuthDomain } from "./firebaseAuthDomain.js";
 
 function getFirebaseAuthDomain() {
-  if (typeof window !== "undefined" && window.location.hostname === PRODUCTION_APP_DOMAIN) {
-    return PRODUCTION_APP_DOMAIN;
-  }
-
-  return import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || DEFAULT_FIREBASE_AUTH_DOMAIN;
+  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+  return resolveFirebaseAuthDomain(hostname, import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
 }
 
 const firebaseConfig = {
