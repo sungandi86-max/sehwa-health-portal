@@ -371,7 +371,7 @@ test("private shared-drive PNG uses safe options and records its request ID", as
     if (url.searchParams.get("alt") === "media") return new Response(inkPng());
     if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "writer" }] });
     if (url.pathname.endsWith("/files/FILE123")) return Response.json({ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"], driveId: "DRIVE123" });
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123" });
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123", capabilities: { canAddChildren: true } });
     if (url.pathname.endsWith("/files")) return Response.json({ files: [{ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"] }] });
     throw new Error("unexpected Drive request");
   };
@@ -387,6 +387,92 @@ test("private shared-drive PNG uses safe options and records its request ID", as
   assert.equal(urls.every(({ url }) => !url.pathname.endsWith("/permissions") || url.searchParams.get("supportsAllDrives") === "true"), true);
 });
 
+test("private My Drive folder with owner and writer permits a signature PNG", async () => {
+  const fetchImpl = async (input) => {
+    const url = new URL(input);
+    if (url.pathname.startsWith("/upload/")) return Response.json({ id: "FILE123" });
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
+    if (url.pathname.endsWith("/files/FILE123")) return Response.json({ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"] });
+    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "owner" }, { type: "user", role: "writer" }] });
+    throw new Error("unexpected Drive request");
+  };
+  const store = new TrainingCenterStore({ folderId: "FOLDER123", fetchImpl, accessToken: async () => "TEST_TOKEN" });
+  assert.equal(await store.uploadSignature(inkPng(), "EVENT-1", now(), "7b377431-4dc3-4bac-acf0-cbe7c8ea3346"), "FILE123");
+});
+
+test("My Drive broad ACL, inaccessible parent, and incomplete permission reads are distinguished", async () => {
+  for (const type of ["anyone", "domain"]) {
+    const store = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
+      const url = new URL(input);
+      if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
+      if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "writer" }, { type, role: "reader" }] });
+      throw new Error("unexpected Drive request");
+    } });
+    await assert.rejects(store.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }), DrivePrivacyError);
+  }
+  const parentHidden = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["PARENT123"], capabilities: { canAddChildren: true } });
+    if (url.pathname.endsWith("/files/PARENT123")) return new Response(null, { status: 404 });
+    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "writer" }] });
+    throw new Error("unexpected Drive request");
+  } });
+  await assert.doesNotReject(parentHidden.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }));
+  const publicParent = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["PARENT123"], capabilities: { canAddChildren: true } });
+    if (url.pathname.endsWith("/files/PARENT123")) return Response.json({ id: "PARENT123", mimeType: "application/vnd.google-apps.folder" });
+    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: url.pathname.includes("PARENT123") ? "domain" : "user", role: "reader" }] });
+    throw new Error("unexpected Drive request");
+  } });
+  await assert.rejects(publicParent.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }), DrivePrivacyError);
+  const permissionsUnavailable = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
+    if (url.pathname.endsWith("/permissions")) return new Response(null, { status: 403 });
+    throw new Error("unexpected Drive request");
+  } });
+  await assert.rejects(permissionsUnavailable.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }));
+  const emptyPermissions = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
+    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [] });
+    throw new Error("unexpected Drive request");
+  } });
+  await assert.rejects(emptyPermissions.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }), DrivePrivacyError);
+});
+
+test("shared-drive folder broad permissions fail before upload", async () => {
+  for (const type of ["anyone", "domain"]) {
+    let uploaded = false;
+    const store = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
+      const url = new URL(input);
+      if (url.pathname.startsWith("/upload/")) { uploaded = true; return Response.json({ id: "FILE123" }); }
+      if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", driveId: "DRIVE123", capabilities: { canAddChildren: true } });
+      if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type, role: "reader" }] });
+      throw new Error("unexpected Drive request");
+    } });
+    await assert.rejects(store.uploadSignature(inkPng(), "EVENT-1", now(), "7b377431-4dc3-4bac-acf0-cbe7c8ea3346"), DrivePrivacyError);
+    assert.equal(uploaded, false);
+  }
+});
+
+test("My Drive uploaded PNG with broad permission is blocked after creation", async () => {
+  let uploaded = false;
+  const store = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
+    const url = new URL(input);
+    if (url.pathname.startsWith("/upload/")) { uploaded = true; return Response.json({ id: "FILE123" }); }
+    if (url.pathname.endsWith("/permissions/PUBLIC")) return new Response(null, { status: 204 });
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
+    if (url.pathname.endsWith("/files/FILE123")) return Response.json({ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"] });
+    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: url.pathname.includes("FILE123") ?
+      [{ id: "PUBLIC", type: "anyone", role: "reader" }] : [{ type: "user", role: "writer" }] });
+    throw new Error("unexpected Drive request");
+  } });
+  await assert.rejects(store.uploadSignature(inkPng(), "EVENT-1", now(), "7b377431-4dc3-4bac-acf0-cbe7c8ea3346"), (error) => error instanceof DrivePrivacyError && error.fileId === "FILE123");
+  assert.equal(uploaded, true);
+});
+
 test("public Drive permission blocks a write and preserves the uploaded orphan", async () => {
   let uploaded = false;
   let revoked = false;
@@ -397,7 +483,7 @@ test("public Drive permission blocks a write and preserves the uploaded orphan",
     if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: url.pathname.includes("FILE123") && !revoked ?
       [{ id: "PUBLIC", type: "anyone", role: "reader", allowFileDiscovery: false }] : [{ type: "user", role: "reader" }] });
     if (url.pathname.endsWith("/files/FILE123")) return Response.json({ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"], driveId: "DRIVE123" });
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123" });
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123", capabilities: { canAddChildren: true } });
     throw new Error("unexpected Drive request");
   };
   const store = new TrainingCenterStore({ folderId: "FOLDER123", fetchImpl, accessToken: async () => "TEST_TOKEN" });
@@ -413,7 +499,7 @@ test("public parent folder blocks upload before any PNG is created", async () =>
     const url = new URL(input);
     if (url.pathname.startsWith("/upload/")) { uploaded = true; return Response.json({ id: "FILE123" }); }
     if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "domain", role: "reader" }] });
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123" });
+    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123", capabilities: { canAddChildren: true } });
     throw new Error("unexpected Drive request");
   };
   const store = new TrainingCenterStore({ folderId: "FOLDER123", fetchImpl, accessToken: async () => "TEST_TOKEN" });

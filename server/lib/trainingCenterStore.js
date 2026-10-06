@@ -12,7 +12,7 @@ export class DrivePrivacyError extends Error {
 }
 
 export function assertPrivatePermissions(permissions) {
-  if (!Array.isArray(permissions) || permissions.some((permission) => !permission?.type || ["anyone", "domain"].includes(permission.type))) {
+  if (!Array.isArray(permissions) || permissions.length === 0 || permissions.some((permission) => !permission?.type || ["anyone", "domain"].includes(permission.type))) {
     throw new DrivePrivacyError();
   }
 }
@@ -56,7 +56,11 @@ export class TrainingCenterStore {
     const response = await this.fetchImpl(`https://www.googleapis.com/drive/v3/${path}`, {
       headers: { Authorization: `Bearer ${await this.accessToken(scope)}` },
     });
-    if (!response.ok) throw new TrainingSourceNotReadyError();
+    if (!response.ok) {
+      const error = new TrainingSourceNotReadyError();
+      error.status = response.status;
+      throw error;
+    }
     return response.json();
   }
 
@@ -93,18 +97,28 @@ export class TrainingCenterStore {
     const visited = new Set();
     const queue = [fileId];
     let driveId = "";
+    let myDrive = false;
     while (queue.length) {
       const id = queue.shift();
       if (visited.has(id)) continue;
       if (visited.size >= 25) throw new DrivePrivacyError();
       visited.add(id);
       if (id !== driveId) {
-        const item = await this.driveJson(`files/${id}?fields=id,mimeType,parents,driveId&supportsAllDrives=true`);
+        let item;
+        try {
+          item = await this.driveJson(`files/${id}?fields=id,mimeType,parents,driveId,capabilities(canAddChildren)&supportsAllDrives=true`);
+        } catch (error) {
+          if (myDrive && id !== fileId && [403, 404].includes(error.status)) continue;
+          throw error;
+        }
         if (id === fileId && (mimeType && item.mimeType !== mimeType || parentId && !item.parents?.includes(parentId))) throw new DrivePrivacyError();
-        if (!item.driveId) throw new DrivePrivacyError();
-        driveId = item.driveId;
+        if (id === fileId) {
+          myDrive = !item.driveId;
+          if (mimeType === "application/vnd.google-apps.folder" && item.capabilities?.canAddChildren !== true) throw new DrivePrivacyError();
+        }
+        if (item.driveId) driveId = item.driveId;
         for (const parent of item.parents || []) if (!visited.has(parent)) queue.push(parent);
-        if (!visited.has(driveId)) queue.push(driveId);
+        if (driveId && !visited.has(driveId)) queue.push(driveId);
       }
       assertPrivatePermissions(await this.drivePermissions(id));
     }
