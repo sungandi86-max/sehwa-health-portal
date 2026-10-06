@@ -21,8 +21,7 @@ export async function previewTrainingReport(reportId) {
   return result.preview;
 }
 
-export async function downloadTrainingReport(reportId, filename) {
-  const response = await request(reportId, "download");
+async function saveDownload(response, filename) {
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -32,4 +31,29 @@ export async function downloadTrainingReport(reportId, filename) {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+export async function downloadTrainingReport(reportId, filename) {
+  const response = await request(reportId, "download");
+  await saveDownload(response, filename);
+}
+
+export async function downloadChildAbuseHwpxReport(input, filename) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("로그인이 필요합니다.");
+  const token = await user.getIdToken();
+  const response = await fetch("/api/firebase/admin/training-reports?report=childAbuse&action=hwpx", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const result = await response.json().catch(() => null);
+    throw new Error(result?.message || "HWPX 결과보고서 생성에 실패했습니다.");
+  }
+  await saveDownload(response, filename);
 }

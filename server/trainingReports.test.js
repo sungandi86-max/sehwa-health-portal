@@ -136,3 +136,136 @@ test("report endpoint returns 401 or 403 before reading source and never returns
   assert.equal(res.statusCode, 200);
   assert.equal(JSON.stringify(res.body).includes("CERT-SECRET"), false);
 });
+
+test("child abuse HWPX endpoint accepts confirmed inputs and returns the official content type", async () => {
+  let received = null;
+  const handler = createTrainingReportsHandler({
+    verifyAdmin: async () => ({ ok: true, db: {} }),
+    readModel: async () => ({
+      preview: {
+        canDownload: false,
+        resultReport: {
+          institutionName: "세화여자고등학교",
+          principal: "교장",
+          totalCount: 84,
+          completedCount: 51,
+        },
+      },
+    }),
+    makeHwpx: async (input) => {
+      received = input;
+      return Buffer.from("hwpx");
+    },
+  });
+  const res = {
+    statusCode: 200, headers: {},
+    setHeader(name, value) { this.headers[name] = value; return this; },
+    status(value) { this.statusCode = value; return this; },
+    json(value) { this.body = value; return this; },
+    send(value) { this.body = value; return this; },
+  };
+  await handler({
+    method: "POST",
+    query: { report: "childAbuse", action: "hwpx" },
+    body: JSON.stringify({
+      institutionName: "확인한 기관명",
+      address: "서울 서초구",
+      principal: "확인한 기관장",
+      trainingPeriod: "2026. 3. 2. ~ 9. 30.",
+      educationHours: "1시간",
+      educationMethod: "(인터넷) 복지부 위탁 기관",
+      totalCount: 80,
+      completedCount: 50,
+      referenceDate: "2026-12-31",
+    }),
+  }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers["Content-Type"], "application/hwp+zip");
+  assert.match(res.headers["Content-Disposition"], /filename\*=UTF-8''/);
+  assert.equal(received.totalCount, 80);
+  assert.equal(received.completedCount, 50);
+  assert.equal(received.institutionName, "확인한 기관명");
+  assert.equal(received.principal, "확인한 기관장");
+
+  const blockedExcel = {
+    statusCode: 200, headers: {},
+    setHeader(name, value) { this.headers[name] = value; return this; },
+    status(value) { this.statusCode = value; return this; },
+    json(value) { this.body = value; return this; },
+    send(value) { this.body = value; return this; },
+  };
+  await handler({
+    method: "GET",
+    query: { report: "childAbuse", action: "download" },
+  }, blockedExcel);
+  assert.equal(blockedExcel.statusCode, 409);
+
+  const validatingHandler = createTrainingReportsHandler({
+    verifyAdmin: async () => ({ ok: true, db: {} }),
+    readModel: async () => ({
+      preview: {
+        canDownload: true,
+        resultReport: {
+          institutionName: "세화여자고등학교",
+          principal: "교장",
+          totalCount: 84,
+          completedCount: 51,
+        },
+      },
+    }),
+  });
+  const missingCounts = {
+    statusCode: 200, headers: {},
+    setHeader(name, value) { this.headers[name] = value; return this; },
+    status(value) { this.statusCode = value; return this; },
+    json(value) { this.body = value; return this; },
+    send(value) { this.body = value; return this; },
+  };
+  await validatingHandler({
+    method: "POST",
+    query: { report: "childAbuse", action: "hwpx" },
+    body: JSON.stringify({
+      institutionName: "확인한 기관명",
+      address: "서울 서초구",
+      principal: "확인한 기관장",
+      trainingPeriod: "2026. 3. 2. ~ 9. 30.",
+      educationHours: "1시간",
+      educationMethod: "(인터넷) 복지부 위탁 기관",
+    }),
+  }, missingCounts);
+  assert.equal(missingCounts.statusCode, 400);
+
+  const oversized = {
+    statusCode: 200, headers: {},
+    setHeader(name, value) { this.headers[name] = value; return this; },
+    status(value) { this.statusCode = value; return this; },
+    json(value) { this.body = value; return this; },
+    send(value) { this.body = value; return this; },
+  };
+  await handler({
+    method: "POST",
+    query: { report: "childAbuse", action: "hwpx" },
+    body: JSON.stringify({ ignored: "가".repeat(20_000) }),
+  }, oversized);
+  assert.equal(oversized.statusCode, 413);
+});
+
+test("child abuse HWPX endpoint keeps fatal source validation blocking", async () => {
+  const handler = createTrainingReportsHandler({
+    verifyAdmin: async () => ({ ok: true, db: {} }),
+    readModel: async () => { throw new Error("연구부 source-only 정합성 오류"); },
+  });
+  const res = {
+    statusCode: 200, headers: {},
+    setHeader(name, value) { this.headers[name] = value; return this; },
+    status(value) { this.statusCode = value; return this; },
+    json(value) { this.body = value; return this; },
+    send(value) { this.body = value; return this; },
+  };
+  await handler({
+    method: "POST",
+    query: { report: "childAbuse", action: "hwpx" },
+    body: "{}",
+  }, res);
+  assert.equal(res.statusCode, 409);
+});
