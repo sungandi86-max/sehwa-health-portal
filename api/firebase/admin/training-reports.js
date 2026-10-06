@@ -34,9 +34,6 @@ export function createTrainingReportsHandler({
 
       const model = await readModel({ db: access.db, reportId });
       if (action === "preview") return res.status(200).json({ ok: true, preview: model.preview });
-      if (!model.preview.canDownload) {
-        return res.status(409).json({ ok: false, message: "누락 항목을 확인한 뒤 다운로드해 주세요.", preview: model.preview });
-      }
 
       if (isHwpxRequest) {
         const automatic = model.preview.resultReport;
@@ -61,6 +58,10 @@ export function createTrainingReportsHandler({
         res.setHeader("X-Content-Type-Options", "nosniff");
         res.setHeader("Content-Disposition", `attachment; filename="child-abuse-result-report.hwpx"; filename*=UTF-8''${encodeURIComponent(CHILD_ABUSE_HWPX_FILENAME)}`);
         return res.status(200).send(bytes);
+      }
+
+      if (!model.preview.canDownload) {
+        return res.status(409).json({ ok: false, message: "누락 항목을 확인한 뒤 다운로드해 주세요.", preview: model.preview });
       }
 
       const bytes = await makeXlsx(model);

@@ -143,7 +143,7 @@ test("child abuse HWPX endpoint accepts confirmed inputs and returns the officia
     verifyAdmin: async () => ({ ok: true, db: {} }),
     readModel: async () => ({
       preview: {
-        canDownload: true,
+        canDownload: false,
         resultReport: {
           institutionName: "세화여자고등학교",
           principal: "교장",
@@ -186,6 +186,19 @@ test("child abuse HWPX endpoint accepts confirmed inputs and returns the officia
   assert.equal(received.completedCount, 50);
   assert.equal(received.institutionName, "확인한 기관명");
   assert.equal(received.principal, "확인한 기관장");
+
+  const blockedExcel = {
+    statusCode: 200, headers: {},
+    setHeader(name, value) { this.headers[name] = value; return this; },
+    status(value) { this.statusCode = value; return this; },
+    json(value) { this.body = value; return this; },
+    send(value) { this.body = value; return this; },
+  };
+  await handler({
+    method: "GET",
+    query: { report: "childAbuse", action: "download" },
+  }, blockedExcel);
+  assert.equal(blockedExcel.statusCode, 409);
 
   const validatingHandler = createTrainingReportsHandler({
     verifyAdmin: async () => ({ ok: true, db: {} }),
@@ -235,4 +248,24 @@ test("child abuse HWPX endpoint accepts confirmed inputs and returns the officia
     body: JSON.stringify({ ignored: "가".repeat(20_000) }),
   }, oversized);
   assert.equal(oversized.statusCode, 413);
+});
+
+test("child abuse HWPX endpoint keeps fatal source validation blocking", async () => {
+  const handler = createTrainingReportsHandler({
+    verifyAdmin: async () => ({ ok: true, db: {} }),
+    readModel: async () => { throw new Error("연구부 source-only 정합성 오류"); },
+  });
+  const res = {
+    statusCode: 200, headers: {},
+    setHeader(name, value) { this.headers[name] = value; return this; },
+    status(value) { this.statusCode = value; return this; },
+    json(value) { this.body = value; return this; },
+    send(value) { this.body = value; return this; },
+  };
+  await handler({
+    method: "POST",
+    query: { report: "childAbuse", action: "hwpx" },
+    body: "{}",
+  }, res);
+  assert.equal(res.statusCode, 409);
 });
