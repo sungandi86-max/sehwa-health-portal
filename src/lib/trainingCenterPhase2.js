@@ -19,6 +19,7 @@ async function request(resource, { method = "GET", params = {}, body = null, dow
 }
 
 export const listManagedTrainings = () => request("training-admin-list");
+export const getTrainingRuntimePreflight = () => request("training-runtime-preflight");
 export const saveManagedTraining = (body) => request("training-admin-save", { method: "POST", body });
 export const listTrainingDirectory = () => request("training-admin-directory");
 export const listTrainingTargets = (eventId) => request("training-targets", { params: { eventId } });

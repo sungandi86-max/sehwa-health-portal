@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
-import { listManagedTrainings, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
+import { getTrainingRuntimePreflight, listManagedTrainings, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
+import { summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
 
 const fieldClass = "mt-1 min-h-11 w-full min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm text-[#102047] outline-none focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/10";
 const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50";
@@ -59,7 +60,38 @@ function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTr
   </form>;
 }
 
-export function TrainingAdminContent({ displayName, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining }) {
+export function TrainingRuntimePreflight({ runPreflight = getTrainingRuntimePreflight }) {
+  const [state, setState] = useState("idle");
+  const [result, setResult] = useState(null);
+
+  async function check() {
+    setState("loading");
+    setResult(null);
+    try {
+      setResult(summarizeTrainingRuntimePreflight(await runPreflight()));
+      setState("ready");
+    } catch {
+      setState("error");
+    }
+  }
+
+  const failed = result?.checks.filter(({ passed }) => !passed) || [];
+  const message = state === "idle" ? "아직 검사하지 않음" : state === "loading" ? "점검 중..."
+    : state === "error" ? "점검 요청에 실패했습니다." : result?.ready ? "전체 준비 완료" : "점검 필요";
+
+  return <section aria-label="런타임 점검" className="rounded-[10px] border border-[#DDEAE7] bg-white p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="min-w-0"><h2 className="text-sm font-bold text-[#102047]">런타임 점검</h2><p className="mt-1 break-keep text-xs text-[#627083]" role="status" aria-live="polite">{message}</p></div>
+      <button className={secondaryClass} type="button" onClick={check} disabled={state === "loading"}>{state === "loading" ? "점검 중..." : "런타임 점검"}</button>
+    </div>
+    {state === "ready" && result?.ready && <ul className="mt-3 grid gap-x-4 gap-y-1 border-t border-[#DDEAE7] pt-3 sm:grid-cols-2 lg:grid-cols-4">
+      {result.checks.map(({ key, label }) => <li className="break-keep text-xs text-[#08754B]" key={key}>{label} PASS</li>)}
+    </ul>}
+    {state === "ready" && !result?.ready && <p className="mt-3 break-keep border-t border-[#DDEAE7] pt-3 text-xs text-[#B42318]">{failed.length ? failed.map(({ label }) => label).join(" · ") : "전체 판정을 확인해 주세요."}</p>}
+  </section>;
+}
+
+export function TrainingAdminContent({ displayName, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
   const [items, setItems] = useState([]);
   const [state, setState] = useState("loading");
   const [message, setMessage] = useState("");
@@ -72,6 +104,7 @@ export function TrainingAdminContent({ displayName, loadTrainings = listManagedT
   useEffect(() => { reload(); }, []);
   return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 관리" description="교육 등록과 대상·QR·출석 업무를 관리합니다." displayName={displayName}>
     <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to="/firebase-dashboard">관리자 화면으로</Link><button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button></div>
+    <TrainingRuntimePreflight runPreflight={runPreflight} />
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     {state === "loading" && <p className="text-sm text-[#627083]">교육 목록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
