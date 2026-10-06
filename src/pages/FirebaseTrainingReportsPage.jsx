@@ -1,13 +1,17 @@
 import { useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
-import { downloadTrainingReport, previewTrainingReport } from "../lib/trainingReports.js";
+import { downloadChildAbuseHwpxReport, downloadTrainingReport, previewTrainingReport } from "../lib/trainingReports.js";
 
 const REPORTS = [
   { id: "violence", title: "4대폭력예방", filename: "2026_교직원_4대폭력예방_이수명부.xlsx" },
   { id: "disability", title: "장애인식개선(사회적)", filename: "2026_교직원_장애인식개선_사회적_이수명부.xlsx" },
   { id: "childAbuse", title: "아동학대 신고의무자교육", filename: "2026_아동학대_신고의무자교육_이수명부.xlsx" },
 ];
+
+const CHILD_ABUSE_HWPX_FILENAME = "2026_아동학대_신고의무자교육_교육결과보고서.hwpx";
+const EDUCATION_METHODS = ["집합 강사교육", "집합 온라인 교육", "(인터넷) 복지부 위탁 기관", "(인터넷) 기타 원격교육기관"];
+const fieldClass = "mt-1 min-h-11 w-full rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm text-[#102047] outline-none focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/10 disabled:bg-[#F3F8F6] disabled:text-[#627083]";
 
 function Count({ label, value }) {
   return <div className="min-w-0"><dt className="text-xs text-[#627083]">{label}</dt><dd className="mt-0.5 text-[17px] font-semibold tabular-nums text-[#102047]">{value}</dd></div>;
@@ -35,16 +39,65 @@ function Performance({ performance }) {
 }
 
 function ResultReport({ data }) {
-  const items = [
-    ["기관명", data.institutionName], ["소재지", data.address], ["기관장", data.principal],
-    ["총 인원수", `${data.totalCount}명`], ["교육 수료인원", `${data.completedCount}명`],
-    ["교육시간", data.educationHours], ["교육방법", data.educationMethod],
-  ];
+  const [form, setForm] = useState({
+    institutionName: data.institutionName || "",
+    address: data.address || "",
+    principal: data.principal || "",
+    trainingPeriod: "",
+    instructor: "",
+    totalCount: data.totalCount,
+    completedCount: data.completedCount,
+    referenceDate: "",
+    educationHours: data.educationHours || "",
+    educationMethod: data.educationMethod || "",
+    platformOrg: "",
+    platformUrl: "",
+  });
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+  const setField = (name) => (event) => setForm((current) => ({ ...current, [name]: event.target.value }));
+  const needsInstructor = form.educationMethod === "집합 강사교육";
+  const needsPlatform = form.educationMethod === "(인터넷) 기타 원격교육기관";
+
+  async function submit(event) {
+    event.preventDefault();
+    setMessage("");
+    setWorking(true);
+    try {
+      await downloadChildAbuseHwpxReport(form, CHILD_ABUSE_HWPX_FILENAME);
+    } catch (error) {
+      setMessage(error.message || "HWPX 결과보고서 생성에 실패했습니다.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   return (
     <section className="border-t border-[#DDEAE7] pt-4">
-      <h3 className="text-sm font-semibold text-[#102047]">결과보고서 입력값 미리보기</h3>
-      <p className="mt-1 break-keep text-xs text-[#627083]">소재지·교육시간·교육방법은 공식 양식을 확인해 입력해야 합니다. HWPX 생성은 이번 단계에 포함되지 않습니다.</p>
-      <dl className="mt-2 grid gap-x-5 gap-y-2 sm:grid-cols-2">{items.map(([label, value]) => <div key={label} className="flex justify-between gap-3 border-b border-[#DDEAE7] py-1 text-sm"><dt className="text-[#627083]">{label}</dt><dd className="text-right font-medium text-[#102047]">{value || "입력 필요"}</dd></div>)}</dl>
+      <h3 className="text-sm font-semibold text-[#102047]">HWPX 교육 결과보고서</h3>
+      <p className="mt-1 break-keep text-xs leading-5 text-[#627083]">공식 양식에 들어갈 운영 정보를 확인해 주세요. 대상·수료 인원은 현재 연구부 자료로 미리 채워지며 기준일에 맞게 확인·수정할 수 있습니다.</p>
+      <form className="mt-3 space-y-3" onSubmit={submit}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-[13px] font-medium text-[#102047]">기관명 · 시설명<input className={fieldClass} value={form.institutionName} onChange={setField("institutionName")} required /></label>
+          <label className="text-[13px] font-medium text-[#102047]">소재지<input className={fieldClass} value={form.address} onChange={setField("address")} placeholder="시도 및 시군구" required /></label>
+          <label className="text-[13px] font-medium text-[#102047]">시설장(기관장) 성명<input className={fieldClass} value={form.principal} onChange={setField("principal")} required /></label>
+          <label className="text-[13px] font-medium text-[#102047]">교육일시<input className={fieldClass} value={form.trainingPeriod} onChange={setField("trainingPeriod")} placeholder="예: 2026. 3. 2. ~ 9. 30." required /></label>
+          <label className="text-[13px] font-medium text-[#102047]">총 인원수<input className={fieldClass} type="number" min="0" step="1" value={form.totalCount} onChange={setField("totalCount")} required /></label>
+          <label className="text-[13px] font-medium text-[#102047]">교육 수료인원<input className={fieldClass} type="number" min="0" step="1" value={form.completedCount} onChange={setField("completedCount")} required /></label>
+          <label className="text-[13px] font-medium text-[#102047] sm:col-span-2">총 인원수 기준일<input className={fieldClass} type="date" value={form.referenceDate} onChange={setField("referenceDate")} required /></label>
+          <label className="text-[13px] font-medium text-[#102047]">교육시간<input className={fieldClass} value={form.educationHours} onChange={setField("educationHours")} placeholder="예: 1시간" required /></label>
+          <label className="text-[13px] font-medium text-[#102047]">교육방법<select className={fieldClass} value={form.educationMethod} onChange={setField("educationMethod")} required><option value="">선택</option>{EDUCATION_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}</select></label>
+          {needsInstructor && <label className="text-[13px] font-medium text-[#102047] sm:col-span-2">강사명(소속)<input className={fieldClass} value={form.instructor} onChange={setField("instructor")} required /></label>}
+          {needsPlatform && <>
+            <label className="text-[13px] font-medium text-[#102047]">교육(탑재)운영 기관명<input className={fieldClass} value={form.platformOrg} onChange={setField("platformOrg")} required /></label>
+            <label className="text-[13px] font-medium text-[#102047]">탑재 사이트 주소<input className={fieldClass} value={form.platformUrl} onChange={setField("platformUrl")} placeholder="https://" required /></label>
+          </>}
+        </div>
+        {message && <p role="alert" className="rounded-[9px] border border-[#F6D8D8] bg-[#FFF7F7] px-3 py-2 text-[13px] text-[#B42318]">{message}</p>}
+        <div className="flex justify-end">
+          <button type="submit" disabled={working} className="min-h-11 rounded-[9px] bg-[#0D4EA6] px-4 text-[13px] font-semibold text-white hover:bg-[#183B8F] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/20 disabled:cursor-not-allowed disabled:opacity-50">{working ? "생성 중…" : "HWPX 결과보고서 다운로드"}</button>
+        </div>
+      </form>
     </section>
   );
 }

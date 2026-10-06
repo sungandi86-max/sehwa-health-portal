@@ -30,12 +30,35 @@ export function getBearerToken(req) {
   return header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
 }
 
-export async function readJsonBody(req) {
-  if (req.body && typeof req.body === "object") return req.body;
-  if (typeof req.body === "string") return JSON.parse(req.body || "{}");
+export async function readJsonBody(req, { maxBytes = Infinity } = {}) {
+  function assertSize(value) {
+    if (Buffer.byteLength(value, "utf8") > maxBytes) {
+      const error = new RangeError("요청 본문이 너무 큽니다.");
+      error.code = "body-too-large";
+      throw error;
+    }
+  }
+
+  if (req.body && typeof req.body === "object") {
+    assertSize(JSON.stringify(req.body));
+    return req.body;
+  }
+  if (typeof req.body === "string") {
+    assertSize(req.body);
+    return JSON.parse(req.body || "{}");
+  }
 
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) {
+      const error = new RangeError("요청 본문이 너무 큽니다.");
+      error.code = "body-too-large";
+      throw error;
+    }
+    chunks.push(chunk);
+  }
   const bodyText = Buffer.concat(chunks).toString("utf8");
   return bodyText ? JSON.parse(bodyText) : {};
 }
