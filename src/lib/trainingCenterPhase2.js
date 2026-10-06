@@ -32,7 +32,7 @@ export const correctTrainingAttendance = (body) => request("training-attendance-
 export const getTrainingFinalSheet = (eventId) => request("training-final-sheet", { params: { eventId } });
 
 export async function downloadTrainingFinalSheet(eventId, filename) {
-  const blob = await request("training-final-sheet", { params: { eventId, download: "1" }, download: true });
+  const blob = await request("training-final-sheet", { params: { eventId, download: "pdf" }, download: true });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

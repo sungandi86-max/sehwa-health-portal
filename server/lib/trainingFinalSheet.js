@@ -1,60 +1,126 @@
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import ExcelJS from "exceljs";
+import { PNG } from "pngjs";
 
-export async function makeTrainingFinalSheetXlsx(model, { readSignature } = {}) {
-  if (!model?.event || !Array.isArray(model.rows)) throw new RangeError("서명부 자료를 확인해 주세요.");
-  const imageRows = model.rows.map((row, index) => ({ index, fileId: row.fileId })).filter((row) => row.fileId);
-  if (imageRows.length && typeof readSignature !== "function") throw new Error("서명 파일을 읽을 수 없습니다.");
+const TEMPLATE_URL = new URL("../templates/training-roster-cpr-2026.xlsx", import.meta.url);
+const FIRST_DATA_ROW = 4;
+const LAST_DATA_ROW = 98;
+const MAX_TEMPLATE_ROWS = LAST_DATA_ROW - FIRST_DATA_ROW + 1;
+const PAGE_BREAK_ROWS = [23, 44, 85];
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function safeFilename(value) {
+  return String(value || "교육").replace(/[\\/:*?"<>|\r\n]/g, "_").slice(0, 60);
+}
+
+function trainingDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) throw new RangeError("교육 일자를 확인해 주세요.");
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new RangeError("교육 일자를 확인해 주세요.");
+  return `${Number(match[2])}.${Number(match[3])}.(${WEEKDAYS[date.getUTCDay()]})`;
+}
+
+function assertPng(bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length < 8 || !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    throw new RangeError("서명 이미지 형식이 올바르지 않습니다.");
+  }
+}
+
+function placeSignature(workbook, sheet, rowNumber, bytes) {
+  assertPng(bytes);
+  const image = PNG.sync.read(bytes);
+  const cellWidthPx = Math.floor((sheet.getColumn(4).width || 8.43) * 7 + 5);
+  const cellHeightPx = Math.max(1, Math.floor((sheet.getRow(rowNumber).height || 15) * 4 / 3));
+  const scale = Math.min(1, cellWidthPx * 0.88 / image.width, cellHeightPx * 0.8 / image.height);
+  const width = Math.max(1, Math.floor(image.width * scale));
+  const height = Math.max(1, Math.floor(image.height * scale));
+  const left = (cellWidthPx - width) / 2;
+  const top = (cellHeightPx - height) / 2;
+  const imageId = workbook.addImage({ buffer: bytes, extension: "png" });
+  sheet.addImage(imageId, {
+    tl: { col: 3 + left / cellWidthPx, row: rowNumber - 1 + top / cellHeightPx },
+    ext: { width, height },
+    editAs: "oneCell",
+  });
+}
+
+async function readSignatures(rows, readSignature) {
+  const withFiles = rows.map((row, index) => ({ index, fileId: row.fileId })).filter(({ fileId }) => fileId);
+  if (withFiles.length && typeof readSignature !== "function") throw new Error("서명 파일을 읽을 수 없습니다.");
   const images = new Map();
   let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(6, imageRows.length) }, async () => {
-    while (cursor < imageRows.length) {
-      const next = imageRows[cursor++];
+  await Promise.all(Array.from({ length: Math.min(6, withFiles.length) }, async () => {
+    while (cursor < withFiles.length) {
+      const next = withFiles[cursor++];
       images.set(next.index, await readSignature(next.fileId));
     }
   }));
+  return images;
+}
+
+export async function makeTrainingRosterXlsx(model, { readSignature, templateBytes } = {}) {
+  if (!model?.event || !Array.isArray(model.rows)) throw new RangeError("연수등록부 자료를 확인해 주세요.");
+  const rows = model.rows.filter((row) => row.status !== "제외");
+  if (rows.length > MAX_TEMPLATE_ROWS) throw new RangeError(`연수등록부는 최대 ${MAX_TEMPLATE_ROWS}명까지 출력할 수 있습니다.`);
+  const images = await readSignatures(rows, readSignature);
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "온라인 보건실";
-  const sheet = workbook.addWorksheet("최종 서명부", {
-    pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-    views: [{ state: "frozen", ySplit: 3 }],
-  });
-  sheet.columns = [{ width: 7 }, { width: 17 }, { width: 20 }, { width: 16 }, { width: 16 }, { width: 25 }, { width: 25 }];
-  sheet.mergeCells("A1:G1");
-  sheet.getCell("A1").value = `${model.event.title} 최종 서명부`;
-  sheet.getCell("A1").font = { name: "맑은 고딕", size: 15, bold: true, color: { argb: "FF102047" } };
-  sheet.getRow(1).height = 34;
-  sheet.mergeCells("A2:G2");
-  sheet.getCell("A2").value = `${model.event.date} · ${model.event.location || "장소 미정"} · 대상 ${model.counts.target}명 · 서명 ${model.counts.signed}명 · 제외 ${model.counts.excluded}명`;
-  sheet.getCell("A2").font = { name: "맑은 고딕", size: 10, color: { argb: "FF627083" } };
-  sheet.getRow(2).height = 23;
-  ["번호", "성명", "부서", "직책", "상태", "서명일시", "전자서명"].forEach((title, index) => { sheet.getRow(3).getCell(index + 1).value = title; });
-  sheet.getRow(3).height = 26;
-  sheet.getRow(3).eachCell((cell) => {
-    cell.font = { name: "맑은 고딕", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0D4EA6" } };
-    cell.alignment = { horizontal: "center", vertical: "middle" };
-  });
-  for (const [index, person] of model.rows.entries()) {
-    const row = sheet.addRow([index + 1, person.name, person.department, person.position, person.status, person.signedAt, person.fileId ? "" : person.method === "correction" ? "관리자 보정" : ""]);
-    row.height = 58;
-    row.eachCell((cell) => {
-      cell.font = { name: "맑은 고딕", size: 10, color: { argb: "FF102047" } };
-      cell.border = { bottom: { style: "hair", color: { argb: "FFDDEAE7" } } };
-      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-    });
-    if (person.fileId) {
-      const bytes = images.get(index);
-      const imageId = workbook.addImage({ buffer: bytes, extension: "png" });
-      sheet.addImage(imageId, { tl: { col: 6.1, row: index + 3.1 }, br: { col: 6.9, row: index + 3.9 }, editAs: "oneCell" });
-    }
+  await workbook.xlsx.load(templateBytes || await readFile(TEMPLATE_URL));
+  const sheet = workbook.worksheets[0];
+  if (!sheet || sheet.name !== "Sheet1" || sheet.getCell("A3").value !== "연번" || sheet.getCell("D3").value !== "서명") {
+    throw new Error("연수등록부 템플릿 구조를 확인해 주세요.");
   }
-  sheet.autoFilter = { from: "A3", to: `G${Math.max(3, sheet.lastRow.number)}` };
+
+  const year = String(model.event.date).slice(0, 4);
+  sheet.getCell("A1").value = {
+    richText: [
+      { font: { name: "맑은 고딕", family: 3, charset: 129, size: 14, bold: true }, text: `(${year}학년도 ${model.event.title}) 연수 등록부` },
+      { font: { name: "맑은 고딕", family: 3, charset: 129, size: 18, bold: true }, text: "\n                                               " },
+      { font: { name: "맑은 고딕", family: 3, charset: 129, size: 11 }, text: "세화여자고등학교" },
+    ],
+  };
+  sheet.getCell("A2").value = {
+    richText: [
+      { font: { name: "맑은 고딕", family: 3, charset: 129, size: 12 }, text: `◈ 일시: ${model.event.date}` },
+      { font: { name: "맑은 고딕", family: 3, charset: 129, size: 12 }, text: "\n" },
+      { font: { name: "맑은 고딕", family: 3, charset: 129, size: 12 }, text: `◈ 장소: ${model.event.location || "장소 미정"}` },
+    ],
+  };
+
+  for (let rowNumber = FIRST_DATA_ROW; rowNumber <= LAST_DATA_ROW; rowNumber += 1) {
+    for (let column = 1; column <= 5; column += 1) sheet.getRow(rowNumber).getCell(column).value = null;
+  }
+  const dateLabel = trainingDate(model.event.date);
+  rows.forEach((person, index) => {
+    const rowNumber = FIRST_DATA_ROW + index;
+    const row = sheet.getRow(rowNumber);
+    row.getCell(1).value = index + 1;
+    row.getCell(2).value = person.position || "";
+    row.getCell(3).value = person.name || "";
+    row.getCell(5).value = dateLabel;
+    if (images.has(index)) placeSignature(workbook, sheet, rowNumber, images.get(index));
+  });
+  const lastRow = Math.max(FIRST_DATA_ROW, FIRST_DATA_ROW + rows.length - 1);
+  for (const rowNumber of PAGE_BREAK_ROWS) {
+    if (rowNumber < lastRow) sheet.getRow(rowNumber).addPageBreak(1, 5);
+  }
+  sheet.pageSetup.printArea = `A1:E${lastRow}`;
   sheet.pageSetup.printTitlesRow = "1:3";
-  sheet.pageSetup.printArea = `A1:G${Math.max(3, sheet.lastRow.number)}`;
+  workbook.creator = "온라인 보건실";
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
-export function finalSheetFilename(event) {
-  const safe = String(event.title || "교육").replace(/[\\/:*?"<>|\r\n]/g, "_").slice(0, 60);
-  return `${event.date || "교육"}_${safe}_최종서명부.xlsx`;
+export function trainingRosterPdfFilename(event) {
+  return `${event.date || "교육"}_${safeFilename(event.title)}_연수등록부.pdf`;
 }
+
+export function trainingRosterXlsxFilename(event) {
+  return `${event.date || "교육"}_${safeFilename(event.title)}_연수등록부.xlsx`;
+}
+
+export async function trainingRosterTemplateHash() {
+  return createHash("sha256").update(await readFile(TEMPLATE_URL)).digest("hex");
+}
+
+export { FIRST_DATA_ROW, LAST_DATA_ROW, MAX_TEMPLATE_ROWS, PAGE_BREAK_ROWS, TEMPLATE_URL };

@@ -15,8 +15,9 @@ const preflightMode = new URLSearchParams(window.location.search).get("preflight
 const runPreflight = async () => {
   if (preflightMode === "loading") return new Promise(() => {});
   return { ok: preflightMode === "success", checks: {
-    qrSecretConfigured: true, qrSecretValid: true, driveFolderConfigured: true,
-    driveFolderAccessible: true, driveFolderWritable: true, driveFolderPrivate: preflightMode === "success",
+    qrSecretConfigured: true, qrSecretValid: true, signatureGatewayConfigured: true,
+    signatureGatewayReachable: true, signatureGatewayAuthenticated: true,
+    signatureStorageReady: preflightMode === "success", signatureReadReady: preflightMode === "success",
     signatureSheetReady: true, firebaseAdminReady: true,
   } };
 };

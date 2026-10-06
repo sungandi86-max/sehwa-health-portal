@@ -6,9 +6,10 @@ import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
 import { MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { createTrainingPhase2Handler } from "./trainingCenterPhase2Api.js";
 import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
-import { DriveApiError, DrivePrivacyError, hasSignatureSheetSchema, managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
+import { hasSignatureSheetSchema, managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
 import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
-import { makeTrainingFinalSheetXlsx } from "./trainingFinalSheet.js";
+import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
+import { SignatureGatewayError } from "./trainingSignatureGateway.js";
 
 const row = (headers, values) => headers.map((header) => values[header] ?? "");
 const open = "2026-10-06T08:00:00+09:00";
@@ -86,9 +87,9 @@ function fakeStore({ appendMode = "success" } = {}) {
   const calls = { uploads: 0, appended: 0, saved: 0 };
   return {
     calls, values,
-    folderId: "FOLDER123",
-    assertSignatureFolderConfigured: () => {},
-    inspectSignatureFolder: async () => ({ accessible: true, writable: true, private: true, storageSupported: true }),
+    signatureGatewayConfigured: true,
+    assertSignatureGatewayConfigured: () => {},
+    inspectSignatureGateway: async () => ({ reachable: true, authenticated: true, storageReady: true, readReady: true }),
     isSignatureSheetReady: async () => true,
     listSignatureFilesByRequest: async () => [],
     readBase: async () => values,
@@ -125,7 +126,8 @@ function harness(options = {}) {
     } }),
     db: () => db,
     directory: async () => ({ directory, stats: { duplicateStaffIds: 0 } }),
-    store, secret: () => options.secret ?? secret, now: options.now || now,
+    store, rosterPdf: options.rosterPdf || { render: async () => Buffer.from("%PDF-test") },
+    secret: () => options.secret ?? secret, now: options.now || now,
   });
   async function call(resource, { token = "admin", method = "GET", query = {}, body = null } = {}) {
     const res = response();
@@ -364,186 +366,28 @@ test("fresh and completed reservations cannot be recovered", async () => {
   assert.equal((await done.call("training-attendance-recovery-apply", { method: "POST", body: query })).statusCode, 409);
 });
 
-test("private shared-drive PNG uses safe options and records its request ID", async () => {
-  const urls = [];
+test("TrainingCenterStore delegates private signature storage to the Gateway adapter", async () => {
   const requestId = "7b377431-4dc3-4bac-acf0-cbe7c8ea3346";
-  const fetchImpl = async (input, options = {}) => {
-    const url = new URL(input);
-    urls.push({ url, options });
-    if (url.pathname.startsWith("/upload/")) return Response.json({ id: "FILE123" });
-    if (url.searchParams.get("alt") === "media") return new Response(inkPng());
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "writer" }] });
-    if (url.pathname.endsWith("/files/FILE123")) return Response.json({ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"], driveId: "DRIVE123" });
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123", capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/files")) return Response.json({ files: [{ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"] }] });
-    throw new Error("unexpected Drive request");
+  const calls = [];
+  const storage = {
+    configured: true,
+    healthCheck: async () => ({ reachable: true, authenticated: true, storageReady: true, readReady: true }),
+    saveSignature: async (input) => { calls.push(["save", input]); return "2026/EVENT-1/" + requestId + ".png"; },
+    readSignature: async (storageKey) => { calls.push(["read", storageKey]); return inkPng(); },
+    findByRequestId: async (id) => { calls.push(["find", id]); return [{ id: "2026/EVENT-1/" + id + ".png", private: true }]; },
   };
-  const store = new TrainingCenterStore({ folderId: "FOLDER123", fetchImpl, accessToken: async () => "TEST_TOKEN" });
-  assert.deepEqual(await store.inspectSignatureFolder(), { accessible: true, writable: true, private: true, storageSupported: true });
-  assert.equal(await store.uploadSignature(inkPng(), "EVENT-1", now(), requestId), "FILE123");
-  assert.equal((await store.downloadSignature("FILE123")).length > 100, true);
-  assert.deepEqual((await store.listSignatureFilesByRequest(requestId)).map((file) => file.id), ["FILE123"]);
-  const upload = urls.find(({ url }) => url.pathname.startsWith("/upload/"));
-  assert.equal(upload.url.searchParams.get("supportsAllDrives"), "true");
-  assert.equal(upload.url.searchParams.get("ignoreDefaultVisibility"), "true");
-  assert.equal(upload.options.body.includes(`trainingRequestId":"${requestId}`), true);
-  assert.equal(urls.filter(({ url }) => url.pathname.endsWith("/files/FILE123") && url.searchParams.get("alt") === "media")[0].url.searchParams.get("supportsAllDrives"), "true");
-  assert.equal(urls.every(({ url }) => !url.pathname.endsWith("/permissions") || url.searchParams.get("supportsAllDrives") === "true"), true);
+  const store = new TrainingCenterStore({ storage });
+  assert.deepEqual(await store.inspectSignatureGateway(), { reachable: true, authenticated: true, storageReady: true, readReady: true });
+  assert.equal(await store.uploadSignature(inkPng(), "EVENT-1", now(), requestId), "2026/EVENT-1/" + requestId + ".png");
+  assert.equal((await store.downloadSignature("2026/EVENT-1/" + requestId + ".png")).length > 100, true);
+  assert.equal((await store.listSignatureFilesByRequest(requestId))[0].private, true);
+  assert.deepEqual(calls.map(([action]) => action), ["save", "read", "find"]);
 });
-
-test("Drive create preserves only safe status and quota reason", async () => {
-  const sensitive = "DO_NOT_LOG_KEY_OR_FOLDER_ID";
-  let uploads = 0;
-  const store = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-    const url = new URL(input);
-    if (url.pathname.startsWith("/upload/")) {
-      uploads += 1;
-      return Response.json({ error: { code: 403, status: "PERMISSION_DENIED", message: sensitive,
-        errors: [{ reason: "storageQuotaExceeded", message: sensitive }] } }, { status: 403 });
-    }
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", driveId: "DRIVE123", capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "writer" }] });
-    throw new Error("unexpected Drive request");
-  } });
-  await assert.rejects(store.uploadSignature(inkPng(), "EVENT-1", now(), "7b377431-4dc3-4bac-acf0-cbe7c8ea3346"), (error) => {
-    assert.equal(error instanceof DriveApiError, true);
-    assert.deepEqual({ stage: error.stage, status: error.status, code: error.code, reason: error.reason },
-      { stage: "DRIVE_CREATE", status: 403, code: "PERMISSION_DENIED", reason: "storageQuotaExceeded" });
-    assert.equal(JSON.stringify(error).includes(sensitive), false);
-    assert.equal(error.message.includes(sensitive), false);
-    return true;
-  });
-  assert.equal(uploads, 1);
-  const unknown = new DriveApiError("DRIVE_CREATE", 403, "DO_NOT_LOG_KEY_OR_FOLDER_ID", "DO_NOT_LOG_KEY_OR_FOLDER_ID");
-  assert.equal(unknown.code, "");
-  assert.equal(unknown.reason, "");
-});
-
-test("private My Drive remains private but rejects service-account upload before create", async () => {
-  let uploaded = false;
-  const fetchImpl = async (input) => {
-    const url = new URL(input);
-    if (url.pathname.startsWith("/upload/")) { uploaded = true; return Response.json({ id: "FILE123" }); }
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/files/FILE123")) return Response.json({ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"] });
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "owner" }, { type: "user", role: "writer" }] });
-    throw new Error("unexpected Drive request");
-  };
-  const store = new TrainingCenterStore({ folderId: "FOLDER123", fetchImpl, accessToken: async () => "TEST_TOKEN" });
-  assert.deepEqual(await store.inspectSignatureFolder(), { accessible: true, writable: true, private: true, storageSupported: false });
-  await assert.rejects(store.uploadSignature(inkPng(), "EVENT-1", now(), "7b377431-4dc3-4bac-acf0-cbe7c8ea3346"), TrainingSourceNotReadyError);
-  assert.equal(uploaded, false);
-});
-
-test("My Drive broad ACL, inaccessible parent, and incomplete permission reads are distinguished", async () => {
-  for (const type of ["anyone", "domain"]) {
-    const store = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-      const url = new URL(input);
-      if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
-      if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "writer" }, { type, role: "reader" }] });
-      throw new Error("unexpected Drive request");
-    } });
-    await assert.rejects(store.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }), DrivePrivacyError);
-  }
-  const parentHidden = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-    const url = new URL(input);
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["PARENT123"], capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/files/PARENT123")) return new Response(null, { status: 404 });
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "writer" }] });
-    throw new Error("unexpected Drive request");
-  } });
-  await assert.doesNotReject(parentHidden.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }));
-  const publicParent = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-    const url = new URL(input);
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["PARENT123"], capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/files/PARENT123")) return Response.json({ id: "PARENT123", mimeType: "application/vnd.google-apps.folder" });
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: url.pathname.includes("PARENT123") ? "domain" : "user", role: "reader" }] });
-    throw new Error("unexpected Drive request");
-  } });
-  await assert.rejects(publicParent.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }), DrivePrivacyError);
-  const permissionsUnavailable = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-    const url = new URL(input);
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/permissions")) return new Response(null, { status: 403 });
-    throw new Error("unexpected Drive request");
-  } });
-  await assert.rejects(permissionsUnavailable.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }));
-  const emptyPermissions = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-    const url = new URL(input);
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [] });
-    throw new Error("unexpected Drive request");
-  } });
-  await assert.rejects(emptyPermissions.assertPrivateDriveItem("FOLDER123", { mimeType: "application/vnd.google-apps.folder" }), DrivePrivacyError);
-});
-
-test("shared-drive folder broad permissions fail before upload", async () => {
-  for (const type of ["anyone", "domain"]) {
-    let uploaded = false;
-    const store = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-      const url = new URL(input);
-      if (url.pathname.startsWith("/upload/")) { uploaded = true; return Response.json({ id: "FILE123" }); }
-      if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", driveId: "DRIVE123", capabilities: { canAddChildren: true } });
-      if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type, role: "reader" }] });
-      throw new Error("unexpected Drive request");
-    } });
-    assert.deepEqual(await store.inspectSignatureFolder(), { accessible: true, writable: true, private: false, storageSupported: false });
-    await assert.rejects(store.uploadSignature(inkPng(), "EVENT-1", now(), "7b377431-4dc3-4bac-acf0-cbe7c8ea3346"), DrivePrivacyError);
-    assert.equal(uploaded, false);
-  }
-});
-
-test("My Drive uploaded PNG privacy remains independently checkable", async () => {
-  const store = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-    const url = new URL(input);
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/files/FILE123")) return Response.json({ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"] });
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: url.pathname.includes("FILE123") ?
-      [{ id: "PUBLIC", type: "anyone", role: "reader" }] : [{ type: "user", role: "writer" }] });
-    throw new Error("unexpected Drive request");
-  } });
-  await assert.rejects(store.assertPrivateDriveItem("FILE123", { mimeType: "image/png", parentId: "FOLDER123" }), DrivePrivacyError);
-});
-
-test("public Drive permission blocks a write and preserves the uploaded orphan", async () => {
-  let uploaded = false;
-  let revoked = false;
-  const fetchImpl = async (input, options = {}) => {
-    const url = new URL(input);
-    if (url.pathname.startsWith("/upload/")) { uploaded = true; return Response.json({ id: "FILE123" }); }
-    if (url.pathname.endsWith("/permissions/PUBLIC") && options.method === "DELETE") { revoked = true; return new Response(null, { status: 204 }); }
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: url.pathname.includes("FILE123") && !revoked ?
-      [{ id: "PUBLIC", type: "anyone", role: "reader", allowFileDiscovery: false }] : [{ type: "user", role: "reader" }] });
-    if (url.pathname.endsWith("/files/FILE123")) return Response.json({ id: "FILE123", mimeType: "image/png", parents: ["FOLDER123"], driveId: "DRIVE123" });
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123", capabilities: { canAddChildren: true } });
-    throw new Error("unexpected Drive request");
-  };
-  const store = new TrainingCenterStore({ folderId: "FOLDER123", fetchImpl, accessToken: async () => "TEST_TOKEN" });
-  await assert.rejects(store.uploadSignature(inkPng(), "EVENT-1", now(), "7b377431-4dc3-4bac-acf0-cbe7c8ea3346"), (error) => error instanceof DrivePrivacyError && error.fileId === "FILE123");
-  assert.equal(uploaded, true);
-  assert.equal(revoked, true);
-  assert.throws(() => new TrainingCenterStore({ folderId: "" }).assertSignatureFolderConfigured(), TrainingSourceNotReadyError);
-});
-
-test("public parent folder blocks upload before any PNG is created", async () => {
-  let uploaded = false;
-  const fetchImpl = async (input) => {
-    const url = new URL(input);
-    if (url.pathname.startsWith("/upload/")) { uploaded = true; return Response.json({ id: "FILE123" }); }
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "domain", role: "reader" }] });
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", parents: ["DRIVE123"], driveId: "DRIVE123", capabilities: { canAddChildren: true } });
-    throw new Error("unexpected Drive request");
-  };
-  const store = new TrainingCenterStore({ folderId: "FOLDER123", fetchImpl, accessToken: async () => "TEST_TOKEN" });
-  await assert.rejects(store.uploadSignature(inkPng(), "EVENT-1", now(), "7b377431-4dc3-4bac-acf0-cbe7c8ea3346"), DrivePrivacyError);
-  assert.equal(uploaded, false);
-});
-
-test("short QR secret and missing signature folder fail as configuration errors", async () => {
+test("short QR secret and missing signature Gateway fail as configuration errors", async () => {
   const short = harness({ secret: "short" });
   assert.equal((await short.call("training-qr", { query: { eventId: "EVENT-1" } })).statusCode, 503);
   const missing = harness();
-  missing.store.assertSignatureFolderConfigured = () => { throw new TrainingSourceNotReadyError(); };
+  missing.store.assertSignatureGatewayConfigured = () => { throw new TrainingSourceNotReadyError(); };
   assert.equal((await missing.call("training-qr", { query: { eventId: "EVENT-1" } })).statusCode, 503);
 });
 
@@ -560,10 +404,10 @@ test("Sheet append uncertainty keeps the lock pending; committed response reconc
   assert.equal(after.store.values.signatures.length, 2);
 });
 
-test("Drive failure with unknown file ID remains searchable after a retry", async () => {
+test("Gateway response loss with unknown storage key remains searchable after a retry", async () => {
   const { call, db, store } = harness();
   const failedRequestIds = [];
-  store.uploadSignature = async (_bytes, _eventId, _now, requestId) => { failedRequestIds.push(requestId); throw new Error("simulated Drive response loss"); };
+  store.uploadSignature = async (_bytes, _eventId, _now, requestId) => { failedRequestIds.push(requestId); throw new Error("simulated Gateway response loss"); };
   const challenge = issueQrChallenge({ eventId: "EVENT-1", secret, now: now().getTime() });
   const body = { eventId: "EVENT-1", challenge, signature: `data:image/png;base64,${inkPng().toString("base64")}` };
   assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body })).statusCode, 503);
@@ -596,18 +440,35 @@ test("admin cancellation cannot rewrite a Sheet row while recovery owns a pendin
   assert.equal(store.calls.saved, 0);
 });
 
-test("final sheet model and XLSX keep image, missing and excluded rows", async () => {
+test("final roster model and template XLSX keep the correct active image and omit excluded people", async () => {
   const parsed = parseTrainingSource(source());
   parsed.signatures.push({ signatureId: "SIG-1", eventId: "EVENT-1", eventGroupId: "GROUP-1", "교직원ID": "QA001", "서명일시": now().toISOString(), "출석방식": "qr", "서명파일ID": "PRIVATE_FILE_1", "상태": "완료", "취소여부": "N" });
   parsed.targets.find((item) => item.eventId === "EVENT-1" && item["교직원ID"] === "QA002")["제외여부"] = "Y";
   const model = finalSheetModel(parsed, directory, "EVENT-1");
   assert.deepEqual(model.counts, { target: 1, signed: 1, excluded: 1 });
-  const bytes = await makeTrainingFinalSheetXlsx(model, { readSignature: async () => inkPng() });
+  const bytes = await makeTrainingRosterXlsx(model, { readSignature: async () => inkPng() });
   const book = new ExcelJS.Workbook();
   await book.xlsx.load(bytes);
-  assert.deepEqual([book.worksheets[0].getCell("B4").value, book.worksheets[0].getCell("B5").value].sort(), ["다른 교직원", "테스트 교직원"].sort());
-  assert.deepEqual([book.worksheets[0].getCell("E4").value, book.worksheets[0].getCell("E5").value].sort(), ["서명 완료", "제외"].sort());
+  assert.equal(book.worksheets[0].getCell("B4").value, "교사");
+  assert.equal(book.worksheets[0].getCell("C4").value, "테스트 교직원");
+  assert.equal(book.worksheets[0].getCell("E4").value, "10.6.(화)");
+  assert.equal(book.worksheets[0].getCell("C5").value, null);
   assert.equal(book.worksheets[0].getImages().length, 1);
+});
+
+test("administrator PDF download fills the official workbook before Gateway rendering", async () => {
+  let rendered;
+  const { call } = harness({ rosterPdf: { render: async (input) => { rendered = input; return Buffer.from("%PDF-test"); } } });
+  const result = await call("training-final-sheet", { query: { eventId: "EVENT-1", download: "pdf" } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.headers["Content-Type"], "application/pdf");
+  assert.match(result.headers["Content-Disposition"], /training-roster\.pdf/);
+  assert.equal(result.bytes.toString(), "%PDF-test");
+  assert.match(rendered.filename, /연수등록부\.pdf$/);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(rendered.xlsx);
+  const sheet = workbook.getWorksheet("Sheet1");
+  assert.deepEqual([sheet.getCell("C4").value, sheet.getCell("C5").value].sort(), ["다른 교직원", "테스트 교직원"].sort());
 });
 
 test("admin correction preserves the cancelled row and records the reason and actor", async () => {
@@ -646,10 +507,11 @@ test("runtime preflight is admin-only, GET-only, redacted, and write-free", asyn
     assert.equal(res.headers["Cache-Control"], "private, no-store");
     assert.equal(res.body.ok, true);
     assert.equal(Object.values(res.body.checks).every(Boolean), true);
-    assert.deepEqual(Object.keys(res.body.checks), ["qrSecretConfigured", "qrSecretValid", "driveFolderConfigured",
-      "driveFolderAccessible", "driveFolderWritable", "driveFolderPrivate", "driveStorageSupported", "signatureSheetReady", "firebaseAdminReady"]);
+    assert.deepEqual(Object.keys(res.body.checks), ["qrSecretConfigured", "qrSecretValid", "signatureGatewayConfigured",
+      "signatureGatewayReachable", "signatureGatewayAuthenticated", "signatureStorageReady", "signatureReadReady",
+      "signatureSheetReady", "firebaseAdminReady"]);
     assert.equal(JSON.stringify(res.body).includes(secret), false);
-    assert.equal(JSON.stringify(res.body).includes(store.folderId), false);
+    assert.equal(JSON.stringify(res.body).includes("GATEWAY_SECRET"), false);
   }
   assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0 });
   assert.equal(db.records.size, 0);
@@ -661,32 +523,23 @@ test("runtime preflight reports invalid config and source without exposing value
   assert.equal(short.body.checks.qrSecretValid, false);
   assert.equal(short.body.ok, false);
   const missing = harness();
-  missing.store.folderId = "";
-  const noFolder = await missing.call("training-runtime-preflight");
-  assert.equal(noFolder.body.checks.driveFolderConfigured, false);
-  assert.equal(noFolder.body.checks.driveFolderAccessible, false);
+  missing.store.signatureGatewayConfigured = false;
+  const noGateway = await missing.call("training-runtime-preflight");
+  assert.equal(noGateway.body.checks.signatureGatewayConfigured, false);
+  assert.equal(noGateway.body.checks.signatureGatewayReachable, false);
   const inaccessible = harness();
-  inaccessible.store.inspectSignatureFolder = async () => ({ accessible: false, writable: false, private: false, storageSupported: false });
-  assert.equal((await inaccessible.call("training-runtime-preflight")).body.checks.driveFolderAccessible, false);
-  const publicFolder = harness();
-  publicFolder.store.inspectSignatureFolder = async () => ({ accessible: true, writable: true, private: false, storageSupported: false });
-  assert.equal((await publicFolder.call("training-runtime-preflight")).body.checks.driveFolderPrivate, false);
-  const myDrive = harness();
-  myDrive.store.inspectSignatureFolder = async () => ({ accessible: true, writable: true, private: true, storageSupported: false });
-  const myDriveResult = await myDrive.call("training-runtime-preflight");
-  assert.equal(myDriveResult.body.checks.driveFolderPrivate, true);
-  assert.equal(myDriveResult.body.checks.driveStorageSupported, false);
-  assert.equal(myDriveResult.body.ok, false);
+  inaccessible.store.inspectSignatureGateway = async () => ({ reachable: false, authenticated: false, storageReady: false, readReady: false });
+  assert.equal((await inaccessible.call("training-runtime-preflight")).body.checks.signatureGatewayReachable, false);
   const badSheet = harness();
   badSheet.store.isSignatureSheetReady = async () => false;
   assert.equal((await badSheet.call("training-runtime-preflight")).body.checks.signatureSheetReady, false);
 });
 
-test("failed attendance stores stage only and logs a redacted Drive category", async () => {
+test("failed attendance stores stage only and logs a redacted Gateway category", async () => {
   const { call, db, store } = harness();
   const sensitive = "DO_NOT_LOG_SECRET_OR_SIGNATURE";
   store.uploadSignature = async () => {
-    const error = new DriveApiError("DRIVE_CREATE", 403, "PERMISSION_DENIED", "storageQuotaExceeded");
+    const error = new SignatureGatewayError("SIGNATURE_GATEWAY_SAVE", { status: 403, code: "AUTH_FAILED" });
     error.message = sensitive;
     throw error;
   };
@@ -702,62 +555,15 @@ test("failed attendance stores stage only and logs a redacted Drive category", a
   assert.equal(result.statusCode, 503);
   assert.equal(JSON.stringify(result.body).includes(sensitive), false);
   assert.equal(logs.length, 1);
-  assert.deepEqual(JSON.parse(logs[0]), { event: "training_attendance_failure", stage: "DRIVE_CREATE",
-    status: 403, code: "PERMISSION_DENIED", reason: "storageQuotaExceeded", errorName: "DriveApiError", eventCount: 1 });
+  assert.deepEqual(JSON.parse(logs[0]), { event: "training_attendance_failure", stage: "SIGNATURE_GATEWAY_SAVE",
+    status: 403, code: "AUTH_FAILED", errorName: "SignatureGatewayError", eventCount: 1 });
   assert.equal(logs[0].includes(sensitive), false);
   assert.equal(logs[0].includes("QA001"), false);
   const [lock] = db.records.values();
   assert.equal(lock.state, "failed");
-  assert.equal(lock.failureCategory, "DRIVE_CREATE");
+  assert.equal(lock.failureCategory, "SIGNATURE_GATEWAY_SAVE");
   assert.equal(JSON.stringify(lock).includes(sensitive), false);
   assert.equal(store.values.signatures.length, 1);
-});
-
-test("My Drive service-account attendance fails before Drive create or Sheet append", async () => {
-  let uploaded = false;
-  const store = new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input) => {
-    const url = new URL(input);
-    if (url.pathname.startsWith("/upload/")) { uploaded = true; return Response.json({ id: "FILE123" }); }
-    if (url.pathname.endsWith("/files/FOLDER123")) return Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } });
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ type: "user", role: "writer" }] });
-    throw new Error("unexpected Drive request");
-  } });
-  let appended = false;
-  store.readSource = async () => source();
-  store.appendSignatures = async () => { appended = true; };
-  const { call, db } = harness({ store });
-  const challenge = issueQrChallenge({ eventId: "EVENT-1", secret, now: now().getTime() });
-  const originalError = console.error;
-  console.error = () => {};
-  let result;
-  try {
-    result = await call("training-attendance-submit", { token: "staff", method: "POST",
-      body: { eventId: "EVENT-1", challenge, signature: `data:image/png;base64,${inkPng().toString("base64")}` } });
-  } finally { console.error = originalError; }
-  assert.equal(result.statusCode, 503);
-  assert.equal(uploaded, false);
-  assert.equal(appended, false);
-  const [lock] = db.records.values();
-  assert.equal(lock.state, "failed");
-  assert.equal(lock.failureCategory, "DRIVE_FOLDER_CHECK");
-});
-
-test("runtime folder inspection accepts private My Drive and rejects broad ACL without writes", async () => {
-  const calls = [];
-  const makeStore = (permissionType, metadataStatus = 200) => new TrainingCenterStore({ folderId: "FOLDER123", accessToken: async () => "TEST_TOKEN", fetchImpl: async (input, options = {}) => {
-    const url = new URL(input);
-    calls.push({ url, method: options.method || "GET" });
-    if (url.pathname.endsWith("/files/FOLDER123")) return metadataStatus === 200
-      ? Response.json({ id: "FOLDER123", mimeType: "application/vnd.google-apps.folder", capabilities: { canAddChildren: true } })
-      : new Response(null, { status: metadataStatus });
-    if (url.pathname.endsWith("/permissions")) return Response.json({ permissions: [{ id: "OWNER", type: permissionType, role: "owner" }] });
-    throw new Error("unexpected request");
-  } });
-  assert.deepEqual(await makeStore("user").inspectSignatureFolder(), { accessible: true, writable: true, private: true, storageSupported: false });
-  assert.deepEqual(await makeStore("anyone").inspectSignatureFolder(), { accessible: true, writable: true, private: false, storageSupported: false });
-  assert.deepEqual(await makeStore("domain").inspectSignatureFolder(), { accessible: true, writable: true, private: false, storageSupported: false });
-  assert.deepEqual(await makeStore("user", 403).inspectSignatureFolder(), { accessible: false, writable: false, private: false, storageSupported: false });
-  assert.equal(calls.every(({ method }) => method === "GET"), true);
 });
 
 test("runtime signature Sheet requires a hidden tab and exact A:M headers", () => {

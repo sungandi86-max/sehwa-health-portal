@@ -2,25 +2,29 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { readJsonBody, readStaffDirectory, sendCors } from "./staffDirectory.js";
 import { TARGET_HEADERS, TRAINING_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { resolveTrainingAccess } from "./trainingCenterAccess.js";
-import { DriveApiError, DrivePrivacyError, trainingCenterStore } from "./trainingCenterStore.js";
+import { trainingCenterStore } from "./trainingCenterStore.js";
 import { AttendanceConflictError, assertCompletedAttendanceLock, attachAttendanceFile, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { applyAttendanceRecovery, inspectAttendanceRecovery, listAttendanceRecoveryCandidates, RecoveryConflictError } from "./trainingAttendanceRecovery.js";
 import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, SIGNATURE_HEADERS, SIGNATURE_SHEET, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
-import { finalSheetFilename, makeTrainingFinalSheetXlsx } from "./trainingFinalSheet.js";
+import { makeTrainingRosterXlsx, trainingRosterPdfFilename, trainingRosterXlsxFilename } from "./trainingFinalSheet.js";
+import { SignatureGatewayError, trainingRosterPdfRenderer } from "./trainingSignatureGateway.js";
 import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 
 function bad(res, status, message, code = "") {
   return res.status(status).json({ ok: false, ...(code ? { code } : {}), message });
 }
 
-const ATTENDANCE_FAILURE_STAGES = new Set(["DRIVE_FOLDER_CHECK", "DRIVE_CREATE", "DRIVE_FILE_PRIVACY", "SHEET_APPEND", "LOCK_FINALIZE"]);
+const ATTENDANCE_FAILURE_STAGES = new Set([
+  "SIGNATURE_GATEWAY_CONFIG", "SIGNATURE_GATEWAY_AUTH", "SIGNATURE_GATEWAY_SAVE", "SIGNATURE_GATEWAY_READ",
+  "ROSTER_BUILD", "ROSTER_SIGNATURE_FETCH", "ROSTER_TEMPLATE_FILL", "ROSTER_PDF_GENERATE", "SHEET_APPEND", "LOCK_FINALIZE",
+]);
 
 function logAttendanceFailure(error, fallbackStage, eventCount) {
   const stage = ATTENDANCE_FAILURE_STAGES.has(error?.stage) ? error.stage : fallbackStage;
-  const driveError = error instanceof DriveApiError;
+  const gatewayError = error instanceof SignatureGatewayError;
   console.error(JSON.stringify({ event: "training_attendance_failure", stage,
-    status: driveError ? error.status : 0, code: driveError ? error.code : "", reason: driveError ? error.reason : "",
-    errorName: driveError ? "DriveApiError" : error instanceof DrivePrivacyError ? "DrivePrivacyError" :
+    status: gatewayError ? error.status : 0, code: gatewayError ? error.code : "",
+    errorName: gatewayError ? "SignatureGatewayError" :
       error instanceof TrainingSourceNotReadyError ? "TrainingSourceNotReadyError" : "Error", eventCount }));
   return stage;
 }
@@ -65,7 +69,8 @@ function createSignatureRecord(event, staffId, { fileId = "", method = "qr", act
 }
 
 export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = getFirebaseAdminDb, directory = readStaffDirectory,
-  store = trainingCenterStore, secret = () => process.env.TRAINING_QR_SECRET || "", now = () => new Date() } = {}) {
+  store = trainingCenterStore, rosterPdf = trainingRosterPdfRenderer,
+  secret = () => process.env.TRAINING_QR_SECRET || "", now = () => new Date() } = {}) {
   return async function handleTrainingPhase2(req, res) {
     sendCors(res, "GET, POST, OPTIONS");
     res.setHeader("Cache-Control", "private, no-store");
@@ -83,12 +88,15 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const qrSecret = secret();
         const qrSecretConfigured = Boolean(qrSecret);
         const qrSecretValid = qrSecretConfigured && Buffer.byteLength(qrSecret, "utf8") >= 32;
-        const driveFolderConfigured = Boolean(store.folderId);
-        const folder = driveFolderConfigured ? await store.inspectSignatureFolder() : { accessible: false, writable: false, private: false, storageSupported: false };
+        const signatureGatewayConfigured = store.signatureGatewayConfigured === true;
+        const gateway = signatureGatewayConfigured ? await store.inspectSignatureGateway() :
+          { reachable: false, authenticated: false, storageReady: false, readReady: false };
         const checks = {
-          qrSecretConfigured, qrSecretValid, driveFolderConfigured,
-          driveFolderAccessible: folder.accessible, driveFolderWritable: folder.writable, driveFolderPrivate: folder.private,
-          driveStorageSupported: folder.storageSupported === true && folder.writable === true && folder.private === true,
+          qrSecretConfigured, qrSecretValid, signatureGatewayConfigured,
+          signatureGatewayReachable: gateway.reachable === true,
+          signatureGatewayAuthenticated: gateway.authenticated === true,
+          signatureStorageReady: gateway.storageReady === true,
+          signatureReadReady: gateway.readReady === true,
           signatureSheetReady: await store.isSignatureSheetReady(), firebaseAdminReady: true,
         };
         return res.status(200).json({ ok: Object.values(checks).every(Boolean), checks });
@@ -154,7 +162,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       }
       if (resource === "training-qr" && req.method === "GET") {
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
-        store.assertSignatureFolderConfigured();
+        store.assertSignatureGatewayConfigured();
         const scope = qrScope(req.query);
         const source = parseTrainingSource(await store.readSource());
         const events = resolveEvents(source, scope);
@@ -175,7 +183,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       }
       if (resource === "training-attendance-submit" && req.method === "POST") {
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
-        store.assertSignatureFolderConfigured();
+        store.assertSignatureGatewayConfigured();
         const scope = qrScope(body);
         if (!verifyQrChallenge(body?.challenge, { ...scope, secret: secret(), now: now().getTime() })) return bad(res, 403, "QR 유효시간이 지났거나 링크가 올바르지 않습니다.");
         const bytes = decodeInkSignature(body?.signature);
@@ -188,7 +196,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         let fileId = "";
         let records = [];
         let appendStarted = false;
-        let stage = "DRIVE_FOLDER_CHECK";
+        let stage = "SIGNATURE_GATEWAY_SAVE";
         try {
           fileId = await store.uploadSignature(bytes, events[0].eventId, now(), reservation.requestId);
           stage = "LOCK_FINALIZE";
@@ -200,7 +208,6 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           await store.appendSignatures(records);
         } catch (error) {
           const failureCategory = logAttendanceFailure(error, stage, events.length);
-          if (!fileId && error?.fileId) fileId = error.fileId;
           let committed = false;
           let certain = !records.length;
           if (records.length) {
@@ -218,10 +225,6 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
               return bad(res, 503, "출석 저장 결과를 확인 중입니다. 관리자에게 문의해 주세요.");
             }
           }
-          if (error instanceof DrivePrivacyError) {
-            if (error.requiresImmediateIsolation) console.error("[training] signature permission isolation requires administrator attention");
-            return bad(res, 503, error.requiresImmediateIsolation ? "서명 파일 공개 권한을 차단하지 못했습니다. 관리자에게 즉시 문의해 주세요." : error.message);
-          }
           if (!committed) return bad(res, 503, certain ? "출석 저장에 실패했습니다. 다시 시도해 주세요." : "출석 저장 결과를 확인 중입니다. 관리자에게 문의해 주세요.");
         }
         let coordinationReconciled = true;
@@ -234,11 +237,29 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const source = parseTrainingSource(await store.readSource());
         const model = finalSheetModel(source, access.directory, eventId);
         if (!model) return bad(res, 404, "교육을 찾을 수 없습니다.");
-        if (resource === "training-final-sheet" && req.query?.download === "1") {
-          const bytes = await makeTrainingFinalSheetXlsx(model, { readSignature: (fileId) => store.downloadSignature(fileId) });
-          res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-          res.setHeader("Content-Disposition", `attachment; filename="training-final-sheet.xlsx"; filename*=UTF-8''${encodeURIComponent(finalSheetFilename(model.event))}`);
-          return res.status(200).send(bytes);
+        if (resource === "training-final-sheet" && ["pdf", "xlsx"].includes(req.query?.download)) {
+          let xlsx;
+          try {
+            xlsx = await makeTrainingRosterXlsx(model, { readSignature: (storageKey) => store.downloadSignature(storageKey) });
+          } catch (error) {
+            logAttendanceFailure(error, "ROSTER_BUILD", model.rows.length);
+            throw error;
+          }
+          if (req.query.download === "xlsx") {
+            res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            res.setHeader("Content-Disposition", `attachment; filename="training-roster.xlsx"; filename*=UTF-8''${encodeURIComponent(trainingRosterXlsxFilename(model.event))}`);
+            return res.status(200).send(xlsx);
+          }
+          const filename = trainingRosterPdfFilename(model.event);
+          let pdf;
+          try { pdf = await rosterPdf.render({ xlsx, filename }); }
+          catch (error) {
+            logAttendanceFailure(error, "ROSTER_PDF_GENERATE", model.rows.length);
+            throw error;
+          }
+          res.setHeader("Content-Type", "application/pdf");
+          res.setHeader("Content-Disposition", `attachment; filename="training-roster.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+          return res.status(200).send(pdf);
         }
         return res.status(200).json({ ok: true, ...publicFinalModel(model) });
       }
