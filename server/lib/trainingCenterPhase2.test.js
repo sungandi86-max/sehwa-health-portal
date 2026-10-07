@@ -334,6 +334,9 @@ test("stale pending with exactly one active Sheet row becomes completed", async 
   const applied = await call("training-attendance-recovery-apply", { method: "POST", body: { eventId: "EVENT-1", staffId: "QA001" } });
   assert.deepEqual([applied.statusCode, applied.body.status], [200, "completed"]);
   assert.deepEqual((await reservation.refs[0].get()).data().signatureIds, ["SIG-1"]);
+  assert.equal((await reservation.refs[0].get()).data().originalRequestId, reservation.requestId);
+  assert.equal((await call("training-attendance-recovery-apply", { method: "POST", body: { eventId: "EVENT-1", staffId: "QA001" } })).statusCode, 409);
+  assert.equal(store.calls.uploads, 0);
 });
 
 test("duplicate or partially recorded group stays in manual review", async () => {
@@ -395,6 +398,170 @@ test("administrator-reviewed release of an uncertain zero-row append requires ag
   } });
   assert.deepEqual([applied.statusCode, applied.body.status, applied.body.reviewedRelease], [200, "retryable", true]);
   assert.equal((await reservation.refs[0].get()).data().state, "failed");
+});
+
+test("stale retry reuses the original private PNG after Sheet append failed", async () => {
+  const store = fakeStore();
+  const files = new Map();
+  let uploads = 0;
+  let failAppend = true;
+  let clock = now();
+  store.uploadSignature = async (_bytes, _eventId, _time, requestId) => {
+    if (!files.has(requestId)) files.set(requestId, `PRIVATE_FILE_${++uploads}`);
+    return files.get(requestId);
+  };
+  store.listSignatureFilesByRequest = async (requestId) => files.has(requestId) ? [{ id: files.get(requestId), private: true }] : [];
+  store.downloadSignature = async (fileId) => {
+    assert.equal([...files.values()].includes(fileId), true);
+    return inkPng();
+  };
+  store.appendSignatures = async (records) => {
+    if (failAppend) { failAppend = false; throw new Error("simulated Sheet append failure"); }
+    records.forEach((record) => store.values.signatures.push(row(SIGNATURE_HEADERS, record)));
+  };
+  const { call, db } = harness({ store, now: () => clock });
+  const body = () => ({ eventId: "EVENT-1", challenge: issueQrChallenge({ eventId: "EVENT-1", secret, now: clock.getTime() }),
+    signature: `data:image/png;base64,${inkPng().toString("base64")}` });
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body: body() })).statusCode, 503);
+  const original = [...db.records.values()].find((item) => item.eventId === "EVENT-1");
+  assert.equal(uploads, 1);
+  clock = new Date(clock.getTime() + 31 * 60 * 1000);
+  const recoveryBody = { eventId: "EVENT-1", staffId: "QA001", confirmedNoInflight: true, reason: "함수 종료와 Sheet 미반영 확인" };
+  assert.equal((await call("training-attendance-recovery-apply", { method: "POST", body: recoveryBody })).body.status, "retryable");
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body: body() })).statusCode, 200);
+  const completed = [...db.records.values()].find((item) => item.eventId === "EVENT-1");
+  const records = store.values.signatures.slice(1).filter((cells) => cells[SIGNATURE_HEADERS.indexOf("eventId")] === "EVENT-1");
+  assert.equal(uploads, 1, "retry must reuse the original PNG instead of uploading another");
+  assert.equal(records.length, 1);
+  assert.equal(records[0][SIGNATURE_HEADERS.indexOf("서명파일ID")], files.get(original.requestId));
+  assert.equal(completed.state, "completed");
+  assert.notEqual(completed.requestId, original.requestId);
+  assert.equal(completed.originalRequestId, original.requestId);
+  assert.equal((await call("training-attendance-recovery-apply", { method: "POST", body: recoveryBody })).statusCode, 409);
+  assert.equal(uploads, 1);
+});
+
+test("stale group retry keeps one PNG shared by both completed event rows", async () => {
+  const store = fakeStore();
+  const files = new Map();
+  let uploads = 0;
+  let failAppend = true;
+  let clock = now();
+  store.uploadSignature = async (_bytes, _eventId, _time, requestId) => {
+    if (!files.has(requestId)) files.set(requestId, `PRIVATE_FILE_${++uploads}`);
+    return files.get(requestId);
+  };
+  store.listSignatureFilesByRequest = async (requestId) => files.has(requestId) ? [{ id: files.get(requestId), private: true }] : [];
+  store.downloadSignature = async () => inkPng();
+  store.appendSignatures = async (records) => {
+    if (failAppend) { failAppend = false; throw new Error("simulated group Sheet append failure"); }
+    records.forEach((record) => store.values.signatures.push(row(SIGNATURE_HEADERS, record)));
+  };
+  const { call, db } = harness({ store, now: () => clock });
+  const body = () => ({ eventGroupId: "GROUP-1", challenge: issueQrChallenge({ eventGroupId: "GROUP-1", secret, now: clock.getTime() }),
+    signature: `data:image/png;base64,${inkPng().toString("base64")}` });
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body: body() })).statusCode, 503);
+  const originalRequestId = [...db.records.values()].find((item) => item.eventId === "EVENT-1").requestId;
+  clock = new Date(clock.getTime() + 31 * 60 * 1000);
+  const recoveryBody = { eventId: "EVENT-1", staffId: "QA001", confirmedNoInflight: true, reason: "그룹 append 미반영 확인" };
+  assert.equal((await call("training-attendance-recovery-apply", { method: "POST", body: recoveryBody })).body.status, "retryable");
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body: body() })).statusCode, 200);
+  const records = store.values.signatures.slice(1);
+  assert.equal(uploads, 1);
+  assert.deepEqual(records.map((cells) => cells[SIGNATURE_HEADERS.indexOf("eventId")]).sort(), ["EVENT-1", "EVENT-2"]);
+  assert.equal(new Set(records.map((cells) => cells[SIGNATURE_HEADERS.indexOf("서명파일ID")])).size, 1);
+  assert.equal(records[0][SIGNATURE_HEADERS.indexOf("서명파일ID")], files.get(originalRequestId));
+  assert.equal([...db.records.values()].filter((item) => item.state === "completed" && item.originalRequestId === originalRequestId).length, 2);
+});
+
+test("cancelled attendance starts a new storage lineage, even when retried as a group", async () => {
+  const { db, call, store } = harness();
+  const old = await reserveAttendance(db, ["EVENT-1"], "QA001", now().getTime());
+  await finishAttendance(old, "failed");
+  const completed = await reserveAttendance(db, ["EVENT-1"], "QA001", now().getTime());
+  await finishAttendance(completed, "completed");
+  await cancelAttendanceLock(db, "EVENT-1", "QA001", "ADMIN");
+  const fresh = await reserveAttendance(db, ["EVENT-1", "EVENT-2"], "QA001", now().getTime());
+  assert.deepEqual(fresh.priorRequestIds, []);
+  assert.equal(fresh.originalRequestId, fresh.requestId);
+  assert.deepEqual((await fresh.refs[0].get()).data().orphanAttempts, []);
+  assert.equal((await fresh.refs[0].get()).data().historicalOrphanAttempts[0].requestId, old.requestId);
+  store.listSignatureFilesByRequest = async (requestId) => requestId === old.requestId ?
+    [{ id: "OLD_AUDIT_FILE", private: true }] : [];
+  await finishAttendance(fresh, "failed");
+  const audit = await call("training-attendance-recovery-check", { query: { eventId: "EVENT-1", staffId: "QA001" } });
+  assert.equal(audit.body.orphanFiles.some((file) => file.fileId === "OLD_AUDIT_FILE"), true);
+  const retry = await reserveAttendance(db, ["EVENT-1", "EVENT-2"], "QA001", now().getTime());
+  assert.deepEqual(retry.priorRequestIds, [fresh.requestId]);
+  assert.equal(retry.originalRequestId, fresh.requestId);
+});
+
+test("legacy failed requests across a Seoul year boundary reuse the original PNG", async () => {
+  const store = fakeStore();
+  const lookups = [];
+  const originalFileId = "PRIVATE_2026_PNG";
+  store.listSignatureFilesByRequest = async (requestId, context) => {
+    lookups.push({ requestId, context });
+    return requestId === first.requestId && !context.year ? [{ id: originalFileId, private: true }] : [];
+  };
+  store.downloadSignature = async () => inkPng();
+  store.values.trainings[1] = event("EVENT-1", { 일자: "2027-01-01", 교육연도: "2027",
+    signatureOpenAt: "2027-01-01T00:00:00+09:00", signatureCloseAt: "2027-01-01T23:59:00+09:00" });
+  let clock = new Date("2026-12-31T16:00:00.000Z");
+  const { call, db } = harness({ store, now: () => clock });
+  const first = await reserveAttendance(db, ["EVENT-1"], "QA001", Date.parse("2026-12-31T14:30:00.000Z"));
+  await finishAttendance(first, "failed");
+  const second = await reserveAttendance(db, ["EVENT-1"], "QA001", clock.getTime());
+  const legacy = (await second.refs[0].get()).data();
+  delete legacy.originalRequestId;
+  delete legacy.originalCreatedAt;
+  delete legacy.legacyYearLookup;
+  await second.refs[0].set(legacy);
+  clock = new Date(clock.getTime() + 31 * 60 * 1000);
+  const recovered = await call("training-attendance-recovery-apply", { method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA001",
+  } });
+  assert.equal(recovered.body.status, "retryable");
+  assert.equal((await second.refs[0].get()).data().legacyYearLookup, true);
+  const body = { eventId: "EVENT-1", challenge: issueQrChallenge({ eventId: "EVENT-1", secret, now: clock.getTime() }),
+    signature: `data:image/png;base64,${inkPng().toString("base64")}` };
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body })).statusCode, 200);
+  assert.equal(store.calls.uploads, 0);
+  assert.equal(store.values.signatures[1][SIGNATURE_HEADERS.indexOf("서명파일ID")], originalFileId);
+  assert.equal(lookups.some((lookup) => lookup.requestId === first.requestId && !lookup.context.year), true);
+  assert.equal((await second.refs[0].get()).data().originalRequestId, first.requestId);
+});
+
+test("stale retry creates a PNG only when the original object and Sheet row are absent", async () => {
+  const store = fakeStore();
+  const files = new Map();
+  let uploads = 0;
+  let clock = now();
+  let failAppend = true;
+  store.uploadSignature = async (_bytes, _eventId, _time, requestId) => {
+    if (!files.has(requestId)) files.set(requestId, `PRIVATE_FILE_${++uploads}`);
+    return files.get(requestId);
+  };
+  store.listSignatureFilesByRequest = async (requestId) => files.has(requestId) ? [{ id: files.get(requestId), private: true }] : [];
+  store.appendSignatures = async (records) => {
+    if (failAppend) { failAppend = false; throw new Error("simulated Sheet append failure"); }
+    records.forEach((record) => store.values.signatures.push(row(SIGNATURE_HEADERS, record)));
+  };
+  const { call, db } = harness({ store, now: () => clock });
+  const body = () => ({ eventId: "EVENT-1", challenge: issueQrChallenge({ eventId: "EVENT-1", secret, now: clock.getTime() }),
+    signature: `data:image/png;base64,${inkPng().toString("base64")}` });
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body: body() })).statusCode, 503);
+  const originalRequestId = [...db.records.values()].find((item) => item.eventId === "EVENT-1").requestId;
+  files.clear();
+  clock = new Date(clock.getTime() + 31 * 60 * 1000);
+  assert.equal((await call("training-attendance-recovery-apply", { method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA001", confirmedNoInflight: true, reason: "Sheet와 Drive 모두 미반영 확인",
+  } })).body.status, "retryable");
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body: body() })).statusCode, 200);
+  assert.equal(uploads, 2);
+  assert.equal(files.size, 1);
+  assert.equal(files.has(originalRequestId), true);
+  assert.equal(store.values.signatures.length, 2);
 });
 
 test("fresh and completed reservations cannot be recovered", async () => {

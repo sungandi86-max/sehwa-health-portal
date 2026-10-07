@@ -13,8 +13,17 @@ export class AttendanceConflictError extends Error {
 
 export async function reserveAttendance(db, eventIds, staffId, now = Date.now()) {
   const requestId = randomUUID();
+  const createdAt = new Date(now).toISOString();
   const refs = eventIds.map((eventId) => db.collection(trainingLockCollection()).doc(signatureKey(eventId, staffId)));
+  let originalRequestId = requestId;
+  let originalCreatedAt = createdAt;
+  let priorRequestIds = [];
+  let legacyYearLookup = false;
   await db.runTransaction(async (transaction) => {
+    originalRequestId = requestId;
+    originalCreatedAt = createdAt;
+    priorRequestIds = [];
+    legacyYearLookup = false;
     const snapshots = [];
     for (const ref of refs) snapshots.push(await transaction.get(ref));
     if (snapshots.some((snap) => {
@@ -22,28 +31,47 @@ export async function reserveAttendance(db, eventIds, staffId, now = Date.now())
       const data = snap.data();
       return data?.state === "completed" || data?.state === "pending";
     })) throw new AttendanceConflictError();
+    const previous = snapshots.map((snapshot) => snapshot.exists ? snapshot.data() : {});
+    const failed = previous.filter((data) => data.state === "failed");
+    if (failed.length) {
+      if (failed.length !== eventIds.length || failed.some((data) => data.staffId !== staffId ||
+        JSON.stringify(data.eventIds) !== JSON.stringify(eventIds))) throw new AttendanceConflictError();
+      const originals = failed.map((data) => data.originalRequestId || data.orphanAttempts?.[0]?.requestId || data.requestId);
+      const created = failed.map((data) => data.originalCreatedAt || data.createdAt);
+      if (new Set(originals).size !== 1 || !originals[0] || new Set(created).size !== 1 ||
+        !Number.isFinite(Date.parse(created[0]))) throw new AttendanceConflictError();
+      originalRequestId = originals[0];
+      originalCreatedAt = created[0];
+      legacyYearLookup = failed.some((data) => data.legacyYearLookup || !data.originalCreatedAt && data.orphanAttempts?.length);
+      priorRequestIds = [...new Set([originalRequestId, ...failed.flatMap((data) => [
+        ...(data.orphanAttempts || []).map((attempt) => attempt.requestId), data.requestId,
+      ])].filter(Boolean))];
+    }
     refs.forEach((ref, index) => {
-      const previous = snapshots[index].exists ? snapshots[index].data() : {};
-      const orphanAttempts = [...(previous.orphanAttempts || []), ...(previous.state === "failed" && previous.requestId ?
-        [{ requestId: previous.requestId, fileIds: previous.orphanFileIds || [] }] : [])];
-      if (orphanAttempts.length > 20) throw new AttendanceConflictError();
+      const prior = previous[index];
+      const orphanAttempts = [...(prior.state === "failed" ? prior.orphanAttempts || [] : []), ...(prior.state === "failed" && prior.requestId ?
+        [{ requestId: prior.requestId, fileIds: prior.orphanFileIds || [] }] : [])];
+      const historicalOrphanAttempts = [...(prior.historicalOrphanAttempts || []),
+        ...(prior.state === "failed" ? [] : prior.orphanAttempts || [])];
+      if (orphanAttempts.length + historicalOrphanAttempts.length > 20) throw new AttendanceConflictError();
       transaction.set(ref, {
-        eventId: eventIds[index], eventIds, staffId, state: "pending", requestId, leaseUntil: now + LEASE_MS,
-        createdAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), orphanAttempts,
+        eventId: eventIds[index], eventIds, staffId, state: "pending", requestId, originalRequestId, originalCreatedAt,
+        legacyYearLookup,
+        leaseUntil: now + LEASE_MS, createdAt, updatedAt: createdAt, orphanAttempts, historicalOrphanAttempts,
       });
     });
   });
-  return { db, requestId, refs };
+  return { db, requestId, originalRequestId, originalCreatedAt, priorRequestIds, legacyYearLookup, refs };
 }
 
-export async function attachAttendanceFile(reservation, fileId, now = Date.now()) {
+export async function attachAttendanceFile(reservation, fileId, now = Date.now(), storageRequestId = reservation.requestId) {
   await reservation.db.runTransaction(async (transaction) => {
     const snapshots = [];
     for (const ref of reservation.refs) snapshots.push(await transaction.get(ref));
     if (snapshots.some((snap) => !snap.exists || snap.data()?.state !== "pending" || snap.data()?.requestId !== reservation.requestId)) {
       throw new AttendanceConflictError();
     }
-    reservation.refs.forEach((ref) => transaction.set(ref, { uploadedFileId: fileId,
+    reservation.refs.forEach((ref) => transaction.set(ref, { uploadedFileId: fileId, storageRequestId,
       leaseUntil: now + LEASE_MS, updatedAt: new Date(now).toISOString() }, { merge: true }));
   });
 }

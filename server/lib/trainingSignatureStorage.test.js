@@ -142,6 +142,22 @@ test("save bootstraps marked year and requests folders then reuses one request f
   assert.equal(fake.calls.some(({ params }) => params.ignoreDefaultVisibility === true), true);
 });
 
+test("legacy request lookup searches all years only inside the current private environment root", async () => {
+  const { adapter } = await bootstrapped();
+  const fileId = await adapter.saveSignature({ bytes: png(), eventId: "EVENT-1", year: 2026, requestId });
+  assert.deepEqual(await adapter.findByRequestId(requestId, { year: 2027 }), []);
+  assert.deepEqual(await adapter.findByRequestId(requestId), [{ id: fileId, private: true }]);
+});
+
+test("a damaged existing PNG is never reused or replaced automatically", async () => {
+  const { fake, adapter } = await bootstrapped();
+  const input = { bytes: png(), eventId: "EVENT-1", year: 2026, requestId };
+  const fileId = await adapter.saveSignature(input);
+  fake.bytes.set(fileId, Buffer.from("damaged PNG"));
+  await assert.rejects(adapter.saveSignature(input), /형식/);
+  assert.equal([...fake.files.values()].filter((file) => file.mimeType === "image/png").length, 1);
+});
+
 test("group events share one file for the same request", async () => {
   const { adapter } = await bootstrapped();
   const first = await adapter.saveSignature({ bytes: png(), eventId: "EVENT-1", year: 2026, requestId });
@@ -149,12 +165,12 @@ test("group events share one file for the same request", async () => {
   assert.equal(first, second);
 });
 
-test("request lookup rejects duplicate objects and requires the expected year", async () => {
+test("request lookup rejects duplicate objects with or without an expected year", async () => {
   const { fake, adapter } = await bootstrapped();
   const fileId = await adapter.saveSignature({ bytes: png(), eventId: "EVENT-1", year: 2026, requestId });
   fake.addFile({ ...fake.files.get(fileId), id: "DUPLICATE_FILE_123456" }, png());
   await assert.rejects(adapter.findByRequestId(requestId, { year: 2026 }), (error) => error.code === "DUPLICATE_OBJECT");
-  await assert.rejects(adapter.findByRequestId(requestId), /연도/);
+  await assert.rejects(adapter.findByRequestId(requestId), (error) => error.code === "DUPLICATE_OBJECT");
 });
 
 test("read accepts only private app-created signatures inside the marked hierarchy", async () => {
@@ -193,6 +209,7 @@ test("QA and production keep identical request IDs in distinct private roots", a
   await assert.rejects(production.readSignature(qaFile), (error) => error.code === "INVALID_OBJECT");
   await assert.rejects(production.deleteSignature(qaFile), (error) => error.code === "INVALID_OBJECT");
   await production.bootstrap();
+  assert.deepEqual(await production.findByRequestId(requestId, { year: 2026 }), []);
   const productionFile = await production.saveSignature({ bytes: png(), eventId: "EVENT-1", year: 2026, requestId });
   assert.notEqual(qaFile, productionFile);
   assert.deepEqual((await qa.findByRequestId(requestId, { year: 2026 })).map((file) => file.id), [qaFile]);

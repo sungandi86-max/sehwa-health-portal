@@ -8,7 +8,7 @@ import { applyAttendanceRecovery, inspectAttendanceRecovery, listAttendanceRecov
 import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, SIGNATURE_HEADERS, SIGNATURE_SHEET, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx, trainingRosterPdfFilename, trainingRosterXlsxFilename } from "./trainingFinalSheet.js";
 import { trainingRosterPdfRenderer } from "./trainingRosterPdf.js";
-import { SignatureStorageError } from "./trainingSignatureStorage.js";
+import { signatureStorageYear, SignatureStorageError } from "./trainingSignatureStorage.js";
 import { recordRosterPdfVerification } from "./trainingSignatureLifecycle.js";
 import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 import { requireTrainingEnvironment, TrainingDeploymentError } from "./trainingDeployment.js";
@@ -206,11 +206,27 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         let fileId = "";
         let records = [];
         let appendStarted = false;
-        let stage = "SIGNATURE_STORAGE_SAVE";
+        let stage = "SIGNATURE_STORAGE_READ";
         try {
-          fileId = await store.uploadSignature(bytes, events[0].eventId, now(), reservation.requestId);
+          let storageRequestId = reservation.originalRequestId;
+          const priorFiles = [];
+          for (const requestId of reservation.priorRequestIds) {
+            const files = await store.listSignatureFilesByRequest(requestId,
+              reservation.legacyYearLookup ? {} : { year: signatureStorageYear(reservation.originalCreatedAt) });
+            if (files.some((file) => file.private !== true)) throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "PUBLIC_PERMISSION" });
+            priorFiles.push(...files.map((file) => ({ requestId, fileId: file.id })));
+          }
+          if (priorFiles.length > 1) throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "DUPLICATE_OBJECT" });
+          if (priorFiles.length === 1) {
+            storageRequestId = priorFiles[0].requestId;
+            decodeInkSignature(`data:image/png;base64,${(await store.downloadSignature(priorFiles[0].fileId)).toString("base64")}`);
+            fileId = priorFiles[0].fileId;
+          } else {
+            stage = "SIGNATURE_STORAGE_SAVE";
+            fileId = await store.uploadSignature(bytes, events[0].eventId, new Date(reservation.originalCreatedAt), storageRequestId);
+          }
           stage = "LOCK_FINALIZE";
-          await attachAttendanceFile(reservation, fileId, now().getTime());
+          await attachAttendanceFile(reservation, fileId, now().getTime(), storageRequestId);
           records = events.map((event) => createSignatureRecord(event, access.assignment.staffId, { fileId, now: now() }));
           stage = "SHEET_APPEND";
           await markAttendanceAppendStarted(reservation, now().getTime());

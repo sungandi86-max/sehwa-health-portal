@@ -271,7 +271,10 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
     const storageYear = assertYear(year);
     try {
       const existing = await this.requestFiles(requestId, storageYear);
-      if (existing[0]) return existing[0].id;
+      if (existing[0]) {
+        await this.readSignature(existing[0].id);
+        return existing[0].id;
+      }
       const requestsFolder = await this.requestsFolder(storageYear, { create: true });
       const appProperties = { appOwner: APP_OWNER, purpose: SIGNATURE_PURPOSE,
         trainingRequestId: requestId, year: storageYear, environment };
@@ -301,7 +304,16 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
 
   async findByRequestId(requestId, { year } = {}) {
     try {
-      return (await this.requestFiles(requestId, year)).map((file) => ({ id: file.id, private: true }));
+      if (year) return (await this.requestFiles(requestId, year)).map((file) => ({ id: file.id, private: true }));
+      const root = await this.rootFolder({ required: true });
+      const yearFolders = await this.markedFolders({ parentId: root.id, purpose: YEAR_PURPOSE });
+      const found = [];
+      for (const folder of yearFolders) {
+        const storageYear = assertYear(folder.appProperties?.year);
+        found.push(...await this.requestFiles(requestId, storageYear));
+      }
+      if (found.length > 1) throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "DUPLICATE_OBJECT" });
+      return found.map((file) => ({ id: file.id, private: true }));
     } catch (cause) {
       if (cause instanceof RangeError || cause instanceof SignatureStorageError) throw cause;
       throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "READ_FAILED", cause });

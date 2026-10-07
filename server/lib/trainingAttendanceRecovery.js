@@ -43,11 +43,15 @@ export async function listAttendanceRecoveryCandidates({ db, now = Date.now() })
 }
 
 async function findOrphanFiles(store, data) {
-  const requestIds = [...new Set([data.requestId, ...(data.orphanAttempts || []).map((attempt) => attempt.requestId)].filter(Boolean))];
-  const createdAt = Date.parse(data.createdAt);
+  const requestIds = [...new Set([data.originalRequestId, data.requestId,
+    ...(data.orphanAttempts || []).map((attempt) => attempt.requestId),
+    ...(data.historicalOrphanAttempts || []).map((attempt) => attempt.requestId)].filter(Boolean))];
+  const createdAt = Date.parse(data.originalCreatedAt || data.createdAt);
   const year = Number.isFinite(createdAt) ? signatureStorageYear(createdAt) : "";
+  const legacyYearLookup = data.legacyYearLookup || data.historicalOrphanAttempts?.length ||
+    !data.originalCreatedAt && data.orphanAttempts?.length;
   const filesByRequest = await Promise.all(requestIds.map(async (requestId) => ({ requestId,
-    files: year ? await store.listSignatureFilesByRequest(requestId, { year }) : [] })));
+    files: year || legacyYearLookup ? await store.listSignatureFilesByRequest(requestId, legacyYearLookup ? {} : { year }) : [] })));
   return filesByRequest.flatMap(({ requestId, files }) => files.map((file) => ({ fileId: file.id, private: file.private !== false, requestId })));
 }
 
@@ -57,7 +61,9 @@ export async function inspectAttendanceRecovery({ db, store, eventId, staffId, n
   if (!anchor.exists) return { status: "not-pending", recoverable: false, eventIds: [] };
   const data = anchor.data();
   if (data.state !== "pending") {
-    if (!(data.state === "failed" && data.requestId || data.orphanAttempts?.length)) return { status: "not-pending", recoverable: false, eventIds: [] };
+    if (!(data.state === "failed" && data.requestId || data.orphanAttempts?.length || data.historicalOrphanAttempts?.length)) {
+      return { status: "not-pending", recoverable: false, eventIds: [] };
+    }
     const orphanFiles = await findOrphanFiles(store, data);
     return { status: "orphan-candidate", recoverable: false, eventIds: data.eventIds || [], orphanFiles };
   }
@@ -84,6 +90,9 @@ export async function inspectAttendanceRecovery({ db, store, eventId, staffId, n
     orphanFiles.every((file) => file.private) && snapshots.every((snapshot) => snapshot.data().appendStartedAt &&
       now - Date.parse(snapshot.data().updatedAt) >= MIN_REVIEW_MS);
   return { status, recoverable: status !== "manual-review-required", eventIds, requestId: data.requestId,
+    originalRequestId: data.originalRequestId || data.orphanAttempts?.[0]?.requestId || data.requestId,
+    originalCreatedAt: data.originalCreatedAt || data.createdAt,
+    legacyYearLookup: Boolean(data.legacyYearLookup || !data.originalCreatedAt && data.orphanAttempts?.length),
     refs, signatureIdsByEvent: matches.map((rows) => rows.map((row) => row.signatureId)), orphanFiles, currentOrphanFileIds, canReviewedRetry,
     lockUpdatedAt: snapshots.map((snapshot) => snapshot.data().updatedAt),
     lockAppendStartedAt: snapshots.map((snapshot) => snapshot.data().appendStartedAt || "") };
@@ -104,6 +113,8 @@ export async function applyAttendanceRecovery({ db, store, eventId, staffId, act
     }
     plan.refs.forEach((ref, index) => transaction.set(ref, {
       state: plan.status === "completed" ? "completed" : "failed", leaseUntil: 0,
+      originalRequestId: plan.originalRequestId, originalCreatedAt: plan.originalCreatedAt,
+      legacyYearLookup: plan.legacyYearLookup,
       signatureIds: plan.status === "completed" ? plan.signatureIdsByEvent[index] : [],
       orphanFileIds: plan.status === "completed" ? [] : plan.currentOrphanFileIds,
       recoveredBy: actor, recoveredAt: new Date(now).toISOString(), recoveredReason: reviewedRetry ? reason.trim() : "",
