@@ -32,10 +32,14 @@ export function managedCellUpdates(sheetId, rowNumber, headers, values, actual) 
 }
 
 export class TrainingCenterStore {
-  constructor({ spreadsheetId = getTrainingSpreadsheetId(), storage = signatureStorage } = {}) {
-    this.spreadsheetId = spreadsheetId;
+  constructor({ spreadsheetId = null, storage = signatureStorage } = {}) {
+    this.configuredSpreadsheetId = spreadsheetId;
     this.storage = storage;
     this.sheetIdCache = new Map();
+  }
+
+  get spreadsheetId() {
+    return this.configuredSpreadsheetId || getTrainingSpreadsheetId();
   }
 
   get signatureStorageConfigured() {

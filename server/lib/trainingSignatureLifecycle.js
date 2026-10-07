@@ -1,10 +1,10 @@
 import { signatureKey } from "./trainingCenterPhase2.js";
+import { trainingLockCollection } from "./trainingDeployment.js";
 
-const COLLECTION = "training_attendance_locks";
 const PDF_MAGIC = Buffer.from("%PDF-", "ascii");
 
 function lockRef(db, eventId, staffId) {
-  return db.collection(COLLECTION).doc(signatureKey(eventId, staffId));
+  return db.collection(trainingLockCollection()).doc(signatureKey(eventId, staffId));
 }
 
 function assertVerifiedPdf(pdf, rows, includedFileIds) {

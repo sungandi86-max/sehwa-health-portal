@@ -1,4 +1,5 @@
 import { readGoogleSheetValues } from "./staffDirectory.js";
+import { trainingSpreadsheetId } from "./trainingDeployment.js";
 
 export const TRAINING_SHEETS = {
   trainings: "앱_교직원교육",
@@ -10,10 +11,8 @@ export const TRAINING_HEADERS = ["eventId", "eventGroupId", "교육연도", "사
 export const MATERIAL_HEADERS = ["materialId", "eventId", "사용여부", "자료명", "자료유형", "링크 또는 파일ID", "정렬순서"];
 export const TARGET_HEADERS = ["eventId", "교직원ID", "대상상태", "필수여부", "제외여부", "제외사유"];
 
-const DEFAULT_SPREADSHEET_ID = "1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs";
-
 export function getTrainingSpreadsheetId() {
-  return process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+  return trainingSpreadsheetId();
 }
 
 export class TrainingSourceNotReadyError extends Error {

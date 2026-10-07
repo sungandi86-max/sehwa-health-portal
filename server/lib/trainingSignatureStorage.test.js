@@ -14,7 +14,7 @@ function png() {
 }
 
 function marker(purpose, year = "") {
-  return { appOwner: APP_OWNER, purpose, ...(year ? { year } : {}) };
+  return { appOwner: APP_OWNER, purpose, environment: "qa", ...(year ? { year } : {}) };
 }
 
 function driveFake({ rootCount = 0, publicRoot = false } = {}) {
@@ -30,7 +30,7 @@ function driveFake({ rootCount = 0, publicRoot = false } = {}) {
   }
 
   for (let index = 0; index < rootCount; index += 1) {
-    addFile({ id: `ROOT_FOLDER_${index}_123456`, name: "온라인보건실_연수서명_임시",
+    addFile({ id: `ROOT_FOLDER_${index}_123456`, name: "온라인보건실_연수서명_qa",
       mimeType: "application/vnd.google-apps.folder", appProperties: marker(ROOT_PURPOSE),
       permissions: publicRoot ? [{ type: "domain", role: "reader" }] : [{ type: "user", role: "owner" }] });
   }
@@ -88,8 +88,8 @@ function driveFake({ rootCount = 0, publicRoot = false } = {}) {
   return { request, files, bytes, calls, addFile, queryFiles };
 }
 
-function storage(fake) {
-  return new GoogleDriveOAuthSignatureStorage({ request: fake.request, config });
+function storage(fake, environment = "qa") {
+  return new GoogleDriveOAuthSignatureStorage({ request: fake.request, config, environment: () => environment });
 }
 
 async function bootstrapped() {
@@ -120,7 +120,7 @@ test("root bootstrap creates once and reuses the app-marked private root", async
   assert.deepEqual(second, { rootFolderId: first.rootFolderId, created: false });
   const roots = fake.queryFiles(`trashed=false and appProperties has { key='appOwner' and value='${APP_OWNER}' } and appProperties has { key='purpose' and value='${ROOT_PURPOSE}' }`);
   assert.equal(roots.length, 1);
-  assert.equal(roots[0].name, "온라인보건실_연수서명_임시");
+  assert.equal(roots[0].name, "온라인보건실_연수서명_qa");
 });
 
 test("root bootstrap rejects duplicate or public roots", async () => {
@@ -182,4 +182,28 @@ test("delete removes only a validated app-created private signature", async () =
   fake.addFile({ id: "OUTSIDE_FILE_123456", name: "outside.png", mimeType: "image/png", parents: [],
     size: png().length, appProperties: marker(SIGNATURE_PURPOSE, "2026") }, png());
   await assert.rejects(adapter.deleteSignature("OUTSIDE_FILE_123456"), (error) => error.code === "OUTSIDE_ROOT");
+});
+
+test("QA and production keep identical request IDs in distinct private roots", async () => {
+  const fake = driveFake();
+  const qa = storage(fake, "qa");
+  const production = storage(fake, "production");
+  await qa.bootstrap();
+  const qaFile = await qa.saveSignature({ bytes: png(), eventId: "EVENT-1", year: 2026, requestId });
+  await assert.rejects(production.readSignature(qaFile), (error) => error.code === "INVALID_OBJECT");
+  await assert.rejects(production.deleteSignature(qaFile), (error) => error.code === "INVALID_OBJECT");
+  await production.bootstrap();
+  const productionFile = await production.saveSignature({ bytes: png(), eventId: "EVENT-1", year: 2026, requestId });
+  assert.notEqual(qaFile, productionFile);
+  assert.deepEqual((await qa.findByRequestId(requestId, { year: 2026 })).map((file) => file.id), [qaFile]);
+  assert.deepEqual((await production.findByRequestId(requestId, { year: 2026 })).map((file) => file.id), [productionFile]);
+  assert.equal(fake.files.get(qaFile).appProperties.environment, "qa");
+  assert.equal(fake.files.get(productionFile).appProperties.environment, "production");
+});
+
+test("unrecognized runtime refuses Drive bootstrap before any write", async () => {
+  const fake = driveFake();
+  const adapter = new GoogleDriveOAuthSignatureStorage({ request: fake.request, config });
+  await assert.rejects(adapter.bootstrap(), { code: "training-deployment-not-allowed" });
+  assert.equal(fake.calls.length, 0);
 });

@@ -6,10 +6,15 @@ import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
 import { MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { createTrainingPhase2Handler } from "./trainingCenterPhase2Api.js";
 import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
+import { listAttendanceRecoveryCandidates } from "./trainingAttendanceRecovery.js";
 import { hasSignatureSheetSchema, managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
 import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
 import { SignatureStorageError } from "./trainingSignatureStorage.js";
+
+process.env.VERCEL_ENV = "preview";
+process.env.VERCEL_GIT_COMMIT_REF = "qa";
+process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
 
 const row = (headers, values) => headers.map((header) => values[header] ?? "");
 const open = "2026-10-06T08:00:00+09:00";
@@ -30,6 +35,43 @@ const directory = [{ staffId: "QA001", name: "테스트 교직원", department: 
   { staffId: "QA002", name: "다른 교직원", department: "교무실", position: "교사", employmentStatus: "재직" }];
 const now = () => new Date("2026-10-06T04:00:00.000Z");
 const secret = "test-only-phase2-challenge-secret";
+
+test("QA attendance locks never appear in production recovery or duplicate checks", async () => {
+  const db = fakeDb();
+  const originalEnvironment = process.env.VERCEL_ENV;
+  const originalRef = process.env.VERCEL_GIT_COMMIT_REF;
+  try {
+    const qaLock = await reserveAttendance(db, ["EVENT-1"], "QA001", 0);
+    assert.equal(qaLock.refs.length, 1);
+    process.env.VERCEL_ENV = "production";
+    process.env.VERCEL_GIT_COMMIT_REF = "main";
+    assert.deepEqual((await listAttendanceRecoveryCandidates({ db, now: 20 * 60 * 1000 })).items, []);
+    const productionLock = await reserveAttendance(db, ["EVENT-1"], "QA001", 0);
+    assert.equal(productionLock.refs.length, 1);
+    assert.equal(db.records.size, 2);
+    process.env.VERCEL_ENV = "preview";
+    process.env.VERCEL_GIT_COMMIT_REF = "qa";
+    assert.equal((await listAttendanceRecoveryCandidates({ db, now: 20 * 60 * 1000 })).items.length, 1);
+  } finally {
+    if (originalEnvironment === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = originalEnvironment;
+    if (originalRef === undefined) delete process.env.VERCEL_GIT_COMMIT_REF; else process.env.VERCEL_GIT_COMMIT_REF = originalRef;
+  }
+});
+
+test("feature Preview cannot write training rows or inspect attendance recovery", async () => {
+  const originalRef = process.env.VERCEL_GIT_COMMIT_REF;
+  try {
+    process.env.VERCEL_GIT_COMMIT_REF = "feature/training-center-phase2";
+    const { call, store } = harness();
+    const write = await call("training-admin-save", { method: "POST", body: {} });
+    const recovery = await call("training-attendance-recovery-candidates");
+    assert.equal(write.statusCode, 503);
+    assert.equal(recovery.statusCode, 503);
+    assert.equal(store.calls.saved, 0);
+  } finally {
+    if (originalRef === undefined) delete process.env.VERCEL_GIT_COMMIT_REF; else process.env.VERCEL_GIT_COMMIT_REF = originalRef;
+  }
+});
 
 function inkPng(ink = true) {
   const image = new PNG({ width: 300, height: 100, colorType: 6 });

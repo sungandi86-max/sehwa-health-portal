@@ -1,7 +1,7 @@
 import { activeSignature, sheetRows, signatureKey, SIGNATURE_HEADERS } from "./trainingCenterPhase2.js";
 import { signatureStorageYear } from "./trainingSignatureStorage.js";
+import { trainingLockCollection } from "./trainingDeployment.js";
 
-const COLLECTION = "training_attendance_locks";
 const MIN_STALE_MS = 15 * 60 * 1000;
 const MIN_REVIEW_MS = 30 * 60 * 1000;
 
@@ -12,7 +12,7 @@ export class RecoveryConflictError extends Error {
 }
 
 function lockRef(db, eventId, staffId) {
-  return db.collection(COLLECTION).doc(signatureKey(eventId, staffId));
+  return db.collection(trainingLockCollection()).doc(signatureKey(eventId, staffId));
 }
 
 function matchingPending(data, requestId, eventIds, staffId) {
@@ -28,7 +28,7 @@ function isStale(data, now) {
 }
 
 export async function listAttendanceRecoveryCandidates({ db, now = Date.now() }) {
-  const snapshot = await db.collection(COLLECTION).where("state", "==", "pending").limit(501).get();
+  const snapshot = await db.collection(trainingLockCollection()).where("state", "==", "pending").limit(501).get();
   const seen = new Set();
   const items = [];
   for (const doc of snapshot.docs.slice(0, 500)) {

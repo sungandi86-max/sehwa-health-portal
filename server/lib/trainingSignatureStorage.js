@@ -2,6 +2,7 @@ import {
   createDriveFolder, createDriveOAuthRequester, deleteDriveFile, downloadDriveFile,
   DRIVE_FOLDER_MIME, DRIVE_OAUTH_SCOPE, getDriveFile, getDrivePermissions, listDriveFiles, uploadDrivePng,
 } from "./trainingDriveOAuthClient.js";
+import { requireTrainingEnvironment } from "./trainingDeployment.js";
 
 const PNG_MAGIC = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const MAX_SIGNATURE_BYTES = 300_000;
@@ -13,7 +14,7 @@ const ROOT_PURPOSE = "training-signatures-root";
 const YEAR_PURPOSE = "training-signatures-year";
 const REQUESTS_PURPOSE = "training-signatures-requests";
 const SIGNATURE_PURPOSE = "training-signature";
-const ROOT_FOLDER_NAME = "온라인보건실_연수서명_임시";
+const ROOT_FOLDER_NAME = "온라인보건실_연수서명_";
 
 export class SignatureStorageError extends Error {
   constructor(stage, { code = "", cause } = {}) {
@@ -84,9 +85,9 @@ function markerQuery(properties) {
     `appProperties has { key='${escapeQuery(key)}' and value='${escapeQuery(value)}' }`).join(" and ");
 }
 
-function matchesMarker(file, purpose, year = "") {
+function matchesMarker(file, purpose, year = "", environment = "") {
   return file?.appProperties?.appOwner === APP_OWNER && file.appProperties.purpose === purpose &&
-    (!year || file.appProperties.year === year);
+    (!year || file.appProperties.year === year) && (!environment || file.appProperties.environment === environment);
 }
 
 function isNotFound(error) {
@@ -100,10 +101,11 @@ export function signatureStorageYear(value = new Date()) {
 }
 
 export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
-  constructor({ config = envConfig(), request = null } = {}) {
+  constructor({ config = envConfig(), request = null, environment = () => requireTrainingEnvironment() } = {}) {
     super();
     this.config = config;
     this.request = request;
+    this.environment = environment;
   }
 
   get configured() {
@@ -132,12 +134,13 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
   }
 
   async markedFolders({ purpose, year = "", parentId = "" }) {
-    const properties = { appOwner: APP_OWNER, purpose, ...(year ? { year } : {}) };
+    const properties = { appOwner: APP_OWNER, purpose, environment: this.environment(), ...(year ? { year } : {}) };
     const parent = parentId ? `'${escapeQuery(parentId)}' in parents and ` : "";
     return this.list(`${parent}trashed=false and mimeType='${DRIVE_FOLDER_MIME}' and ${markerQuery(properties)}`);
   }
 
   async rootFolder({ required = false } = {}) {
+    const environment = this.environment();
     const roots = await this.markedFolders({ purpose: ROOT_PURPOSE });
     if (roots.length > 1) throw new SignatureStorageError("SIGNATURE_STORAGE_CONFIG", { code: "DUPLICATE_ROOT" });
     if (!roots[0]) {
@@ -145,7 +148,7 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
       return null;
     }
     const root = roots[0];
-    if (!matchesMarker(root, ROOT_PURPOSE) || (root.parents?.length || 0) > 1 || root.driveId) {
+    if (!matchesMarker(root, ROOT_PURPOSE, "", environment) || (root.parents?.length || 0) > 1 || root.driveId) {
       throw new SignatureStorageError("SIGNATURE_STORAGE_CONFIG", { code: "ROOT_FOLDER_INVALID" });
     }
     await this.assertPrivate(root.id, "SIGNATURE_STORAGE_CONFIG");
@@ -153,13 +156,14 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
   }
 
   async bootstrap() {
+    const environment = this.environment();
     if (!this.configured) throw new SignatureStorageError("SIGNATURE_STORAGE_CONFIG", { code: "CONFIG_REQUIRED" });
     try {
       const existing = await this.rootFolder();
       if (existing) return { rootFolderId: existing.id, created: false };
-      const created = await createDriveFolder(this.requester(), { name: ROOT_FOLDER_NAME,
-        appProperties: { appOwner: APP_OWNER, purpose: ROOT_PURPOSE } });
-      if (!matchesMarker(created, ROOT_PURPOSE)) throw new SignatureStorageError("SIGNATURE_STORAGE_CONFIG", { code: "ROOT_FOLDER_INVALID" });
+      const created = await createDriveFolder(this.requester(), { name: `${ROOT_FOLDER_NAME}${environment}`,
+        appProperties: { appOwner: APP_OWNER, purpose: ROOT_PURPOSE, environment } });
+      if (!matchesMarker(created, ROOT_PURPOSE, "", environment)) throw new SignatureStorageError("SIGNATURE_STORAGE_CONFIG", { code: "ROOT_FOLDER_INVALID" });
       await this.assertPrivate(created.id, "SIGNATURE_STORAGE_CONFIG");
       const resolved = await this.rootFolder({ required: true });
       return { rootFolderId: resolved.id, created: true };
@@ -170,6 +174,7 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
   }
 
   async childFolder({ parentId, purpose, year, name, create }) {
+    const environment = this.environment();
     const folders = await this.markedFolders({ parentId, purpose, year });
     if (folders.length > 1) throw new SignatureStorageError("SIGNATURE_STORAGE_SAVE", { code: "DUPLICATE_FOLDER" });
     if (folders[0]) {
@@ -178,8 +183,8 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
     }
     if (!create) return null;
     const created = await createDriveFolder(this.requester(), { parentId, name,
-      appProperties: { appOwner: APP_OWNER, purpose, year } });
-    if (!matchesMarker(created, purpose, year) || !created.parents?.includes(parentId)) {
+      appProperties: { appOwner: APP_OWNER, purpose, year, environment } });
+    if (!matchesMarker(created, purpose, year, environment) || !created.parents?.includes(parentId)) {
       throw new SignatureStorageError("SIGNATURE_STORAGE_SAVE", { code: "FOLDER_INTEGRITY" });
     }
     await this.assertPrivate(created.id, "SIGNATURE_STORAGE_SAVE");
@@ -201,7 +206,7 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
     const storageYear = assertYear(year);
     const folder = await this.requestsFolder(storageYear);
     if (!folder) return [];
-    const properties = { appOwner: APP_OWNER, purpose: SIGNATURE_PURPOSE, trainingRequestId: requestId, year: storageYear };
+    const properties = { appOwner: APP_OWNER, purpose: SIGNATURE_PURPOSE, trainingRequestId: requestId, year: storageYear, environment: this.environment() };
     const files = await this.list(`'${escapeQuery(folder.id)}' in parents and trashed=false and ${markerQuery(properties)}`);
     if (files.length > 1) throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "DUPLICATE_OBJECT" });
     if (files[0]) await this.inspectStoredFile(files[0].id, { expectedParentId: folder.id, requestId, year: storageYear });
@@ -209,8 +214,9 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
   }
 
   async inspectStoredFile(fileId, { expectedParentId = "", requestId = "", year = "" } = {}) {
+    const environment = this.environment();
     const file = await this.file(fileId);
-    if (file.trashed || file.mimeType !== "image/png" || !matchesMarker(file, SIGNATURE_PURPOSE, year) ||
+    if (file.trashed || file.mimeType !== "image/png" || !matchesMarker(file, SIGNATURE_PURPOSE, year, environment) ||
       (requestId && file.appProperties?.trainingRequestId !== requestId)) {
       throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "INVALID_OBJECT" });
     }
@@ -224,17 +230,18 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
     }
     const parent = await this.file(parentId);
     const fileYear = year || file.appProperties?.year;
-    if (!matchesMarker(parent, REQUESTS_PURPOSE, fileYear)) {
+    if (!matchesMarker(parent, REQUESTS_PURPOSE, fileYear, environment)) {
       throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "OUTSIDE_ROOT" });
     }
     await this.assertPrivate(parent.id);
     const yearFolder = parent.parents?.length === 1 ? await this.file(parent.parents[0]) : null;
-    if (!matchesMarker(yearFolder, YEAR_PURPOSE, fileYear)) {
+    if (!matchesMarker(yearFolder, YEAR_PURPOSE, fileYear, environment)) {
       throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "OUTSIDE_ROOT" });
     }
     await this.assertPrivate(yearFolder.id);
     const root = yearFolder.parents?.length === 1 ? await this.file(yearFolder.parents[0]) : null;
-    if (!matchesMarker(root, ROOT_PURPOSE) || (root.parents?.length || 0) > 1 || root.driveId) {
+    if (!matchesMarker(root, ROOT_PURPOSE, "", environment) || (root.parents?.length || 0) > 1 || root.driveId ||
+      root.id !== (await this.rootFolder({ required: true })).id) {
       throw new SignatureStorageError("SIGNATURE_STORAGE_READ", { code: "OUTSIDE_ROOT" });
     }
     await this.assertPrivate(root.id);
@@ -243,6 +250,9 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
   }
 
   async healthCheck() {
+    try { this.environment(); } catch {
+      return { authReady: false, rootReady: false, rootPrivate: false, readReady: false, needsBootstrap: false, writeReady: null };
+    }
     if (!this.configured) return { authReady: false, rootReady: false, rootPrivate: false, readReady: false, needsBootstrap: false, writeReady: null };
     try {
       const root = await this.rootFolder();
@@ -255,6 +265,7 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
   }
 
   async saveSignature({ bytes, eventId, year, requestId }) {
+    const environment = this.environment();
     assertPng(bytes);
     assertEventId(eventId);
     const storageYear = assertYear(year);
@@ -263,7 +274,7 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
       if (existing[0]) return existing[0].id;
       const requestsFolder = await this.requestsFolder(storageYear, { create: true });
       const appProperties = { appOwner: APP_OWNER, purpose: SIGNATURE_PURPOSE,
-        trainingRequestId: requestId, year: storageYear };
+        trainingRequestId: requestId, year: storageYear, environment };
       const created = await uploadDrivePng(this.requester(), { name: `${requestId}.png`, mimeType: "image/png",
         parents: [requestsFolder.id], appProperties }, bytes);
       await this.inspectStoredFile(created.id, { expectedParentId: requestsFolder.id, requestId, year: storageYear });

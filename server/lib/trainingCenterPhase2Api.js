@@ -11,6 +11,7 @@ import { trainingRosterPdfRenderer } from "./trainingRosterPdf.js";
 import { SignatureStorageError } from "./trainingSignatureStorage.js";
 import { recordRosterPdfVerification } from "./trainingSignatureLifecycle.js";
 import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
+import { requireTrainingEnvironment, TrainingDeploymentError } from "./trainingDeployment.js";
 
 function bad(res, status, message, code = "") {
   return res.status(status).json({ ok: false, ...(code ? { code } : {}), message });
@@ -85,6 +86,8 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (!access.ok) return bad(res, access.status, access.message);
       const adminOnly = !["training-attendance-check", "training-attendance-submit"].includes(resource);
       if (adminOnly && !access.isAdmin) return bad(res, 403, "교육 관리자 권한이 없습니다.");
+      if (req.method === "POST" || resource.startsWith("training-attendance-recovery-") ||
+        (resource === "training-final-sheet" && req.query?.download === "pdf")) requireTrainingEnvironment();
       if (resource === "training-runtime-preflight") {
         if (req.method !== "GET") return bad(res, 405, "지원하지 않는 요청입니다.");
         const qrSecret = secret();
@@ -321,6 +324,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       }
       return bad(res, 405, "지원하지 않는 요청입니다.");
     } catch (error) {
+      if (error instanceof TrainingDeploymentError) return bad(res, 503, error.message, error.code);
       if (error instanceof AttendanceConflictError) return bad(res, 409, error.message, error.code);
       if (error instanceof RecoveryConflictError) return bad(res, 409, error.message, "recovery-conflict");
       if (error instanceof TrainingSourceNotReadyError) return bad(res, 503, "교육센터 Sheet 또는 저장소 설정을 확인해 주세요.", error.code);

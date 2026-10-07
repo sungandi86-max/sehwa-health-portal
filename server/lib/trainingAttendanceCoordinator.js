@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { signatureKey } from "./trainingCenterPhase2.js";
+import { trainingLockCollection } from "./trainingDeployment.js";
 
-const COLLECTION = "training_attendance_locks";
 const LEASE_MS = 15 * 60 * 1000;
 
 export class AttendanceConflictError extends Error {
@@ -13,7 +13,7 @@ export class AttendanceConflictError extends Error {
 
 export async function reserveAttendance(db, eventIds, staffId, now = Date.now()) {
   const requestId = randomUUID();
-  const refs = eventIds.map((eventId) => db.collection(COLLECTION).doc(signatureKey(eventId, staffId)));
+  const refs = eventIds.map((eventId) => db.collection(trainingLockCollection()).doc(signatureKey(eventId, staffId)));
   await db.runTransaction(async (transaction) => {
     const snapshots = [];
     for (const ref of refs) snapshots.push(await transaction.get(ref));
@@ -73,7 +73,7 @@ export async function finishAttendance(reservation, state, extra = {}) {
 }
 
 export async function cancelAttendanceLock(db, eventId, staffId, actor) {
-  const ref = db.collection(COLLECTION).doc(signatureKey(eventId, staffId));
+  const ref = db.collection(trainingLockCollection()).doc(signatureKey(eventId, staffId));
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (snapshot.exists && snapshot.data()?.state === "pending") throw new AttendanceConflictError();
@@ -83,7 +83,7 @@ export async function cancelAttendanceLock(db, eventId, staffId, actor) {
 }
 
 export async function assertCompletedAttendanceLock(db, eventId, staffId) {
-  const ref = db.collection(COLLECTION).doc(signatureKey(eventId, staffId));
+  const ref = db.collection(trainingLockCollection()).doc(signatureKey(eventId, staffId));
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists || snapshot.data()?.state !== "completed") throw new AttendanceConflictError();

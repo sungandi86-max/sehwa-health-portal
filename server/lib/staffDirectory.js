@@ -1,9 +1,9 @@
 import { JWT } from "google-auth-library";
 import { getFirebaseAdminAuth, getFirebaseAdminDb, getFirebaseServiceAccount } from "./firebaseAdmin.js";
+import { trainingSpreadsheetId } from "./trainingDeployment.js";
 
 export const CURRENT_SCHOOL_YEAR = 2026;
 export const CURRENT_SEMESTER = 2;
-const DEFAULT_HEALTH_SPREADSHEET_ID = "1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs";
 const STAFF_ROSTER_SHEET_NAME = "교직원명단";
 const STAFF_ROSTER_RANGE = `${STAFF_ROSTER_SHEET_NAME}!A1:Z1000`;
 
@@ -184,7 +184,7 @@ export async function readGoogleSheetValues({ spreadsheetId, range }) {
 
 export async function readStaffDirectory({ allowInvalidEmploymentStatus = true } = {}) {
   return normalizeDirectory(await readGoogleSheetValues({
-    spreadsheetId: process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || DEFAULT_HEALTH_SPREADSHEET_ID,
+    spreadsheetId: trainingSpreadsheetId(),
     range: STAFF_ROSTER_RANGE,
   }), { allowInvalidEmploymentStatus });
 }
