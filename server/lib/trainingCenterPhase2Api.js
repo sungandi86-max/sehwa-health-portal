@@ -92,16 +92,21 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const qrSecretValid = qrSecretConfigured && Buffer.byteLength(qrSecret, "utf8") >= 32;
         const signatureStorageConfigured = store.signatureStorageConfigured === true;
         const storage = signatureStorageConfigured ? await store.inspectSignatureStorage() :
-          { authReady: false, folderAccessible: false, folderPrivate: false, readReady: false, writeReady: null };
+          { authReady: false, rootReady: false, rootPrivate: false, readReady: false, needsBootstrap: false, writeReady: null };
         const checks = {
           qrSecretConfigured, qrSecretValid, signatureStorageConfigured,
           signatureDriveAuthReady: storage.authReady === true,
-          signatureDriveFolderAccessible: storage.folderAccessible === true,
-          signatureDriveFolderPrivate: storage.folderPrivate === true,
+          signatureDriveRootReady: storage.rootReady === true,
+          signatureDriveRootPrivate: storage.rootPrivate === true,
           signatureStorageReadReady: storage.readReady === true,
           signatureSheetReady: await store.isSignatureSheetReady(), firebaseAdminReady: true,
         };
-        return res.status(200).json({ ok: Object.values(checks).every(Boolean), checks });
+        return res.status(200).json({ ok: Object.values(checks).every(Boolean), needsBootstrap: storage.needsBootstrap === true, checks });
+      }
+      if (resource === "training-signature-storage-bootstrap") {
+        if (req.method !== "POST") return bad(res, 405, "지원하지 않는 요청입니다.");
+        const result = await store.bootstrapSignatureStorage();
+        return res.status(200).json({ ok: true, created: result.created === true });
       }
 
       const body = req.method === "POST" ? await readJsonBody(req, { maxBytes: 400000 }) : null;

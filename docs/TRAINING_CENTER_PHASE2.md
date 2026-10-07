@@ -27,11 +27,13 @@
 ## 서버 설정과 권한
 
 - `TRAINING_QR_SECRET`: 32바이트 이상의 임의 비밀값을 서버 환경에만 설정한다. QR HMAC 검증에 사용한다. 브라우저의 `VITE_` 변수에 두지 않는다.
-- `TRAINING_DRIVE_OAUTH_CLIENT_ID`, `TRAINING_DRIVE_OAUTH_CLIENT_SECRET`, `TRAINING_DRIVE_OAUTH_REFRESH_TOKEN`, `TRAINING_SIGNATURE_DRIVE_FOLDER_ID`는 서버 환경에만 설정한다. refresh token과 client secret을 브라우저, Sheet, Firestore, 로그에 노출하지 않는다.
+- `TRAINING_DRIVE_OAUTH_CLIENT_ID`, `TRAINING_DRIVE_OAUTH_CLIENT_SECRET`, `TRAINING_DRIVE_OAUTH_REFRESH_TOKEN`은 서버 환경에만 설정한다. refresh token과 client secret을 브라우저, Sheet, Firestore, 로그에 노출하지 않는다.
 - Google Sheet 읽기·쓰기는 기존 Firebase Admin service account와 Sheets API를 계속 사용한다. Drive OAuth credential은 전자서명 파일에만 사용한다.
-- 고정된 기존 My Drive 폴더를 env ID로 bootstrap하고 그 하위 파일을 검색·검증해야 하므로 현재 OAuth scope는 `https://www.googleapis.com/auth/drive`다. `drive.file`은 OAuth 앱이 생성했거나 사용자가 Picker로 선택한 파일에 한정되므로 현재 고정 폴더 계약에는 충분하지 않다. 향후 앱이 폴더를 직접 생성·선택하는 연결 UI를 도입하면 `drive.file`로 축소를 재검토한다.
+- Drive OAuth scope는 `https://www.googleapis.com/auth/drive.file`만 사용한다. 앱이 만든 전용 폴더와 PNG만 탐색·읽기·삭제하며 사용자의 다른 My Drive 파일에 접근하지 않는다.
 - 현재 Phase는 관리자가 별도로 발급한 offline refresh token을 Vercel encrypted env에 넣는 single-school bootstrap까지만 지원한다. 향후 연결 UI는 서버가 만든 일회성 state를 HttpOnly/SameSite 세션과 대조하고 authorization code를 서버에서만 교환해야 하며, token을 브라우저 응답이나 Firestore 평문으로 저장하지 않는다.
-- 전자서명은 configured private root의 `<year>/requests/<requestId>.png`에 저장한다. 이름, staffId, UID, 부서, 직위는 파일명이나 appProperties에 넣지 않는다.
+- 최초 storage-only QA에서 명시적 bootstrap을 실행해 My Drive에 `온라인보건실_연수서명_임시` root를 만든다. read-only preflight는 root가 없으면 `needsBootstrap`만 반환하며 폴더를 만들지 않는다. root는 폴더명이 아니라 `appOwner=sehwa-health-portal`, `purpose=training-signatures-root` appProperties로 식별하고, 2개 이상이면 무결성 오류로 중단한다.
+- bootstrap은 기존 Firebase 관리자 인증이 적용된 `training-signature-storage-bootstrap` POST resource로만 실행한다. 응답에는 생성 여부만 포함하고 Drive folder ID는 노출하지 않는다.
+- 전자서명은 앱이 만든 private root의 `<year>/requests/<requestId>.png`에 임시 저장한다. year, requests, PNG에도 appProperties marker를 두며 이름, staffId, UID, 부서, 직위, eventId는 파일명이나 appProperties에 넣지 않는다.
 - 서명 root와 파일에 `anyone` 또는 `domain` permission이 있으면 fail closed한다. 공개 링크와 `webContentLink`는 생성하거나 반환하지 않는다.
 - Firestore `training_attendance_locks`는 Admin SDK만 사용한다. 현행 `firestore.rules`의 최종 deny 규칙으로 클라이언트 직접 읽기·쓰기는 허용되지 않는다.
 - `api/firebase/staff-directory.js`의 기존 함수에 resource를 추가했으므로 Vercel function 수는 증가하지 않는다.
@@ -52,9 +54,9 @@ Firebase ID token, 현재 학기 활성 assignment, canonical 교직원ID 및 �
 
 ## 적용 순서
 
-1. 이 schema, 전용 Drive OAuth client, private root 폴더와 server-only env 설정을 사용자에게 확인받는다.
+1. 이 schema, 전용 Drive OAuth client와 server-only env 설정을 사용자에게 확인받는다.
 2. 새 탭을 숨김 상태로 생성하고 헤더만 넣는다. 샘플 교직원·교육 데이터는 넣지 않는다.
-3. QA 환경에서 OAuth auth, root 접근과 private permission을 read-only 점검한 뒤 synthetic PNG로 storage-only save/read/idempotency를 확인한다.
+3. QA 환경에서 OAuth auth를 read-only 점검하고, 명시적 bootstrap으로 app 전용 private root를 만든 뒤 synthetic PNG로 storage-only save/read/idempotency를 확인한다.
 4. feature branch fixture 테스트와 관리자 UI를 검증한 다음 사용자 승인 후 `qa`에 병합한다.
 5. 실제 운영 교육과 교직원 대상 행은 관리자가 별도로 등록한다. 이 작업에서 자동 생성하거나 이관하지 않는다.
 

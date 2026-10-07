@@ -16,8 +16,8 @@ const runPreflight = async () => {
   if (preflightMode === "loading") return new Promise(() => {});
   return { ok: preflightMode === "success", checks: {
     qrSecretConfigured: true, qrSecretValid: true, signatureStorageConfigured: true,
-    signatureDriveAuthReady: preflightMode === "success", signatureDriveFolderAccessible: preflightMode === "success",
-    signatureDriveFolderPrivate: preflightMode === "success", signatureStorageReadReady: preflightMode === "success",
+    signatureDriveAuthReady: preflightMode === "success", signatureDriveRootReady: preflightMode === "success",
+    signatureDriveRootPrivate: preflightMode === "success", signatureStorageReadReady: preflightMode === "success",
     signatureSheetReady: true, firebaseAdminReady: true,
   } };
 };

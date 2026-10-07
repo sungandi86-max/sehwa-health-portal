@@ -4,7 +4,7 @@ import { OAuth2Client } from "google-auth-library";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
-export const DRIVE_OAUTH_SCOPE = "https://www.googleapis.com/auth/drive";
+export const DRIVE_OAUTH_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 export function createDriveOAuthRequester(config) {
   const auth = new OAuth2Client(config.clientId, config.clientSecret);
@@ -27,10 +27,11 @@ export async function listDriveFiles(request, query) {
     fields: "files(id,name,mimeType,parents,trashed,size,appProperties,driveId)" } })).data.files || [];
 }
 
-export async function createDriveFolder(request, parentId, name) {
+export async function createDriveFolder(request, { parentId = "", name, appProperties }) {
+  const parents = parentId ? [parentId] : undefined;
   return (await request({ url: `${DRIVE_API}/files`, method: "POST",
-    params: { ignoreDefaultVisibility: true, fields: "id,name,mimeType,parents,trashed,driveId" },
-    data: { name, mimeType: DRIVE_FOLDER_MIME, parents: [parentId] } })).data;
+    params: { ignoreDefaultVisibility: true, fields: "id,name,mimeType,parents,trashed,appProperties,driveId" },
+    data: { name, mimeType: DRIVE_FOLDER_MIME, ...(parents ? { parents } : {}), appProperties } })).data;
 }
 
 export async function uploadDrivePng(request, metadata, bytes) {
