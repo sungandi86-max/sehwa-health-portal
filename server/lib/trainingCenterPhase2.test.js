@@ -89,7 +89,7 @@ function fakeStore({ appendMode = "success" } = {}) {
     calls, values,
     signatureStorageConfigured: true,
     assertSignatureStorageConfigured: () => {},
-    inspectSignatureStorage: async () => ({ bucketReady: true, readReady: true, writeReady: null }),
+    inspectSignatureStorage: async () => ({ authReady: true, folderAccessible: true, folderPrivate: true, readReady: true, writeReady: null }),
     isSignatureSheetReady: async () => true,
     listSignatureFilesByRequest: async () => [],
     readBase: async () => values,
@@ -371,15 +371,16 @@ test("TrainingCenterStore delegates private signature storage to the provider ad
   const calls = [];
   const storage = {
     configured: true,
-    healthCheck: async () => ({ bucketReady: true, readReady: true, writeReady: null }),
-    saveSignature: async (input) => { calls.push(["save", input]); return "training-signatures/2026/requests/" + requestId + ".png"; },
+    healthCheck: async () => ({ authReady: true, folderAccessible: true, folderPrivate: true, readReady: true, writeReady: null }),
+    saveSignature: async (input) => { calls.push(["save", input]); return "DRIVE_FILE_123456"; },
     readSignature: async (storageKey) => { calls.push(["read", storageKey]); return inkPng(); },
-    findByRequestId: async (id) => { calls.push(["find", id]); return [{ id: "training-signatures/2026/requests/" + id + ".png", private: true }]; },
+    findByRequestId: async (id) => { calls.push(["find", id]); return [{ id: "DRIVE_FILE_123456", private: true }]; },
+    deleteSignature: async (id) => { calls.push(["delete", id]); return true; },
   };
   const store = new TrainingCenterStore({ storage });
-  assert.deepEqual(await store.inspectSignatureStorage(), { bucketReady: true, readReady: true, writeReady: null });
-  assert.equal(await store.uploadSignature(inkPng(), "EVENT-1", now(), requestId), "training-signatures/2026/requests/" + requestId + ".png");
-  assert.equal((await store.downloadSignature("training-signatures/2026/requests/" + requestId + ".png")).length > 100, true);
+  assert.deepEqual(await store.inspectSignatureStorage(), { authReady: true, folderAccessible: true, folderPrivate: true, readReady: true, writeReady: null });
+  assert.equal(await store.uploadSignature(inkPng(), "EVENT-1", now(), requestId), "DRIVE_FILE_123456");
+  assert.equal((await store.downloadSignature("DRIVE_FILE_123456")).length > 100, true);
   assert.equal((await store.listSignatureFilesByRequest(requestId))[0].private, true);
   assert.deepEqual(calls.map(([action]) => action), ["save", "read", "find"]);
 });
@@ -506,7 +507,7 @@ test("runtime preflight is admin-only, GET-only, redacted, and write-free", asyn
     assert.equal(res.body.ok, true);
     assert.equal(Object.values(res.body.checks).every(Boolean), true);
     assert.deepEqual(Object.keys(res.body.checks), ["qrSecretConfigured", "qrSecretValid", "signatureStorageConfigured",
-      "signatureStorageBucketReady", "signatureStorageReadReady",
+      "signatureDriveAuthReady", "signatureDriveFolderAccessible", "signatureDriveFolderPrivate", "signatureStorageReadReady",
       "signatureSheetReady", "firebaseAdminReady"]);
     assert.equal(JSON.stringify(res.body).includes(secret), false);
     assert.equal(JSON.stringify(res.body).includes("FIREBASE_SERVICE_ACCOUNT"), false);
@@ -524,10 +525,12 @@ test("runtime preflight reports invalid config and source without exposing value
   missing.store.signatureStorageConfigured = false;
   const noStorage = await missing.call("training-runtime-preflight");
   assert.equal(noStorage.body.checks.signatureStorageConfigured, false);
-  assert.equal(noStorage.body.checks.signatureStorageBucketReady, false);
+  assert.equal(noStorage.body.checks.signatureDriveAuthReady, false);
+  assert.equal(noStorage.body.checks.signatureDriveFolderAccessible, false);
+  assert.equal(noStorage.body.checks.signatureDriveFolderPrivate, false);
   const inaccessible = harness();
-  inaccessible.store.inspectSignatureStorage = async () => ({ bucketReady: false, readReady: false, writeReady: null });
-  assert.equal((await inaccessible.call("training-runtime-preflight")).body.checks.signatureStorageBucketReady, false);
+  inaccessible.store.inspectSignatureStorage = async () => ({ authReady: true, folderAccessible: false, folderPrivate: false, readReady: false, writeReady: null });
+  assert.equal((await inaccessible.call("training-runtime-preflight")).body.checks.signatureDriveFolderAccessible, false);
   const badSheet = harness();
   badSheet.store.isSignatureSheetReady = async () => false;
   assert.equal((await badSheet.call("training-runtime-preflight")).body.checks.signatureSheetReady, false);

@@ -47,11 +47,11 @@ export class TrainingCenterStore {
   }
 
   async inspectSignatureStorage() {
-    if (!this.signatureStorageConfigured) return { bucketReady: false, readReady: false, writeReady: null };
+    if (!this.signatureStorageConfigured) return { authReady: false, folderAccessible: false, folderPrivate: false, readReady: false, writeReady: null };
     try {
       return await this.storage.healthCheck();
     } catch {
-      return { bucketReady: false, readReady: false, writeReady: null };
+      return { authReady: false, folderAccessible: false, folderPrivate: false, readReady: false, writeReady: null };
     }
   }
 
@@ -136,6 +136,11 @@ export class TrainingCenterStore {
   async listSignatureFilesByRequest(requestId, context = {}) {
     this.assertSignatureStorageConfigured();
     return this.storage.findByRequestId(requestId, context);
+  }
+
+  async deleteSignature(storageKey) {
+    this.assertSignatureStorageConfigured();
+    return this.storage.deleteSignature(storageKey);
   }
 }
 

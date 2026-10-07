@@ -9,6 +9,7 @@ import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetM
 import { makeTrainingRosterXlsx, trainingRosterPdfFilename, trainingRosterXlsxFilename } from "./trainingFinalSheet.js";
 import { trainingRosterPdfRenderer } from "./trainingRosterPdf.js";
 import { SignatureStorageError } from "./trainingSignatureStorage.js";
+import { recordRosterPdfVerification } from "./trainingSignatureLifecycle.js";
 import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 
 function bad(res, status, message, code = "") {
@@ -16,8 +17,8 @@ function bad(res, status, message, code = "") {
 }
 
 const ATTENDANCE_FAILURE_STAGES = new Set([
-  "SIGNATURE_STORAGE_CONFIG", "SIGNATURE_STORAGE_SAVE", "SIGNATURE_STORAGE_READ",
-  "ROSTER_BUILD", "ROSTER_SIGNATURE_FETCH", "ROSTER_TEMPLATE_FILL", "ROSTER_PDF_GENERATE", "SHEET_APPEND", "LOCK_FINALIZE",
+  "SIGNATURE_STORAGE_CONFIG", "SIGNATURE_STORAGE_SAVE", "SIGNATURE_STORAGE_READ", "SIGNATURE_STORAGE_DELETE",
+  "ROSTER_BUILD", "ROSTER_SIGNATURE_FETCH", "ROSTER_TEMPLATE_FILL", "ROSTER_PDF_GENERATE", "ROSTER_PDF_AUDIT", "SHEET_APPEND", "LOCK_FINALIZE",
 ]);
 
 function logAttendanceFailure(error, fallbackStage, eventCount) {
@@ -91,10 +92,12 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const qrSecretValid = qrSecretConfigured && Buffer.byteLength(qrSecret, "utf8") >= 32;
         const signatureStorageConfigured = store.signatureStorageConfigured === true;
         const storage = signatureStorageConfigured ? await store.inspectSignatureStorage() :
-          { bucketReady: false, readReady: false, writeReady: null };
+          { authReady: false, folderAccessible: false, folderPrivate: false, readReady: false, writeReady: null };
         const checks = {
           qrSecretConfigured, qrSecretValid, signatureStorageConfigured,
-          signatureStorageBucketReady: storage.bucketReady === true,
+          signatureDriveAuthReady: storage.authReady === true,
+          signatureDriveFolderAccessible: storage.folderAccessible === true,
+          signatureDriveFolderPrivate: storage.folderPrivate === true,
           signatureStorageReadReady: storage.readReady === true,
           signatureSheetReady: await store.isSignatureSheetReady(), firebaseAdminReady: true,
         };
@@ -247,10 +250,21 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           }
           const filename = trainingRosterPdfFilename(model.event);
           let pdf;
-          try { pdf = await rosterPdf.render({ model, filename, readSignature: (storageKey) => store.downloadSignature(storageKey) }); }
+          const includedFileIds = new Set();
+          try { pdf = await rosterPdf.render({ model, filename, readSignature: async (storageKey) => {
+            const bytes = await store.downloadSignature(storageKey);
+            includedFileIds.add(storageKey);
+            return bytes;
+          } }); }
           catch (error) {
             logAttendanceFailure(error, "ROSTER_PDF_GENERATE", model.rows.length);
             throw error;
+          }
+          try {
+            await recordRosterPdfVerification({ db: access.db, eventId, rows: model.rows,
+              includedFileIds: [...includedFileIds], pdf, actor: access.assignment.staffId, now: now().getTime() });
+          } catch (error) {
+            logAttendanceFailure(error, "ROSTER_PDF_AUDIT", model.rows.length);
           }
           res.setHeader("Content-Type", "application/pdf");
           res.setHeader("Content-Disposition", `attachment; filename="training-roster.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`);

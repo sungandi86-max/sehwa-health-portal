@@ -4,7 +4,6 @@ import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
-import { getStorage } from "firebase-admin/storage";
 
 const DEFAULT_PROJECT_ID = "sehwa-health-portal-v2";
 const LOCAL_ENV_FILE = ".env.local";
@@ -64,11 +63,9 @@ export function getFirebaseAdminApp() {
     throw new Error("Firebase Admin 서비스 계정 환경변수가 필요합니다.");
   }
 
-  const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || "";
   return initializeApp({
     credential: cert(serviceAccount),
     projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || DEFAULT_PROJECT_ID,
-    ...(storageBucket ? { storageBucket } : {}),
   });
 }
 
@@ -82,15 +79,4 @@ export function getFirebaseAdminDb() {
 
 export function getFirebaseAdminMessaging() {
   return getMessaging(getFirebaseAdminApp());
-}
-
-export function getFirebaseStorageBucketName() {
-  loadLocalEnv();
-  return String(process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || "").trim();
-}
-
-export function getFirebaseAdminStorageBucket() {
-  const bucketName = getFirebaseStorageBucketName();
-  if (!bucketName) throw new Error("Firebase Storage bucket 환경변수가 필요합니다.");
-  return getStorage(getFirebaseAdminApp()).bucket(bucketName);
 }
