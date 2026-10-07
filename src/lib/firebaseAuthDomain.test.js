@@ -14,8 +14,9 @@ test("fixed QA preview uses its same-origin auth handler", () => {
   assert.equal(resolveFirebaseAuthDomain(QA_HOST, "custom.example"), QA_HOST);
 });
 
-test("existing feature preview remains authorized during QA transition", () => {
-  assert.equal(resolveFirebaseAuthDomain(FEATURE_HOST, "custom.example"), FEATURE_HOST);
+test("legacy feature preview uses the configured fallback instead of same-origin auth", () => {
+  assert.equal(resolveFirebaseAuthDomain(FEATURE_HOST, "custom.example"), "custom.example");
+  assert.equal(resolveFirebaseAuthDomain(FEATURE_HOST), DEFAULT_FIREBASE_AUTH_DOMAIN);
 });
 
 test("localhost keeps the configured auth domain or Firebase default", () => {

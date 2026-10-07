@@ -85,11 +85,21 @@ Firebase ID token, 현재 학기 활성 assignment, canonical 교직원ID 및 �
 
 ## Phase 2 QA 종료 및 main 병합 검토 (2026-10-08)
 
-- 이번 checkpoint 직전 `qa`와 `feature/training-center-phase2`는 `689752544f4bdaaece86f014f1c6d82957998b07`로 일치했다. 아래 fail-closed 보완은 feature 브랜치에만 반영하며 `qa`, `main`, Production 배포에는 반영하지 않는다.
+- 이번 blocker checkpoint 직전 `qa`와 `feature/training-center-phase2`는 `689752544f4bdaaece86f014f1c6d82957998b07`로 일치했다. 최신 fail-closed 보완은 고정 `qa`에 동기화해 검증한 뒤에만 main 병합을 검토한다.
 - 고정 QA Preview에서 승인된 QA 관리자 본인의 정상 출석·전자서명 흐름을 여러 차례 실제로 검증했다. 단일·묶음 QR, 중복 제출 차단, 관리자 현황·보정, 연수등록부 PDF와 서명 표시는 수행한 QA 범위에서 확인했다.
 - stale lock 복구와 원본 requestId의 orphan PNG 재사용 계약은 fixture 기반 자동 테스트로 검증했다. 실제 stale 상태를 강제로 만드는 재현은 추가 수행하지 않았다. 의도적 실패 상태 생성은 추가 검증 실익에 비해 QA 데이터·잠금·Drive 잔여물의 운영 리스크가 크기 때문이다. 따라서 실환경 stale recovery 성공은 확인된 사실로 간주하지 않는다.
 - 분리된 QA 워크북에는 `[QA]` 교육 5건(모두 `미사용`), 승인된 관리자 본인 대상 행 5건, 전자서명 감사 행 4건이 남아 있다. 감사 행·비공개 PNG·잠금은 자동 삭제하지 않는다. QA 전자서명 탭은 숨김 상태이고 임시 보호 규칙은 남아 있지 않다.
 - QA 워크북, Drive `qa` namespace, Firestore `training_attendance_locks_qa`는 Production 데이터와 분리되어 있다. 이번 종료 점검에서는 외부 데이터를 수정하지 않았다.
 - Production에는 서버 전용 `TRAINING_DRIVE_OAUTH_CLIENT_ID`, `TRAINING_DRIVE_OAUTH_CLIENT_SECRET`, `TRAINING_DRIVE_OAUTH_REFRESH_TOKEN` 설정이 완료됐다. 실제 값은 문서나 Git에 복제하지 않는다. Production 서명 Drive root의 명시적 bootstrap은 아직 실행하지 않았다.
-- 교육센터 전용 workbook resolver는 Production에서 운영 워크북만, 고정 `qa`와 승인된 `feature/training-center-phase2` Preview에서 명시적인 비운영 QA 워크북만 허용한다. 승인되지 않은 Preview나 QA 워크북 미설정 Preview에서는 GET/list/detail/관리자 API를 인증·Sheet 조회 전에 거부한다. 기존 일반 staff-directory resolver의 fallback 정책은 변경하지 않았다.
-- 관리자 QR 발급은 Drive OAuth 인증, 전용 root 존재·비공개 및 읽기 준비를 확인한 후에만 challenge를 생성한다. root가 없으면 `needsBootstrap` 오류를 반환하며 preflight나 QR 발급에서 bootstrap을 자동 실행하지 않는다. Production root bootstrap과 이 로컬 수정의 재검토 전까지 main 병합은 보류한다.
+- 교육센터 전용 workbook resolver는 Production에서 운영 워크북만, 고정 `qa` Preview에서 명시적인 비운영 QA 워크북만 허용한다. 모든 feature/임의 Preview에서는 override 유무와 무관하게 GET/list/detail/관리자 API를 인증·Sheet 조회 전에 거부한다. 기존 일반 staff-directory resolver의 fallback 정책은 변경하지 않았다. Firebase same-origin auth host 허용 목록도 Production과 고정 `qa`만 유지한다.
+- 관리자 QR 발급은 Drive OAuth 인증, 전용 root 존재·비공개 및 읽기 준비를 확인한 후에만 challenge를 생성한다. root가 없으면 `needsBootstrap` 오류를 반환하며 preflight나 QR 발급에서 bootstrap을 자동 실행하지 않는다. 고정 `qa`에서 최신 보완을 검증하고 최종 검토하기 전까지 main 병합은 보류한다.
+
+## Production 출시 순서
+
+1. 고정 `qa`가 최신 feature SHA로 Ready이고 교육 목록·상세, 관리자 QR 및 fail-closed 회귀 점검을 통과하면 main 병합을 별도로 승인한다.
+2. `main` 병합 후 Production 배포를 확인한다. 이 시점에 서명 root가 없다면 QR 발급은 `503`과 `needsBootstrap`으로 차단되어야 하며, 자동 bootstrap은 실행되지 않는다.
+3. Production 관리자 로그인 후 read-only `training-runtime-preflight`로 Firebase Admin, QR secret, 서비스 계정 Sheet schema, Drive OAuth 인증과 root 상태를 확인한다.
+4. root 미생성 상태의 QR 발급 차단을 확인한 뒤 관리자가 명시적으로 `training-signature-storage-bootstrap`을 실행한다. 이것이 Production Drive root를 만드는 유일한 단계다.
+5. root 비공개·읽기 준비, 서명 Sheet A:M schema와 QR secret 유효성을 다시 확인한다. 모든 준비 항목이 통과한 뒤에만 운영 QR 발급·전자서명 사용을 시작한다.
+
+Production root bootstrap은 main 병합 **전** 조건이 아니라 운영 QR 사용 **전** 필수 조건이다. 해당 bootstrap, 운영 교육·서명 생성, Production Sheet/Firestore/Drive write는 별도 승인과 배포 후 점검 절차에서만 수행한다.

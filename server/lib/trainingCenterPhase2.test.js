@@ -645,8 +645,8 @@ test("Phase 2 admin GET rejects unapproved Preview before canonical directory or
     assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, bootstraps: 0 });
     process.env.VERCEL_GIT_COMMIT_REF = "feature/training-center-phase2";
     process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
-    assert.equal((await call("training-admin-list")).statusCode, 200);
-    assert.equal(directoryReads, 1);
+    assert.equal((await call("training-admin-list")).statusCode, 503);
+    assert.equal(directoryReads, 0);
     assert.equal((await call("training-admin-save", { method: "POST", body: {} })).statusCode, 503);
   } finally {
     if (prior === undefined) delete process.env.VERCEL_GIT_COMMIT_REF; else process.env.VERCEL_GIT_COMMIT_REF = prior;

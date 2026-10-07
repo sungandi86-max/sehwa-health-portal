@@ -40,8 +40,7 @@ export function trainingSpreadsheetId(context = process.env) {
 export function trainingCenterSpreadsheetId(context = process.env) {
   const environment = trainingEnvironment(context);
   if (environment === "production") return DEFAULT_HEALTH_SPREADSHEET_ID;
-  const approvedFeature = context.VERCEL_ENV === "preview" && context.VERCEL_GIT_COMMIT_REF === "feature/training-center-phase2";
-  if (environment !== "qa" && !approvedFeature) {
+  if (environment !== "qa") {
     throw new TrainingDeploymentError("이 배포 환경에서는 교육센터에 접근할 수 없습니다.", "training-environment-not-allowed");
   }
   const configured = String(context.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || "").trim();
