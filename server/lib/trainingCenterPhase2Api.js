@@ -1,6 +1,6 @@
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { readJsonBody, readStaffDirectory, sendCors } from "./staffDirectory.js";
-import { TARGET_HEADERS, TRAINING_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
+import { getTrainingSpreadsheetId, TARGET_HEADERS, TRAINING_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { resolveTrainingAccess } from "./trainingCenterAccess.js";
 import { trainingCenterStore } from "./trainingCenterStore.js";
 import { AttendanceConflictError, assertCompletedAttendanceLock, attachAttendanceFile, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
@@ -82,6 +82,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
     const resource = req.query?.resource;
     if (!TRAINING_PHASE2_RESOURCES.has(resource)) return bad(res, 400, "교육 요청 종류가 올바르지 않습니다.");
     try {
+      getTrainingSpreadsheetId();
       const access = await resolveTrainingAccess(req, { auth, db, directory });
       if (!access.ok) return bad(res, access.status, access.message);
       const adminOnly = !["training-attendance-check", "training-attendance-submit"].includes(resource);
@@ -173,6 +174,13 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (resource === "training-qr" && req.method === "GET") {
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
         store.assertSignatureStorageConfigured();
+        const storage = await store.inspectSignatureStorage();
+        if (!storage.authReady || !storage.rootReady || !storage.rootPrivate || !storage.readReady) {
+          return res.status(503).json({ ok: false,
+            code: storage.needsBootstrap ? "training-signature-needs-bootstrap" : "training-signature-storage-not-ready",
+            needsBootstrap: storage.needsBootstrap === true,
+            message: storage.needsBootstrap ? "서명 저장소 초기화가 필요합니다." : "서명 저장소 준비 상태를 확인해 주세요." });
+        }
         const scope = qrScope(req.query);
         const source = parseTrainingSource(await store.readSource());
         const events = resolveEvents(source, scope);

@@ -169,7 +169,7 @@ function harness(options = {}) {
       throw new Error("invalid token");
     } }),
     db: () => db,
-    directory: async () => ({ directory, stats: { duplicateStaffIds: 0 } }),
+    directory: options.directory || (async () => ({ directory, stats: { duplicateStaffIds: 0 } })),
     store, rosterPdf: options.rosterPdf || { render: async () => Buffer.from("%PDF-test") },
     secret: () => options.secret ?? secret, now: options.now || now,
   });
@@ -605,6 +605,53 @@ test("short QR secret and missing signature storage fail as configuration errors
   const missing = harness();
   missing.store.assertSignatureStorageConfigured = () => { throw new TrainingSourceNotReadyError(); };
   assert.equal((await missing.call("training-qr", { query: { eventId: "EVENT-1" } })).statusCode, 503);
+});
+
+test("QR issuance requires authenticated private bootstrapped storage without writes", async () => {
+  const failures = [
+    { authReady: true, rootReady: false, rootPrivate: false, readReady: false, needsBootstrap: true },
+    { authReady: false, rootReady: false, rootPrivate: false, readReady: false, needsBootstrap: false },
+    { authReady: true, rootReady: true, rootPrivate: false, readReady: false, needsBootstrap: false },
+  ];
+  for (const state of failures) {
+    const { call, db, store } = harness();
+    store.inspectSignatureStorage = async () => state;
+    const result = await call("training-qr", { query: { eventId: "EVENT-1" } });
+    assert.equal(result.statusCode, 503);
+    assert.equal(result.body.needsBootstrap, state.needsBootstrap);
+    assert.equal(result.body.path, undefined);
+    assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, bootstraps: 0 });
+    assert.equal(db.records.size, 0);
+  }
+  const ready = await harness().call("training-qr", { query: { eventId: "EVENT-1" } });
+  assert.equal(ready.statusCode, 200);
+  assert.equal(ready.body.path.startsWith("/training/attendance/EVENT-1?challenge="), true);
+});
+
+test("Phase 2 admin GET rejects unapproved Preview before canonical directory or Sheet reads", async () => {
+  const prior = process.env.VERCEL_GIT_COMMIT_REF;
+  const workbook = process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID;
+  try {
+    process.env.VERCEL_GIT_COMMIT_REF = "feature/other";
+    delete process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID;
+    let directoryReads = 0;
+    const { call, store } = harness({ directory: async () => { directoryReads += 1; return { directory, stats: { duplicateStaffIds: 0 } }; } });
+    for (const resource of ["training-admin-list", "training-targets", "training-final-sheet"]) {
+      const result = await call(resource, { query: { eventId: "EVENT-1" } });
+      assert.equal(result.statusCode, 503);
+      assert.equal(result.body.code, "training-environment-not-allowed");
+    }
+    assert.equal(directoryReads, 0);
+    assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, bootstraps: 0 });
+    process.env.VERCEL_GIT_COMMIT_REF = "feature/training-center-phase2";
+    process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
+    assert.equal((await call("training-admin-list")).statusCode, 200);
+    assert.equal(directoryReads, 1);
+    assert.equal((await call("training-admin-save", { method: "POST", body: {} })).statusCode, 503);
+  } finally {
+    if (prior === undefined) delete process.env.VERCEL_GIT_COMMIT_REF; else process.env.VERCEL_GIT_COMMIT_REF = prior;
+    if (workbook === undefined) delete process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID; else process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = workbook;
+  }
 });
 
 test("Sheet append uncertainty keeps the lock pending; committed response reconciles", async () => {

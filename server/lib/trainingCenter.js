@@ -1,5 +1,5 @@
 import { readGoogleSheetValues } from "./staffDirectory.js";
-import { trainingSpreadsheetId } from "./trainingDeployment.js";
+import { trainingCenterSpreadsheetId } from "./trainingDeployment.js";
 
 export const TRAINING_SHEETS = {
   trainings: "앱_교직원교육",
@@ -12,7 +12,7 @@ export const MATERIAL_HEADERS = ["materialId", "eventId", "사용여부", "자�
 export const TARGET_HEADERS = ["eventId", "교직원ID", "대상상태", "필수여부", "제외여부", "제외사유"];
 
 export function getTrainingSpreadsheetId() {
-  return trainingSpreadsheetId();
+  return trainingCenterSpreadsheetId();
 }
 
 export class TrainingSourceNotReadyError extends Error {

@@ -83,11 +83,13 @@ Firebase ID token, 현재 학기 활성 assignment, canonical 교직원ID 및 �
 
 향후 다학교 확장은 `schoolId → encrypted OAuth credential → private root folder` tenant 설정으로 분리한다. refresh token은 KMS 또는 암호화된 credential store에 보관하고 이번 Phase의 단일 env token을 그대로 확장하지 않는다. client direct upload와 공개 Drive URL은 제공하지 않는다.
 
-## Phase 2 QA 종료 및 main 병합 검토 (2026-10-07)
+## Phase 2 QA 종료 및 main 병합 검토 (2026-10-08)
 
-- `qa`와 `feature/training-center-phase2`는 QA 종료 시점에 `edf64cdf6a377b75bca5ed485b54aa6845fcb261`로 일치한다. `main`과 Production 배포는 변경하지 않았다.
+- 이번 checkpoint 직전 `qa`와 `feature/training-center-phase2`는 `689752544f4bdaaece86f014f1c6d82957998b07`로 일치했다. 아래 fail-closed 보완은 feature 브랜치에만 반영하며 `qa`, `main`, Production 배포에는 반영하지 않는다.
 - 고정 QA Preview에서 승인된 QA 관리자 본인의 정상 출석·전자서명 흐름을 여러 차례 실제로 검증했다. 단일·묶음 QR, 중복 제출 차단, 관리자 현황·보정, 연수등록부 PDF와 서명 표시는 수행한 QA 범위에서 확인했다.
 - stale lock 복구와 원본 requestId의 orphan PNG 재사용 계약은 fixture 기반 자동 테스트로 검증했다. 실제 stale 상태를 강제로 만드는 재현은 추가 수행하지 않았다. 의도적 실패 상태 생성은 추가 검증 실익에 비해 QA 데이터·잠금·Drive 잔여물의 운영 리스크가 크기 때문이다. 따라서 실환경 stale recovery 성공은 확인된 사실로 간주하지 않는다.
-- 분리된 QA 워크북에는 `[QA]` 교육 5건, 승인된 관리자 본인 대상 행 5건, 전자서명 감사 행 4건이 남아 있다. 교육 4건은 `사용`·`진행중`, stale recovery 확인용 교육 1건은 `미사용`이다. QA 화면의 혼동을 막기 위해 활성 QA 교육 4건을 `미사용`으로 전환하는 것은 후속 정리 후보이며, 감사 행·비공개 PNG·잠금은 자동 삭제하지 않는다. QA 전자서명 탭은 숨김 상태이고 임시 보호 규칙은 남아 있지 않다.
+- 분리된 QA 워크북에는 `[QA]` 교육 5건(모두 `미사용`), 승인된 관리자 본인 대상 행 5건, 전자서명 감사 행 4건이 남아 있다. 감사 행·비공개 PNG·잠금은 자동 삭제하지 않는다. QA 전자서명 탭은 숨김 상태이고 임시 보호 규칙은 남아 있지 않다.
 - QA 워크북, Drive `qa` namespace, Firestore `training_attendance_locks_qa`는 Production 데이터와 분리되어 있다. 이번 종료 점검에서는 외부 데이터를 수정하지 않았다.
-- main 병합 전에는 Production의 서버 전용 `TRAINING_DRIVE_OAUTH_CLIENT_ID`, `TRAINING_DRIVE_OAUTH_CLIENT_SECRET`, `TRAINING_DRIVE_OAUTH_REFRESH_TOKEN` 설정이 필요하다. QA Preview의 값을 문서나 Git에 복제하지 않는다. 현재 Production에는 이 세 키가 없으므로 병합 준비 검토는 가능하지만 실제 main 병합은 안전하지 않다.
+- Production에는 서버 전용 `TRAINING_DRIVE_OAUTH_CLIENT_ID`, `TRAINING_DRIVE_OAUTH_CLIENT_SECRET`, `TRAINING_DRIVE_OAUTH_REFRESH_TOKEN` 설정이 완료됐다. 실제 값은 문서나 Git에 복제하지 않는다. Production 서명 Drive root의 명시적 bootstrap은 아직 실행하지 않았다.
+- 교육센터 전용 workbook resolver는 Production에서 운영 워크북만, 고정 `qa`와 승인된 `feature/training-center-phase2` Preview에서 명시적인 비운영 QA 워크북만 허용한다. 승인되지 않은 Preview나 QA 워크북 미설정 Preview에서는 GET/list/detail/관리자 API를 인증·Sheet 조회 전에 거부한다. 기존 일반 staff-directory resolver의 fallback 정책은 변경하지 않았다.
+- 관리자 QR 발급은 Drive OAuth 인증, 전용 root 존재·비공개 및 읽기 준비를 확인한 후에만 challenge를 생성한다. root가 없으면 `needsBootstrap` 오류를 반환하며 preflight나 QR 발급에서 bootstrap을 자동 실행하지 않는다. Production root bootstrap과 이 로컬 수정의 재검토 전까지 main 병합은 보류한다.

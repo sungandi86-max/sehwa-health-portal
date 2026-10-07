@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildTrainingView, MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { createTrainingHandler } from "./trainingCenterApi.js";
+import { trainingCenterSpreadsheetId } from "./trainingDeployment.js";
 import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
 import { expectedTrainingDetail, expectedTrainingList, trainingCenterSheetFixture } from "../../tests/fixtures/trainingCenterFixture.js";
 
@@ -64,6 +65,7 @@ function handlerFor({ assignment = { active: true, uid: "uid-1", schoolYear: 202
     db: () => ({ collection: () => ({ doc: () => ({ get: async () => ({ exists: Boolean(assignment), data: () => assignment }) }) }) }),
     directory: async () => ({ directory: directoryValue, stats: { duplicateStaffIds: 0 } }),
     sheets: async () => sourceValue,
+    workbook: () => "QA_WORKBOOK_TEST_ONLY",
   });
 }
 
@@ -146,4 +148,21 @@ test("training API reports absent sheets without exposing source data", async ()
   const result = await call(handlerFor({ sourceValue: { trainings: [], materials: [], targets: [] } }));
   assert.equal(result.statusCode, 503);
   assert.equal(result.body.code, "training-source-not-ready");
+});
+
+test("training list and detail reject unapproved Preview before authentication or Sheet reads", async () => {
+  const context = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "feature/other" };
+  const calls = { auth: 0, directory: 0, sheets: 0 };
+  const handler = createTrainingHandler({
+    workbook: () => trainingCenterSpreadsheetId(context),
+    auth: () => { calls.auth += 1; return { verifyIdToken: async () => ({ uid: "uid-1" }) }; },
+    directory: async () => { calls.directory += 1; return { directory: [], stats: { duplicateStaffIds: 0 } }; },
+    sheets: async () => { calls.sheets += 1; return source; },
+  });
+  for (const query of [{ resource: "training-list" }, { resource: "training-detail", eventId: "event-1" }]) {
+    const result = await call(handler, query);
+    assert.equal(result.statusCode, 503);
+    assert.equal(result.body.code, "training-environment-not-allowed");
+  }
+  assert.deepEqual(calls, { auth: 0, directory: 0, sheets: 0 });
 });
