@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import ExcelJS from "exceljs";
 import { strFromU8, unzipSync } from "fflate";
 import { PNG } from "pngjs";
 import { makeTrainingRosterXlsx, MAX_TEMPLATE_ROWS } from "./trainingFinalSheet.js";
-import { PDFDocument } from "pdf-lib";
-import { makeTrainingRosterPdf, ROWS_PER_PAGE } from "./trainingRosterPdf.js";
+import { PDFDocument, decodePDFRawStream } from "pdf-lib";
+import { COLUMN_UNITS, makeTrainingRosterPdf, ROWS_PER_PAGE } from "./trainingRosterPdf.js";
 
 function png(width = 120, height = 40) {
   return PNG.sync.write(new PNG({ width, height, colorType: 6 }));
@@ -106,4 +107,31 @@ test("PDF roster keeps cancelled or excluded signatures out and rejects malforme
   await assert.rejects(makeTrainingRosterPdf(model([
     { staffId: "ACTIVE", position: "교사", name: "정상", status: "서명완료", fileId: "DRIVE_FILE_ACTIVE_123" },
   ]), { readSignature: async () => Buffer.from("not png") }), /형식/);
+});
+
+test("PDF roster uses the attached Excel template's column widths and title placement", async () => {
+  const template = new ExcelJS.Workbook();
+  await template.xlsx.load(await readFile(new URL("../templates/training-roster-cpr-2026.xlsx", import.meta.url)));
+  const sheet = template.worksheets[0];
+  assert.deepEqual(COLUMN_UNITS, [1, 2, 3, 4, 5].map((column) => sheet.getColumn(column).width ?? 13));
+
+  const pdf = await PDFDocument.load(await makeTrainingRosterPdf(model([])));
+  const contents = pdf.context.lookup(pdf.getPage(0).node.Contents().asArray()[0]);
+  const operators = Buffer.from(decodePDFRawStream(contents).decode()).toString("latin1");
+  const titleX = Number(operators.match(/1 0 0 1 ([\d.]+) [\d.]+ Tm/)?.[1]);
+  assert.ok(titleX > 51.02, "Excel template centers the title within A1:E1");
+});
+
+test("PDF roster keeps the Excel template's yellow title and pale-yellow header fills", async () => {
+  const template = new ExcelJS.Workbook();
+  await template.xlsx.load(await readFile(new URL("../templates/training-roster-cpr-2026.xlsx", import.meta.url)));
+  const sheet = template.worksheets[0];
+  const color = (address) => sheet.getCell(address).fill.fgColor.argb.slice(2).match(/../g).map((part) => parseInt(part, 16) / 255);
+  const pdf = await PDFDocument.load(await makeTrainingRosterPdf(model([])));
+  const contents = pdf.context.lookup(pdf.getPage(0).node.Contents().asArray()[0]);
+  const operators = Buffer.from(decodePDFRawStream(contents).decode()).toString("latin1");
+  const fills = [...operators.matchAll(/([\d.]+) ([\d.]+) ([\d.]+) rg/g)].map((match) => match.slice(1).map(Number));
+  const matches = (actual, expected) => actual.every((value, index) => Math.abs(value - expected[index]) < 0.001);
+  assert.ok(fills.some((fill) => matches(fill, color("A1"))), "Excel template uses a yellow title fill");
+  assert.ok(fills.filter((fill) => matches(fill, color("A3"))).length >= 5, "all five headers use the pale-yellow template fill");
 });

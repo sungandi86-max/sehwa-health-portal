@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, rgb } from "pdf-lib";
+import { degrees, PDFDocument, popGraphicsState, pushGraphicsState, rgb, setLineWidth, setTextRenderingMode, TextRenderingMode } from "pdf-lib";
 import { PNG } from "pngjs";
 import { MAX_TEMPLATE_ROWS } from "./trainingFinalSheet.js";
 
@@ -15,8 +15,10 @@ const INFO_HEIGHT = 135.75;
 const HEADER_HEIGHT = 24.95;
 const ROW_HEIGHT = 23.25;
 const ROWS_PER_PAGE = 22;
-const COLUMN_UNITS = [8.43, 14.5, 18.375, 25.5, 8.43];
+const COLUMN_UNITS = [13, 14.5, 18.375, 25.5, 13];
 const HEADERS = ["연번", "직위", "성명", "서명", "연수일자"];
+const TITLE_FILL = rgb(1, 1, 0);
+const HEADER_FILL = rgb(242 / 255, 246 / 255, 172 / 255);
 const PNG_MAGIC = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 function assertPng(bytes) {
@@ -25,12 +27,15 @@ function assertPng(bytes) {
   }
 }
 
-function dateLabel(value) {
+function dateLabel(value, includeYear = false) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
   if (!match) throw new RangeError("교육 일자를 확인해 주세요.");
   const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
   if (date.toISOString().slice(0, 10) !== value) throw new RangeError("교육 일자를 확인해 주세요.");
-  return `${Number(match[2])}.${Number(match[3])}.(${["일", "월", "화", "수", "목", "금", "토"][date.getUTCDay()]})`;
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getUTCDay()];
+  return includeYear
+    ? `${match[1]}. ${Number(match[2])}. ${Number(match[3])}.(${weekday})`
+    : `${Number(match[2])}.${Number(match[3])}.(${weekday})`;
 }
 
 async function signatureImages(pdf, rows, readSignature) {
@@ -50,13 +55,25 @@ async function signatureImages(pdf, rows, readSignature) {
   return images;
 }
 
-function centeredText(page, font, text, size, x, y, width, height) {
+function drawText(page, text, options, bold = false) {
+  if (bold) page.pushOperators(pushGraphicsState(), setLineWidth(0.35), setTextRenderingMode(TextRenderingMode.FillAndOutline));
+  page.drawText(text, options);
+  if (bold) page.pushOperators(popGraphicsState());
+}
+
+function centeredText(page, font, text, size, x, y, width, height, bold = false) {
   const value = String(text ?? "");
   let fittedSize = size;
   while (fittedSize > 6.5 && font.widthOfTextAtSize(value, fittedSize) > width - 6) fittedSize -= 0.5;
   const textWidth = font.widthOfTextAtSize(value, fittedSize);
-  page.drawText(value, { x: x + Math.max(3, (width - textWidth) / 2), y: y + (height - fittedSize) / 2 + 2,
-    size: fittedSize, font, color: rgb(0, 0, 0), maxWidth: Math.max(1, width - 6) });
+  drawText(page, value, { x: x + Math.max(3, (width - textWidth) / 2), y: y + (height - fittedSize) / 2 + 2,
+    size: fittedSize, font, color: rgb(0, 0, 0), maxWidth: Math.max(1, width - 6) }, bold);
+}
+
+function drawDiamond(page, x, y) {
+  page.drawRectangle({ x, y, width: 9, height: 9, rotate: degrees(45), color: rgb(0, 0, 0) });
+  page.drawRectangle({ x, y: y + 1.4, width: 7, height: 7, rotate: degrees(45), color: rgb(1, 1, 1) });
+  page.drawRectangle({ x, y: y + 2.8, width: 5, height: 5, rotate: degrees(45), color: rgb(0, 0, 0) });
 }
 
 function drawCell(page, x, y, width, height, { fill } = {}) {
@@ -78,15 +95,23 @@ function drawPageHeader(page, font, event, geometry) {
   const totalWidth = geometry.widths.reduce((sum, value) => sum + value, 0);
   const year = String(event.date).slice(0, 4);
   top -= TITLE_HEIGHT;
-  page.drawText(`(${year}학년도 ${event.title}) 연수 등록부`, { x: MARGIN_X, y: top + 34, size: 14, font });
-  page.drawText("세화여자고등학교", { x: MARGIN_X + totalWidth - 96, y: top + 12, size: 10, font });
+  drawCell(page, MARGIN_X, top, totalWidth, TITLE_HEIGHT, { fill: TITLE_FILL });
+  centeredText(page, font, `(${year}학년도 ${event.title}) 연수 등록부`, 14,
+    MARGIN_X, top + 26, totalWidth, 30, true);
+  const school = "세화여자고등학교";
+  page.drawText(school, { x: MARGIN_X + totalWidth - font.widthOfTextAtSize(school, 11) - 8,
+    y: top + 10, size: 11, font });
   top -= INFO_HEIGHT;
-  page.drawText(`• 일시: ${event.date}`, { x: MARGIN_X + 6, y: top + INFO_HEIGHT - 30, size: 11, font });
-  page.drawText(`• 장소: ${event.location || "장소 미정"}`, { x: MARGIN_X + 6, y: top + INFO_HEIGHT - 54, size: 11, font });
+  const dateY = top + INFO_HEIGHT - 30;
+  const locationY = top + INFO_HEIGHT - 54;
+  drawDiamond(page, MARGIN_X + 8, dateY + 3);
+  drawDiamond(page, MARGIN_X + 8, locationY + 3);
+  page.drawText(`일시: ${dateLabel(event.date, true)}`, { x: MARGIN_X + 21, y: dateY, size: 12, font });
+  page.drawText(`장소: ${event.location || "장소 미정"}`, { x: MARGIN_X + 21, y: locationY, size: 12, font });
   top -= HEADER_HEIGHT;
   geometry.starts.forEach((x, index) => {
-    drawCell(page, x, top, geometry.widths[index], HEADER_HEIGHT, { fill: rgb(0.92, 0.92, 0.92) });
-    centeredText(page, font, HEADERS[index], 10, x, top, geometry.widths[index], HEADER_HEIGHT);
+    drawCell(page, x, top, geometry.widths[index], HEADER_HEIGHT, { fill: HEADER_FILL });
+    centeredText(page, font, HEADERS[index], 12, x, top, geometry.widths[index], HEADER_HEIGHT, true);
   });
   return top;
 }
@@ -114,7 +139,7 @@ export async function makeTrainingRosterPdf(model, { readSignature, fontBytes } 
       const values = [globalIndex + 1, person.position || "", person.name || "", "", trainingDate];
       geometry.starts.forEach((x, columnIndex) => {
         drawCell(page, x, y, geometry.widths[columnIndex], ROW_HEIGHT);
-        if (columnIndex !== 3) centeredText(page, font, values[columnIndex], 9, x, y, geometry.widths[columnIndex], ROW_HEIGHT);
+        if (columnIndex !== 3) centeredText(page, font, values[columnIndex], 12, x, y, geometry.widths[columnIndex], ROW_HEIGHT);
       });
       const signature = images.get(globalIndex);
       if (signature) {
