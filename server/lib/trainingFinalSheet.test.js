@@ -4,6 +4,8 @@ import ExcelJS from "exceljs";
 import { strFromU8, unzipSync } from "fflate";
 import { PNG } from "pngjs";
 import { makeTrainingRosterXlsx, MAX_TEMPLATE_ROWS } from "./trainingFinalSheet.js";
+import { PDFDocument } from "pdf-lib";
+import { makeTrainingRosterPdf, ROWS_PER_PAGE } from "./trainingRosterPdf.js";
 
 function png(width = 120, height = 40) {
   return PNG.sync.write(new PNG({ width, height, colorType: 6 }));
@@ -77,4 +79,31 @@ test("roster rejects overflow and malformed signature bytes", async () => {
   await assert.rejects(makeTrainingRosterXlsx(model(overflow)), /최대/);
   await assert.rejects(makeTrainingRosterXlsx(model([{ staffId: "S1", name: "테스트", status: "서명완료", fileId: "key" }]),
     { readSignature: async () => Buffer.from("not-png") }), /형식/);
+});
+
+test("pure JavaScript PDF renders A4 Korean roster pages and embedded signatures", async () => {
+  const rows = Array.from({ length: ROWS_PER_PAGE + 1 }, (_, index) => ({
+    staffId: `STAFF-${index}`, position: "교사", name: `교직원 ${index + 1}`,
+    status: index === 0 ? "서명완료" : "미서명", fileId: index === 0 ? "training-signatures/2026/requests/test.png" : "",
+  }));
+  const requested = [];
+  const bytes = await makeTrainingRosterPdf(model(rows), { readSignature: async (key) => { requested.push(key); return png(); } });
+  assert.equal(bytes.subarray(0, 5).toString("ascii"), "%PDF-");
+  const pdf = await PDFDocument.load(bytes);
+  assert.equal(pdf.getPageCount(), 2);
+  assert.deepEqual(pdf.getPage(0).getSize(), { width: 595.28, height: 841.89 });
+  assert.deepEqual(requested, ["training-signatures/2026/requests/test.png"]);
+  assert.equal(Buffer.from(bytes).includes(Buffer.from("Apps Script")), false);
+});
+
+test("PDF roster keeps cancelled or excluded signatures out and rejects malformed signature bytes", async () => {
+  const requested = [];
+  await makeTrainingRosterPdf(model([
+    { staffId: "ACTIVE", position: "교사", name: "정상", status: "서명완료", fileId: "training-signatures/2026/requests/active.png" },
+    { staffId: "EXCLUDED", position: "교사", name: "제외", status: "제외", fileId: "training-signatures/2026/requests/excluded.png" },
+  ]), { readSignature: async (key) => { requested.push(key); return png(); } });
+  assert.deepEqual(requested, ["training-signatures/2026/requests/active.png"]);
+  await assert.rejects(makeTrainingRosterPdf(model([
+    { staffId: "ACTIVE", position: "교사", name: "정상", status: "서명완료", fileId: "training-signatures/2026/requests/active.png" },
+  ]), { readSignature: async () => Buffer.from("not png") }), /형식/);
 });

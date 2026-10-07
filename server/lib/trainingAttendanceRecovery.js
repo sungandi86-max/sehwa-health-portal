@@ -1,4 +1,5 @@
 import { activeSignature, sheetRows, signatureKey, SIGNATURE_HEADERS } from "./trainingCenterPhase2.js";
+import { signatureStorageYear } from "./trainingSignatureStorage.js";
 
 const COLLECTION = "training_attendance_locks";
 const MIN_STALE_MS = 15 * 60 * 1000;
@@ -43,7 +44,10 @@ export async function listAttendanceRecoveryCandidates({ db, now = Date.now() })
 
 async function findOrphanFiles(store, data) {
   const requestIds = [...new Set([data.requestId, ...(data.orphanAttempts || []).map((attempt) => attempt.requestId)].filter(Boolean))];
-  const filesByRequest = await Promise.all(requestIds.map(async (requestId) => ({ requestId, files: await store.listSignatureFilesByRequest(requestId) })));
+  const createdAt = Date.parse(data.createdAt);
+  const year = Number.isFinite(createdAt) ? signatureStorageYear(createdAt) : "";
+  const filesByRequest = await Promise.all(requestIds.map(async (requestId) => ({ requestId,
+    files: year ? await store.listSignatureFilesByRequest(requestId, { year }) : [] })));
   return filesByRequest.flatMap(({ requestId, files }) => files.map((file) => ({ fileId: file.id, private: file.private !== false, requestId })));
 }
 

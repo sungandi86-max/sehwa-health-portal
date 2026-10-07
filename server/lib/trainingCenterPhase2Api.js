@@ -7,7 +7,8 @@ import { AttendanceConflictError, assertCompletedAttendanceLock, attachAttendanc
 import { applyAttendanceRecovery, inspectAttendanceRecovery, listAttendanceRecoveryCandidates, RecoveryConflictError } from "./trainingAttendanceRecovery.js";
 import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, SIGNATURE_HEADERS, SIGNATURE_SHEET, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx, trainingRosterPdfFilename, trainingRosterXlsxFilename } from "./trainingFinalSheet.js";
-import { SignatureGatewayError, trainingRosterPdfRenderer } from "./trainingSignatureGateway.js";
+import { trainingRosterPdfRenderer } from "./trainingRosterPdf.js";
+import { SignatureStorageError } from "./trainingSignatureStorage.js";
 import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 
 function bad(res, status, message, code = "") {
@@ -15,16 +16,16 @@ function bad(res, status, message, code = "") {
 }
 
 const ATTENDANCE_FAILURE_STAGES = new Set([
-  "SIGNATURE_GATEWAY_CONFIG", "SIGNATURE_GATEWAY_AUTH", "SIGNATURE_GATEWAY_SAVE", "SIGNATURE_GATEWAY_READ",
+  "SIGNATURE_STORAGE_CONFIG", "SIGNATURE_STORAGE_SAVE", "SIGNATURE_STORAGE_READ",
   "ROSTER_BUILD", "ROSTER_SIGNATURE_FETCH", "ROSTER_TEMPLATE_FILL", "ROSTER_PDF_GENERATE", "SHEET_APPEND", "LOCK_FINALIZE",
 ]);
 
 function logAttendanceFailure(error, fallbackStage, eventCount) {
   const stage = ATTENDANCE_FAILURE_STAGES.has(error?.stage) ? error.stage : fallbackStage;
-  const gatewayError = error instanceof SignatureGatewayError;
+  const storageError = error instanceof SignatureStorageError;
   console.error(JSON.stringify({ event: "training_attendance_failure", stage,
-    status: gatewayError ? error.status : 0, code: gatewayError ? error.code : "",
-    errorName: gatewayError ? "SignatureGatewayError" :
+    status: 0, code: storageError ? error.code : "",
+    errorName: storageError ? "SignatureStorageError" :
       error instanceof TrainingSourceNotReadyError ? "TrainingSourceNotReadyError" : "Error", eventCount }));
   return stage;
 }
@@ -88,15 +89,13 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const qrSecret = secret();
         const qrSecretConfigured = Boolean(qrSecret);
         const qrSecretValid = qrSecretConfigured && Buffer.byteLength(qrSecret, "utf8") >= 32;
-        const signatureGatewayConfigured = store.signatureGatewayConfigured === true;
-        const gateway = signatureGatewayConfigured ? await store.inspectSignatureGateway() :
-          { reachable: false, authenticated: false, storageReady: false, readReady: false };
+        const signatureStorageConfigured = store.signatureStorageConfigured === true;
+        const storage = signatureStorageConfigured ? await store.inspectSignatureStorage() :
+          { bucketReady: false, readReady: false, writeReady: null };
         const checks = {
-          qrSecretConfigured, qrSecretValid, signatureGatewayConfigured,
-          signatureGatewayReachable: gateway.reachable === true,
-          signatureGatewayAuthenticated: gateway.authenticated === true,
-          signatureStorageReady: gateway.storageReady === true,
-          signatureReadReady: gateway.readReady === true,
+          qrSecretConfigured, qrSecretValid, signatureStorageConfigured,
+          signatureStorageBucketReady: storage.bucketReady === true,
+          signatureStorageReadReady: storage.readReady === true,
           signatureSheetReady: await store.isSignatureSheetReady(), firebaseAdminReady: true,
         };
         return res.status(200).json({ ok: Object.values(checks).every(Boolean), checks });
@@ -162,7 +161,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       }
       if (resource === "training-qr" && req.method === "GET") {
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
-        store.assertSignatureGatewayConfigured();
+        store.assertSignatureStorageConfigured();
         const scope = qrScope(req.query);
         const source = parseTrainingSource(await store.readSource());
         const events = resolveEvents(source, scope);
@@ -183,7 +182,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       }
       if (resource === "training-attendance-submit" && req.method === "POST") {
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
-        store.assertSignatureGatewayConfigured();
+        store.assertSignatureStorageConfigured();
         const scope = qrScope(body);
         if (!verifyQrChallenge(body?.challenge, { ...scope, secret: secret(), now: now().getTime() })) return bad(res, 403, "QR 유효시간이 지났거나 링크가 올바르지 않습니다.");
         const bytes = decodeInkSignature(body?.signature);
@@ -196,7 +195,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         let fileId = "";
         let records = [];
         let appendStarted = false;
-        let stage = "SIGNATURE_GATEWAY_SAVE";
+        let stage = "SIGNATURE_STORAGE_SAVE";
         try {
           fileId = await store.uploadSignature(bytes, events[0].eventId, now(), reservation.requestId);
           stage = "LOCK_FINALIZE";
@@ -238,21 +237,17 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const model = finalSheetModel(source, access.directory, eventId);
         if (!model) return bad(res, 404, "교육을 찾을 수 없습니다.");
         if (resource === "training-final-sheet" && ["pdf", "xlsx"].includes(req.query?.download)) {
-          let xlsx;
-          try {
-            xlsx = await makeTrainingRosterXlsx(model, { readSignature: (storageKey) => store.downloadSignature(storageKey) });
-          } catch (error) {
-            logAttendanceFailure(error, "ROSTER_BUILD", model.rows.length);
-            throw error;
-          }
           if (req.query.download === "xlsx") {
+            let xlsx;
+            try { xlsx = await makeTrainingRosterXlsx(model, { readSignature: (storageKey) => store.downloadSignature(storageKey) }); }
+            catch (error) { logAttendanceFailure(error, "ROSTER_BUILD", model.rows.length); throw error; }
             res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             res.setHeader("Content-Disposition", `attachment; filename="training-roster.xlsx"; filename*=UTF-8''${encodeURIComponent(trainingRosterXlsxFilename(model.event))}`);
             return res.status(200).send(xlsx);
           }
           const filename = trainingRosterPdfFilename(model.event);
           let pdf;
-          try { pdf = await rosterPdf.render({ xlsx, filename }); }
+          try { pdf = await rosterPdf.render({ model, filename, readSignature: (storageKey) => store.downloadSignature(storageKey) }); }
           catch (error) {
             logAttendanceFailure(error, "ROSTER_PDF_GENERATE", model.rows.length);
             throw error;

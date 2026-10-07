@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/firebase/staff-directory.js": {
+      "includeFiles": "node_modules/@expo-google-fonts/noto-sans-kr/400Regular/NotoSansKR_400Regular.ttf"
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/health-mandatory-training-sync",

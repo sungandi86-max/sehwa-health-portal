@@ -9,7 +9,7 @@ import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAt
 import { hasSignatureSheetSchema, managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
 import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
-import { SignatureGatewayError } from "./trainingSignatureGateway.js";
+import { SignatureStorageError } from "./trainingSignatureStorage.js";
 
 const row = (headers, values) => headers.map((header) => values[header] ?? "");
 const open = "2026-10-06T08:00:00+09:00";
@@ -87,9 +87,9 @@ function fakeStore({ appendMode = "success" } = {}) {
   const calls = { uploads: 0, appended: 0, saved: 0 };
   return {
     calls, values,
-    signatureGatewayConfigured: true,
-    assertSignatureGatewayConfigured: () => {},
-    inspectSignatureGateway: async () => ({ reachable: true, authenticated: true, storageReady: true, readReady: true }),
+    signatureStorageConfigured: true,
+    assertSignatureStorageConfigured: () => {},
+    inspectSignatureStorage: async () => ({ bucketReady: true, readReady: true, writeReady: null }),
     isSignatureSheetReady: async () => true,
     listSignatureFilesByRequest: async () => [],
     readBase: async () => values,
@@ -366,28 +366,28 @@ test("fresh and completed reservations cannot be recovered", async () => {
   assert.equal((await done.call("training-attendance-recovery-apply", { method: "POST", body: query })).statusCode, 409);
 });
 
-test("TrainingCenterStore delegates private signature storage to the Gateway adapter", async () => {
+test("TrainingCenterStore delegates private signature storage to the provider adapter", async () => {
   const requestId = "7b377431-4dc3-4bac-acf0-cbe7c8ea3346";
   const calls = [];
   const storage = {
     configured: true,
-    healthCheck: async () => ({ reachable: true, authenticated: true, storageReady: true, readReady: true }),
-    saveSignature: async (input) => { calls.push(["save", input]); return "2026/EVENT-1/" + requestId + ".png"; },
+    healthCheck: async () => ({ bucketReady: true, readReady: true, writeReady: null }),
+    saveSignature: async (input) => { calls.push(["save", input]); return "training-signatures/2026/requests/" + requestId + ".png"; },
     readSignature: async (storageKey) => { calls.push(["read", storageKey]); return inkPng(); },
-    findByRequestId: async (id) => { calls.push(["find", id]); return [{ id: "2026/EVENT-1/" + id + ".png", private: true }]; },
+    findByRequestId: async (id) => { calls.push(["find", id]); return [{ id: "training-signatures/2026/requests/" + id + ".png", private: true }]; },
   };
   const store = new TrainingCenterStore({ storage });
-  assert.deepEqual(await store.inspectSignatureGateway(), { reachable: true, authenticated: true, storageReady: true, readReady: true });
-  assert.equal(await store.uploadSignature(inkPng(), "EVENT-1", now(), requestId), "2026/EVENT-1/" + requestId + ".png");
-  assert.equal((await store.downloadSignature("2026/EVENT-1/" + requestId + ".png")).length > 100, true);
+  assert.deepEqual(await store.inspectSignatureStorage(), { bucketReady: true, readReady: true, writeReady: null });
+  assert.equal(await store.uploadSignature(inkPng(), "EVENT-1", now(), requestId), "training-signatures/2026/requests/" + requestId + ".png");
+  assert.equal((await store.downloadSignature("training-signatures/2026/requests/" + requestId + ".png")).length > 100, true);
   assert.equal((await store.listSignatureFilesByRequest(requestId))[0].private, true);
   assert.deepEqual(calls.map(([action]) => action), ["save", "read", "find"]);
 });
-test("short QR secret and missing signature Gateway fail as configuration errors", async () => {
+test("short QR secret and missing signature storage fail as configuration errors", async () => {
   const short = harness({ secret: "short" });
   assert.equal((await short.call("training-qr", { query: { eventId: "EVENT-1" } })).statusCode, 503);
   const missing = harness();
-  missing.store.assertSignatureGatewayConfigured = () => { throw new TrainingSourceNotReadyError(); };
+  missing.store.assertSignatureStorageConfigured = () => { throw new TrainingSourceNotReadyError(); };
   assert.equal((await missing.call("training-qr", { query: { eventId: "EVENT-1" } })).statusCode, 503);
 });
 
@@ -404,10 +404,10 @@ test("Sheet append uncertainty keeps the lock pending; committed response reconc
   assert.equal(after.store.values.signatures.length, 2);
 });
 
-test("Gateway response loss with unknown storage key remains searchable after a retry", async () => {
+test("storage response loss with unknown key remains searchable after a retry", async () => {
   const { call, db, store } = harness();
   const failedRequestIds = [];
-  store.uploadSignature = async (_bytes, _eventId, _now, requestId) => { failedRequestIds.push(requestId); throw new Error("simulated Gateway response loss"); };
+  store.uploadSignature = async (_bytes, _eventId, _now, requestId) => { failedRequestIds.push(requestId); throw new Error("simulated storage response loss"); };
   const challenge = issueQrChallenge({ eventId: "EVENT-1", secret, now: now().getTime() });
   const body = { eventId: "EVENT-1", challenge, signature: `data:image/png;base64,${inkPng().toString("base64")}` };
   assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body })).statusCode, 503);
@@ -456,7 +456,7 @@ test("final roster model and template XLSX keep the correct active image and omi
   assert.equal(book.worksheets[0].getImages().length, 1);
 });
 
-test("administrator PDF download fills the official workbook before Gateway rendering", async () => {
+test("administrator PDF download uses the final model and server-side renderer", async () => {
   let rendered;
   const { call } = harness({ rosterPdf: { render: async (input) => { rendered = input; return Buffer.from("%PDF-test"); } } });
   const result = await call("training-final-sheet", { query: { eventId: "EVENT-1", download: "pdf" } });
@@ -465,10 +465,8 @@ test("administrator PDF download fills the official workbook before Gateway rend
   assert.match(result.headers["Content-Disposition"], /training-roster\.pdf/);
   assert.equal(result.bytes.toString(), "%PDF-test");
   assert.match(rendered.filename, /연수등록부\.pdf$/);
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(rendered.xlsx);
-  const sheet = workbook.getWorksheet("Sheet1");
-  assert.deepEqual([sheet.getCell("C4").value, sheet.getCell("C5").value].sort(), ["다른 교직원", "테스트 교직원"].sort());
+  assert.deepEqual(rendered.model.rows.map((row) => row.name).sort(), ["다른 교직원", "테스트 교직원"].sort());
+  assert.equal(typeof rendered.readSignature, "function");
 });
 
 test("admin correction preserves the cancelled row and records the reason and actor", async () => {
@@ -507,11 +505,11 @@ test("runtime preflight is admin-only, GET-only, redacted, and write-free", asyn
     assert.equal(res.headers["Cache-Control"], "private, no-store");
     assert.equal(res.body.ok, true);
     assert.equal(Object.values(res.body.checks).every(Boolean), true);
-    assert.deepEqual(Object.keys(res.body.checks), ["qrSecretConfigured", "qrSecretValid", "signatureGatewayConfigured",
-      "signatureGatewayReachable", "signatureGatewayAuthenticated", "signatureStorageReady", "signatureReadReady",
+    assert.deepEqual(Object.keys(res.body.checks), ["qrSecretConfigured", "qrSecretValid", "signatureStorageConfigured",
+      "signatureStorageBucketReady", "signatureStorageReadReady",
       "signatureSheetReady", "firebaseAdminReady"]);
     assert.equal(JSON.stringify(res.body).includes(secret), false);
-    assert.equal(JSON.stringify(res.body).includes("GATEWAY_SECRET"), false);
+    assert.equal(JSON.stringify(res.body).includes("FIREBASE_SERVICE_ACCOUNT"), false);
   }
   assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0 });
   assert.equal(db.records.size, 0);
@@ -523,23 +521,23 @@ test("runtime preflight reports invalid config and source without exposing value
   assert.equal(short.body.checks.qrSecretValid, false);
   assert.equal(short.body.ok, false);
   const missing = harness();
-  missing.store.signatureGatewayConfigured = false;
-  const noGateway = await missing.call("training-runtime-preflight");
-  assert.equal(noGateway.body.checks.signatureGatewayConfigured, false);
-  assert.equal(noGateway.body.checks.signatureGatewayReachable, false);
+  missing.store.signatureStorageConfigured = false;
+  const noStorage = await missing.call("training-runtime-preflight");
+  assert.equal(noStorage.body.checks.signatureStorageConfigured, false);
+  assert.equal(noStorage.body.checks.signatureStorageBucketReady, false);
   const inaccessible = harness();
-  inaccessible.store.inspectSignatureGateway = async () => ({ reachable: false, authenticated: false, storageReady: false, readReady: false });
-  assert.equal((await inaccessible.call("training-runtime-preflight")).body.checks.signatureGatewayReachable, false);
+  inaccessible.store.inspectSignatureStorage = async () => ({ bucketReady: false, readReady: false, writeReady: null });
+  assert.equal((await inaccessible.call("training-runtime-preflight")).body.checks.signatureStorageBucketReady, false);
   const badSheet = harness();
   badSheet.store.isSignatureSheetReady = async () => false;
   assert.equal((await badSheet.call("training-runtime-preflight")).body.checks.signatureSheetReady, false);
 });
 
-test("failed attendance stores stage only and logs a redacted Gateway category", async () => {
+test("failed attendance stores stage only and logs a redacted storage category", async () => {
   const { call, db, store } = harness();
   const sensitive = "DO_NOT_LOG_SECRET_OR_SIGNATURE";
   store.uploadSignature = async () => {
-    const error = new SignatureGatewayError("SIGNATURE_GATEWAY_SAVE", { status: 403, code: "AUTH_FAILED" });
+    const error = new SignatureStorageError("SIGNATURE_STORAGE_SAVE", { code: "SAVE_FAILED" });
     error.message = sensitive;
     throw error;
   };
@@ -555,13 +553,13 @@ test("failed attendance stores stage only and logs a redacted Gateway category",
   assert.equal(result.statusCode, 503);
   assert.equal(JSON.stringify(result.body).includes(sensitive), false);
   assert.equal(logs.length, 1);
-  assert.deepEqual(JSON.parse(logs[0]), { event: "training_attendance_failure", stage: "SIGNATURE_GATEWAY_SAVE",
-    status: 403, code: "AUTH_FAILED", errorName: "SignatureGatewayError", eventCount: 1 });
+  assert.deepEqual(JSON.parse(logs[0]), { event: "training_attendance_failure", stage: "SIGNATURE_STORAGE_SAVE",
+    status: 0, code: "SAVE_FAILED", errorName: "SignatureStorageError", eventCount: 1 });
   assert.equal(logs[0].includes(sensitive), false);
   assert.equal(logs[0].includes("QA001"), false);
   const [lock] = db.records.values();
   assert.equal(lock.state, "failed");
-  assert.equal(lock.failureCategory, "SIGNATURE_GATEWAY_SAVE");
+  assert.equal(lock.failureCategory, "SIGNATURE_STORAGE_SAVE");
   assert.equal(JSON.stringify(lock).includes(sensitive), false);
   assert.equal(store.values.signatures.length, 1);
 });

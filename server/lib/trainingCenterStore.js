@@ -3,7 +3,7 @@ import { getFirebaseServiceAccount } from "./firebaseAdmin.js";
 import { getTrainingSpreadsheetId, readTrainingSheets, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { readGoogleSheetValues } from "./staffDirectory.js";
 import { SIGNATURE_HEADERS, SIGNATURE_SHEET } from "./trainingCenterPhase2.js";
-import { signatureStorage } from "./trainingSignatureGateway.js";
+import { signatureStorage, signatureStorageYear } from "./trainingSignatureStorage.js";
 
 export function hasSignatureSheetSchema(sheets, values) {
   const sheet = sheets?.find((item) => item.properties?.title === SIGNATURE_SHEET);
@@ -38,20 +38,20 @@ export class TrainingCenterStore {
     this.sheetIdCache = new Map();
   }
 
-  get signatureGatewayConfigured() {
+  get signatureStorageConfigured() {
     return this.storage.configured === true;
   }
 
-  assertSignatureGatewayConfigured() {
-    if (!this.signatureGatewayConfigured) throw new TrainingSourceNotReadyError();
+  assertSignatureStorageConfigured() {
+    if (!this.signatureStorageConfigured) throw new TrainingSourceNotReadyError();
   }
 
-  async inspectSignatureGateway() {
-    if (!this.signatureGatewayConfigured) return { reachable: false, authenticated: false, storageReady: false, readReady: false };
+  async inspectSignatureStorage() {
+    if (!this.signatureStorageConfigured) return { bucketReady: false, readReady: false, writeReady: null };
     try {
       return await this.storage.healthCheck();
     } catch {
-      return { reachable: false, authenticated: false, storageReady: false, readReady: false };
+      return { bucketReady: false, readReady: false, writeReady: null };
     }
   }
 
@@ -124,17 +124,17 @@ export class TrainingCenterStore {
   }
 
   async uploadSignature(bytes, eventId, now = new Date(), requestId = "") {
-    this.assertSignatureGatewayConfigured();
-    return this.storage.saveSignature({ bytes, eventId, year: now.getFullYear(), requestId });
+    this.assertSignatureStorageConfigured();
+    return this.storage.saveSignature({ bytes, eventId, year: signatureStorageYear(now), requestId });
   }
 
   async downloadSignature(storageKey) {
-    this.assertSignatureGatewayConfigured();
+    this.assertSignatureStorageConfigured();
     return this.storage.readSignature(storageKey);
   }
 
   async listSignatureFilesByRequest(requestId, context = {}) {
-    this.assertSignatureGatewayConfigured();
+    this.assertSignatureStorageConfigured();
     return this.storage.findByRequestId(requestId, context);
   }
 }

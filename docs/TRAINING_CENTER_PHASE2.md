@@ -14,7 +14,7 @@
 | D | 교직원ID | 기존 canonical `교직원명단.교직원ID` |
 | E | 서명일시 | ISO 8601 시각 |
 | F | 출석방식 | `qr` 또는 `correction` |
-| G | 서명파일ID | 비공개 Gateway storage key, 관리자 보정이면 공란 |
+| G | 서명파일ID | 비공개 Firebase Storage object path, 관리자 보정이면 공란 |
 | H | 상태 | `완료` 또는 `취소` |
 | I | 취소여부 | `Y` 또는 `N` |
 | J | 취소사유 | 관리자 정정 사유 |
@@ -27,9 +27,9 @@
 ## 서버 설정과 권한
 
 - `TRAINING_QR_SECRET`: 32바이트 이상의 임의 비밀값을 서버 환경에만 설정한다. QR HMAC 검증에 사용한다. 브라우저의 `VITE_` 변수에 두지 않는다.
-- `TRAINING_SIGNATURE_GATEWAY_URL`, `TRAINING_SIGNATURE_GATEWAY_SECRET`: Apps Script Signature Storage Gateway의 Web App URL과 32바이트 이상 HMAC 비밀값이다. 서버 환경에만 두고 브라우저의 `VITE_` 변수에 두지 않는다.
-- Gateway의 Script Properties에는 실행 계정 My Drive의 비공개 폴더 ID인 `SIGNATURE_FOLDER_ID`와 동일한 `GATEWAY_SECRET`을 둔다. 자세한 배포 계약은 `docs/TRAINING_SIGNATURE_GATEWAY.md`를 따른다.
-- Firebase Admin 서비스 계정은 교육센터 워크북 편집 권한만 필요하다. 전자서명 My Drive 파일은 Apps Script 배포자 계정이 저장하고 읽는다.
+- `FIREBASE_STORAGE_BUCKET`: 선택 항목이다. 설정하지 않으면 기존 `VITE_FIREBASE_STORAGE_BUCKET` 값을 서버에서도 재사용한다. bucket 이름은 코드에 하드코딩하지 않는다.
+- Firebase Admin 서비스 계정은 교육센터 워크북 편집 권한과 지정 Firebase Storage bucket의 object 읽기·쓰기 권한이 필요하다.
+- 전자서명은 `training-signatures/<year>/requests/<requestId>.png`에 비공개 object로 저장한다. 이름, staffId, UID, 부서, 직위는 경로나 metadata에 넣지 않는다.
 - Firestore `training_attendance_locks`는 Admin SDK만 사용한다. 현행 `firestore.rules`의 최종 deny 규칙으로 클라이언트 직접 읽기·쓰기는 허용되지 않는다.
 - `api/firebase/staff-directory.js`의 기존 함수에 resource를 추가했으므로 Vercel function 수는 증가하지 않는다.
 
@@ -37,16 +37,22 @@
 
 Firebase ID token, 현재 학기 활성 assignment, canonical 교직원ID 및 재직상태를 서버에서 재검증한다. QR에는 교육 ID 또는 묶음 ID와 15분 유효 HMAC challenge만 들어간다. 이름, staffId, UID는 포함하지 않는다. Challenge는 외부 공유를 완전히 막는 위치 증명이 아니므로 현장에서 짧은 시간에 생성·표시한다.
 
-출석 제출은 각 `(eventId, staffId)`의 Firestore 예약을 단일 transaction으로 선점한다. 그룹의 모든 교육에 대해 대상·제외·시간창·중복을 확인한 다음 Vercel 서버가 HMAC 인증으로 Gateway에 PNG를 저장하고, Sheets `spreadsheets.batchUpdate`의 한 `appendCells` 요청으로 모든 행사 행을 함께 기록한다. Sheets의 이 요청은 원자적으로 적용된다. Gateway는 requestId 기반 파일명과 연도·eventId 폴더를 사용하며 공개 또는 도메인 공유 권한이 감지되면 기록을 막는다. 미반영이 확실해도 Drive 파일은 자동 영구 삭제하지 않고 orphan 후보로 보존한다. 결과가 불명확하면 storage key와 잠금을 보존하고 관리자 확인을 요구한다. 진행 중 잠금은 시간이 지나도 자동 재선점하지 않는다.
+출석 제출은 각 `(eventId, staffId)`의 Firestore 예약을 단일 transaction으로 선점한다. 그룹의 모든 교육에 대해 대상·제외·시간창·중복을 확인한 다음 Vercel 서버의 Firebase Admin SDK가 PNG를 저장하고, Sheets `spreadsheets.batchUpdate`의 한 `appendCells` 요청으로 모든 행사 행을 함께 기록한다. Sheets의 이 요청은 원자적으로 적용된다. 그룹 QR도 requestId 기준 object 하나를 만들고 여러 행사 row가 같은 object path를 참조한다. 미반영이 확실해도 Storage object는 자동 영구 삭제하지 않고 orphan 후보로 보존한다. 결과가 불명확하면 object path와 잠금을 보존하고 관리자 확인을 요구한다. 진행 중 잠금은 시간이 지나도 자동 재선점하지 않는다.
 
 관리자 전용 `training-attendance-recovery-candidates`는 오래된 pending 후보를 최대 500개 조회하고 더 있으면 `truncated`를 표시한다. `training-attendance-recovery-check`와 `training-attendance-recovery-apply`는 eventId·교직원ID를 지정해 확인한다. 15분 이상 갱신되지 않은 pending의 Sheet 활성 서명 기록을 재조회해 행사별 정확히 1건이면 completed, 전부 0건이면서 append 시작 전이면 failed로 복구하여 재시도를 허용한다. append가 이미 시작됐는데 결과가 0건이면 지연된 Sheet 반영 위험 때문에 자동 복구하지 않는다. 30분 이상 지난 경우 관리자가 함수 종료와 Sheet 상태를 직접 확인한 뒤 `confirmedNoInflight: true`와 정정 사유를 명시해야 재시도 가능 상태로 전환된다. 중복, 묶음 일부 기록, 공개 orphan 파일에는 이 수동 해제를 허용하지 않는다. 상태 전환 전 Firestore transaction에서 requestId·상태·updatedAt·append 시작 표시를 재확인한다. 일반 교직원은 복구 API에 접근할 수 없다. 실패한 시도의 orphan 이력은 다음 예약에도 보존하며 관리자 조회에는 실제로 존재하는 파일 ID와 비공개 여부만 제공한다. 파일은 자동 영구 삭제하지 않는다.
 
 ## 적용 순서
 
-1. 이 schema와 서버 설정을 사용자에게 확인받는다.
+1. 이 schema와 Firebase Storage bucket 설정을 사용자에게 확인받는다.
 2. 새 탭을 숨김 상태로 생성하고 헤더만 넣는다. 샘플 교직원·교육 데이터는 넣지 않는다.
-3. Apps Script Gateway를 배포하고 비공개 My Drive 폴더, HMAC secret, QA branch 환경변수를 확인한다.
+3. QA 환경에서 Firebase Admin bucket metadata/read 점검 후 synthetic PNG로 storage-only save/read/idempotency를 확인한다.
 4. feature branch fixture 테스트와 관리자 UI를 검증한 다음 사용자 승인 후 `qa`에 병합한다.
 5. 실제 운영 교육과 교직원 대상 행은 관리자가 별도로 등록한다. 이 작업에서 자동 생성하거나 이관하지 않는다.
 
 현재 구현은 Phase 1 목록·상세와 기존 제출·법정의무연수 로직을 변경하지 않는다. 외부연수 이수증과 법정의무연수 UI 통합은 포함하지 않는다.
+
+## 연수등록부 출력
+
+공식 XLSX 템플릿 기반 XLSX 생성은 병합, 열 너비, 행 높이, 인쇄 영역과 전자서명 이미지 위치를 보존한다. PDF는 Apps Script나 LibreOffice 같은 외부 런타임 없이 Vercel에서 동작하도록 `pdf-lib`와 내장 Noto Sans KR font asset으로 A4 문서를 생성한다. 동일한 최종 roster model과 Firebase Storage PNG를 사용하며 A~E의 연번·직위·성명·서명·연수일자를 출력한다. Excel 고유 렌더링과 픽셀 단위로 동일한 변환은 보장하지 않으므로 QA에서 페이지 나눔, 한글, 서명 크기와 인쇄 결과를 수동 확인한다.
+
+향후 다학교 확장은 storage adapter 앞에 school/tenant 식별자를 주입해 `schools/<schoolId>/training-signatures/...` prefix로 확장한다. 이번 Phase에서는 단일 학교 prefix만 사용하며 client direct upload와 공개 download URL은 제공하지 않는다.
