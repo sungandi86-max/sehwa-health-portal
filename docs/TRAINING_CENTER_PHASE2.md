@@ -85,14 +85,15 @@ Firebase ID token, 현재 학기 활성 assignment, canonical 교직원ID 및 �
 
 ## Phase 2 QA 종료 및 main 병합 검토 (2026-10-08)
 
-- 이번 blocker checkpoint 직전 `qa`와 `feature/training-center-phase2`는 `689752544f4bdaaece86f014f1c6d82957998b07`로 일치했다. 최신 fail-closed 보완은 고정 `qa`에 동기화해 검증한 뒤에만 main 병합을 검토한다.
+- 최종 QA 종료 시점에 `qa`와 `feature/training-center-phase2`는 `8064718e739c444fc146fd2c344be300d8ad2125`로 일치한다. 최신 fail-closed 보완, QA workbook 격리와 runtime preflight를 확인했으며 추가 실환경 QA는 종료했다.
 - 고정 QA Preview에서 승인된 QA 관리자 본인의 정상 출석·전자서명 흐름을 여러 차례 실제로 검증했다. 단일·묶음 QR, 중복 제출 차단, 관리자 현황·보정, 연수등록부 PDF와 서명 표시는 수행한 QA 범위에서 확인했다.
-- stale lock 복구와 원본 requestId의 orphan PNG 재사용 계약은 fixture 기반 자동 테스트로 검증했다. 실제 stale 상태를 강제로 만드는 재현은 추가 수행하지 않았다. 의도적 실패 상태 생성은 추가 검증 실익에 비해 QA 데이터·잠금·Drive 잔여물의 운영 리스크가 크기 때문이다. 따라서 실환경 stale recovery 성공은 확인된 사실로 간주하지 않는다.
+- stale lock 복구와 원본 requestId의 orphan PNG 재사용 계약은 fixture 기반 자동 테스트로 검증했다. 실제 stale 상태를 강제로 만드는 재현은 추가 수행하지 않았다. 의도적 실패 상태 생성은 추가 검증 실익에 비해 QA 데이터·잠금·Drive 잔여물의 운영 리스크가 크기 때문이다. 실환경 stale recovery 성공을 확인된 사실로 간주하지 않는다는 한계를 accepted residual risk로 수용하며, 이를 이유로 추가 실환경 QA를 진행하지 않는다.
 - 분리된 QA 워크북에는 `[QA]` 교육 5건(모두 `미사용`), 승인된 관리자 본인 대상 행 5건, 전자서명 감사 행 4건이 남아 있다. 감사 행·비공개 PNG·잠금은 자동 삭제하지 않는다. QA 전자서명 탭은 숨김 상태이고 임시 보호 규칙은 남아 있지 않다.
 - QA 워크북, Drive `qa` namespace, Firestore `training_attendance_locks_qa`는 Production 데이터와 분리되어 있다. 이번 종료 점검에서는 외부 데이터를 수정하지 않았다.
 - Production에는 서버 전용 `TRAINING_DRIVE_OAUTH_CLIENT_ID`, `TRAINING_DRIVE_OAUTH_CLIENT_SECRET`, `TRAINING_DRIVE_OAUTH_REFRESH_TOKEN` 설정이 완료됐다. 실제 값은 문서나 Git에 복제하지 않는다. Production 서명 Drive root의 명시적 bootstrap은 아직 실행하지 않았다.
 - 교육센터 전용 workbook resolver는 Production에서 운영 워크북만, 고정 `qa` Preview에서 명시적인 비운영 QA 워크북만 허용한다. 모든 feature/임의 Preview에서는 override 유무와 무관하게 GET/list/detail/관리자 API를 인증·Sheet 조회 전에 거부한다. 기존 일반 staff-directory resolver의 fallback 정책은 변경하지 않았다. Firebase same-origin auth host 허용 목록도 Production과 고정 `qa`만 유지한다.
-- 관리자 QR 발급은 Drive OAuth 인증, 전용 root 존재·비공개 및 읽기 준비를 확인한 후에만 challenge를 생성한다. root가 없으면 `needsBootstrap` 오류를 반환하며 preflight나 QR 발급에서 bootstrap을 자동 실행하지 않는다. 고정 `qa`에서 최신 보완을 검증하고 최종 검토하기 전까지 main 병합은 보류한다.
+- 관리자 QR 발급은 Drive OAuth 인증, 전용 root 존재·비공개 및 읽기 준비를 확인한 후에만 challenge를 생성한다. root가 없으면 `needsBootstrap` 오류를 반환하며 preflight나 QR 발급에서 bootstrap을 자동 실행하지 않는다. Production root bootstrap은 main 병합 조건이 아니며 배포 후 운영 QR 활성화 전에 별도 승인으로 수행한다.
+- `server/lib/trainingCenterPhase2Api.js`와 `server/lib/trainingSignatureStorage.js`의 책임 분리는 유지보수 follow-up 후보이며, 현재 검증된 동작을 변경하는 merge blocker로 분류하지 않는다.
 
 ## Production 출시 순서
 
