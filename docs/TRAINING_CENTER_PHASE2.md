@@ -62,6 +62,21 @@ Firebase ID token, 현재 학기 활성 assignment, canonical 교직원ID 및 �
 
 현재 구현은 Phase 1 목록·상세와 기존 제출·법정의무연수 로직을 변경하지 않는다. 외부연수 이수증과 법정의무연수 UI 통합은 포함하지 않는다.
 
+## QA handoff (2026-10-07)
+
+- 검증 branch: `feature/training-center-phase2`
+- 검증 commit: `dff11643e18d056d4e405dee917b4dbca135a837`
+- Preview deployment: `https://sehwa-health-portal-h8usdawbm-sungandi86-maxs-projects.vercel.app`
+- Preview branch 전용으로 `TRAINING_DRIVE_OAUTH_CLIENT_ID`, `TRAINING_DRIVE_OAUTH_CLIENT_SECRET`, `TRAINING_DRIVE_OAUTH_REFRESH_TOKEN`, `FIREBASE_SERVICE_ACCOUNT_BASE64` 키를 설정했다. 값은 문서, Git, 로그에 남기지 않았다.
+- Firebase Authentication authorized domain에 위 Preview hostname을 추가했고, `health_teacher` 세션에서 관리자 교육관리 화면의 read-only 런타임 점검을 실행했다.
+- 관리자 API 인증과 Firebase Admin 초기화는 성공했다.
+- Google Drive OAuth 인증은 성공했다. 앱 전용 root가 아직 없어 `needsBootstrap=true`, `rootReady=false`로 확인됐다.
+- root가 없으므로 `서명 저장소 초기화`, `서명 폴더 비공개`, `서명 읽기 준비`는 아직 미완료다. 이는 bootstrap 전의 예상 상태다.
+- feature Preview에는 `TRAINING_QR_SECRET`이 아직 설정되지 않아 QR secret 설정/유효성 점검은 실패 상태다.
+- 이 점검까지 Drive create/write/delete, Sheet write, Firestore write는 모두 0건이다. Production, `qa`, `main`에는 변경이 없다.
+
+집에서 재개할 첫 단계는 관리자 인증 상태에서 `training-signature-storage-bootstrap`을 명시적으로 한 번 실행해 앱 전용 private root를 생성하는 것이다. bootstrap 직후 root marker와 private permission을 확인한 다음에만 synthetic PNG로 storage-only save/read/idempotency QA를 진행한다. 운영 서명, 교육 행사, Sheet/Firestore 데이터를 사용하는 전체 E2E는 storage-only QA가 모두 통과할 때까지 금지한다.
+
 ## 연수등록부 출력
 
 공식 XLSX 템플릿 기반 XLSX 생성은 병합, 열 너비, 행 높이, 인쇄 영역과 전자서명 이미지 위치를 보존한다. PDF는 Apps Script나 LibreOffice 같은 외부 런타임 없이 Vercel에서 동작하도록 `pdf-lib`와 내장 Noto Sans KR font asset으로 A4 문서를 생성한다. 동일한 최종 roster model과 Google Drive OAuth로 읽은 private PNG를 사용하며 A~E의 연번·직위·성명·서명·연수일자를 출력한다. Excel 고유 렌더링과 픽셀 단위로 동일한 변환은 보장하지 않으므로 QA에서 페이지 나눔, 한글, 서명 크기와 인쇄 결과를 수동 확인한다.
