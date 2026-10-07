@@ -1,6 +1,6 @@
 # 교직원 교육센터 Phase 2 운영 준비
 
-이 문서는 feature branch의 구현 계약이다. 현재 운영 워크북에는 교육 샘플 행을 쓰지 않았고, 새 탭도 만들지 않았다. 관리자 UI를 운영 데이터에 연결하기 전에 아래 준비와 승인이 필요하다.
+이 문서의 초기 준비 절차와 QA handoff는 작성 당시의 기록이다. 현재 QA 종료 상태와 main 병합 전 조건은 맨 아래의 `Phase 2 QA 종료 및 main 병합 검토`를 따른다. 운영 워크북에 QA 교육 샘플 행을 쓰지 않았다.
 
 ## Sheet schema
 
@@ -82,3 +82,12 @@ Firebase ID token, 현재 학기 활성 assignment, canonical 교직원ID 및 �
 공식 XLSX 템플릿 기반 XLSX 생성은 병합, 열 너비, 행 높이, 인쇄 영역과 전자서명 이미지 위치를 보존한다. PDF는 Apps Script나 LibreOffice 같은 외부 런타임 없이 Vercel에서 동작하도록 `pdf-lib`와 내장 Noto Sans KR font asset으로 A4 문서를 생성한다. 동일한 최종 roster model과 Google Drive OAuth로 읽은 private PNG를 사용하며 A~E의 연번·직위·성명·서명·연수일자를 출력한다. Excel 고유 렌더링과 픽셀 단위로 동일한 변환은 보장하지 않으므로 QA에서 페이지 나눔, 한글, 서명 크기와 인쇄 결과를 수동 확인한다.
 
 향후 다학교 확장은 `schoolId → encrypted OAuth credential → private root folder` tenant 설정으로 분리한다. refresh token은 KMS 또는 암호화된 credential store에 보관하고 이번 Phase의 단일 env token을 그대로 확장하지 않는다. client direct upload와 공개 Drive URL은 제공하지 않는다.
+
+## Phase 2 QA 종료 및 main 병합 검토 (2026-10-07)
+
+- `qa`와 `feature/training-center-phase2`는 QA 종료 시점에 `edf64cdf6a377b75bca5ed485b54aa6845fcb261`로 일치한다. `main`과 Production 배포는 변경하지 않았다.
+- 고정 QA Preview에서 승인된 QA 관리자 본인의 정상 출석·전자서명 흐름을 여러 차례 실제로 검증했다. 단일·묶음 QR, 중복 제출 차단, 관리자 현황·보정, 연수등록부 PDF와 서명 표시는 수행한 QA 범위에서 확인했다.
+- stale lock 복구와 원본 requestId의 orphan PNG 재사용 계약은 fixture 기반 자동 테스트로 검증했다. 실제 stale 상태를 강제로 만드는 재현은 추가 수행하지 않았다. 의도적 실패 상태 생성은 추가 검증 실익에 비해 QA 데이터·잠금·Drive 잔여물의 운영 리스크가 크기 때문이다. 따라서 실환경 stale recovery 성공은 확인된 사실로 간주하지 않는다.
+- 분리된 QA 워크북에는 `[QA]` 교육 5건, 승인된 관리자 본인 대상 행 5건, 전자서명 감사 행 4건이 남아 있다. 교육 4건은 `사용`·`진행중`, stale recovery 확인용 교육 1건은 `미사용`이다. QA 화면의 혼동을 막기 위해 활성 QA 교육 4건을 `미사용`으로 전환하는 것은 후속 정리 후보이며, 감사 행·비공개 PNG·잠금은 자동 삭제하지 않는다. QA 전자서명 탭은 숨김 상태이고 임시 보호 규칙은 남아 있지 않다.
+- QA 워크북, Drive `qa` namespace, Firestore `training_attendance_locks_qa`는 Production 데이터와 분리되어 있다. 이번 종료 점검에서는 외부 데이터를 수정하지 않았다.
+- main 병합 전에는 Production의 서버 전용 `TRAINING_DRIVE_OAUTH_CLIENT_ID`, `TRAINING_DRIVE_OAUTH_CLIENT_SECRET`, `TRAINING_DRIVE_OAUTH_REFRESH_TOKEN` 설정이 필요하다. QA Preview의 값을 문서나 Git에 복제하지 않는다. 현재 Production에는 이 세 키가 없으므로 병합 준비 검토는 가능하지만 실제 main 병합은 안전하지 않다.
