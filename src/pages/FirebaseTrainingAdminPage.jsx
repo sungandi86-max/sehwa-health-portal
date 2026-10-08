@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
-import { getTrainingRuntimePreflight, listManagedTrainings, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
-import { summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
+import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
+import { getTrainingStorageBootstrapUiState, performTrainingStorageBootstrap, summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
 
 const fieldClass = "mt-1 min-h-11 w-full min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm text-[#102047] outline-none focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/10";
 const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50";
@@ -60,30 +60,58 @@ function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTr
   </form>;
 }
 
-export function TrainingRuntimePreflight({ runPreflight = getTrainingRuntimePreflight }) {
+export function TrainingRuntimePreflight({
+  runPreflight = getTrainingRuntimePreflight,
+  bootstrapStorage = bootstrapTrainingSignatureStorage,
+  confirmAction = (message) => window.confirm(message),
+}) {
   const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
+  const [bootstrapState, setBootstrapState] = useState("idle");
 
-  async function check() {
+  async function check({ throwOnError = false } = {}) {
     setState("loading");
     setResult(null);
     try {
-      setResult(summarizeTrainingRuntimePreflight(await runPreflight()));
+      const next = summarizeTrainingRuntimePreflight(await runPreflight());
+      setResult(next);
       setState("ready");
+      return next;
     } catch {
       setState("error");
+      if (throwOnError) throw new Error("runtime-preflight-failed");
+      return null;
     }
   }
 
+  async function bootstrap() {
+    if (!bootstrapUi.enabled || bootstrapState === "loading") return;
+    setBootstrapState("loading");
+    const outcome = await performTrainingStorageBootstrap({
+      confirmAction,
+      bootstrapStorage,
+      refresh: () => check({ throwOnError: true }),
+    });
+    setBootstrapState(outcome.status === "success" ? "success" : outcome.status === "error" ? "error" : "idle");
+  }
+
   const failed = result?.checks.filter(({ passed }) => !passed) || [];
+  const bootstrapUi = getTrainingStorageBootstrapUiState(result);
   const message = state === "idle" ? "아직 검사하지 않음" : state === "loading" ? "점검 중..."
     : state === "error" ? "점검 요청에 실패했습니다." : result?.ready ? "전체 준비 완료" : "점검 필요";
 
   return <section aria-label="런타임 점검" className="rounded-[10px] border border-[#DDEAE7] bg-white p-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="min-w-0"><h2 className="text-sm font-bold text-[#102047]">런타임 점검</h2><p className="mt-1 break-keep text-xs text-[#627083]" role="status" aria-live="polite">{message}</p></div>
-      <button className={secondaryClass} type="button" onClick={check} disabled={state === "loading"}>{state === "loading" ? "점검 중..." : "런타임 점검"}</button>
+      <div className="flex flex-wrap items-center gap-2">
+        {bootstrapUi.visible && <button className={secondaryClass} type="button" onClick={bootstrap} disabled={!bootstrapUi.enabled || bootstrapState === "loading"}>
+          {bootstrapState === "loading" ? "초기화 중..." : bootstrapUi.label}
+        </button>}
+        <button className={secondaryClass} type="button" onClick={() => check()} disabled={state === "loading" || bootstrapState === "loading"}>{state === "loading" ? "점검 중..." : "런타임 점검"}</button>
+      </div>
     </div>
+    {bootstrapState === "success" && <p className="mt-3 break-keep text-xs text-[#08754B]" role="status">서명 저장소 초기화를 완료했습니다.</p>}
+    {bootstrapState === "error" && <p className="mt-3 break-keep text-xs text-[#B42318]" role="alert">서명 저장소를 초기화하지 못했습니다. 잠시 후 다시 시도해 주세요.</p>}
     {state === "ready" && result?.ready && <ul className="mt-3 grid gap-x-4 gap-y-1 border-t border-[#DDEAE7] pt-3 sm:grid-cols-2 lg:grid-cols-4">
       {result.checks.map(({ key, label }) => <li className="break-keep text-xs text-[#08754B]" key={key}>{label} PASS</li>)}
     </ul>}
