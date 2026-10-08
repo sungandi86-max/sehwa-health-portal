@@ -1,5 +1,6 @@
 import fetch from "node-fetch";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
+import { readRoadmap } from "../server/lib/portalRoadmap.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
@@ -334,7 +335,7 @@ async function forwardToAppsScript(searchParams, scriptUrl, res) {
   }
 }
 
-async function postToAppsScript(payload, scriptUrl, res) {
+async function postToAppsScript(payload, scriptUrl, res, transform) {
   try {
     const scriptRes = await fetch(scriptUrl, {
       method: "POST",
@@ -372,9 +373,9 @@ async function postToAppsScript(payload, scriptUrl, res) {
       );
     }
 
+    let json;
     try {
-      const json = JSON.parse(text);
-      return res.status(200).json(json);
+      json = JSON.parse(text);
     } catch (error) {
       console.error("[health-room-status] POST JSON parse failed", error);
       return jsonError(
@@ -384,16 +385,17 @@ async function postToAppsScript(payload, scriptUrl, res) {
         "Invalid JSON from Apps Script"
       );
     }
+    return res.status(200).json(transform ? await transform(json) : json);
   } catch (error) {
     console.error("[health-room-status] POST proxy failed", {
       name: error?.name || "Error",
-      message: sanitizeDebugMessage(error?.message || "unknown"),
+      code: error?.code || "upstream_error",
     });
     return jsonError(
       res,
       502,
       "Apps Script 요청에 실패했습니다. 네트워크, 배포 URL, Vercel 환경변수를 확인해 주세요.",
-      error.message
+      error?.code || "apps_script_post_error"
     );
   }
 }
@@ -443,6 +445,29 @@ export default async function handler(req, res) {
         console.log("[health-room-status] firebase legacy admin request", {
           action: params.action || "",
         });
+        if (params.action === "verifyAdminMaster") {
+          return postToAppsScript(
+            { ...authorizedAdmin.payload, action: "getAdminReceiptSummary" }, scriptUrl, res,
+            async (summary) => {
+              if (summary?.success !== true) return summary;
+              const items = (summary.sections || []).flatMap((section) => section.items || []);
+              const todayReceiptCount = items.reduce((sum, item) => sum + Number(item.todayCount || 0), 0);
+              const recentReceiptAt = items.map((item) => String(item.recentReceivedAt || "")).sort().at(-1) || "";
+              const roadmap = await readRoadmap(getFirebaseAdminDb());
+              const roadmapTaskCount = new Set(roadmap.items.map((item) => item.taskName).filter(Boolean)).size;
+              return {
+                success: true, result: "success", receiptAlert: summary.alert || null,
+                adminDashboard: {
+                  todayReceiptCount, recentReceiptAt, roadmapTaskCount,
+                  checkItems: [
+                    { label: "신규 접수", count: todayReceiptCount },
+                    { label: "확인 필요한 제출", count: todayReceiptCount },
+                  ],
+                },
+              };
+            },
+          );
+        }
         return postToAppsScript(authorizedAdmin.payload, scriptUrl, res);
       }
 

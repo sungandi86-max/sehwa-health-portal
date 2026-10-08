@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
+import RoadmapEditor from "../components/RoadmapEditor.jsx";
+import { requestPortalRoadmap } from "../lib/portalRoadmap.js";
 
 const emptyRoadmap = { enabled: false, adminOnly: true, items: [] };
 const MESSAGE_HELPER_LITE_URL = "https://script.google.com/macros/s/AKfycbxVONfUYNf63cvJhiehe8N9TAka14MuKAXxXDVQG79H_R1DeX4kwXfHtjo25hDGsYFU/exec";
@@ -8,6 +10,11 @@ const MESSAGE_HELPER_LITE_URL = "https://script.google.com/macros/s/AKfycbxVONfU
 function safeText(value, fallback = "-") {
   const text = String(value || "").trim();
   return text || fallback;
+}
+
+function safeLink(value) {
+  const url = String(value || "").trim();
+  return /^https?:\/\//i.test(url) ? url : "";
 }
 
 function splitList(value) {
@@ -186,7 +193,7 @@ function SummarySidebar({ selectedTask, selectedItem, recentTask, totalSteps, cu
       <AppCard className="p-4">
         <p className="text-xs font-semibold text-[#D94F70]">기준일</p>
         <p className="mt-2 text-base font-semibold text-[#263238]">{todayLabel()}</p>
-        <p className="mt-1 text-xs font-bold text-slate-500">시트 로드맵 기준으로 확인합니다.</p>
+        <p className="mt-1 text-xs font-bold text-slate-500">Firestore 로드맵 기준으로 확인합니다.</p>
       </AppCard>
       <AppCard className="p-4">
         <p className="text-xs font-semibold text-[#D94F70]">일정 요약</p>
@@ -206,7 +213,7 @@ function normalizeToolType(type) {
 
 function ToolCard({ tool }) {
   const type = normalizeToolType(tool.type);
-  const url = String(tool.url || "").trim();
+  const url = safeLink(tool.url);
   const canOpen = (type === "external" || type === "sheet") && url;
   const typeLabel = {
     external: "외부 도구",
@@ -265,7 +272,7 @@ function RoadmapToolSection({ item }) {
   const tools = Array.isArray(item.tools)
     ? item.tools.filter((tool) => String(tool?.name || "").trim())
     : [];
-  const relatedSheetUrl = String(item.relatedSheetUrl || item.sheetUrl || "").trim();
+  const relatedSheetUrl = safeLink(item.relatedSheetUrl || item.sheetUrl);
 
   return (
     <GuideBlock title="관련 도구">
@@ -413,13 +420,49 @@ function RoadmapGuide({ item, nextItem, onCopy, copiedMessage, stepIndex, totalS
   );
 }
 
-export default function AdminRoadmapPage({ roadmap = emptyRoadmap }) {
+export default function AdminRoadmapPage({ readOnly = false }) {
   const navigate = useNavigate();
-  const items = Array.isArray(roadmap?.items) ? roadmap.items : [];
+  const [roadmap, setRoadmap] = useState(emptyRoadmap);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const allItems = Array.isArray(roadmap?.items) ? roadmap.items : [];
+  const items = allItems.filter((item) => item.active && item.visible);
   const [selectedTaskKey, setSelectedTaskKey] = useState("");
   const [step, setStep] = useState("");
   const [recentTask, setRecentTask] = useState(null);
   const [copiedMessage, setCopiedMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    requestPortalRoadmap().then((result) => {
+      if (!active) return;
+      setRoadmap(result.roadmap);
+      setErrorMessage("");
+    }).catch((error) => { if (active) setErrorMessage(error.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const editItem = allItems.find((item) => item.id === editingId) || null;
+  const applyChange = async (action, item = null, id = editingId) => {
+    setBusy(true);
+    setErrorMessage("");
+    setNotice("");
+    try {
+      const result = await requestPortalRoadmap({ action, id, item });
+      const refreshed = await requestPortalRoadmap();
+      setRoadmap(refreshed.roadmap);
+      if (action === "add") setEditingId(result.id || "");
+      setNotice(action === "deactivate" ? "업무가 비활성화되었습니다." : action === "restore" ? "업무가 복원되었습니다." : "저장되었습니다.");
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const tasks = useMemo(() => {
     const map = new Map();
@@ -480,10 +523,10 @@ export default function AdminRoadmapPage({ roadmap = emptyRoadmap }) {
     <section className="mx-auto max-w-7xl px-3 py-5 sm:px-4 md:py-8">
       <button
         type="button"
-        onClick={() => navigate("/admin")}
+        onClick={() => navigate(readOnly ? "/" : "/admin")}
         className="mb-4 flex min-h-11 items-center gap-1 rounded-full px-3 py-2 text-sm font-bold text-slate-500 transition hover:bg-[#EAF3FF] hover:text-[#1A3B8B]"
       >
-        ← 관리자 화면으로
+        ← {readOnly ? "홈으로" : "관리자 화면으로"}
       </button>
 
       <div className="overflow-hidden rounded-[28px] bg-[#EAF3FF] p-4 md:rounded-[32px] md:p-6">
@@ -491,16 +534,20 @@ export default function AdminRoadmapPage({ roadmap = emptyRoadmap }) {
           <SectionTitle
             eyebrow="ADMIN WORK BOARD"
             title="보건실 업무 로드맵 도우미"
-            description="업무 선택 → 단계 선택 → 현재 해야 할 일 확인 흐름으로 보건업무 진행 상황을 점검하는 관리자용 실무 보드입니다."
+            description="업무 선택 → 단계 선택 → 현재 해야 할 일 확인 흐름으로 보건업무 진행 상황을 점검합니다."
           />
-          {roadmap?.adminOnly && <Badge type="pink">관리자 전용</Badge>}
+          <Badge type="pink">{readOnly ? "조회 전용" : "관리자 전용"}</Badge>
         </div>
 
-        {!roadmap?.enabled || !items.length ? (
+        {errorMessage && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{errorMessage}</p>}
+        {notice && <p role="status" className="mb-4 rounded-xl bg-[#E8F6EE] p-3 text-sm font-semibold text-[#2E7D32]">{notice}</p>}
+        {loading && <p className="mb-4 text-sm font-semibold text-slate-600">로드맵을 불러오는 중입니다.</p>}
+
+        {!loading && (!roadmap?.enabled || !items.length) ? (
           <AppCard className="p-6 text-center text-sm font-bold text-slate-600">
             등록된 업무 로드맵이 없습니다.
           </AppCard>
-        ) : (
+        ) : !loading && (
           <div className="space-y-5">
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
               <BoardPanel
@@ -542,6 +589,27 @@ export default function AdminRoadmapPage({ roadmap = emptyRoadmap }) {
             </BoardPanel>
           </div>
         )}
+
+        {!readOnly && !loading && <BoardPanel title="업무 관리" subtitle="관리자만 업무를 추가·수정·비활성화할 수 있습니다." className="mt-5">
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl bg-[#F7F9FC] p-3">
+            <p className="text-sm font-semibold text-slate-700">일반 교직원 조회: {roadmap.adminOnly ? "차단" : "허용"}</p>
+            <button type="button" disabled={busy} onClick={() => applyChange("update-config", { adminOnly: !roadmap.adminOnly })}
+              className="min-h-11 rounded-xl border border-[#C9DFFF] bg-white px-4 text-sm font-semibold text-[#1A3B8B] disabled:opacity-50">
+              {roadmap.adminOnly ? "교직원 조회 허용" : "교직원 조회 차단"}
+            </button>
+          </div>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button type="button" onClick={() => setEditingId("")} className="min-h-11 rounded-xl bg-[#1A3B8B] px-4 py-2 text-sm font-semibold text-white">새 업무 추가</button>
+            <select aria-label="수정할 업무 선택" className="min-h-11 min-w-0 max-w-full rounded-xl border border-[#C9DFFF] bg-white px-3 text-sm" value={editingId} onChange={(event) => setEditingId(event.target.value)}>
+              <option value="">새 업무</option>
+              {allItems.map((item) => <option key={item.id} value={item.id}>{item.active ? "" : "[비활성] "}{item.category} · {item.taskName} · {item.step}</option>)}
+            </select>
+          </div>
+          <RoadmapEditor key={editingId || "new"} item={editItem} busy={busy}
+            onSave={(form) => applyChange(editingId ? "update" : "add", form)}
+            onDeactivate={(id) => applyChange("deactivate", null, id)}
+            onRestore={(id) => applyChange("restore", null, id)} />
+        </BoardPanel>}
       </div>
     </section>
   );

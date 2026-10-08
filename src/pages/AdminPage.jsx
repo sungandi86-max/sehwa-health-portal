@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
+import { requestPortalRoadmap } from "../lib/portalRoadmap.js";
 
 const quickLinks = [
   {
@@ -46,11 +48,24 @@ function countText(value) {
   return `${Number(value || 0).toLocaleString("ko-KR")}건`;
 }
 
-export default function AdminPage({ roadmap = { enabled: false, adminOnly: true, items: [] }, adminDashboard = null }) {
+export default function AdminPage({ adminDashboard = null }) {
   const navigate = useNavigate();
+  const [roadmap, setRoadmap] = useState(null);
+  const [roadmapError, setRoadmapError] = useState("");
+  useEffect(() => {
+    let active = true;
+    requestPortalRoadmap().then((result) => {
+      if (active) setRoadmap(result.roadmap);
+    }).catch((error) => {
+      if (active) setRoadmapError(error.message);
+    });
+    return () => { active = false; };
+  }, []);
   const todayReceiptCount = adminDashboard?.todayReceiptCount;
   const recentReceiptAt = adminDashboard?.recentReceiptAt || "";
-  const roadmapTaskCount = adminDashboard?.roadmapTaskCount ?? (Array.isArray(roadmap?.items) ? roadmap.items.length : 0);
+  const roadmapTaskCount = new Set((roadmap?.items || [])
+    .filter((item) => item.active && item.visible)
+    .map((item) => `${item.category}|${item.taskName}`)).size;
   const checkItems = Array.isArray(adminDashboard?.checkItems)
     ? adminDashboard.checkItems
     : [
@@ -84,8 +99,8 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
           />
           <SummaryCard
             label="업무 로드맵"
-            value={roadmap?.enabled ? `사용 중 ${Number(roadmapTaskCount || 0).toLocaleString("ko-KR")}개 업무` : "미사용"}
-            description="앱_업무로드맵 시트 기준으로 관리자 업무 흐름을 안내합니다."
+            value={roadmapError ? "조회 실패" : !roadmap ? "불러오는 중" : roadmap.enabled ? `사용 중 ${roadmapTaskCount.toLocaleString("ko-KR")}개 업무` : "미사용"}
+            description={roadmapError || "Firestore 기준으로 관리자 업무 흐름을 안내합니다."}
             tone={roadmap?.enabled ? "blue" : "pink"}
           />
         </div>

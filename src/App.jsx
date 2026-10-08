@@ -12,6 +12,7 @@ const PORTAL_API_URL = "/api/portal";
 const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
 
 const AdminAuthGate = lazy(() => import("./components/AdminAuthGate.jsx"));
+const FirebaseStaffSubmissionAccessGate = lazy(() => import("./components/FirebaseStaffSubmissionAccessGate.jsx"));
 const Header = lazy(() => import("./components/Header.jsx"));
 const AdminMessageHelperPage = lazy(() => import("./pages/AdminMessageHelperPage.jsx"));
 const AdminPage = lazy(() => import("./pages/AdminPage.jsx"));
@@ -148,6 +149,8 @@ export default function App() {
     "/admin/receipts",
     "/admin/infections",
     "/admin/infection-reports",
+    "/admin",
+    "/admin/roadmap",
   ].includes(window.location.pathname) || !portalScope;
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
@@ -191,7 +194,6 @@ export default function App() {
     : fallbackAppConfig;
 
   const liveStudentCare = portalData ? (portalData.studentCare|| []) : studentCareItems;
-  const liveRoadmap     = portalData?.roadmap || { enabled: false, adminOnly: true, items: [] };
 
   return (
     <BrowserRouter>
@@ -243,9 +245,10 @@ export default function App() {
                 <Route path="/firebase-admin/trainings/:eventId/qr" element={<FirebaseTrainingQrPage />} />
                 <Route path="/firebase-admin/trainings/:eventId/attendance" element={<FirebaseTrainingAttendanceAdminPage />} />
                 <Route path="/firebase-admin/trainings/:eventId/final-sheet" element={<FirebaseTrainingAttendanceAdminPage finalSheet />} />
-                <Route path="/admin"       element={<AdminAuthGate><AdminPage roadmap={liveRoadmap} /></AdminAuthGate>} />
-                <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage roadmap={liveRoadmap} /></AdminAuthGate>} />
-                <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage roadmap={liveRoadmap} /></AdminAuthGate>} />
+                <Route path="/admin"       element={<AdminAuthGate><AdminPage /></AdminAuthGate>} />
+                <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage /></AdminAuthGate>} />
+                <Route path="/roadmap" element={<FirebaseStaffSubmissionAccessGate accessTitle="업무 로드맵" readOnly>{() => <AdminRoadmapPage readOnly />}</FirebaseStaffSubmissionAccessGate>} />
+                <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage /></AdminAuthGate>} />
                 <Route path="/admin/receipts" element={<AdminAuthGate><AdminReceiptStatusPage /></AdminAuthGate>} />
                 <Route path="/admin/infections" element={<Navigate to="/firebase-admin/infections" replace />} />
                 <Route path="/admin/infection-reports" element={<Navigate to="/firebase-admin/infections" replace />} />

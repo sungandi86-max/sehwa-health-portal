@@ -11,8 +11,7 @@ const SHEET_NAMES = {
   portalStudentCare: "앱_학생건강관리",
   portalResources: "앱_건강정보/이벤트",
   portalMessages: "앱_메신저문구",
-  portalFaqs: "앱_FAQ",
-  portalRoadmap: "앱_업무로드맵"
+  portalFaqs: "앱_FAQ"
 };
 
 const HEALTH_ROOM_SUBJECT_SCOPE = "today";
@@ -2034,28 +2033,15 @@ function buildAdminDashboardSummary_(ss) {
     if (!recentReceiptAt || receivedAt > recentReceiptAt) recentReceiptAt = receivedAt;
   });
 
-  const roadmapTaskCount = countAdminRoadmapTasks_(ss);
-
   return {
     todayReceiptCount: todayReceiptCount,
     recentReceiptAt: recentReceiptAt,
-    roadmapTaskCount: roadmapTaskCount,
+    roadmapTaskCount: 0,
     checkItems: [
       { label: "신규 접수", count: todayReceiptCount },
       { label: "확인 필요한 제출", count: todayReceiptCount }
     ]
   };
-}
-
-function countAdminRoadmapTasks_(ss) {
-  const roadmap = getRoadmap_(ss);
-  const taskNames = {};
-  (roadmap.items || []).forEach(function(item) {
-    const taskName = String(item.taskName || "").trim();
-    if (!taskName) return;
-    taskNames[taskName] = true;
-  });
-  return Object.keys(taskNames).length;
 }
 
 function getAdminReceiptSummary_(params) {
@@ -2348,9 +2334,7 @@ function getPortalData_(options) {
   }
 
   if (scope === "admin") {
-    return Object.assign({}, base, {
-      roadmap: getRoadmap_(ss)
-    });
+    return Object.assign({}, base, {});
   }
 
   if (scope === "home") {
@@ -2387,8 +2371,7 @@ function getPortalData_(options) {
     studentCare: getStudentCare_(ss),
     resources:   getResources_(ss),
     messages:    getMessages_(ss),
-    faqs:        getFaqs_(ss),
-    roadmap:     getRoadmap_(ss)
+    faqs:        getFaqs_(ss)
   });
 }
 
@@ -2845,46 +2828,6 @@ function getFaqs_(ss) {
     question: getValue_(r, ["질문"]),
     answer:   getValue_(r, ["답변"])
   }));
-}
-
-function getRoadmap_(ss) {
-  const enabled = isTrue_(getAppConfig_("업무로드맵_사용"));
-  const adminOnly = isTrue_(getAppConfig_("업무로드맵_관리자전용"));
-  const items = enabled
-    ? getRows_(ss, SHEET_NAMES.portalRoadmap).map(r => ({
-        category:      getValue_(r, ["업무분류"]),
-        taskName:      getValue_(r, ["업무명"]),
-        step:          getValue_(r, ["단계"]),
-        todo:          getValue_(r, ["지금할일"]),
-        openMenus:     getValue_(r, ["온라인보건실_열메뉴"]),
-        hideMenus:     getValue_(r, ["온라인보건실_숨김메뉴"]),
-        audience:      getValue_(r, ["안내대상"]),
-        messageTitle:  getValue_(r, ["메신저제목"]),
-        messageBody:   getValue_(r, ["메신저문구"]),
-        privacyNote:   getValue_(r, ["개인정보주의"]),
-        relatedSheet:  getValue_(r, ["관련시트"]),
-        relatedMenuId: getValue_(r, ["관련메뉴ID"]),
-        relatedSheetUrl: getValue_(r, ["관련시트_URL"]),
-        sheetUrl:      getValue_(r, ["관련시트_URL"]),
-        tools:         getRoadmapTools_(r),
-        sortOrder:     Number(getValue_(r, ["정렬순서"], "999") || 999)
-      }))
-    : [];
-  return { enabled, adminOnly, items };
-}
-
-function getRoadmapTools_(row) {
-  const tools = [];
-  [1, 2, 3].forEach(function(index) {
-    const name = getValue_(row, ["관련도구" + index + "_이름"]);
-    if (!name) return;
-    tools.push({
-      name: name,
-      type: String(getValue_(row, ["관련도구" + index + "_유형"], "info") || "info").trim().toLowerCase(),
-      url: getValue_(row, ["관련도구" + index + "_URL"])
-    });
-  });
-  return tools;
 }
 
 // ════════════════════════════════════════════════════════════════

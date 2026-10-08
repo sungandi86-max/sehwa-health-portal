@@ -63,6 +63,11 @@ export default async function handler(req, res) {
     return jsonError(res, 405, "허용되지 않는 요청 방식입니다.", `method=${req.method}`);
   }
 
+  const scope = String(req.query?.scope || "").trim();
+  if (!["home", "upload", "fallback"].includes(scope)) {
+    return jsonError(res, 410, "이 포털 데이터 범위는 더 이상 제공되지 않습니다. 업무 로드맵은 교직원 인증 API를 이용해 주세요.");
+  }
+
   const scriptUrl = getScriptUrl();
   if (!scriptUrl) {
     return jsonError(
