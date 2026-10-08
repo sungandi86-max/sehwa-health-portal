@@ -4,16 +4,13 @@ import {
   healthColumnMode,
   summarizePlan,
   summarizeResearchRows,
-  summarizeSourceOnlyExceptions,
 } from "./healthMandatoryTrainingAnalysis.js";
+import { readStoredExceptions, summarizeStoredExceptions } from "./healthMandatoryTrainingExceptions.js";
 import { readGoogleSheetValues, readStaffDirectory } from "./lib/staffDirectory.js";
 
 const RESEARCH_SPREADSHEET_ID = "1rn4CVt41lq2f_o8Uiodij4h_R4Q9lVbpPMNFJjy6-IM";
-const HEALTH_SPREADSHEET_ID = "1ZCsztyIDuvcTzGdE4zZvexJmLuz8aNIIiuGuSyIBwbs";
 const RESEARCH_SHEET_NAME = "법정의무연수 묶음과정";
 const RESEARCH_RANGE = `${RESEARCH_SHEET_NAME}!A1:Z1000`;
-const EXCEPTION_SHEET_NAME = "법정의무연수_예외";
-const EXCEPTION_RANGE = `${EXCEPTION_SHEET_NAME}!A1:F1000`;
 const TASK_ID = "health-mandatory-training-2026";
 const TASK_YEAR = 2026;
 
@@ -47,7 +44,7 @@ function buildSummary(source, exceptions, plan, snapshotPlan, taskEnabled) {
       description: "감염병 · 4대폭력예방 · 아동학대예방 · 장애인학대예방",
     },
     exceptions: {
-      sheetName: EXCEPTION_SHEET_NAME,
+      source: "firestore",
       parseStatus: exceptions.headerInfo.parseStatus,
       currentYearRows: exceptions.stats.currentYearRows,
       confirmedRows: exceptions.stats.confirmedRows,
@@ -74,6 +71,7 @@ function buildSummary(source, exceptions, plan, snapshotPlan, taskEnabled) {
       excludedLeave: plan.excludedLeave,
       excludedRetired: plan.excludedRetired,
       excludedByTargetRule: plan.excludedByTargetRule,
+      excludedCanonicalException: plan.excludedCanonicalException,
       confirmedSourceOnlyExcluded: plan.confirmedSourceOnlyExcluded,
       unresolvedSourceOnly: plan.unresolvedSourceOnly,
       canonicalActiveMissingFromSource: plan.canonicalActiveMissingFromSource,
@@ -111,17 +109,14 @@ function buildSummary(source, exceptions, plan, snapshotPlan, taskEnabled) {
 }
 
 export async function getResearchTrainingSummary({ db } = {}) {
-  const [directoryResult, researchValues, exceptionValues, taskSnapshot] = await Promise.all([
+  const [directoryResult, researchValues, exceptionRecords, taskSnapshot] = await Promise.all([
     readStaffDirectory({ allowInvalidEmploymentStatus: true }),
     readGoogleSheetValues({ spreadsheetId: RESEARCH_SPREADSHEET_ID, range: RESEARCH_RANGE }),
-    readGoogleSheetValues({
-      spreadsheetId: process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID || HEALTH_SPREADSHEET_ID,
-      range: EXCEPTION_RANGE,
-    }),
+    readStoredExceptions(db),
     db ? db.collection("staff_submission_tasks").doc(TASK_ID).get() : Promise.resolve(null),
   ]);
   const source = summarizeResearchRows(researchValues);
-  const exceptions = summarizeSourceOnlyExceptions(exceptionValues, TASK_YEAR);
+  const exceptions = summarizeStoredExceptions(exceptionRecords, TASK_YEAR);
   const plan = summarizePlan(source.rows, directoryResult.directory, exceptions, { taskYear: TASK_YEAR });
   const snapshotPlan = buildSnapshotPlan(source.rows, directoryResult.directory, exceptions, { taskYear: TASK_YEAR });
   const taskEnabled = taskSnapshot ? taskSnapshot.exists && taskSnapshot.data()?.enabled === true : null;
@@ -145,7 +140,7 @@ export function assertSafeApply(source, exceptions, plan, snapshotPlan, taskEnab
     source.headerInfo.indexes.status !== null;
 
   if (!hasRequiredHeaders) throw new Error("연구부 연수 시트 헤더를 확인할 수 없습니다.");
-  if (exceptions.headerInfo.parseStatus !== "success") throw new Error("법정의무연수 예외 시트 헤더를 확인할 수 없습니다.");
+  if (exceptions.headerInfo.parseStatus !== "success") throw new Error("법정의무연수 예외 저장소를 확인할 수 없습니다.");
   if (source.stats.validRows <= 0) throw new Error("반영할 연구부 연수 행이 없습니다.");
   if (Number(source.stats.missingNameRows || 0) !== 0) {
     throw new Error("연구부 연수 시트에 성명 또는 직책이 누락된 행이 있습니다.");

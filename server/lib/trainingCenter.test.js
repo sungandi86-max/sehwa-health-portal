@@ -141,6 +141,7 @@ test("staff-directory dispatches training before admin gate and preserves admin 
   assert.equal((await call(router, { resource: "staff-identity" }, "")).statusCode, 401);
   assert.equal((await call(router, { resource: "health-mandatory-training-sync" }, "")).statusCode, 401);
   assert.equal((await call(router, { resource: "health-mandatory-training-current-targets" }, "")).statusCode, 401);
+  assert.equal((await call(router, { resource: "health-mandatory-training-exceptions" }, "")).statusCode, 401);
   assert.equal((await call(router, {}, "")).statusCode, 401);
 });
 

@@ -1,3 +1,5 @@
+import { sourceRowFingerprint } from "./healthMandatoryTrainingExceptions.js";
+
 const COMPLETED_VALUE = "이수완료";
 const INCOMPLETE_VALUES = new Set(["미이수", "미완료", "미수료", "미완"]);
 const HEALTH_TRAINING_COLUMNS = ["감염병", "4대폭력", "아동학대", "장애인학대"];
@@ -158,7 +160,7 @@ export function summarizeSourceOnlyExceptions(values, taskYear) {
   let invalidRows = 0;
   let duplicateConfirmedRows = 0;
 
-  values.slice(headerInfo.dataStartRowIndex).forEach((row) => {
+  values.slice(headerInfo.dataStartRowIndex).forEach((row, index) => {
     if (!row.some((value) => Boolean(text(value)))) return;
     const year = Number(cell(row, headerInfo.indexes, "year"));
     const realName = cell(row, headerInfo.indexes, "realName");
@@ -178,7 +180,7 @@ export function summarizeSourceOnlyExceptions(values, taskYear) {
     if (isCurrentYear && !isValid) invalidRows += 1;
     if (isConfirmed && confirmedKeys.has(key)) duplicateConfirmedRows += 1;
     if (isConfirmed) confirmedKeys.add(key);
-    rows.push({ year, realName, position, reason, confirmationStatus, isCurrentYear, isValid, isConfirmed, key });
+    rows.push({ sheetRow: headerInfo.dataStartRowIndex + index + 1, year, realName, position, reason, confirmationStatus, isCurrentYear, isValid, isConfirmed, key });
   });
 
   return {
@@ -248,9 +250,12 @@ function resolveStaff(sourceRow, indexes) {
 
 export function buildPlan(sourceRows, directory, exceptionSummary, taskYear) {
   const indexes = buildDirectoryIndexes(directory);
-  const confirmedExceptionKeys = new Set(
-    (exceptionSummary?.rows || []).filter((row) => row.isConfirmed).map((row) => row.key)
-  );
+  const confirmedExceptions = new Map();
+  (exceptionSummary?.rows || []).filter((row) => row.isConfirmed && row.identityType !== "canonical_staff").forEach((row) => {
+    confirmedExceptions.set(row.key, [...(confirmedExceptions.get(row.key) || []), row]);
+  });
+  const canonicalExceptionStaffIds = new Set((exceptionSummary?.rows || [])
+    .filter((row) => row.isConfirmed && row.identityType === "canonical_staff").map((row) => row.staffId));
   const sourceKeys = new Set();
   const matchedActiveItems = [];
   const seenStaffIds = new Set();
@@ -260,6 +265,7 @@ export function buildPlan(sourceRows, directory, exceptionSummary, taskYear) {
     excludedLeave: 0,
     excludedRetired: 0,
     excludedByTargetRule: 0,
+    excludedCanonicalException: 0,
     confirmedSourceOnlyExcluded: 0,
     unresolvedSourceOnly: 0,
     canonicalActiveMissingFromSource: 0,
@@ -282,12 +288,22 @@ export function buildPlan(sourceRows, directory, exceptionSummary, taskYear) {
     }
     if (resolved.kind === "unmatched") {
       const key = exceptionKey(taskYear, sourceRow.realName, sourceRow.position);
-      if (confirmedExceptionKeys.has(key)) {
+      const matchingException = (confirmedExceptions.get(key) || []).some((item) =>
+        item.identityType !== "source_only_exact" || (
+          item.sourceRow === sourceRow.sourceRow && item.sourceFingerprint === sourceRow.sourceFingerprint
+        )
+      );
+      if (matchingException) {
         counts.confirmedSourceOnlyExcluded += 1;
       } else {
         counts.unresolvedSourceOnly += 1;
         issueReasons.source_only_unresolved = (issueReasons.source_only_unresolved || 0) + 1;
       }
+      return;
+    }
+
+    if (canonicalExceptionStaffIds.has(resolved.match.staffId)) {
+      counts.excludedCanonicalException += 1;
       return;
     }
 
@@ -315,6 +331,7 @@ export function buildPlan(sourceRows, directory, exceptionSummary, taskYear) {
 
   const canonicalActiveMissingFromSource = directory.filter((item) => {
     if (!isCurrentTarget(item)) return false;
+    if (canonicalExceptionStaffIds.has(item.staffId)) return false;
     return !sourceKeys.has(`${exactText(item.name)}|${exactText(item.position)}`);
   });
   counts.canonicalActiveMissingFromSource = canonicalActiveMissingFromSource.length;
@@ -360,7 +377,7 @@ export function summarizeResearchRows(values) {
   let missingNameRows = 0;
   let lecturerRows = 0;
 
-  values.slice(headerInfo.dataStartRowIndex).forEach((row) => {
+  values.slice(headerInfo.dataStartRowIndex).forEach((row, index) => {
     if (!row.some((value) => Boolean(text(value)))) {
       blankRows += 1;
       return;
@@ -379,6 +396,13 @@ export function summarizeResearchRows(values) {
     nameCounts.set(exactText(realName), (nameCounts.get(exactText(realName)) || 0) + 1);
     if (["강사", "시간강사"].includes(exactText(position))) lecturerRows += 1;
     rows.push({
+      sourceRow: headerInfo.dataStartRowIndex + index + 1,
+      sourceFingerprint: sourceRowFingerprint(2026, {
+        sourceRow: headerInfo.dataStartRowIndex + index + 1,
+        realName,
+        position,
+        department: cell(row, headerInfo.indexes, "department"),
+      }),
       realName,
       department: cell(row, headerInfo.indexes, "department"),
       position,

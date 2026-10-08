@@ -1,5 +1,15 @@
 # Staff Submission And Training Status Model
 
+## 2026-10-08 Legal-training exception Sheet reduction
+
+The health-office `법정의무연수_예외` tab has one header row and four 2026 `확인완료/퇴직` data rows. All four match exactly one row in the research department's `법정의무연수 묶음과정` source by exact name and position, but none matches a current `교직원명단` row. They are **source-only former-staff exceptions**, not canonical-staffId exceptions. No staffId is inferred from a name.
+
+The new server reader uses environment-isolated Firestore collections `health_mandatory_training_exceptions_qa` and `health_mandatory_training_exceptions_production`; no runtime reader or writer uses this exception tab. Legacy documents have `taskId`, `year`, `identityType=source_only_exact`, `legacySourceOnly=true`, `sourceName`, `sourceTitle`, `exceptionReason`, `confirmationStatus`, `active`, `staffId=null`, `sourceRow`, `sourceFingerprint`, `legacySource`, `legacyImportedAt`, `originalSheetName`, and review metadata. The fingerprint binds year, physical research row, exact name, title, and department; a moved or changed row fails closed. Current-staff exceptions use a separate `identityType=canonical_staff` and a roster-verified canonical `staffId`; the two modes cannot match each other. An inactive/released record is retained but no longer excludes a source row. Admin-only API and UI permit listing, adding, and releasing. The research source remains read-only.
+
+The owner approved the four legacy/source-only records for migration. Read-only preflight found four confirmed 2026 rows, one exact research row per exception, zero canonical roster matches, zero existing exception documents, zero conflicts, and Sheet-versus-Firestore projected plan parity. A single Firestore transaction created the four Production exception documents; read-back confirmed four distinct active records with complete legacy metadata. The migration CLI's post-migration read-only dry-run completed with `alreadyMigrated=true`, four existing documents, zero conflicts, and parity; the runtime dry-run returned four confirmed source-only exclusions, zero unresolved source-only rows, and `applyAllowed=true`. No status snapshot apply was run. The old Sheet tab remains intact for rollback; Production deployment and tab deletion have not occurred. No Apps Script runtime references the exception tab.
+
+Read-only workbook audit: 23 tabs; 270 formula cells inspected across bounded A1:Z1000 ranges, no formula references to `법정의무연수_예외`, and no displayed `#REF!`. The exception tab has no formula cells in A1:F6; existing data-validation rules were not changed. A direct Sheets API metadata read found zero named ranges in the workbook, including zero references to this tab. Keep the tab until the new code is deployed and a post-deployment parity check passes.
+
 ## 2026-10-08 TB Firestore-First Update
 
 `tb-screening-2026`의 운영 master는 `staff_submission_status`이다. `교직원명단`의 canonical `staffId`만 identity join에 사용하며 이름, 이메일, 직책 조합으로 상태를 생성하거나 합치지 않는다. 단체검진 신청과 개인 확인증 제출은 인증된 현재 assignment의 `staffId`로 상태를 기록하고, `응답_교직원결핵검진유형선택`은 raw audit 탭으로만 유지한다. Apps Script는 더 이상 `교직원 결핵검진현황`을 읽거나 갱신하지 않는다.

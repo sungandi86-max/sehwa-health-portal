@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPanel.jsx";
+import ResearchTrainingExceptionsPanel from "../components/ResearchTrainingExceptionsPanel.jsx";
 import { getAdminStaffSubmissionStatusOverview, updateAdminTbScreeningStatus } from "../lib/staffSubmissionStatusAdmin.js";
 import { CPR_TRAINING_TASK_ID, isHealthMandatoryTrainingTask, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
 import { CPR_METHOD_LABELS } from "../lib/cprTrainingStatusModel.js";
@@ -286,6 +287,7 @@ function AdminStatusContent({ displayName }) {
       displayName={displayName}
     >
       <ResearchTrainingDryRunPanel onApplied={loadOverview} />
+      <ResearchTrainingExceptionsPanel />
 
       {state.status === "success" && selectedTask && (
         <>

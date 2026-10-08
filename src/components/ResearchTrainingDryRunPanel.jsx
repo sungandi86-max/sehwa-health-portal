@@ -69,7 +69,7 @@ function ResultPanel({ data }) {
       )}
       {exceptionHeaderMissing && (
         <p className="mb-3 rounded-[8px] border border-[#F3D8A8] bg-[#FFFDF7] px-3 py-2 text-[12px] font-semibold leading-5 text-[#9A5B00]">
-          법정의무연수 예외 시트 헤더를 확인하지 못했습니다.
+          법정의무연수 예외 저장소를 확인하지 못했습니다.
         </p>
       )}
       <p

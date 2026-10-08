@@ -2,6 +2,7 @@ import { auth } from "./firebase.js";
 
 const RESEARCH_TRAINING_SYNC_API = "/api/firebase/staff-directory?resource=health-mandatory-training-sync";
 const RESEARCH_TRAINING_DRY_RUN_API = `${RESEARCH_TRAINING_SYNC_API}&dryRun=1`;
+const RESEARCH_TRAINING_EXCEPTIONS_API = "/api/firebase/staff-directory?resource=health-mandatory-training-exceptions";
 
 async function getIdToken() {
   const currentUser = auth.currentUser;
@@ -18,6 +19,26 @@ export async function applyResearchTrainingSnapshot() {
     url: RESEARCH_TRAINING_SYNC_API,
     method: "POST",
     body: JSON.stringify({ apply: true }),
+  });
+}
+
+export async function listResearchTrainingExceptions() {
+  return requestResearchTrainingSync({ url: RESEARCH_TRAINING_EXCEPTIONS_API, method: "GET" });
+}
+
+export async function saveResearchTrainingException(input) {
+  return requestResearchTrainingSync({
+    url: RESEARCH_TRAINING_EXCEPTIONS_API,
+    method: "POST",
+    body: JSON.stringify({ action: "add", ...input }),
+  });
+}
+
+export async function releaseResearchTrainingException(id) {
+  return requestResearchTrainingSync({
+    url: RESEARCH_TRAINING_EXCEPTIONS_API,
+    method: "POST",
+    body: JSON.stringify({ action: "release", id }),
   });
 }
 
