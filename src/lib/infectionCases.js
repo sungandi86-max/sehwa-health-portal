@@ -1,7 +1,6 @@
 import { collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
-import { auth, db } from "./firebase.js";
-import { projectInfectionCaseBestEffort } from "./infectionSheetProjection.js";
+import { db } from "./firebase.js";
 import {
   INFECTION_CASE_STATUS,
   INFECTION_CASE_STATUS_OPTIONS,
@@ -107,7 +106,7 @@ export function getRecommendedCaseStatus(infectionCase, today = new Date()) {
   return exclusionEndDate < getKstDateKey(today) ? INFECTION_CASE_STATUS.returnCheckNeeded : "";
 }
 
-export async function getInfectionCases({ includeClosed = false } = {}) {
+export async function getInfectionCases() {
   const snapshot = await getDocs(
     query(
       collection(db, STUDENT_HEALTH_COLLECTION),
@@ -120,7 +119,6 @@ export async function getInfectionCases({ includeClosed = false } = {}) {
   return snapshot.docs
     .map(normalizeInfectionCase)
     .filter((item) => isCurrentTermInfection(item))
-    .filter((item) => includeClosed || item.caseStatus !== INFECTION_CASE_STATUS.closed)
     .sort(compareInfectionCases);
 }
 
@@ -131,7 +129,6 @@ export async function updateInfectionCaseStatus({ caseId, caseStatus, reviewerUi
     "report.caseUpdatedBy": reviewerUid,
     updatedAt: serverTimestamp(),
   });
-  await projectInfectionCaseBestEffort(auth.currentUser, caseId);
 }
 
 export async function markInfectionSubmissionReviewed({ caseId, reviewerUid }) {

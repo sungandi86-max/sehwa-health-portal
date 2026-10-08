@@ -49,14 +49,12 @@ function countText(value) {
 export default function AdminPage({ roadmap = { enabled: false, adminOnly: true, items: [] }, adminDashboard = null }) {
   const navigate = useNavigate();
   const todayReceiptCount = adminDashboard?.todayReceiptCount;
-  const activeInfectionCount = adminDashboard?.activeInfectionCount;
   const recentReceiptAt = adminDashboard?.recentReceiptAt || "";
   const roadmapTaskCount = adminDashboard?.roadmapTaskCount ?? (Array.isArray(roadmap?.items) ? roadmap.items.length : 0);
   const checkItems = Array.isArray(adminDashboard?.checkItems)
     ? adminDashboard.checkItems
     : [
         { label: "신규 접수", count: todayReceiptCount ?? 0 },
-        { label: "미종결 감염병 보고", count: activeInfectionCount ?? 0 },
       ];
 
   return (
@@ -71,18 +69,12 @@ export default function AdminPage({ roadmap = { enabled: false, adminOnly: true,
           <Badge type="pink">관리자 전용</Badge>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3">
           <SummaryCard
             label="오늘 신규 접수"
             value={countText(todayReceiptCount)}
             description="개별 건강검진 확인서 제출, 채용검진 요청, 인바디 신청의 오늘 신규 합계입니다."
             tone="blue"
-          />
-          <SummaryCard
-            label="미종결 감염병 보고"
-            value={countText(activeInfectionCount)}
-            description="신규, 확인 중, 관리 중, 복귀 확인 필요 건을 감염병 보고 관리에서 확인합니다."
-            tone="pink"
           />
           <SummaryCard
             label="최근 제출 현황"

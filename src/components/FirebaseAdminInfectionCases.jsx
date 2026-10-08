@@ -16,7 +16,6 @@ function FieldLabel({ children, htmlFor }) {
     </label>
   );
 }
-
 export function SummaryRow({ items }) {
   return (
     <section className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5" aria-label="감염병 사례 요약">
@@ -29,7 +28,6 @@ export function SummaryRow({ items }) {
     </section>
   );
 }
-
 function StatusChip({ label, tone = "info" }) {
   const className =
     tone === "case"
@@ -50,10 +48,10 @@ function Recommendation({ infectionCase }) {
   );
 }
 
-function CaseStatusSelect({ caseStatus, disabled, onChange }) {
+function CaseStatusSelect({ ariaLabel, caseStatus, disabled, onChange }) {
   return (
     <select
-      aria-label="사례 상태 변경"
+      aria-label={ariaLabel}
       value={caseStatus}
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
@@ -80,9 +78,9 @@ function DetailItem({ label, value }) {
 export function InfectionCaseCard({ infectionCase, pendingAction, onCaseStatusChange, onReview }) {
   const student = infectionCase.student || {};
   const infection = infectionCase.infection || {};
-  const submitter = infectionCase.submittedBy || {};
   const isPending = pendingAction === infectionCase.id;
   const isSubmitted = infectionCase.submissionStatus === INFECTION_SUBMISSION_STATUS.submitted;
+  const caseLabel = `${student.grade || "-"}학년 ${student.classNo || "-"}반 ${student.number || "-"}번 ${student.name || "학생"}`;
 
   return (
     <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 shadow-[var(--shh-soft-shadow)]">
@@ -102,6 +100,7 @@ export function InfectionCaseCard({ infectionCase, pendingAction, onCaseStatusCh
           {isSubmitted && (
             <button
               type="button"
+              aria-label={`${caseLabel} 보고 확인완료`}
               onClick={() => onReview(infectionCase.id)}
               disabled={isPending}
               className="min-h-10 rounded-[9px] bg-[#20A982] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#178C6C] focus:outline-none focus:ring-4 focus:ring-[#20A982]/15 disabled:cursor-not-allowed disabled:opacity-50"
@@ -110,6 +109,7 @@ export function InfectionCaseCard({ infectionCase, pendingAction, onCaseStatusCh
             </button>
           )}
           <CaseStatusSelect
+            ariaLabel={`${caseLabel} 사례 상태 변경`}
             caseStatus={infectionCase.caseStatus}
             disabled={isPending}
             onChange={(nextStatus) => onCaseStatusChange(infectionCase.id, nextStatus)}
@@ -124,14 +124,15 @@ export function InfectionCaseCard({ infectionCase, pendingAction, onCaseStatusCh
       <dl className="mt-4 grid gap-3 border-t border-[#DDEAE7] pt-4 sm:grid-cols-2 lg:grid-cols-4">
         <DetailItem label="진단일" value={infection.diagnosisDate} />
         <DetailItem label="등교중지 기간" value={`${infection.exclusionStartDate || "-"} ~ ${infection.exclusionEndDate || "-"}`} />
-        <DetailItem label="제출일" value={infectionCase.submittedAtLabel} />
-        <DetailItem label="제출자" value={submitter.displayName || submitter.email || "-"} />
+        <DetailItem label="접수일" value={infectionCase.submittedAtLabel} />
+        <DetailItem label="보고완료" value={isSubmitted ? "미완료" : "완료"} />
       </dl>
 
       {infectionCase.report?.note && (
-        <p className="mt-3 rounded-[8px] border border-[#DDEAE7] bg-[#F3F8F6] px-3 py-2 text-sm font-medium leading-5 text-[#627083]">
-          {infectionCase.report.note}
-        </p>
+        <div className="mt-3 rounded-[8px] border border-[#DDEAE7] bg-[#F3F8F6] px-3 py-2">
+          <p className="text-[12px] font-semibold text-[#627083]">비고</p>
+          <p className="mt-1 text-sm font-medium leading-5 text-[#102047]">{infectionCase.report.note}</p>
+        </div>
       )}
     </article>
   );
@@ -141,16 +142,18 @@ export function InfectionCaseFilters({
   caseStatus,
   classNo,
   grade,
+  diseaseName,
   includeClosed,
   searchText,
   onCaseStatusChange,
   onClassNoChange,
   onGradeChange,
+  onDiseaseNameChange,
   onIncludeClosedChange,
   onSearchTextChange,
 }) {
   return (
-    <div className="grid gap-3 md:grid-cols-[minmax(150px,1fr)_120px_120px_minmax(180px,1.4fr)_auto] md:items-end">
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(140px,1fr)_100px_100px_minmax(150px,1fr)_minmax(180px,1.4fr)_auto] lg:items-end">
       <div className="flex flex-col gap-1.5">
         <FieldLabel htmlFor="infection-case-status-filter">사례 상태</FieldLabel>
         <select
@@ -198,12 +201,23 @@ export function InfectionCaseFilters({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <FieldLabel htmlFor="infection-case-search">학생명 또는 감염병명</FieldLabel>
+        <FieldLabel htmlFor="infection-case-search">학생명</FieldLabel>
         <input
           id="infection-case-search"
           type="search"
           value={searchText}
           onChange={(event) => onSearchTextChange(event.target.value)}
+          className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm font-semibold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/15"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <FieldLabel htmlFor="infection-case-disease-filter">질환</FieldLabel>
+        <input
+          id="infection-case-disease-filter"
+          type="search"
+          value={diseaseName}
+          onChange={(event) => onDiseaseNameChange(event.target.value)}
           className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm font-semibold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/15"
         />
       </div>
@@ -219,23 +233,4 @@ export function InfectionCaseFilters({
       </label>
     </div>
   );
-}
-
-function matchesText(infectionCase, searchText) {
-  const keyword = searchText.trim().toLowerCase();
-  if (!keyword) return true;
-
-  const student = infectionCase.student || {};
-  const infection = infectionCase.infection || {};
-  return [student.name, infection.diseaseName].some((value) => String(value || "").toLowerCase().includes(keyword));
-}
-
-export function filterCases(cases, filters) {
-  return cases.filter((infectionCase) => {
-    const student = infectionCase.student || {};
-    const matchesStatus = filters.caseStatus === ALL_CASE_STATUS || infectionCase.caseStatus === filters.caseStatus;
-    const matchesGrade = !filters.grade || String(student.grade || "") === filters.grade;
-    const matchesClassNo = !filters.classNo || String(student.classNo || "") === filters.classNo.trim();
-    return matchesStatus && matchesGrade && matchesClassNo && matchesText(infectionCase, filters.searchText);
-  });
 }

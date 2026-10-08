@@ -12,8 +12,7 @@ const SHEET_NAMES = {
   portalResources: "앱_건강정보/이벤트",
   portalMessages: "앱_메신저문구",
   portalFaqs: "앱_FAQ",
-  portalRoadmap: "앱_업무로드맵",
-  infectionManagement: "학생 감염병 관리 현황"
+  portalRoadmap: "앱_업무로드맵"
 };
 
 const HEALTH_ROOM_SUBJECT_SCOPE = "today";
@@ -65,7 +64,6 @@ const HEALTH_ROOM_BACKUP = {
     SHEET_NAMES.portalCheckups,
     SHEET_NAMES.portalEducations,
     SHEET_NAMES.portalStudentCare,
-    SHEET_NAMES.infectionManagement,
     "응답_심폐소생술이수증",
     "응답_결핵검진확인증",
     "응답_채용검진확인요청"
@@ -255,12 +253,6 @@ function doGet(e) {
     if (action === "getAdminReceiptSummary") {
       return jsonOutput_(getAdminReceiptSummary_(e.parameter || {}));
     }
-    if (action === "getAdminInfectionReports") {
-      return jsonOutput_(getAdminInfectionReports_(e.parameter || {}));
-    }
-    if (action === "updateAdminInfectionReportStatus") {
-      return jsonOutput_(updateAdminInfectionReportStatus_(e.parameter || {}));
-    }
     if (action === "getHealthRoomLocation") {
       return jsonOutput_(healthRoomApiError_("보건실 소재 확인은 Firebase 로그인 후 앱 내부 조회 화면을 이용해 주세요.", "legacy getHealthRoomLocation action"));
     }
@@ -343,32 +335,10 @@ function doPost(e) {
     if (payload.action === "getAdminReceiptSummary") {
       return jsonOutput_(getAdminReceiptSummary_(payload));
     }
-    if (payload.action === "getAdminInfectionReports") {
-      return jsonOutput_(getAdminInfectionReports_(payload));
-    }
-    if (payload.action === "updateAdminInfectionReportStatus") {
-      return jsonOutput_(updateAdminInfectionReportStatus_(payload));
-    }
-
     if (payload.type === "student-file" || payload.submissionType === "student-file") {
       const result = appendStudentFileSubmission_(payload);
       return ContentService.createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (payload.action === "infectionReport") {
-      try {
-        const result = appendInfectionReport_(payload);
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      } catch (error) {
-        Logger.log("infectionReport error: " + error);
-        return ContentService.createTextOutput(JSON.stringify({
-          success: false,
-          result: "error",
-          message: "감염병 발생 보고 저장 중 오류가 발생했습니다."
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
     }
 
     const { sheetName, folderId, fields, fileName, fileBase64, fileMimeType } = payload;
@@ -524,133 +494,6 @@ function findHeaderIndex_(headers, candidates) {
     if (index !== -1) return index;
   }
   return -1;
-}
-
-function appendInfectionReport_(payload) {
-  const grade = String(payload.grade || "").trim();
-  const classNumber = String(payload.classNumber || "").trim();
-  const studentNumber = String(payload.studentNumber || "").trim();
-  const studentName = String(payload.studentName || "").trim();
-  const diseaseType = String(payload.diseaseType || "").trim();
-  const diseaseEtc = String(payload.diseaseEtc || "").trim();
-  const diagnosisDate = String(payload.diagnosisDate || "").trim();
-  const exclusionStartDate = String(payload.exclusionStartDate || "").trim();
-  const exclusionEndDate = String(payload.exclusionEndDate || "").trim();
-  const memo = String(payload.memo || "").trim();
-
-  if (!grade || !classNumber || !studentNumber || !studentName || !diseaseType || !diagnosisDate) {
-    return { success: false, result: "error", message: "학년, 반, 번호, 학생 이름, 감염병 종류, 진단일은 필수입니다." };
-  }
-  if (diseaseType === "기타" && !diseaseEtc) {
-    return { success: false, result: "error", message: "기타 감염병명을 입력해 주세요." };
-  }
-
-  const diseaseName = diseaseType === "기타" ? diseaseEtc : diseaseType;
-  const ss = getSpreadsheet_();
-  const sheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
-  if (!sheet) {
-    return { success: false, result: "error", message: SHEET_NAMES.infectionManagement + " 탭을 찾을 수 없습니다." };
-  }
-
-  const diagnosisKey = dateKey_(diagnosisDate);
-  const rows = sheet.getDataRange().getDisplayValues();
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    if (
-      normalizeKey_(row[2]) === normalizeKey_(grade) &&
-      normalizeKey_(row[3]) === normalizeKey_(classNumber) &&
-      normalizeKey_(row[4]) === normalizeKey_(studentNumber) &&
-      normalizeKey_(row[5]) === normalizeKey_(studentName) &&
-      normalizeKey_(row[6]) === normalizeKey_(diseaseName) &&
-      dateKey_(row[7]) === diagnosisKey
-    ) {
-      return { success: false, result: "error", message: "이미 같은 내용의 감염병 발생 보고가 접수되어 있습니다." };
-    }
-  }
-
-  const targetRow = findFirstEmptyInfectionRow_(sheet);
-  ensureInfectionRowFormula_(sheet, targetRow, 1);
-  ensureInfectionRowFormula_(sheet, targetRow, 13);
-  prepareInfectionInputRow_(sheet, targetRow);
-
-  sheet.getRange(targetRow, 2, 1, 11).setValues([[
-    new Date(),
-    grade,
-    classNumber,
-    studentNumber,
-    studentName,
-    diseaseName,
-    parseDateValue_(diagnosisDate),
-    parseDateValue_(exclusionStartDate),
-    parseDateValue_(exclusionEndDate),
-    false,
-    memo
-  ]]);
-  sheet.getRange(targetRow, 2).setNumberFormat("yyyy-MM-dd HH:mm:ss");
-  sheet.getRange(targetRow, 8, 1, 3).setNumberFormat("yyyy-MM-dd");
-  sheet.getRange(targetRow, 11).setValue(false);
-  if (!sheet.getRange(targetRow, 13).getFormulaR1C1()) {
-    sheet.getRange(targetRow, 13).setValue(monthKey_(diagnosisDate));
-  }
-
-  return { success: true, result: "success", message: "감염병 발생 보고가 제출되었습니다." };
-}
-
-function normalizeKey_(value) {
-  return String(value || "").trim().replace(/\s+/g, "").toUpperCase();
-}
-
-function dateKey_(value) {
-  const text = String(value || "").trim();
-  const match = text.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-  if (!match) return text;
-  return match[1] + "-" + String(Number(match[2])).padStart(2, "0") + "-" + String(Number(match[3])).padStart(2, "0");
-}
-
-function monthKey_(value) {
-  const key = dateKey_(value);
-  const match = key.match(/^(\d{4})-(\d{2})-\d{2}$/);
-  return match ? match[1] + "-" + match[2] : "";
-}
-
-function parseDateValue_(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  const match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!match) return text;
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-}
-
-function findFirstEmptyInfectionRow_(sheet) {
-  const startRow = 5;
-  const lastRow = Math.max(sheet.getLastRow(), startRow);
-  const values = sheet.getRange(startRow, 6, lastRow - startRow + 1, 3).getDisplayValues();
-  for (let i = 0; i < values.length; i++) {
-    const name = String(values[i][0] || "").trim();
-    const disease = String(values[i][1] || "").trim();
-    const diagnosisDate = String(values[i][2] || "").trim();
-    if (!name && !disease && !diagnosisDate) return startRow + i;
-  }
-  return lastRow + 1;
-}
-
-function ensureInfectionRowFormula_(sheet, row, column) {
-  const currentFormula = sheet.getRange(row, column).getFormulaR1C1();
-  if (currentFormula) return;
-
-  const startRow = 5;
-  for (let sourceRow = row - 1; sourceRow >= startRow; sourceRow--) {
-    const formula = sheet.getRange(sourceRow, column).getFormulaR1C1();
-    if (formula) {
-      sheet.getRange(sourceRow, column).copyTo(sheet.getRange(row, column), SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
-      return;
-    }
-  }
-}
-
-function prepareInfectionInputRow_(sheet, row) {
-  sheet.getRange(row, 2, 1, 9).clearDataValidations();
-  sheet.getRange(row, 12).clearDataValidations();
 }
 
 function getOrCreateSubmitSheet_(ss, sheetName) {
@@ -2251,23 +2094,14 @@ function buildAdminDashboardSummary_(ss) {
     if (!recentReceiptAt || receivedAt > recentReceiptAt) recentReceiptAt = receivedAt;
   });
 
-  let activeInfectionCount = 0;
-  const infectionSheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
-  if (infectionSheet) {
-    const infectionResponse = buildAdminInfectionReportsResponse_(infectionSheet);
-    activeInfectionCount = Number(infectionResponse.summary && infectionResponse.summary.activeCount || 0);
-  }
-
   const roadmapTaskCount = countAdminRoadmapTasks_(ss);
 
   return {
     todayReceiptCount: todayReceiptCount,
-    activeInfectionCount: activeInfectionCount,
     recentReceiptAt: recentReceiptAt,
     roadmapTaskCount: roadmapTaskCount,
     checkItems: [
       { label: "신규 접수", count: todayReceiptCount },
-      { label: "미종결 감염병 보고", count: activeInfectionCount },
       { label: "확인 필요한 제출", count: todayReceiptCount }
     ]
   };
@@ -2448,145 +2282,6 @@ function parseAdminReceiptDateTime_(value, displayText) {
 
 function formatAdminReceiptDateTime_(date) {
   return "최근 접수 " + Utilities.formatDate(date, TIMEZONE, "yyyy-MM-dd HH:mm");
-}
-
-function getAdminInfectionReports_(params) {
-  const access = verifyAdminMasterAccess_(params);
-  if (!access.ok) return access.error;
-
-  const ss = getSpreadsheet_();
-  const sheet = ss.getSheetByName(SHEET_NAMES.infectionManagement);
-  if (!sheet) {
-    return {
-      success: false,
-      result: "error",
-      message: SHEET_NAMES.infectionManagement + " 탭을 찾을 수 없습니다."
-    };
-  }
-
-  ensureInfectionStatusColumn_(sheet);
-  return buildAdminInfectionReportsResponse_(sheet);
-}
-
-function buildAdminInfectionReportsResponse_(sheet) {
-  const values = sheet.getDataRange().getDisplayValues();
-  const today = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");
-  const items = [];
-  for (let i = 4; i < values.length; i++) {
-    const row = values[i] || [];
-    const name = String(row[5] || "").trim();
-    const disease = String(row[6] || "").trim();
-    const diagnosisDate = String(row[7] || "").trim();
-    if (!name && !disease && !diagnosisDate) continue;
-
-    const state = getInfectionReportState_(row, today);
-    const receivedAt = String(row[1] || "").trim();
-    const diagnosisKey = normalizeDateText_(diagnosisDate);
-    const receivedKey = normalizeDateText_(receivedAt);
-    const reportComplete = isTruthy_(row[10]);
-    const memo = String(row[11] || "").trim();
-
-    items.push({
-      id: String(i + 1),
-      receivedAt: receivedAt,
-      occurredAt: diagnosisDate,
-      grade: String(row[2] || "").trim(),
-      classNumber: String(row[3] || "").trim(),
-      studentNumber: String(row[4] || "").trim(),
-      diseaseType: disease,
-      diagnosisDate: diagnosisDate,
-      exclusionStartDate: String(row[8] || "").trim(),
-      exclusionEndDate: String(row[9] || "").trim(),
-      status: state,
-      homeroomNoticeStatus: reportComplete ? "보고 완료" : "시트 확인",
-      memoStatus: memo ? "메모 있음 - 원본 시트 확인" : "메모 없음",
-      sortKey: receivedKey || diagnosisKey || ""
-    });
-  }
-
-  items.sort(function(a, b) {
-    return String(b.sortKey || "").localeCompare(String(a.sortKey || ""));
-  });
-
-  const summary = {
-    todayNewCount: 0,
-    activeCount: 0,
-    returnCheckCount: 0,
-    closedCount: 0
-  };
-
-  items.forEach(function(item) {
-    if (normalizeDateText_(item.receivedAt) === today) summary.todayNewCount += 1;
-    if (item.status === "복귀 확인 필요") summary.returnCheckCount += 1;
-    if (item.status === "종결") summary.closedCount += 1;
-    else summary.activeCount += 1;
-  });
-
-  return {
-    success: true,
-    result: "success",
-    updatedAt: Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss"),
-    summary: summary,
-    items: items
-  };
-}
-
-function getInfectionReportState_(row, today) {
-  const savedStatus = String(row[13] || "").trim();
-  if (isValidInfectionStatus_(savedStatus)) return savedStatus;
-
-  if (isTruthy_(row[10])) return "종결";
-
-  const receivedDate = normalizeDateText_(row[1]);
-  const startDate = normalizeDateText_(row[8]);
-  const endDate = normalizeDateText_(row[9]);
-
-  if (endDate && endDate < today) return "복귀 확인 필요";
-  if (startDate || endDate) return "관리 중";
-  if (receivedDate === today) return "신규";
-  return "확인 중";
-}
-
-function updateAdminInfectionReportStatus_(params) {
-  const rowId = Number(params.rowId || 0);
-  const status = String(params.status || "").trim();
-  const access = verifyAdminMasterAccess_(params);
-  if (!access.ok) return access.error;
-  if (!rowId || rowId < 5) {
-    return { success: false, result: "error", message: "상태를 변경할 보고 행을 찾을 수 없습니다." };
-  }
-  if (!isValidInfectionStatus_(status)) {
-    return { success: false, result: "error", message: "변경할 수 없는 상태값입니다." };
-  }
-
-  const sheet = getSpreadsheet_().getSheetByName(SHEET_NAMES.infectionManagement);
-  if (!sheet || rowId > sheet.getLastRow()) {
-    return { success: false, result: "error", message: "원본 감염병 보고 행을 찾을 수 없습니다." };
-  }
-
-  const row = sheet.getRange(rowId, 1, 1, 14).getDisplayValues()[0] || [];
-  const hasReport = String(row[5] || "").trim() || String(row[6] || "").trim() || String(row[7] || "").trim();
-  if (!hasReport) {
-    return { success: false, result: "error", message: "원본 감염병 보고 행이 비어 있습니다." };
-  }
-
-  ensureInfectionStatusColumn_(sheet);
-  sheet.getRange(rowId, 14).setValue(status);
-
-  return buildAdminInfectionReportsResponse_(sheet);
-}
-
-function ensureInfectionStatusColumn_(sheet) {
-  const headerRow = 4;
-  const statusColumn = 14;
-  const header = String(sheet.getRange(headerRow, statusColumn).getDisplayValue() || "").trim();
-  if (!header) {
-    sheet.getRange(headerRow, statusColumn).setValue("관리상태");
-  }
-}
-
-function isValidInfectionStatus_(status) {
-  return ["신규", "확인 중", "관리 중", "복귀 확인 필요", "종결"].indexOf(String(status || "").trim()) !== -1;
 }
 
 function parseTbRegistrationDate_(value, boundary) {

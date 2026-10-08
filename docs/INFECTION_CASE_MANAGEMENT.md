@@ -6,8 +6,8 @@
 
 | 영역 | 현재 route/API/data | 역할 | 비고 |
 | --- | --- | --- | --- |
-| v1 공개 제출 | `/upload` 감염병 발생 보고 | Apps Script `infectionReport` action으로 Sheet에 신규 보고 기록 | Google Sheet `학생 감염병 관리 현황`에 저장 |
-| v1 관리자 | `/admin/infections`, `/admin/infection-reports` | Sheet 기반 감염병 목록 조회와 관리상태 변경 | `/api/health-room-status` bridge를 통해 Apps Script 호출 |
+| 기존 공개 제출 | `/upload` 감염병 발생 보고 | 신규 제출 차단 후 Firebase 제출 화면 안내 | Sheet 신규 기록 없음 |
+| 기존 관리자 route | `/admin/infections`, `/admin/infection-reports` | `/firebase-admin/infections`로 이동 | Sheet 관리자 API 사용 안 함 |
 | v2 제출 | `/firebase-submit/infection` | Firestore `student_health_submissions`에 신규 보고 생성 | 담임 또는 보건교사 권한 필요 |
 | v2 관리자 | `/firebase-admin/submissions?tab=infection` | Firestore 감염병 보고 처리 상태 관리 | 현재 일반 제출 관리 화면의 tab으로 포함 |
 | dashboard | `/firebase-dashboard` | `report.status == "submitted"` 기준으로 미처리 감염병 집계 | 사례 관리 상태는 아직 별도 집계하지 않음 |
@@ -18,11 +18,7 @@
 
 신규 감염병 보고와 사례 관리는 Firestore `student_health_submissions`를 primary/master로 전환한다.
 
-Google Sheet `학생 감염병 관리 현황`은 장기적으로 다음 역할로 축소한다.
-
-- 기존 v1 과거 데이터 archive
-- 보건교사용 export/reference
-- migration 전환 기간 동안의 read-only 확인 자료
+Google Sheet `학생 감염병 관리 현황`은 Firestore에 없는 legacy 행의 migration 검토가 끝날 때까지만 read-only로 보존한다. 신규 제출, 상태 변경, 관리자 조회, 통계에는 사용하지 않는다.
 
 양방향 동기화는 원칙적으로 금지한다. 감염병 데이터는 학생 건강정보이므로, 같은 사례가 Sheet와 Firestore에서 서로 다른 상태로 수정되는 구조를 만들면 충돌과 개인정보 복제 위험이 커진다.
 
@@ -345,24 +341,15 @@ dry-run, duplicate detection, count parity를 거쳐 미종결 또는 최근 사
 
 충분한 운영 기간 후 모든 query와 UI가 새 상태 모델을 사용하면 `report.status` 의존을 제거한다.
 
-## 19. Legacy Sheet Write 제거 조건
+## 19. Legacy Sheet 제거 조건
 
-`updateAdminInfectionReportStatus`를 장기적으로 제거하려면 다음 조건이 충족되어야 한다.
-
-- 신규 감염병 보고가 Firestore로만 생성됨
-- 보건교사 관리 workflow가 `/firebase-admin/infections`에서 동등하거나 더 좋게 제공됨
-- 미종결 v1 사례가 Firestore로 selective migration됨
-- 과거 Sheet 자료는 read-only archive로 조회 가능함
-- dashboard가 새 상태 모델 기준으로 정상 집계됨
-- 운영자가 일정 기간 Sheet 상태 변경 없이 업무를 완료함
-
-조건 충족 전에는 endpoint를 바로 삭제하지 않는다.
+신규 감염병 보고, 상태 변경, 관리자 조회와 통계는 Firestore로 일원화했다. Sheet 탭 삭제 전에는 Firestore 문서 ID가 없는 legacy 행을 건별 검토하고, 자동 추정 없이 migration 승인 여부를 결정한다. Firestore에 없는 행이 1건이라도 남아 있으면 탭을 삭제하지 않는다.
 
 ## 20. Decision List
 
-구현 Phase로 넘어가기 전에 다음 결정을 확정해야 한다.
+현재 운영 정책과 구현 상태는 다음과 같다.
 
-1. `admin` role에 감염병 상세 read/write를 허용할지, summary만 허용할지
+1. 현재 학기 `health_teacher`와 `admin` role은 감염병 상세 조회와 상태 변경을 할 수 있다.
 2. `/firebase-admin/infections` 별도 route를 만들지
 3. `caseStatus` 자동 추천을 UI 계산으로만 둘지, 별도 저장 필드로 둘지
 4. 과거 데이터 migration 범위를 미종결만으로 할지, 현재 학년도 최근 사례까지 포함할지
@@ -383,12 +370,14 @@ dry-run, duplicate detection, count parity를 거쳐 미종결 또는 최근 사
 
 이 순서가 가장 안전하다. 상태 모델을 먼저 병행 저장하면 이후 UI, dashboard, migration을 작게 나누어 검증할 수 있다.
 
-## 22. Google Sheet 운영 projection
+## 22. Firestore-only 운영
 
 - Firestore `student_health_submissions`가 감염병 사례의 유일한 원본(Source of Truth)이다.
-- Google Sheet `학생 감염병 관리 현황`은 Firestore 내용을 조회·집계하기 위한 단방향 운영 projection이다.
-- Sheet에서 수정한 값은 Firestore로 역동기화되지 않는다.
-- Firestore 제출 또는 관리자 상태 변경이 성공한 뒤 Sheet projection을 시도한다. Projection 실패는 이미 완료된 Firestore 제출이나 상태 변경을 무효화하지 않는다.
-- Projection 행은 Google Sheets developer metadata에 저장한 Firestore 문서 ID로 식별한다. ID가 없는 기존 수기 행은 수정하거나 삭제하지 않는다.
-- 관리자 권한의 `syncInfectionSheet` dry-run/apply 작업으로 전체 Firestore 사례를 다시 동기화할 수 있다. Dry-run은 건수만 반환하며 학생 개인정보를 반환하지 않는다.
-- A열 연번과 M열 월 수식, K열 보고완료 체크박스, O열 이후 집계 영역은 projection에서 덮어쓰지 않는다. 신규 행의 K열만 기존 입력 규칙에 맞춰 `false`로 초기화하며, metadata만 생성되고 값 쓰기가 중단된 신규 projection 행도 재시도 시 같은 초기화를 복구한다.
+- 신규 제출과 관리자 상태 변경은 Google Sheet projection을 수행하지 않는다.
+- `/firebase-admin/infections`에서 전체·관리 중·종결·보고 미완료 건수, 월별·질환별 집계, 학생별 목록과 검색·학년·상태·질환 필터를 제공한다.
+- 기존 Apps Script 감염병 제출·조회·상태 변경·대시보드 집계 경로는 사용하지 않는다.
+- 학생 건강정보 상세 접근은 기존 `health_teacher` 중심 Firestore Rules와 관리자 화면 권한 정책을 유지한다.
+
+### 2026-10-08 migration gate
+
+2026-10-08 운영 대조 결과 Sheet의 실데이터 1행은 Firestore 감염병 문서 1건과 학년·반·번호·성명·질환·진단일·등교중지 기간이 모두 일치했다. 중복 문서를 만들지 않고 기존 Firestore 문서에 `legacyImported`, `legacySource`, `legacyImportedAt`, `sourceSheetName`, `legacySourceRow` metadata를 추가해 명시적으로 보존했다. 대조와 검증 출력에는 학생 개인정보를 포함하지 않았다. Production에서 Firestore-only 코드와 관리자 조회·통계가 확인되고 workbook 참조가 0건일 때에만 legacy Sheet 탭을 삭제한다.
