@@ -1,10 +1,12 @@
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "./firebase.js";
 import { normalizeTbScreening } from "./tbScreeningStatusModel.js";
+import { CPR_TRAINING_TASK_ID, normalizeCprTraining } from "./cprTrainingStatusModel.js";
 
 export const STAFF_STATUS_TASK_IDS = ["tb-screening-2026", "cpr-training-2026", "health-mandatory-training-2026"];
 export const HEALTH_MANDATORY_TRAINING_TASK_ID = "health-mandatory-training-2026";
 export const TB_SCREENING_TASK_ID = "tb-screening-2026";
+export { CPR_TRAINING_TASK_ID };
 
 export const STAFF_STATUS_LABELS = {
   incomplete: "미완료",
@@ -69,6 +71,7 @@ function normalizeStatus(documentSnapshot) {
     sourceType: data.sourceType || "",
     syncedAt: data.syncedAt || null,
     screening: normalizeTbScreening(data.screening),
+    training: normalizeCprTraining(data.training),
   };
 }
 
@@ -137,6 +140,7 @@ export async function getMyStaffSubmissionStatus(staffId) {
         action: TASK_ACTIONS[task.taskId] || null,
         syncedAt: statusItem?.syncedAt || null,
         screening: task.taskId === TB_SCREENING_TASK_ID ? normalizeTbScreening(statusItem?.screening) : null,
+        training: task.taskId === CPR_TRAINING_TASK_ID ? normalizeCprTraining(statusItem?.training) : null,
       };
     })
     .filter((item) => item.status !== "not_applicable")

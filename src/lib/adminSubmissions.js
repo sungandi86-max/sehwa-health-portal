@@ -140,7 +140,8 @@ export async function updateStaffSubmissionStatus(submission, status) {
 
   const submissionId = typeof submission === "string" ? submission : submission?.id;
   if (!submissionId) throw new Error("제출 기록을 확인할 수 없습니다.");
-  if (typeof submission === "string" || submission?.itemId !== "tb" || !submission?.staffId) {
+  const statusTaskId = submission?.itemId === "tb" ? "tb-screening-2026" : submission?.itemId === "cpr" ? "cpr-training-2026" : "";
+  if (typeof submission === "string" || !statusTaskId || !submission?.staffId) {
     await updateDoc(doc(db, STAFF_COLLECTION, submissionId), {
       status,
       updatedAt: serverTimestamp(),
@@ -149,17 +150,39 @@ export async function updateStaffSubmissionStatus(submission, status) {
   }
 
   const mappedStatus = status === "completed" ? "completed" : status === "rejected" ? "incomplete" : "pending";
+  if (submission.itemId === "cpr" && status !== "completed") {
+    const current = await getDoc(doc(db, "staff_submission_status", `${submission.staffId}_${statusTaskId}`));
+    if (current.exists() && current.data()?.status === "completed" && current.data()?.training?.completionMethod === "group") {
+      await updateDoc(doc(db, STAFF_COLLECTION, submissionId), { status, updatedAt: serverTimestamp() });
+      return;
+    }
+  }
   const batch = writeBatch(db);
   batch.update(doc(db, STAFF_COLLECTION, submissionId), {
     status,
     updatedAt: serverTimestamp(),
   });
-  batch.set(doc(db, "staff_submission_status", `${submission.staffId}_tb-screening-2026`), {
+  const statusPayload = submission.itemId === "tb" ? {
     staffId: submission.staffId,
-    taskId: "tb-screening-2026",
+    taskId: statusTaskId,
     status: mappedStatus,
     sourceType: "portal_certificate_review",
     screening: { completed: status === "completed", registrationStatus: status },
+  } : {
+    staffId: submission.staffId,
+    taskId: statusTaskId,
+    status: mappedStatus,
+    sourceType: "portal_certificate_review",
+    training: {
+      completionMethod: "individual",
+      completionDate: status === "completed" ? submission.trainingDate || "" : "",
+      eventId: "",
+      evidenceStatus: status,
+      note: status === "completed" ? "외부·개별 이수 확인" : status === "rejected" ? "이수증 보완 필요" : "이수증 확인 중",
+    },
+  };
+  batch.set(doc(db, "staff_submission_status", `${submission.staffId}_${statusTaskId}`), {
+    ...statusPayload,
     syncedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }, { merge: true });

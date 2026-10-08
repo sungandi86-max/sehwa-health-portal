@@ -11,6 +11,7 @@ import {
 import { reconcileCurrentTaskStatusItems } from "./staffSubmissionStatusCurrentSummary.js";
 import { buildTbAdminSummary, buildTbCurrentStaffItems, normalizeTbScreening } from "./tbScreeningStatusModel.js";
 import { getTbAdminUpdate } from "./tbScreeningStatusModel.js";
+import { buildCprAdminSummary, buildCprCurrentStaffItems, CPR_TRAINING_TASK_ID, normalizeCprTraining } from "./cprTrainingStatusModel.js";
 
 const ASSIGNMENT_LIMIT = 500;
 const STAFF_DIRECTORY_API = "/api/firebase/staff-directory";
@@ -50,6 +51,7 @@ function normalizeStatus(documentSnapshot) {
     sourceType: data.sourceType || "",
     syncedAt: data.syncedAt || null,
     screening: normalizeTbScreening(data.screening),
+    training: normalizeCprTraining(data.training),
   };
 }
 
@@ -264,6 +266,13 @@ export async function getAdminStaffSubmissionStatusOverview() {
           : allItems,
         preservedOrphans: tbOrphans.length,
       }
+      : task.taskId === CPR_TRAINING_TASK_ID
+        ? {
+          items: directoryResult.status === "success"
+            ? [...buildCprCurrentStaffItems(directoryItems, allItems), ...tbOrphans]
+            : allItems,
+          preservedOrphans: tbOrphans.length,
+        }
       : reconcileCurrentTaskStatusItems({
         taskId: task.taskId,
         items: allItems,
@@ -289,6 +298,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
         latestSyncedAtLabel: formatSyncedAt(latestSyncedAt),
         preservedOrphans: currentSummary.preservedOrphans,
         ...(task.taskId === TB_SCREENING_TASK_ID ? buildTbAdminSummary(items) : {}),
+        ...(task.taskId === CPR_TRAINING_TASK_ID ? buildCprAdminSummary(items) : {}),
       },
     }];
   });

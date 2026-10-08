@@ -345,6 +345,18 @@ service cloud.firestore {
           ]);
       }
 
+      function isValidCprTrainingStatus() {
+        return request.resource.data.staffId is string
+          && request.resource.data.taskId == "cpr-training-2026"
+          && statusId == request.resource.data.staffId + "_" + request.resource.data.taskId
+          && request.resource.data.status in ["incomplete", "pending", "unknown", "completed", "not_applicable"]
+          && request.resource.data.training is map
+          && request.resource.data.training.keys().hasOnly([
+            "completionMethod", "completionDate", "eventId", "evidenceStatus", "note"
+          ])
+          && request.resource.data.training.completionMethod in ["group", "individual", "none", "unknown"];
+      }
+
       allow read: if hasCurrentHealthTeacherOrAdminAssignment()
         || (
           hasCurrentStudentCarePublicAssignment()
@@ -352,9 +364,10 @@ service cloud.firestore {
           && get(currentAssignmentPath(request.auth.uid)).data.staffId is string
           && resource.data.staffId == get(currentAssignmentPath(request.auth.uid)).data.staffId
         );
-      allow create: if hasCurrentHealthTeacherOrAdminAssignment() && isValidTbScreeningStatus();
+      allow create: if hasCurrentHealthTeacherOrAdminAssignment()
+        && (isValidTbScreeningStatus() || isValidCprTrainingStatus());
       allow update: if hasCurrentHealthTeacherOrAdminAssignment()
-        && isValidTbScreeningStatus()
+        && (isValidTbScreeningStatus() || isValidCprTrainingStatus())
         && request.resource.data.staffId == resource.data.staffId
         && request.resource.data.taskId == resource.data.taskId;
       allow delete: if false;
@@ -401,6 +414,7 @@ service cloud.firestore {
         return request.resource.data.itemId == "cpr"
           && request.resource.data.keys().hasOnly([
             "itemId",
+            "staffId",
             "submitter",
             "trainingDate",
             "institution",
@@ -409,7 +423,9 @@ service cloud.firestore {
             "status",
             "submittedAt",
             "updatedAt"
-          ]);
+          ])
+          && request.resource.data.staffId is string
+          && request.resource.data.staffId == get(currentAssignmentPath(request.auth.uid)).data.staffId;
       }
 
       function isValidTbSubmission() {

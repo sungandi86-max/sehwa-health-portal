@@ -21,30 +21,31 @@ export function isCompletedTbStatus(statusData, staffId) {
   );
 }
 
-export async function verifyTbSubmissionAllowed(req) {
+export async function verifyCurrentStaffSubmissionIdentity(req) {
   const idToken = getBearerToken(req);
   if (!idToken) return { ok: false, status: 401, message: "로그인이 필요합니다." };
-
   let decodedToken;
-  try {
-    decodedToken = await getFirebaseAdminAuth().verifyIdToken(idToken);
-  } catch {
-    return { ok: false, status: 401, message: "로그인 정보를 확인하지 못했습니다." };
-  }
-
+  try { decodedToken = await getFirebaseAdminAuth().verifyIdToken(idToken); }
+  catch { return { ok: false, status: 401, message: "로그인 정보를 확인하지 못했습니다." }; }
   try {
     const db = getFirebaseAdminDb();
-    const assignmentSnapshot = await db.collection("user_assignments").doc(getAssignmentId(decodedToken.uid)).get();
-    if (!assignmentSnapshot.exists) {
-      return { ok: false, status: 403, message: "현재 학기 교직원 정보 연결이 필요합니다." };
-    }
-
-    const assignment = assignmentSnapshot.data();
+    const snapshot = await db.collection("user_assignments").doc(getAssignmentId(decodedToken.uid)).get();
+    const assignment = snapshot.exists ? snapshot.data() : null;
     const staffId = String(assignment?.staffId || "").trim();
-    if (assignment?.active !== true || (assignment?.uid && assignment.uid !== decodedToken.uid) || !staffId) {
+    if (!assignment || assignment.active !== true || (assignment.uid && assignment.uid !== decodedToken.uid) || !staffId) {
       return { ok: false, status: 403, message: "현재 학기 교직원 정보 연결이 필요합니다." };
     }
+    return { ok: true, db, staffId };
+  } catch {
+    return { ok: false, status: 503, message: "교직원 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+}
 
+export async function verifyTbSubmissionAllowed(req) {
+  const identity = await verifyCurrentStaffSubmissionIdentity(req);
+  if (!identity.ok) return identity;
+  try {
+    const { db, staffId } = identity;
     const statusSnapshot = await db
       .collection("staff_submission_status")
       .doc(`${staffId}_${TB_SCREENING_TASK_ID}`)

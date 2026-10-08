@@ -50,7 +50,7 @@ Google Sheet: `2026학년도 보건실 업무`
 Relevant tabs:
 
 - `교직원 결핵검진현황`
-- `교직원 심폐소생술 연수 이수`
+- CPR 운영 상태는 Firestore `staff_submission_status/{staffId}_cpr-training-2026`를 사용한다. 과거 `교직원 심폐소생술 연수 이수` 탭은 migration 승인 전 legacy 대조 자료로만 유지한다.
 - `교직원명단`
 - `제출항목관리`
 - `제출기록`
@@ -347,17 +347,18 @@ Not required in projection:
 
 Source:
 
-- `health_sheet`
-- Sheet: `2026학년도 보건실 업무`
-- Tab: `교직원 심폐소생술 연수 이수`
+- `firestore`
+- Document: `staff_submission_status/{staffId}_cpr-training-2026`
+- School group completion: active CPR event signature from the training center
+- External/individual completion: reviewed `staff_submissions` CPR certificate
 
 Completion rule:
 
-- `확인상태 == "확인완료"`
+- school group: active signature for a CPR-titled event
+- external/individual: administrator review status `completed`
 
-Training method such as school group training or external training may be shown
-if it already exists in the health-office source and is useful for the user
-action.
+The legacy CPR status tab remains read-only migration evidence until the
+candidate mapping is approved. Runtime code must not read or write it.
 
 ### Health-Related Legal Training
 
@@ -564,8 +565,8 @@ Each task has exactly one primary source.
 
 Examples:
 
-- `tb-screening-2026` -> `health_sheet`
-- `cpr-training-2026` -> `health_sheet`
+- `tb-screening-2026` -> `firestore`
+- `cpr-training-2026` -> `firestore` (교육센터 단체 출석 + 외부 이수증 관리자 검토)
 - `health-mandatory-training-2026` -> `research_sheet`
 - `external-training-cert` -> `firestore_submission`
 
@@ -652,7 +653,7 @@ different privacy boundary.
 
 ### Phase 4: CPR Status Projection
 
-- Read `교직원 심폐소생술 연수 이수`.
+- Legacy migration 감사에서만 `교직원 심폐소생술 연수 이수`를 읽는다. runtime은 읽거나 쓰지 않는다.
 - Build `staff_submission_status` for the CPR task.
 - Compare counts and representative user statuses.
 

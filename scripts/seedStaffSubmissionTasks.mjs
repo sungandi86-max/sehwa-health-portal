@@ -23,15 +23,9 @@ const staffSubmissionTasks = [
     title: "심폐소생술 연수",
     description: null,
     category: "training",
-    sourceType: "health_sheet",
-    sourceConfig: {
-      spreadsheetName: "2026학년도 보건실 업무",
-      sheetName: "교직원 심폐소생술 연수 이수",
-    },
-    completionRule: {
-      field: "확인상태",
-      completedValue: "확인완료",
-    },
+    sourceType: "firestore",
+    sourceConfig: null,
+    completionRule: null,
     targetType: "all_staff",
     dueDate: null,
     enabled: true,

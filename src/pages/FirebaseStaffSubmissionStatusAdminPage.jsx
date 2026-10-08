@@ -3,7 +3,8 @@ import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGa
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPanel.jsx";
 import { getAdminStaffSubmissionStatusOverview, updateAdminTbScreeningStatus } from "../lib/staffSubmissionStatusAdmin.js";
-import { isHealthMandatoryTrainingTask, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
+import { CPR_TRAINING_TASK_ID, isHealthMandatoryTrainingTask, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
+import { CPR_METHOD_LABELS } from "../lib/cprTrainingStatusModel.js";
 import { TB_LATENT_STATUS_LABELS, TB_SCREENING_TYPE_LABELS, TB_TARGET_STATUS_LABELS } from "../lib/tbScreeningStatusModel.js";
 
 const STATUS_FILTERS = [
@@ -84,6 +85,7 @@ function TaskSummary({ task, selected, onSelect }) {
 function FilterBar({ filters, options, selectedTask, onChange }) {
   const statusFilters = isHealthMandatoryTrainingTask(selectedTask?.taskId) ? RESEARCH_STATUS_FILTERS : STATUS_FILTERS;
   const isTbTask = selectedTask?.taskId === TB_SCREENING_TASK_ID;
+  const isCprTask = selectedTask?.taskId === CPR_TRAINING_TASK_ID;
 
   return (
     <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
@@ -103,6 +105,13 @@ function FilterBar({ filters, options, selectedTask, onChange }) {
             className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]" aria-label="검진유형 필터">
             <option value="all">검진유형 전체</option>
             {Object.entries(TB_SCREENING_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        )}
+        {isCprTask && (
+          <select value={filters.cprMethod} onChange={(event) => onChange({ ...filters, cprMethod: event.target.value })}
+            className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]" aria-label="이수방법 필터">
+            <option value="all">이수방법 전체</option>
+            {Object.entries(CPR_METHOD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         )}
         <select
@@ -167,6 +176,13 @@ function StaffRow({ item, isTbTask, pending, onTbSave }) {
           </div>
         </details>
       )}
+      {item.taskId === CPR_TRAINING_TASK_ID && (
+        <dl className="grid gap-2 rounded-[8px] bg-[#F7FBF9] p-3 text-[12px] sm:col-span-4 sm:grid-cols-3">
+          <div><dt className="font-semibold text-[#627083]">이수방법</dt><dd className="mt-0.5 font-semibold text-[#102047]">{CPR_METHOD_LABELS[item.training?.completionMethod] || "확인 필요"}</dd></div>
+          <div><dt className="font-semibold text-[#627083]">이수일·교육일</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.training?.completionDate || "-"}</dd></div>
+          <div><dt className="font-semibold text-[#627083]">안내</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.training?.note || "-"}</dd></div>
+        </dl>
+      )}
     </article>
   );
 }
@@ -188,8 +204,9 @@ function filterItems(items, filters) {
     const departmentMatch = filters.department === "all" || item.department === filters.department;
     const positionMatch = filters.position === "all" || item.position === filters.position;
     const screeningTypeMatch = filters.screeningType === "all" || item.screening?.screeningType === filters.screeningType;
+    const cprMethodMatch = filters.cprMethod === "all" || item.training?.completionMethod === filters.cprMethod;
     const searchMatch = !search || normalizeText(item.realName).includes(search);
-    return statusMatch && departmentMatch && positionMatch && screeningTypeMatch && searchMatch;
+    return statusMatch && departmentMatch && positionMatch && screeningTypeMatch && cprMethodMatch && searchMatch;
   });
 }
 
@@ -207,7 +224,7 @@ function getDefaultStatusFilter(task) {
 function AdminStatusContent({ displayName }) {
   const [overview, setOverview] = useState(null);
   const [selectedTaskId, setSelectedTaskId] = useState("tb-screening-2026");
-  const [filters, setFilters] = useState({ status: "incomplete", department: "all", position: "all", screeningType: "all", search: "" });
+  const [filters, setFilters] = useState({ status: "incomplete", department: "all", position: "all", screeningType: "all", cprMethod: "all", search: "" });
   const [state, setState] = useState({ status: "loading", message: "" });
   const [pendingStaffId, setPendingStaffId] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -280,7 +297,7 @@ function AdminStatusContent({ displayName }) {
                 selected={task.taskId === selectedTask.taskId}
                 onSelect={() => {
                   setSelectedTaskId(task.taskId);
-                  setFilters((current) => ({ ...current, status: getDefaultStatusFilter(task), department: "all", position: "all", screeningType: "all", search: "" }));
+                  setFilters((current) => ({ ...current, status: getDefaultStatusFilter(task), department: "all", position: "all", screeningType: "all", cprMethod: "all", search: "" }));
                 }}
               />
             ))}
@@ -295,6 +312,17 @@ function AdminStatusContent({ displayName }) {
               <SummaryCell label="개별검진" value={selectedTask.summary.individual} />
               <SummaryCell label="공단검진" value={selectedTask.summary.national} />
               <SummaryCell label="미신청" value={selectedTask.summary.unregistered} tone="text-[#9A5B00]" />
+              <SummaryCell label="제외·휴직" value={selectedTask.summary.excluded} />
+            </section>
+          )}
+          {selectedTask.taskId === CPR_TRAINING_TASK_ID && (
+            <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <SummaryCell label="전체 대상자" value={selectedTask.summary.target} />
+              <SummaryCell label="이수완료" value={selectedTask.summary.completed} tone="text-[#08754B]" />
+              <SummaryCell label="미이수" value={selectedTask.summary.incomplete} tone="text-[#9A5B00]" />
+              <SummaryCell label="학교 단체교육" value={selectedTask.summary.group} />
+              <SummaryCell label="외부·개별 이수" value={selectedTask.summary.individual} />
+              <SummaryCell label="확인 필요" value={selectedTask.summary.needsCheck} tone="text-[#3154A3]" />
               <SummaryCell label="제외·휴직" value={selectedTask.summary.excluded} />
             </section>
           )}

@@ -1,11 +1,12 @@
 import fetch from "node-fetch";
-import { isTbScreeningSubmission, verifyTbSubmissionAllowed } from "../server/lib/tbSubmissionGuard.js";
+import { isTbScreeningSubmission, verifyCurrentStaffSubmissionIdentity, verifyTbSubmissionAllowed } from "../server/lib/tbSubmissionGuard.js";
 import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 import {
   buildTbCertificateStatus,
   buildTbRegistrationStatus,
   saveTbScreeningStatus,
 } from "../server/lib/tbScreeningStatus.js";
+import { buildCprExternalSubmissionStatus, saveCprTrainingStatus } from "../server/lib/cprTrainingStatus.js";
 
 const SCRIPT_URL =
   process.env.GAS_URL ||
@@ -29,6 +30,10 @@ function isLegacyInfectionSubmit(payload) {
 
 function isSuccessfulResponse(payload) {
   return payload?.status === "success" || payload?.success === true || payload?.ok === true;
+}
+
+function isCprSubmission(payload) {
+  return payload?.type === "cpr" || payload?.sheetName === "응답_심폐소생술이수증";
 }
 
 function buildTbStatusPayload(payload, staffId) {
@@ -69,11 +74,16 @@ export default async function handler(req, res) {
     }
 
     let tbGuard = null;
+    let cprIdentity = null;
     if (isTbScreeningSubmission(payload)) {
       tbGuard = await verifyTbSubmissionAllowed(req);
       if (!tbGuard.ok) {
         return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
       }
+    }
+    if (isCprSubmission(payload)) {
+      cprIdentity = await verifyCurrentStaffSubmissionIdentity(req);
+      if (!cprIdentity.ok) return res.status(cprIdentity.status).json({ status: "error", success: false, message: cprIdentity.message });
     }
 
     const scriptRes = await fetch(SCRIPT_URL, {
@@ -108,6 +118,22 @@ export default async function handler(req, res) {
         });
       }
       json = { ...json, staffId: tbGuard.staffId };
+    }
+    if (cprIdentity && isSuccessfulResponse(json)) {
+      try {
+        await saveCprTrainingStatus({
+          db: cprIdentity.db,
+          payload: buildCprExternalSubmissionStatus({
+            staffId: cprIdentity.staffId,
+            trainingDate: payload?.fields?.completionDate,
+            submissionStatus: "submitted",
+          }),
+        });
+      } catch {
+        console.error("[CPR_STATUS_WRITE] Firestore status update failed.");
+        return res.status(503).json({ status: "error", success: false, message: "이수증은 접수되었지만 CPR 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요." });
+      }
+      json = { ...json, staffId: cprIdentity.staffId };
     }
     return res.status(200).json(json);
   } catch (err) {

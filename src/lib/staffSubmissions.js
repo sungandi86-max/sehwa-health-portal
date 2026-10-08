@@ -43,7 +43,7 @@ async function postWithTimeout(payload) {
   const timeoutId = window.setTimeout(() => controller.abort(), DRIVE_UPLOAD_TIMEOUT_MS);
 
   try {
-    const idToken = payload?.type === "tb" ? await auth.currentUser?.getIdToken() : "";
+    const idToken = ["tb", "cpr"].includes(payload?.type) ? await auth.currentUser?.getIdToken() : "";
     const response = await fetch(SUBMIT_API_URL, {
       method: "POST",
       headers: {
@@ -164,6 +164,7 @@ export async function createCprSubmission({ user, trainingDate, institution, sta
 
   await saveStaffSubmission(submissionRef, {
     itemId: "cpr",
+    staffId: uploadResult.staffId,
     submitter: {
       uid: submitter.uid,
       email: submitter.email,

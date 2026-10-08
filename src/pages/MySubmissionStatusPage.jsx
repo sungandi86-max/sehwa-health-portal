@@ -6,8 +6,10 @@ import {
   getMyStaffSubmissionStatus,
   getStaffSubmissionStatusEligibility,
   isHealthMandatoryTrainingTask,
+  CPR_TRAINING_TASK_ID,
   TB_SCREENING_TASK_ID,
 } from "../lib/staffSubmissionStatus.js";
+import { CPR_METHOD_LABELS } from "../lib/cprTrainingStatusModel.js";
 import {
   TB_LATENT_STATUS_LABELS,
   TB_SCREENING_TYPE_LABELS,
@@ -48,6 +50,7 @@ function StatusBadge({ status, label }) {
 function StatusRow({ item }) {
   const isResearchTask = isHealthMandatoryTrainingTask(item.taskId);
   const isTbTask = item.taskId === TB_SCREENING_TASK_ID;
+  const isCprTask = item.taskId === CPR_TRAINING_TASK_ID;
 
   return (
     <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
@@ -81,6 +84,14 @@ function StatusRow({ item }) {
               <div><dt className="font-semibold text-[#627083]">검진 완료</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.status === "completed" ? "완료" : "미완료"}</dd></div>
               <div><dt className="font-semibold text-[#627083]">검진일</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.screening.screeningDate || "확인 필요"}</dd></div>
               <div><dt className="font-semibold text-[#627083]">안내·비고</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.screening.note || "별도 안내 없음"}</dd></div>
+            </dl>
+          )}
+          {isCprTask && item.training && (
+            <dl className="mt-3 grid gap-2 rounded-[8px] border border-[#DDEAE7] bg-[#F7FBF9] p-3 text-[12px] sm:grid-cols-3">
+              <div><dt className="font-semibold text-[#627083]">이수 여부</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.status === "completed" ? "이수완료" : item.status === "pending" ? "확인 중" : "미이수"}</dd></div>
+              <div><dt className="font-semibold text-[#627083]">이수방법</dt><dd className="mt-0.5 font-semibold text-[#102047]">{CPR_METHOD_LABELS[item.training.completionMethod]}</dd></div>
+              <div><dt className="font-semibold text-[#627083]">이수일·교육일</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.training.completionDate || "확인 필요"}</dd></div>
+              <div className="sm:col-span-3"><dt className="font-semibold text-[#627083]">안내</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.training.note || "학교 단체교육 출석 또는 외부 이수증 확인 후 반영됩니다."}</dd></div>
             </dl>
           )}
         </div>

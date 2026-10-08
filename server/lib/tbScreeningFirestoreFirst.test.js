@@ -25,6 +25,7 @@ test("Apps Script keeps the raw response tab without name-based master updates",
 test("Firestore rules keep self reads staffId-bound and admin writes role-bound", async () => {
   const source = await readFile("firestore.rules", "utf8");
   assert.equal(source.includes("resource.data.staffId == get(currentAssignmentPath(request.auth.uid)).data.staffId"), true);
-  assert.equal(source.includes("allow create: if hasCurrentHealthTeacherOrAdminAssignment() && isValidTbScreeningStatus()"), true);
+  assert.equal(source.includes("allow create: if hasCurrentHealthTeacherOrAdminAssignment()"), true);
+  assert.equal(source.includes("isValidTbScreeningStatus() || isValidCprTrainingStatus()"), true);
   assert.equal(source.includes("allow delete: if false"), true);
 });

@@ -16,9 +16,9 @@
     "migrate:faqs": "node scripts/migrateFaqsToFirestore.mjs",
     "migrate:health-resources": "node scripts/migrateHealthResourcesToFirestore.mjs",
     "migrate:submission-items": "node scripts/migrateSubmissionItemsToFirestore.mjs",
+    "migrate:cpr-training-status": "node scripts/migrateCprTrainingStatus.mjs",
     "seed:staff-submission-tasks": "node scripts/seedStaffSubmissionTasks.mjs",
     "map:staff-ids": "node scripts/mapStaffIdsToUsers.mjs",
-    "sync:cpr-training-status": "node scripts/syncCprTrainingStatus.mjs",
     "seed:firebase-content": "node scripts/seedFirebaseContent.mjs",
     "preview": "vite preview"
   },

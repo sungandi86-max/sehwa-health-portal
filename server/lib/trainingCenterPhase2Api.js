@@ -12,6 +12,7 @@ import { signatureStorageYear, SignatureStorageError } from "./trainingSignature
 import { recordRosterPdfVerification } from "./trainingSignatureLifecycle.js";
 import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 import { requireTrainingEnvironment, TrainingDeploymentError } from "./trainingDeployment.js";
+import { reconcileCprTrainingStatus, saveCompletedCprGroupTraining } from "./cprTrainingStatus.js";
 
 function bad(res, status, message, code = "") {
   return res.status(status).json({ ok: false, ...(code ? { code } : {}), message });
@@ -73,6 +74,8 @@ function createSignatureRecord(event, staffId, { fileId = "", method = "qr", act
 
 export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = getFirebaseAdminDb, directory = readStaffDirectory,
   store = trainingCenterStore, rosterPdf = trainingRosterPdfRenderer,
+  saveCprGroupStatus = saveCompletedCprGroupTraining,
+  reconcileCprStatus = reconcileCprTrainingStatus,
   secret = () => process.env.TRAINING_QR_SECRET || "", now = () => new Date() } = {}) {
   return async function handleTrainingPhase2(req, res) {
     sendCors(res, "GET, POST, OPTIONS");
@@ -264,6 +267,8 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         let coordinationReconciled = true;
         try { await finishAttendance(reservation, "completed", { signatureIds: records.map((record) => record.signatureId) }); }
         catch (error) { coordinationReconciled = false; logAttendanceFailure(error, "LOCK_FINALIZE", events.length); }
+        try { await saveCprGroupStatus({ db: access.db, staffId: access.assignment.staffId, events }); }
+        catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: events.length })); }
         return res.status(200).json({ ok: true, eventIds: events.map((event) => event.eventId), signedAt: records[0]["서명일시"], coordinationReconciled });
       }
       if (["training-attendance-summary", "training-final-sheet"].includes(resource) && req.method === "GET") {
@@ -325,6 +330,9 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           const corrected = { ...active, "상태": "취소", "취소여부": "Y", "취소사유": reason, "정정자": access.assignment.staffId, "정정일시": now().toISOString() };
           await store.saveRow(SIGNATURE_SHEET, SIGNATURE_HEADERS, corrected, active.rowNumber);
           await cancelAttendanceLock(access.db, eventId, staffId, access.assignment.staffId);
+          const nextSource = { ...source, signatures: source.signatures.map((row) => row.signatureId === active.signatureId ? corrected : row) };
+          try { await reconcileCprStatus({ db: access.db, staffId, source: nextSource }); }
+          catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
         } else {
           if (active || truthy(target["제외여부"]) || !["대상", "교육 대상"].includes(target["대상상태"])) return bad(res, 409, "이미 출석했거나 현재 교육 대상이 아닙니다.");
           const reservation = await reserveAttendance(access.db, [eventId], staffId, now().getTime());
@@ -343,6 +351,8 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
             try { await finishAttendance(reservation, "completed", { signatureIds: [record.signatureId] }); }
             catch { console.warn("[training] correction coordination reconciliation needed"); }
           }
+          try { await saveCprGroupStatus({ db: access.db, staffId, events: [event] }); }
+          catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
         }
         return res.status(200).json({ ok: true });
       }
