@@ -1,4 +1,4 @@
-import { collection, getDocs, limit, query, where } from "firebase/firestore";
+import { collection, doc, getDocs, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { auth, db } from "./firebase.js";
 import {
@@ -6,8 +6,11 @@ import {
   STAFF_STATUS_LABELS,
   STAFF_STATUS_TASK_IDS,
   getStaffStatusLabel,
+  TB_SCREENING_TASK_ID,
 } from "./staffSubmissionStatus.js";
 import { reconcileCurrentTaskStatusItems } from "./staffSubmissionStatusCurrentSummary.js";
+import { buildTbAdminSummary, buildTbCurrentStaffItems, normalizeTbScreening } from "./tbScreeningStatusModel.js";
+import { getTbAdminUpdate } from "./tbScreeningStatusModel.js";
 
 const ASSIGNMENT_LIMIT = 500;
 const STAFF_DIRECTORY_API = "/api/firebase/staff-directory";
@@ -46,6 +49,7 @@ function normalizeStatus(documentSnapshot) {
     statusLabel: getStaffStatusLabel(status, data.taskId || ""),
     sourceType: data.sourceType || "",
     syncedAt: data.syncedAt || null,
+    screening: normalizeTbScreening(data.screening),
   };
 }
 
@@ -97,6 +101,8 @@ function normalizeCanonicalDirectoryItem(item) {
     realName: normalizeText(item?.name || item?.realName),
     department: normalizeText(item?.department),
     position: normalizeText(item?.position),
+    target: normalizeText(item?.target),
+    employmentStatus: normalizeText(item?.employmentStatus),
   };
 }
 
@@ -248,13 +254,26 @@ export async function getAdminStaffSubmissionStatusOverview() {
     const allItems = statusSnapshots[index].docs
       .map(normalizeStatus)
       .filter((item) => item.taskId === task.taskId);
-    const currentSummary = reconcileCurrentTaskStatusItems({
-      taskId: task.taskId,
-      items: allItems,
-      currentTargetStaffIds: currentTargetsResult.staffIds,
-    });
+    const directoryItems = [...directoryResult.directory.values()];
+    const directoryStaffIds = new Set(directoryItems.map((item) => item.staffId));
+    const tbOrphans = allItems.filter((item) => !directoryStaffIds.has(item.staffId));
+    const currentSummary = task.taskId === TB_SCREENING_TASK_ID
+      ? {
+        items: directoryResult.status === "success"
+          ? [...buildTbCurrentStaffItems(directoryItems, allItems), ...tbOrphans]
+          : allItems,
+        preservedOrphans: tbOrphans.length,
+      }
+      : reconcileCurrentTaskStatusItems({
+        taskId: task.taskId,
+        items: allItems,
+        currentTargetStaffIds: currentTargetsResult.staffIds,
+      });
     const items = currentSummary.items
-      .map((item) => decorateStatus(item, directoryResult.directory, assignmentDirectoryResult.directory))
+      .map((item) => ({
+        ...decorateStatus(item, directoryResult.directory, assignmentDirectoryResult.directory),
+        statusLabel: getStaffStatusLabel(item.status, task.taskId),
+      }))
       .sort(sortStatusItems);
     const summary = countStatuses(items);
     const latestSyncedAt = items.reduce((latest, item) => (toMillis(item.syncedAt) > toMillis(latest) ? item.syncedAt : latest), null);
@@ -269,6 +288,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
         displayIdentityLinked: items.filter((item) => item.hasDisplayIdentity).length,
         latestSyncedAtLabel: formatSyncedAt(latestSyncedAt),
         preservedOrphans: currentSummary.preservedOrphans,
+        ...(task.taskId === TB_SCREENING_TASK_ID ? buildTbAdminSummary(items) : {}),
       },
     }];
   });
@@ -279,4 +299,18 @@ export async function getAdminStaffSubmissionStatusOverview() {
     assignmentDirectoryStatus: assignmentDirectoryResult.status,
     healthMandatoryTrainingTargetStatus: currentTargetsResult.status,
   };
+}
+
+export async function updateAdminTbScreeningStatus(staffId, value) {
+  const normalizedStaffId = normalizeText(staffId);
+  if (!normalizedStaffId) throw new Error("교직원ID를 확인할 수 없습니다.");
+  const update = getTbAdminUpdate(value);
+  await setDoc(doc(db, "staff_submission_status", `${normalizedStaffId}_${TB_SCREENING_TASK_ID}`), {
+    staffId: normalizedStaffId,
+    taskId: TB_SCREENING_TASK_ID,
+    ...update,
+    sourceType: "admin_ui",
+    syncedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
 }

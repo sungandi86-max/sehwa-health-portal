@@ -6,7 +6,13 @@ import {
   getMyStaffSubmissionStatus,
   getStaffSubmissionStatusEligibility,
   isHealthMandatoryTrainingTask,
+  TB_SCREENING_TASK_ID,
 } from "../lib/staffSubmissionStatus.js";
+import {
+  TB_LATENT_STATUS_LABELS,
+  TB_SCREENING_TYPE_LABELS,
+  TB_TARGET_STATUS_LABELS,
+} from "../lib/tbScreeningStatusModel.js";
 
 const STATUS_TONES = {
   incomplete: "border-[#F3D8A8] bg-[#FFFDF7] text-[#9A5B00]",
@@ -41,6 +47,7 @@ function StatusBadge({ status, label }) {
 
 function StatusRow({ item }) {
   const isResearchTask = isHealthMandatoryTrainingTask(item.taskId);
+  const isTbTask = item.taskId === TB_SCREENING_TASK_ID;
 
   return (
     <article className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
@@ -65,6 +72,16 @@ function StatusRow({ item }) {
             <p className="mt-1.5 text-[12px] font-medium leading-5 text-[#9A5B00]">
               아직 이 항목의 확인 결과가 준비되지 않았습니다.
             </p>
+          )}
+          {isTbTask && item.screening && (
+            <dl className="mt-3 grid gap-2 rounded-[8px] border border-[#DDEAE7] bg-[#F7FBF9] p-3 text-[12px] sm:grid-cols-2 lg:grid-cols-3">
+              <div><dt className="font-semibold text-[#627083]">올해 검진 대상</dt><dd className="mt-0.5 font-semibold text-[#102047]">{TB_TARGET_STATUS_LABELS[item.screening.targetStatus]}</dd></div>
+              <div><dt className="font-semibold text-[#627083]">잠복결핵검진</dt><dd className="mt-0.5 font-semibold text-[#102047]">{TB_LATENT_STATUS_LABELS[item.screening.latentStatus]}</dd></div>
+              <div><dt className="font-semibold text-[#627083]">검진 유형</dt><dd className="mt-0.5 font-semibold text-[#102047]">{TB_SCREENING_TYPE_LABELS[item.screening.screeningType]}</dd></div>
+              <div><dt className="font-semibold text-[#627083]">검진 완료</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.status === "completed" ? "완료" : "미완료"}</dd></div>
+              <div><dt className="font-semibold text-[#627083]">검진일</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.screening.screeningDate || "확인 필요"}</dd></div>
+              <div><dt className="font-semibold text-[#627083]">안내·비고</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.screening.note || "별도 안내 없음"}</dd></div>
+            </dl>
           )}
         </div>
         {item.action && item.status !== "completed" && (

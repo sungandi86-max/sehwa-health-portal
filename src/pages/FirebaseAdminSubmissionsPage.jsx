@@ -308,7 +308,8 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
     setPendingId(submissionId);
     setActionState({ status: "loading", message: "상태를 저장하는 중입니다." });
     try {
-      await updateStaffSubmissionStatus(submissionId, status);
+      const submission = staffItems.find((item) => item.id === submissionId);
+      await updateStaffSubmissionStatus(submission || submissionId, status);
       await loadItems();
       setActionState({ status: "success", message: "제출 상태가 변경되었습니다." });
     } catch (error) {

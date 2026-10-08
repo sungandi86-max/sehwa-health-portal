@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPanel.jsx";
-import { getAdminStaffSubmissionStatusOverview } from "../lib/staffSubmissionStatusAdmin.js";
-import { isHealthMandatoryTrainingTask } from "../lib/staffSubmissionStatus.js";
+import { getAdminStaffSubmissionStatusOverview, updateAdminTbScreeningStatus } from "../lib/staffSubmissionStatusAdmin.js";
+import { isHealthMandatoryTrainingTask, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
+import { TB_LATENT_STATUS_LABELS, TB_SCREENING_TYPE_LABELS, TB_TARGET_STATUS_LABELS } from "../lib/tbScreeningStatusModel.js";
 
 const STATUS_FILTERS = [
   { value: "incomplete", label: "미완료" },
@@ -82,10 +83,11 @@ function TaskSummary({ task, selected, onSelect }) {
 
 function FilterBar({ filters, options, selectedTask, onChange }) {
   const statusFilters = isHealthMandatoryTrainingTask(selectedTask?.taskId) ? RESEARCH_STATUS_FILTERS : STATUS_FILTERS;
+  const isTbTask = selectedTask?.taskId === TB_SCREENING_TASK_ID;
 
   return (
     <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
-      <div className="grid gap-2 md:grid-cols-[1.2fr_1fr_1fr_1.4fr]">
+      <div className={`grid gap-2 ${isTbTask ? "md:grid-cols-5" : "md:grid-cols-[1.2fr_1fr_1fr_1.4fr]"}`}>
         <select
           value={filters.status}
           onChange={(event) => onChange({ ...filters, status: event.target.value })}
@@ -96,6 +98,13 @@ function FilterBar({ filters, options, selectedTask, onChange }) {
             <option key={filter.value} value={filter.value}>{filter.label}</option>
           ))}
         </select>
+        {isTbTask && (
+          <select value={filters.screeningType} onChange={(event) => onChange({ ...filters, screeningType: event.target.value })}
+            className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]" aria-label="검진유형 필터">
+            <option value="all">검진유형 전체</option>
+            {Object.entries(TB_SCREENING_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        )}
         <select
           value={filters.department}
           onChange={(event) => onChange({ ...filters, department: event.target.value })}
@@ -126,7 +135,13 @@ function FilterBar({ filters, options, selectedTask, onChange }) {
   );
 }
 
-function StaffRow({ item }) {
+function StaffRow({ item, isTbTask, pending, onTbSave }) {
+  const [form, setForm] = useState(() => ({ status: item.status, ...item.screening }));
+
+  useEffect(() => {
+    setForm({ status: item.status, ...item.screening });
+  }, [item]);
+
   return (
     <article className="grid gap-3 border-b border-[#DDEAE7] px-3 py-3 last:border-b-0 sm:grid-cols-[1.2fr_1fr_0.8fr_auto] sm:items-center">
       <div className="min-w-0">
@@ -138,6 +153,20 @@ function StaffRow({ item }) {
       <p className="text-[13px] font-semibold text-[#627083]">{item.department || "-"}</p>
       <p className="text-[13px] font-semibold text-[#627083]">{item.position || "-"}</p>
       <StatusBadge status={item.status} label={item.statusLabel} />
+      {isTbTask && (
+        <details className="rounded-[8px] bg-[#F7FBF9] p-3 text-[12px] sm:col-span-4">
+          <summary className="cursor-pointer font-semibold text-[#3154A3]">검진 상세 확인·수정</summary>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="grid gap-1 font-semibold text-[#627083]">대상 상태<select value={form.targetStatus} onChange={(event) => setForm({ ...form, targetStatus: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]">{Object.entries(TB_TARGET_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="grid gap-1 font-semibold text-[#627083]">잠복결핵검진<select value={form.latentStatus} onChange={(event) => setForm({ ...form, latentStatus: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]">{Object.entries(TB_LATENT_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="grid gap-1 font-semibold text-[#627083]">검진 유형<select value={form.screeningType} onChange={(event) => setForm({ ...form, screeningType: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]">{Object.entries(TB_SCREENING_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="grid gap-1 font-semibold text-[#627083]">완료 상태<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]"><option value="unknown">확인 필요</option><option value="incomplete">미검진</option><option value="pending">확인 중</option><option value="completed">검진 완료</option><option value="not_applicable">해당 없음</option></select></label>
+            <label className="grid gap-1 font-semibold text-[#627083]">검진일<input type="date" value={form.screeningDate} onChange={(event) => setForm({ ...form, screeningDate: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]" /></label>
+            <label className="grid gap-1 font-semibold text-[#627083] sm:col-span-2">안내·비고<input value={form.note} maxLength={200} onChange={(event) => setForm({ ...form, note: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]" /></label>
+            <button type="button" disabled={pending} onClick={() => onTbSave(item.staffId, form)} className="min-h-10 self-end rounded-[8px] bg-[#0D4EA6] px-3 font-semibold text-white disabled:opacity-50">{pending ? "저장 중" : "상태 저장"}</button>
+          </div>
+        </details>
+      )}
     </article>
   );
 }
@@ -158,8 +187,9 @@ function filterItems(items, filters) {
       (filters.status === "needs_check" && ["pending", "unknown"].includes(item.status));
     const departmentMatch = filters.department === "all" || item.department === filters.department;
     const positionMatch = filters.position === "all" || item.position === filters.position;
+    const screeningTypeMatch = filters.screeningType === "all" || item.screening?.screeningType === filters.screeningType;
     const searchMatch = !search || normalizeText(item.realName).includes(search);
-    return statusMatch && departmentMatch && positionMatch && searchMatch;
+    return statusMatch && departmentMatch && positionMatch && screeningTypeMatch && searchMatch;
   });
 }
 
@@ -177,8 +207,10 @@ function getDefaultStatusFilter(task) {
 function AdminStatusContent({ displayName }) {
   const [overview, setOverview] = useState(null);
   const [selectedTaskId, setSelectedTaskId] = useState("tb-screening-2026");
-  const [filters, setFilters] = useState({ status: "incomplete", department: "all", position: "all", search: "" });
+  const [filters, setFilters] = useState({ status: "incomplete", department: "all", position: "all", screeningType: "all", search: "" });
   const [state, setState] = useState({ status: "loading", message: "" });
+  const [pendingStaffId, setPendingStaffId] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
   const loadOverview = useCallback(async (options = {}) => {
     const shouldApply = options.shouldApply || (() => true);
     setState({ status: "loading", message: "" });
@@ -200,6 +232,21 @@ function AdminStatusContent({ displayName }) {
       });
     }
   }, []);
+
+  const handleTbSave = async (staffId, value) => {
+    setPendingStaffId(staffId);
+    setActionMessage("");
+    try {
+      await updateAdminTbScreeningStatus(staffId, value);
+      await loadOverview();
+      setActionMessage("결핵검진 상태를 저장했습니다.");
+    } catch (error) {
+      const safeValidationMessage = error instanceof Error && error.message.includes("확인해 주세요") ? error.message : "결핵검진 상태를 저장하지 못했습니다.";
+      setActionMessage(safeValidationMessage);
+    } finally {
+      setPendingStaffId("");
+    }
+  };
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -233,11 +280,24 @@ function AdminStatusContent({ displayName }) {
                 selected={task.taskId === selectedTask.taskId}
                 onSelect={() => {
                   setSelectedTaskId(task.taskId);
-                  setFilters((current) => ({ ...current, status: getDefaultStatusFilter(task), department: "all", position: "all", search: "" }));
+                  setFilters((current) => ({ ...current, status: getDefaultStatusFilter(task), department: "all", position: "all", screeningType: "all", search: "" }));
                 }}
               />
             ))}
           </section>
+
+          {selectedTask.taskId === TB_SCREENING_TASK_ID && (
+            <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <SummaryCell label="전체 대상자" value={selectedTask.summary.total} />
+              <SummaryCell label="검진완료" value={selectedTask.summary.completed} tone="text-[#08754B]" />
+              <SummaryCell label="미검진" value={selectedTask.summary.incomplete} tone="text-[#9A5B00]" />
+              <SummaryCell label="학교 단체검진" value={selectedTask.summary.group} />
+              <SummaryCell label="개별검진" value={selectedTask.summary.individual} />
+              <SummaryCell label="공단검진" value={selectedTask.summary.national} />
+              <SummaryCell label="미신청" value={selectedTask.summary.unregistered} tone="text-[#9A5B00]" />
+              <SummaryCell label="제외·휴직" value={selectedTask.summary.excluded} />
+            </section>
+          )}
 
           {overview.directoryStatus !== "success" && (
             <section className="rounded-[12px] border border-[#F3D8A8] bg-[#FFFDF7] p-4">
@@ -277,6 +337,7 @@ function AdminStatusContent({ displayName }) {
           )}
 
           <FilterBar filters={filters} options={filterOptions} selectedTask={selectedTask} onChange={setFilters} />
+          {actionMessage && <p className="rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2 text-[12px] font-semibold text-[#3154A3]">{actionMessage}</p>}
 
           <section className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white shadow-[var(--shh-soft-shadow)]">
             <div className="flex flex-col gap-2 border-b border-[#DDEAE7] bg-[#F3F8F6] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -284,7 +345,7 @@ function AdminStatusContent({ displayName }) {
               <p className="text-[12px] font-semibold text-[#627083]">표시 {filteredItems.length}명 / 조회 기준 {selectedTask.summary.total}명</p>
             </div>
             {filteredItems.length > 0 ? (
-              <div>{filteredItems.map((item) => <StaffRow key={item.id} item={item} />)}</div>
+              <div>{filteredItems.map((item) => <StaffRow key={item.id || item.staffId} item={item} isTbTask={selectedTask.taskId === TB_SCREENING_TASK_ID} pending={pendingStaffId === item.staffId} onTbSave={handleTbSave} />)}</div>
             ) : (
               <div className="px-4 py-8 text-center text-[13px] font-semibold text-[#627083]">
                 현재 선택한 조건에 해당하는 교직원이 없습니다.

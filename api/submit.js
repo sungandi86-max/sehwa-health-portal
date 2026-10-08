@@ -1,5 +1,11 @@
 import fetch from "node-fetch";
 import { isTbScreeningSubmission, verifyTbSubmissionAllowed } from "../server/lib/tbSubmissionGuard.js";
+import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
+import {
+  buildTbCertificateStatus,
+  buildTbRegistrationStatus,
+  saveTbScreeningStatus,
+} from "../server/lib/tbScreeningStatus.js";
 
 const SCRIPT_URL =
   process.env.GAS_URL ||
@@ -19,6 +25,24 @@ function parseJsonBody(rawBody) {
 
 function isLegacyInfectionSubmit(payload) {
   return payload?.action === "infectionReport" || payload?.type === "infection";
+}
+
+function isSuccessfulResponse(payload) {
+  return payload?.status === "success" || payload?.success === true || payload?.ok === true;
+}
+
+function buildTbStatusPayload(payload, staffId) {
+  if (payload?.type === "tb" || payload?.sheetName === "응답_결핵검진확인증") {
+    return buildTbCertificateStatus({
+      staffId,
+      checkupDate: payload?.fields?.checkupDate,
+      documentType: payload?.fields?.docType,
+    });
+  }
+  return buildTbRegistrationStatus({
+    staffId,
+    registrationType: payload?.fields?.registrationType,
+  });
 }
 
 export default async function handler(req, res) {
@@ -44,10 +68,11 @@ export default async function handler(req, res) {
       });
     }
 
+    let tbGuard = null;
     if (isTbScreeningSubmission(payload)) {
-      const guard = await verifyTbSubmissionAllowed(req);
-      if (!guard.ok) {
-        return res.status(guard.status).json({ status: "error", success: false, message: guard.message });
+      tbGuard = await verifyTbSubmissionAllowed(req);
+      if (!tbGuard.ok) {
+        return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
       }
     }
 
@@ -58,7 +83,6 @@ export default async function handler(req, res) {
     });
 
     const text = await scriptRes.text();
-    console.log("Apps Script response:", text.slice(0, 500));
     let json;
     try {
       json = JSON.parse(text);
@@ -68,6 +92,22 @@ export default async function handler(req, res) {
         success: false,
         message: "Apps Script 응답을 JSON으로 해석할 수 없습니다.",
       });
+    }
+    if (tbGuard && isSuccessfulResponse(json)) {
+      try {
+        await saveTbScreeningStatus({
+          db: getFirebaseAdminDb(),
+          payload: buildTbStatusPayload(payload, tbGuard.staffId),
+        });
+      } catch {
+        console.error("[TB_STATUS_WRITE] Firestore status update failed.");
+        return res.status(503).json({
+          status: "error",
+          success: false,
+          message: "신청 자료는 접수되었지만 결핵검진 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요.",
+        });
+      }
+      json = { ...json, staffId: tbGuard.staffId };
     }
     return res.status(200).json(json);
   } catch (err) {

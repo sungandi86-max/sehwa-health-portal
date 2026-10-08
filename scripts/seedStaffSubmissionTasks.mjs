@@ -10,15 +10,9 @@ const staffSubmissionTasks = [
     title: "교직원 결핵검진",
     description: null,
     category: "screening",
-    sourceType: "health_sheet",
-    sourceConfig: {
-      spreadsheetName: "2026학년도 보건실 업무",
-      sheetName: "교직원 결핵검진현황",
-    },
-    completionRule: {
-      field: "검진상태",
-      completedValue: "검진완료",
-    },
+    sourceType: "firestore",
+    sourceConfig: null,
+    completionRule: null,
     targetType: "all_staff",
     dueDate: null,
     enabled: true,

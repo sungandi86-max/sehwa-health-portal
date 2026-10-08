@@ -328,6 +328,23 @@ service cloud.firestore {
     }
 
     match /staff_submission_status/{statusId} {
+      function isValidTbScreeningStatus() {
+        return request.resource.data.staffId is string
+          && request.resource.data.taskId == "tb-screening-2026"
+          && statusId == request.resource.data.staffId + "_" + request.resource.data.taskId
+          && request.resource.data.status in ["incomplete", "pending", "unknown", "completed", "not_applicable"]
+          && request.resource.data.screening is map
+          && request.resource.data.screening.keys().hasOnly([
+            "targetStatus",
+            "latentStatus",
+            "screeningType",
+            "completed",
+            "screeningDate",
+            "note",
+            "registrationStatus"
+          ]);
+      }
+
       allow read: if hasCurrentHealthTeacherOrAdminAssignment()
         || (
           hasCurrentStudentCarePublicAssignment()
@@ -335,7 +352,12 @@ service cloud.firestore {
           && get(currentAssignmentPath(request.auth.uid)).data.staffId is string
           && resource.data.staffId == get(currentAssignmentPath(request.auth.uid)).data.staffId
         );
-      allow write: if false;
+      allow create: if hasCurrentHealthTeacherOrAdminAssignment() && isValidTbScreeningStatus();
+      allow update: if hasCurrentHealthTeacherOrAdminAssignment()
+        && isValidTbScreeningStatus()
+        && request.resource.data.staffId == resource.data.staffId
+        && request.resource.data.taskId == resource.data.taskId;
+      allow delete: if false;
     }
 
     match /student_care_monthly_aggregates/{aggregateId} {
@@ -394,6 +416,7 @@ service cloud.firestore {
         return request.resource.data.itemId == "tb"
           && request.resource.data.keys().hasOnly([
             "itemId",
+            "staffId",
             "submitter",
             "checkupDate",
             "documentType",
@@ -402,7 +425,9 @@ service cloud.firestore {
             "status",
             "submittedAt",
             "updatedAt"
-          ]);
+          ])
+          && request.resource.data.staffId is string
+          && request.resource.data.staffId == get(currentAssignmentPath(request.auth.uid)).data.staffId;
       }
 
       function hasValidRecruitConfirmations() {
@@ -438,7 +463,7 @@ service cloud.firestore {
       allow read: if signedIn()
         && (
           resource.data.submitter.uid == request.auth.uid
-          || hasCurrentHealthTeacherAssignment()
+          || hasCurrentHealthTeacherOrAdminAssignment()
         );
       allow create: if signedIn()
         && (
@@ -448,7 +473,7 @@ service cloud.firestore {
         && request.resource.data.status == "submitted"
         && request.resource.data.submitter.uid == request.auth.uid
         && request.resource.data.submitter.email == request.auth.token.email;
-      allow update: if hasCurrentHealthTeacherAssignment()
+      allow update: if hasCurrentHealthTeacherOrAdminAssignment()
         && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "updatedAt"]);
       allow delete: if false;
     }

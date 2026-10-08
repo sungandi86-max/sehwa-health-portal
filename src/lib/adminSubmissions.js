@@ -1,4 +1,4 @@
-import { collection, getDoc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc, where } from "firebase/firestore";
+import { collection, getDoc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
 import {
@@ -135,13 +135,35 @@ export async function getInfectionReports({ status = "" } = {}) {
   return filterByStatus(reports, status).sort((left, right) => right.submittedAtMillis - left.submittedAtMillis);
 }
 
-export async function updateStaffSubmissionStatus(submissionId, status) {
+export async function updateStaffSubmissionStatus(submission, status) {
   if (!STAFF_STATUS_OPTIONS.includes(status)) throw new Error("지원하지 않는 제출 상태입니다.");
 
-  await updateDoc(doc(db, STAFF_COLLECTION, submissionId), {
+  const submissionId = typeof submission === "string" ? submission : submission?.id;
+  if (!submissionId) throw new Error("제출 기록을 확인할 수 없습니다.");
+  if (typeof submission === "string" || submission?.itemId !== "tb" || !submission?.staffId) {
+    await updateDoc(doc(db, STAFF_COLLECTION, submissionId), {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+
+  const mappedStatus = status === "completed" ? "completed" : status === "rejected" ? "incomplete" : "pending";
+  const batch = writeBatch(db);
+  batch.update(doc(db, STAFF_COLLECTION, submissionId), {
     status,
     updatedAt: serverTimestamp(),
   });
+  batch.set(doc(db, "staff_submission_status", `${submission.staffId}_tb-screening-2026`), {
+    staffId: submission.staffId,
+    taskId: "tb-screening-2026",
+    status: mappedStatus,
+    sourceType: "portal_certificate_review",
+    screening: { completed: status === "completed", registrationStatus: status },
+    syncedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+  await batch.commit();
 }
 
 export async function updateInfectionReportStatus(submissionId, status) {

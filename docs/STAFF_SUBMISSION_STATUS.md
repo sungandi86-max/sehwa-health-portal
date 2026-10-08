@@ -1,5 +1,19 @@
 # Staff Submission And Training Status Model
 
+## 2026-10-08 TB Firestore-First Update
+
+`tb-screening-2026`의 운영 master는 `staff_submission_status`이다. `교직원명단`의 canonical `staffId`만 identity join에 사용하며 이름, 이메일, 직책 조합으로 상태를 생성하거나 합치지 않는다. 단체검진 신청과 개인 확인증 제출은 인증된 현재 assignment의 `staffId`로 상태를 기록하고, `응답_교직원결핵검진유형선택`은 raw audit 탭으로만 유지한다. Apps Script는 더 이상 `교직원 결핵검진현황`을 읽거나 갱신하지 않는다.
+
+기존 `교직원 결핵검진현황` 대조 결과는 다음과 같다.
+
+- legacy data rows: 98
+- legacy rows containing canonical `staffId`: 0
+- exact `staffId` migration writes: 0
+- existing Firestore TB status documents: 77 (`completed` 54, `incomplete` 23)
+- detailed legacy fields that can be safely joined by `staffId`: 0
+
+따라서 legacy 98행은 자동 이관하지 않는다. 탭 삭제 전 명시적인 staffId 매핑 자료가 필요하며, Production 코드와 최신 Apps Script 반영 및 parity 재검증이 완료될 때까지 탭은 보존한다. 기존 아래의 Sheet projection 단계 설명은 역사적 설계 기록이며 TB의 현재 운영 절차가 아니다.
+
 This document freezes the design direction for unifying staff-facing
 submission, training, and screening status before implementation.
 

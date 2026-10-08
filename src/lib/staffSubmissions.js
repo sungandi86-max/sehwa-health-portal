@@ -204,6 +204,7 @@ export async function createTbSubmission({ user, checkupDate, documentType, staf
 
   await saveStaffSubmission(submissionRef, {
     itemId: "tb",
+    staffId: uploadResult.staffId,
     submitter: {
       uid: submitter.uid,
       email: submitter.email,
