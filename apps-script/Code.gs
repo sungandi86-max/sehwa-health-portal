@@ -4,14 +4,10 @@ const CURRENT_STUDENT_CARE_SEMESTER = 2;
 
 const SHEET_NAMES = {
   visit: "학생 보건실 입실현황",
-  portalNotices: "앱_공지",
   portalUploads: "앱_제출센터",
   portalCheckups: "앱_검진검사",
-  portalEducations: "앱_교육자료",
   portalStudentCare: "앱_학생건강관리",
-  portalResources: "앱_건강정보/이벤트",
-  portalMessages: "앱_메신저문구",
-  portalFaqs: "앱_FAQ"
+  portalMessages: "앱_메신저문구"
 };
 
 const HEALTH_ROOM_SUBJECT_SCOPE = "today";
@@ -58,10 +54,8 @@ const HEALTH_ROOM_BACKUP = {
   sourceMimeType: "application/vnd.google-apps.spreadsheet",
   expectedSheets: [
     SHEET_NAMES.visit,
-    SHEET_NAMES.portalNotices,
     SHEET_NAMES.portalUploads,
     SHEET_NAMES.portalCheckups,
-    SHEET_NAMES.portalEducations,
     SHEET_NAMES.portalStudentCare,
     "응답_심폐소생술이수증",
     "응답_결핵검진확인증",
@@ -2339,15 +2333,13 @@ function getPortalData_(options) {
 
   if (scope === "home") {
     const cache = CacheService.getScriptCache();
-    const cached = cache.get("portal-home-v1");
+    const cached = cache.get("portal-home-v2");
     if (cached) return JSON.parse(cached);
 
     const home = Object.assign({}, base, {
-      notices: getNotices_(ss),
-      checkups: getCheckups_(ss),
-      educations: getEducations_(ss)
+      checkups: getCheckups_(ss)
     });
-    cache.put("portal-home-v1", JSON.stringify(home), 45);
+    cache.put("portal-home-v2", JSON.stringify(home), 45);
     return home;
   }
 
@@ -2364,14 +2356,10 @@ function getPortalData_(options) {
       managerNote:   "제출 자료 확인 및 세부 관리는 보건업무시트에서 별도로 진행됩니다."
     },
     tbConfig:    getPortalTbConfig_(),
-    notices:     getNotices_(ss),
     uploads:     getUploads_(ss),
     checkups:    getCheckups_(ss),
-    educations:  getEducations_(ss),
     studentCare: getStudentCare_(ss),
-    resources:   getResources_(ss),
-    messages:    getMessages_(ss),
-    faqs:        getFaqs_(ss)
+    messages:    getMessages_(ss)
   });
 }
 
@@ -2399,16 +2387,12 @@ function getPortalAppConfigValues_(keys) {
 }
 
 function getPortalFallbackData_(ss, base, type) {
-  if (type === "today") return Object.assign({}, base, { notices: getNotices_(ss) });
-  if (type === "faq") return Object.assign({}, base, { faqs: getFaqs_(ss) });
   if (type === "checkups") {
     return Object.assign({}, base, {
       tbConfig: getPortalTbConfig_(),
       checkups: getCheckups_(ss)
     });
   }
-  if (type === "education") return Object.assign({}, base, { educations: getEducations_(ss) });
-  if (type === "resources") return Object.assign({}, base, { resources: getResources_(ss) });
   return Object.assign({}, base, {});
 }
 
@@ -2692,23 +2676,6 @@ function getTitleLines_(row) {
 // 시트별 데이터 파싱
 // ════════════════════════════════════════════════════════════════
 
-function getNotices_(ss) {
-  const now = new Date();
-  return getRows_(ss, SHEET_NAMES.portalNotices).filter(r => (
-    isVisibleByExposure_(r, now) &&
-    isCurrentPortalDisplayDate_(getValue_(r, ["일시"]), now)
-  )).map(r => ({
-    title:       getValue_(r, ["제목"]),
-    titleLines:  getTitleLines_(r),
-    date:        getValue_(r, ["일시"]),
-    target:      getValue_(r, ["대상"]),
-    description: getValue_(r, ["내용","설명"]),
-    actionText:  getValue_(r, ["이동안내","이동 안내"]),
-    status:      getValue_(r, ["상태"], "안내 중"),
-    badgeType:   getValue_(r, ["배지색"], "blue")
-  }));
-}
-
 function getUploads_(ss) {
   const now = new Date();
   return getRows_(ss, SHEET_NAMES.portalUploads).filter(r => isVisiblePortalUpload_(r, now)).map(r => ({
@@ -2756,23 +2723,6 @@ function getCheckups_(ss) {
   });
 }
 
-function getEducations_(ss) {
-  const now = new Date();
-  return getRows_(ss, SHEET_NAMES.portalEducations).filter(r => (
-    isVisibleByExposure_(r, now)
-  )).map(r => ({
-    title:        getValue_(r, ["교육명","제목"]),
-    target:       getValue_(r, ["대상"]),
-    duration:     getValue_(r, ["소요시간","시간"]),
-    schedule:     getValue_(r, ["일정"]),
-    description:  getValue_(r, ["설명"]),
-    confirmation: getValue_(r, ["확인방법"]),
-    buttonText:   getValue_(r, ["버튼명"]),
-    url:          getValue_(r, ["링크"]),
-    status:       getValue_(r, ["상태"], "자료")
-  }));
-}
-
 function getStudentCare_(ss) {
   return getRows_(ss, SHEET_NAMES.portalStudentCare).map(r => {
     const title = getValue_(r, ["제목"]);
@@ -2805,28 +2755,11 @@ function getStudentCare_(ss) {
   });
 }
 
-function getResources_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalResources).map(r => ({
-    title:       getValue_(r, ["제목"]),
-    category:    getValue_(r, ["카테고리"], "기타"),
-    description: getValue_(r, ["설명"]),
-    buttonText:  getValue_(r, ["버튼명"], "자료 열기"),
-    url:         getValue_(r, ["링크"])
-  }));
-}
-
 function getMessages_(ss) {
   return getRows_(ss, SHEET_NAMES.portalMessages).map(r => ({
     title:    getValue_(r, ["제목"]),
     category: getValue_(r, ["카테고리"], "기타"),
     content:  getValue_(r, ["문구"])
-  }));
-}
-
-function getFaqs_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalFaqs).map(r => ({
-    question: getValue_(r, ["질문"]),
-    answer:   getValue_(r, ["답변"])
   }));
 }
 
@@ -2839,11 +2772,7 @@ function testPortalData() {
   Logger.log(JSON.stringify({
     keys: Object.keys(portal),
     uploadCount: (portal.uploads || []).length,
-    noticeCount: (portal.notices || []).length,
-    checkupCount: (portal.checkups || []).length,
-    educationCount: (portal.educations || []).length,
-    resourceCount: (portal.resources || []).length,
-    faqCount: (portal.faqs || []).length
+    checkupCount: (portal.checkups || []).length
   }, null, 2));
 }
 

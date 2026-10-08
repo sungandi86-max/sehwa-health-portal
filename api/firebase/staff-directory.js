@@ -16,6 +16,7 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/fireb
 import { getAssignmentId, getBearerToken, readJsonBody, readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../../server/lib/staffDirectory.js";
 import { handleTrainingResource } from "../../server/lib/trainingCenterApi.js";
 import { handlePortalRoadmapResource } from "../../server/lib/portalRoadmapApi.js";
+import { handlePortalCmsResource } from "../../server/lib/portalContentCmsApi.js";
 import { TRAINING_PHASE2_RESOURCES } from "../../server/lib/trainingCenterPhase2Resources.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
@@ -104,6 +105,10 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
 
     if (req.query?.resource === "portal-roadmap") {
       return await handlePortalRoadmapResource(req, res);
+    }
+
+    if (req.query?.resource === "portal-cms") {
+      return await handlePortalCmsResource(req, res);
     }
 
     if (["training-list", "training-detail"].includes(req.query?.resource)) {

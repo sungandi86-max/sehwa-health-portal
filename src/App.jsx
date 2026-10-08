@@ -18,6 +18,7 @@ const AdminMessageHelperPage = lazy(() => import("./pages/AdminMessageHelperPage
 const AdminPage = lazy(() => import("./pages/AdminPage.jsx"));
 const AdminReceiptStatusPage = lazy(() => import("./pages/AdminReceiptStatusPage.jsx"));
 const AdminRoadmapPage = lazy(() => import("./pages/AdminRoadmapPage.jsx"));
+const AdminContentPage = lazy(() => import("./pages/AdminContentPage.jsx"));
 const CheckupPage = lazy(() => import("./pages/CheckupPage.jsx"));
 const EducationPage = lazy(() => import("./pages/EducationPage.jsx"));
 const FAQPage = lazy(() => import("./pages/FAQPage.jsx"));
@@ -55,7 +56,7 @@ const FirebaseTrainingQrPage = lazy(() => import("./pages/FirebaseTrainingQrPage
 const FirebaseTrainingAttendanceAdminPage = lazy(() => import("./pages/FirebaseTrainingAttendanceAdminPage.jsx"));
 
 function portalScopeForPath(pathname) {
-  if (pathname === "/admin" || pathname === "/admin/roadmap") return "admin";
+  if (pathname === "/admin" || pathname === "/admin/roadmap" || pathname === "/admin/content") return "admin";
   return "";
 }
 
@@ -247,6 +248,7 @@ export default function App() {
                 <Route path="/firebase-admin/trainings/:eventId/final-sheet" element={<FirebaseTrainingAttendanceAdminPage finalSheet />} />
                 <Route path="/admin"       element={<AdminAuthGate><AdminPage /></AdminAuthGate>} />
                 <Route path="/admin/roadmap" element={<AdminAuthGate><AdminRoadmapPage /></AdminAuthGate>} />
+                <Route path="/admin/content" element={<AdminAuthGate><AdminContentPage /></AdminAuthGate>} />
                 <Route path="/roadmap" element={<FirebaseStaffSubmissionAccessGate accessTitle="업무 로드맵" readOnly>{() => <AdminRoadmapPage readOnly />}</FirebaseStaffSubmissionAccessGate>} />
                 <Route path="/admin/messages" element={<AdminAuthGate><AdminMessageHelperPage /></AdminAuthGate>} />
                 <Route path="/admin/receipts" element={<AdminAuthGate><AdminReceiptStatusPage /></AdminAuthGate>} />

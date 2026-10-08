@@ -1,5 +1,14 @@
 import fetch from "node-fetch";
 import { buildHomeSchedules, filterCurrentPortalItems } from "../src/lib/portalSchedule.js";
+import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
+import { CmsInputError, cmsPublicItems, readCms } from "../server/lib/portalContentCms.js";
+
+const CMS_FALLBACK_TYPES = {
+  today: ["notice", "notices"],
+  faq: ["faq", "faqs"],
+  resources: ["health_event", "resources"],
+  education: ["education", "educations"],
+};
 
 function getScriptUrl() {
   return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
@@ -68,6 +77,17 @@ export default async function handler(req, res) {
     return jsonError(res, 410, "이 포털 데이터 범위는 더 이상 제공되지 않습니다. 업무 로드맵은 교직원 인증 API를 이용해 주세요.");
   }
 
+  const fallbackType = String(req.query?.type || "").trim();
+  if (scope === "fallback" && CMS_FALLBACK_TYPES[fallbackType]) {
+    try {
+      const [type, responseKey] = CMS_FALLBACK_TYPES[fallbackType];
+      const items = await readCms(getFirebaseAdminDb());
+      return res.status(200).json({ updatedAt: new Date().toISOString(), [responseKey]: cmsPublicItems(items, type) });
+    } catch (error) {
+      return jsonError(res, error instanceof CmsInputError ? 503 : 500, "콘텐츠 저장소를 확인할 수 없습니다.");
+    }
+  }
+
   const scriptUrl = getScriptUrl();
   if (!scriptUrl) {
     return jsonError(
@@ -130,8 +150,20 @@ export default async function handler(req, res) {
 
     try {
       const json = JSON.parse(text);
+      if (scope === "home") {
+        try {
+          const items = await readCms(getFirebaseAdminDb());
+          return res.status(200).json(buildHomeResponse({
+            ...json,
+            notices: cmsPublicItems(items, "notice"),
+            educations: cmsPublicItems(items, "education"),
+          }));
+        } catch (error) {
+          return jsonError(res, error instanceof CmsInputError ? 503 : 500, "콘텐츠 저장소를 확인할 수 없습니다.");
+        }
+      }
       return res.status(200).json(
-        String(req.query?.scope || "").trim() === "home" ? buildHomeResponse(json) : json,
+        json,
       );
     } catch (error) {
       console.error("[portal] JSON parse failed", error);
