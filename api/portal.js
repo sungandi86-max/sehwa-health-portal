@@ -61,7 +61,23 @@ function buildHomeResponse(portal, now = new Date()) {
   };
 }
 
-export default async function handler(req, res) {
+function updatedAt() {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(new Date());
+}
+
+async function readTbConfig() {
+  const scriptUrl = getScriptUrl();
+  if (!scriptUrl || !/\/exec(?:\?|$)/.test(scriptUrl)) throw new Error("tb_config_not_configured");
+  const separator = scriptUrl.includes("?") ? "&" : "?";
+  const response = await fetch(`${scriptUrl}${separator}action=getTbConfig`, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error("tb_config_unavailable");
+  const result = await response.json();
+  if (result.result !== "success" || !result.config) throw new Error("tb_config_invalid");
+  return result.config;
+}
+
+export default async function handler(req, res, { db, context = process.env, loadTbConfig = readTbConfig, now = new Date() } = {}) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -78,10 +94,22 @@ export default async function handler(req, res) {
   }
 
   const fallbackType = String(req.query?.type || "").trim();
+  if (scope === "home" || (scope === "fallback" && fallbackType === "checkups")) {
+    try {
+      const items = await readCms(db || getFirebaseAdminDb(), { context });
+      if (scope === "home") return res.status(200).json(buildHomeResponse({ updatedAt: updatedAt(),
+        notices: cmsPublicItems(items, "notice", now), educations: cmsPublicItems(items, "education", now),
+        checkups: cmsPublicItems(items, "checkup", now) }, now));
+      const tbConfig = await loadTbConfig().catch(() => ({ enabled: "FALSE", startDate: "", endDate: "" }));
+      return res.status(200).json({ updatedAt: updatedAt(), tbConfig, checkups: cmsPublicItems(items, "checkup", now) });
+    } catch (error) {
+      return jsonError(res, error instanceof CmsInputError ? 503 : 502, "검진·검사 콘텐츠 또는 신청 설정을 확인할 수 없습니다.");
+    }
+  }
   if (scope === "fallback" && CMS_FALLBACK_TYPES[fallbackType]) {
     try {
       const [type, responseKey] = CMS_FALLBACK_TYPES[fallbackType];
-      const items = await readCms(getFirebaseAdminDb());
+      const items = await readCms(db || getFirebaseAdminDb(), { context });
       return res.status(200).json({ updatedAt: new Date().toISOString(), [responseKey]: cmsPublicItems(items, type) });
     } catch (error) {
       return jsonError(res, error instanceof CmsInputError ? 503 : 500, "콘텐츠 저장소를 확인할 수 없습니다.");
@@ -150,18 +178,6 @@ export default async function handler(req, res) {
 
     try {
       const json = JSON.parse(text);
-      if (scope === "home") {
-        try {
-          const items = await readCms(getFirebaseAdminDb());
-          return res.status(200).json(buildHomeResponse({
-            ...json,
-            notices: cmsPublicItems(items, "notice"),
-            educations: cmsPublicItems(items, "education"),
-          }));
-        } catch (error) {
-          return jsonError(res, error instanceof CmsInputError ? 503 : 500, "콘텐츠 저장소를 확인할 수 없습니다.");
-        }
-      }
       return res.status(200).json(
         json,
       );

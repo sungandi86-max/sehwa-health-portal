@@ -6,12 +6,18 @@ const TYPES = [
   { value: "faq", label: "FAQ" },
   { value: "health_event", label: "건강정보 · 이벤트" },
   { value: "education", label: "교육자료" },
+  { value: "checkup", label: "검진·검사" },
 ];
 const FIELDS = {
   notice: [["titleLine1", "제목 첫 줄"], ["titleLine2", "제목 둘째 줄"], ["date", "안내 일시"], ["target", "대상"], ["actionText", "이동 안내"], ["status", "상태"], ["badgeType", "배지색"]],
   faq: [],
   health_event: [["buttonText", "버튼명"]],
   education: [["target", "대상"], ["duration", "소요시간"], ["schedule", "일정"], ["confirmation", "확인방법"], ["buttonText", "버튼명"], ["status", "상태"]],
+  checkup: [["target", "대상"], ["details", "세부항목", true], ["buttonLabel", "버튼명"],
+    ["linkText", "링크 준비 문구"], ["status", "상태"], ["displayMode", "표시방식 (link/pending/image)"],
+    ["operationStatus", "운영표 상태"], ["imageUrl", "이미지 URL"], ["downloadUrl", "다운로드 URL"],
+    ["secondaryButtonLabel", "보조버튼명"], ["secondaryAction", "보조동작 (notice)"],
+    ["copyText", "보조 안내 문구", true], ["updateNotice", "업데이트 안내", true]],
 };
 const EMPTY = { type: "notice", title: "", content: "", category: "", link: "", attachment: "", visible: true, sortOrder: 999, startAt: "", endAt: "", fields: {} };
 const fieldClass = "min-h-11 w-full rounded-xl border border-[#C9DFFF] bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#1A3B8B] focus:outline-none focus:ring-2 focus:ring-[#C9DFFF]";
@@ -78,7 +84,7 @@ export default function AdminContentPage() {
     <header className="rounded-[24px] border border-[#C9DFFF] bg-white p-5 shadow-sm">
       <p className="text-xs font-bold text-[#D94F70]">CONTENT CMS</p>
       <h1 className="mt-1 text-2xl font-semibold text-[#1A3B8B]">포털 콘텐츠 관리</h1>
-      <p className="mt-2 break-keep text-sm text-slate-600">공지·FAQ·건강정보·교육자료를 Firestore에서 관리합니다. 삭제는 기록 보존을 위해 비활성화로 처리합니다.</p>
+      <p className="mt-2 break-keep text-sm text-slate-600">공지·FAQ·건강정보·교육자료·검진 안내를 Firestore에서 관리합니다. 신청·제출 설정은 여기서 변경하지 않습니다.</p>
     </header>
     <div role="tablist" aria-label="콘텐츠 유형" className="flex flex-wrap gap-2">
       {TYPES.map((entry) => <button key={entry.value} type="button" role="tab" aria-selected={type === entry.value}
@@ -99,7 +105,7 @@ export default function AdminContentPage() {
         <Input label="첨부 링크" value={form.attachment} onChange={(value) => update("attachment", value)} />
         <Input label="노출 시작일" type="date" value={form.startAt} onChange={(value) => update("startAt", value)} />
         <Input label="노출 종료일" type="date" value={form.endAt} onChange={(value) => update("endAt", value)} />
-        {FIELDS[type].map(([key, label]) => <Input key={key} label={label} value={form.fields?.[key]}
+        {FIELDS[type].map(([key, label, textarea]) => <Input key={key} label={label} textarea={textarea} value={form.fields?.[key]}
           onChange={(value) => setForm((currentForm) => ({ ...currentForm, fields: { ...currentForm.fields, [key]: value } }))} />)}
         <label className="flex items-center gap-2 text-sm font-semibold text-slate-700"><input type="checkbox" checked={form.visible} onChange={(event) => update("visible", event.target.checked)} /> 공개 노출</label>
         <div className="flex flex-wrap gap-2 md:col-span-2">

@@ -12,6 +12,7 @@
     "build": "vite build",
     "migrate:announcements": "node scripts/migrateAnnouncementsToFirestore.mjs",
     "migrate:checkups": "node scripts/migrateCheckupsToFirestore.mjs",
+    "migrate:checkup-cms": "node scripts/migrateCheckupCms.mjs",
     "migrate:education": "node scripts/migrateEducationResourcesToFirestore.mjs",
     "migrate:faqs": "node scripts/migrateFaqsToFirestore.mjs",
     "migrate:health-resources": "node scripts/migrateHealthResourcesToFirestore.mjs",

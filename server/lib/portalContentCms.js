@@ -8,6 +8,8 @@ const TYPE_FIELDS = {
   faq: [],
   health_event: ["buttonText"],
   education: ["target", "duration", "schedule", "confirmation", "buttonText", "status"],
+  checkup: ["target", "details", "buttonLabel", "linkText", "status", "displayMode", "operationStatus",
+    "imageUrl", "downloadUrl", "secondaryButtonLabel", "secondaryAction", "copyText", "updateNotice"],
 };
 
 export class CmsInputError extends Error {}
@@ -46,6 +48,20 @@ function sorted(records) {
 function publicItem(record) {
   const f = record.fields || {};
   const publicUrl = [record.link, record.attachment].find((value) => isSafeLink(value)) || "";
+  if (record.type === "checkup") {
+    const details = String(f.details || "").split(/\r?\n|<br\s*\/?>/i).map((item) => item.trim()).filter(Boolean);
+    const schedule = details.find((detail) => /(?:\d{4}\s*[.\/-]\s*)?\d{1,2}\s*(?:월|[.\/-])\s*\d{1,2}\s*일?/.test(detail)) || "";
+    const checkupLink = isSafeLink(record.link) ? record.link : "";
+    return {
+      title: record.title, description: record.content, target: f.target || "", schedule, details,
+      buttonText: f.buttonLabel || "", url: checkupLink || (f.linkText === "안내문 링크" ? f.linkText : ""), status: f.status || "안내 중",
+      displayMode: (f.displayMode || "link").toLowerCase(), operatingStatus: f.operationStatus || "",
+      imageUrl: isSafeLink(f.imageUrl) ? f.imageUrl || "" : "", downloadUrl: isSafeLink(f.downloadUrl) ? f.downloadUrl || "" : "",
+      secondaryText: f.secondaryButtonLabel || "",
+      secondaryAction: (f.secondaryAction || "").toLowerCase(), copyText: f.copyText || "",
+      updateNotice: f.updateNotice || "",
+    };
+  }
   if (record.type === "notice") return {
     title: record.title, titleLines: [f.titleLine1, f.titleLine2].filter(Boolean),
     date: f.date || "", target: f.target || "", description: record.content,
@@ -127,6 +143,16 @@ export function validateCmsInput(input) {
   const endAt = dateKey(input.endAt);
   if (startAt && endAt && startAt > endAt) throw new CmsInputError("노출 종료일이 시작일보다 빠릅니다.");
   const fields = Object.fromEntries(TYPE_FIELDS[type].map((key) => [key, bounded(input.fields?.[key], 1000, key)]));
+  if (type === "checkup") {
+    if (!["link", "pending", "image"].includes(fields.displayMode || "link")
+      || !["", "notice"].includes(fields.secondaryAction)) throw new CmsInputError("검진 안내 동작을 확인해 주세요.");
+    if (!isSafeLink(fields.imageUrl) || !isSafeLink(fields.downloadUrl)) {
+      throw new CmsInputError("검진 안내 이미지·다운로드 링크를 확인해 주세요.");
+    }
+    if (fields.linkText && fields.linkText !== "안내문 링크") {
+      throw new CmsInputError("링크 준비 문구를 확인해 주세요.");
+    }
+  }
   return { type, title, content, category: bounded(input.category, 100, "카테고리"),
     link: safeLink(input.link), attachment: safeLink(input.attachment), fields,
     visible: input.visible === true, sortOrder, startAt, endAt };
@@ -139,7 +165,9 @@ export async function saveCmsItem(db, { action, id, input, actorUid, context = p
     const ref = collection.doc(id);
     const current = await ref.get();
     if (!current.exists || current.data()?.kind !== "item") throw new CmsInputError("콘텐츠 항목을 찾지 못했습니다.");
-    if (["restore", "show"].includes(action) && (!isSafeLink(current.data()?.link) || !isSafeLink(current.data()?.attachment))) {
+    if (["restore", "show"].includes(action) && (!isSafeLink(current.data()?.link) || !isSafeLink(current.data()?.attachment)
+      || (current.data()?.type === "checkup" && (!isSafeLink(current.data()?.fields?.imageUrl)
+        || !isSafeLink(current.data()?.fields?.downloadUrl))))) {
       throw new CmsInputError("공개하기 전에 링크를 안전한 주소로 수정해 주세요.");
     }
     const change = action === "deactivate" ? { active: false }

@@ -1,6 +1,4 @@
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "./firebase.js";
-import { isContentVisible } from "./contentVisibility.js";
+import { fetchPortalContent } from "./portalContent.js";
 
 function normalizeOrder(value) {
   const order = Number(value);
@@ -20,11 +18,11 @@ function sortCheckups(a, b) {
   return a.title.localeCompare(b.title, "ko");
 }
 
-export function normalizeCheckup(docSnapshot) {
-  const data = docSnapshot.data();
+export function normalizeCheckup(docSnapshot, index = 0) {
+  const data = typeof docSnapshot.data === "function" ? docSnapshot.data() : docSnapshot;
 
   return {
-    id: docSnapshot.id,
+    id: docSnapshot.id || data.title,
     title: data.title || "",
     description: data.description || "",
     target: data.target || null,
@@ -32,15 +30,15 @@ export function normalizeCheckup(docSnapshot) {
     operatingStatus: data.scheduleStatus || data.operatingStatus || null,
     scheduleStatus: data.scheduleStatus || data.operatingStatus || null,
     details: normalizeDetails(data.details),
-    enabled: data.enabled === true,
+    enabled: data.enabled !== false,
     startAt: data.startAt || null,
     endAt: data.endAt || null,
-    linkUrl: data.primaryLink || data.linkUrl || null,
+    linkUrl: data.primaryLink || data.linkUrl || data.url || null,
     linkLabel: data.primaryButtonLabel || data.linkLabel || data.buttonText || null,
     primaryButtonLabel: data.primaryButtonLabel || data.linkLabel || data.buttonText || null,
-    primaryLink: data.primaryLink || data.linkUrl || null,
+    primaryLink: data.primaryLink || data.linkUrl || data.url || null,
     buttonText: data.primaryButtonLabel || data.linkLabel || data.buttonText || null,
-    url: data.primaryLink || data.linkUrl || null,
+    url: data.primaryLink || data.linkUrl || data.url || null,
     displayMode: data.displayMode ? String(data.displayMode).trim().toLowerCase() : "link",
     imageUrl: data.imageUrl || null,
     downloadUrl: data.downloadUrl || null,
@@ -49,20 +47,17 @@ export function normalizeCheckup(docSnapshot) {
     secondaryAction: data.secondaryAction ? String(data.secondaryAction).trim().toLowerCase() : null,
     copyText: data.copyText || null,
     updateNotice: data.updateNotice || null,
-    order: normalizeOrder(data.order),
+    order: normalizeOrder(data.order ?? index + 1),
     createdAt: data.createdAt || null,
     updatedAt: data.updatedAt || null,
   };
 }
 
 export async function getAllCheckups() {
-  const snapshot = await getDocs(collection(db, "checkups"));
-
-  return snapshot.docs.map(normalizeCheckup).sort(sortCheckups);
+  const portal = await fetchPortalContent("checkups");
+  return (portal.checkups || []).map(normalizeCheckup).sort(sortCheckups);
 }
 
-export async function getActiveCheckups(now = new Date()) {
-  const checkups = await getAllCheckups();
-
-  return checkups.filter((checkup) => isContentVisible(checkup, now));
+export async function getActiveCheckups() {
+  return getAllCheckups();
 }

@@ -5,7 +5,6 @@ const CURRENT_STUDENT_CARE_SEMESTER = 2;
 const SHEET_NAMES = {
   visit: "학생 보건실 입실현황",
   portalUploads: "앱_제출센터",
-  portalCheckups: "앱_검진검사",
   portalStudentCare: "앱_학생건강관리",
   portalMessages: "앱_메신저문구"
 };
@@ -55,7 +54,6 @@ const HEALTH_ROOM_BACKUP = {
   expectedSheets: [
     SHEET_NAMES.visit,
     SHEET_NAMES.portalUploads,
-    SHEET_NAMES.portalCheckups,
     SHEET_NAMES.portalStudentCare,
     "응답_심폐소생술이수증",
     "응답_결핵검진확인증",
@@ -2331,17 +2329,7 @@ function getPortalData_(options) {
     return Object.assign({}, base, {});
   }
 
-  if (scope === "home") {
-    const cache = CacheService.getScriptCache();
-    const cached = cache.get("portal-home-v2");
-    if (cached) return JSON.parse(cached);
-
-    const home = Object.assign({}, base, {
-      checkups: getCheckups_(ss)
-    });
-    cache.put("portal-home-v2", JSON.stringify(home), 45);
-    return home;
-  }
+  if (scope === "home") return base;
 
   if (scope === "fallback") {
     return getPortalFallbackData_(ss, base, type);
@@ -2357,7 +2345,6 @@ function getPortalData_(options) {
     },
     tbConfig:    getPortalTbConfig_(),
     uploads:     getUploads_(ss),
-    checkups:    getCheckups_(ss),
     studentCare: getStudentCare_(ss),
     messages:    getMessages_(ss)
   });
@@ -2387,12 +2374,6 @@ function getPortalAppConfigValues_(keys) {
 }
 
 function getPortalFallbackData_(ss, base, type) {
-  if (type === "checkups") {
-    return Object.assign({}, base, {
-      tbConfig: getPortalTbConfig_(),
-      checkups: getCheckups_(ss)
-    });
-  }
   return Object.assign({}, base, {});
 }
 
@@ -2694,35 +2675,6 @@ function getUploads_(ss) {
   }));
 }
 
-function getCheckups_(ss) {
-  const now = new Date();
-  return getRows_(ss, SHEET_NAMES.portalCheckups).filter(r => isVisibleByExposure_(r, now)).map(r => {
-    const details = splitLines_(getValue_(r, ["세부항목"]));
-    const firstDatedDetail = details.find(detail => (
-      /(?:\d{4}\s*[.\/-]\s*)?\d{1,2}\s*(?:월|[.\/-])\s*\d{1,2}\s*일?/.test(detail)
-    )) || "";
-
-    return {
-      title:          getValue_(r, ["제목"]),
-      description:    getValue_(r, ["설명"]),
-      target:         getValue_(r, ["대상"]),
-      schedule:       getValue_(r, ["일정"], firstDatedDetail),
-      details,
-      buttonText:     getValue_(r, ["버튼명"]),
-      url:            getValue_(r, ["링크"]),
-      status:         getValue_(r, ["상태"], "안내 중"),
-      displayMode:    getValue_(r, ["표시방식"], "link").toLowerCase(),
-      operatingStatus:getValue_(r, ["운영표상태"]),
-      imageUrl:       getValue_(r, ["이미지URL"]),
-      downloadUrl:    getValue_(r, ["다운로드URL"]),
-      secondaryText:  getValue_(r, ["보조버튼명"]),
-      secondaryAction:getValue_(r, ["보조동작"]).toLowerCase(),
-      copyText:       getValue_(r, ["복사문구"]),
-      updateNotice:   getValue_(r, ["업데이트안내"])
-    };
-  });
-}
-
 function getStudentCare_(ss) {
   return getRows_(ss, SHEET_NAMES.portalStudentCare).map(r => {
     const title = getValue_(r, ["제목"]);
@@ -2771,8 +2723,7 @@ function testPortalData() {
   const portal = getPortalData_();
   Logger.log(JSON.stringify({
     keys: Object.keys(portal),
-    uploadCount: (portal.uploads || []).length,
-    checkupCount: (portal.checkups || []).length
+    uploadCount: (portal.uploads || []).length
   }, null, 2));
 }
 

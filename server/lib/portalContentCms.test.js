@@ -125,6 +125,41 @@ test("invalid date and unsafe link are rejected at the admin boundary", () => {
   assert.throws(() => validateCmsInput({ ...item, link: "http://outside.example" }), CmsInputError);
 });
 
+test("checkup administrator fields preserve safe pending and notice actions", async () => {
+  const plan = planCmsMigration(source());
+  const db = memoryDb(plan.records);
+  const item = { type: "checkup", title: "검진 안내", content: "내용", category: "", link: "",
+    attachment: "", visible: true, sortOrder: 2, startAt: "", endAt: "",
+    fields: { target: "교직원", details: "6월 26일 검진\n준비 안내", buttonLabel: "안내 보기",
+      linkText: "안내문 링크", status: "안내 중", displayMode: "pending", operationStatus: "업데이트 예정",
+      imageUrl: "", downloadUrl: "", secondaryButtonLabel: "담임 협조사항", secondaryAction: "notice",
+      copyText: "학급 대기 협조", updateNotice: "D-3 업데이트" } };
+  const { id } = await saveCmsItem(db, { action: "add", input: item, actorUid: "admin", context: qa });
+  const publicItem = cmsPublicItems(await readCms(db, { context: qa }), "checkup")[0];
+  assert.equal(publicItem.schedule, "6월 26일 검진");
+  assert.equal(publicItem.url, "안내문 링크");
+  assert.equal(publicItem.secondaryAction, "notice");
+  await saveCmsItem(db, { action: "hide", id, actorUid: "admin", context: qa });
+  assert.equal(cmsPublicItems(await readCms(db, { context: qa }), "checkup").length, 0);
+  await saveCmsItem(db, { action: "show", id, actorUid: "admin", context: qa });
+  await saveCmsItem(db, { action: "deactivate", id, actorUid: "admin", context: qa });
+  await saveCmsItem(db, { action: "restore", id, actorUid: "admin", context: qa });
+  assert.equal(db.collections.get("portal_content_qa").get(id).active, true);
+  assert.equal(db.collections.get("portal_content_production"), undefined);
+  assert.throws(() => validateCmsInput({ ...item, fields: { ...item.fields, imageUrl: "javascript:alert(1)" } }), CmsInputError);
+  assert.throws(() => validateCmsInput({ ...item, fields: { ...item.fields, displayMode: "unknown" } }), CmsInputError);
+});
+
+test("checkup public projection never exposes unsafe stored links", () => {
+  const unsafe = { id: "checkup_unsafe", kind: "item", type: "checkup", title: "검진 안내", content: "내용",
+    active: true, visible: true, sortOrder: 1, link: "javascript:alert(1)",
+    fields: { imageUrl: "javascript:alert(2)", downloadUrl: "http://example.org/file", linkText: "javascript:alert(3)" } };
+  const [publicItem] = cmsPublicItems([unsafe], "checkup");
+  assert.equal(publicItem.url, "");
+  assert.equal(publicItem.imageUrl, "");
+  assert.equal(publicItem.downloadUrl, "");
+});
+
 test("unsafe legacy links cannot be imported active or restored without correction", async () => {
   const activeSource = source();
   activeSource.education[1][CMS_SHEETS.education.headers.indexOf("링크")] = "javascript:alert(1)";
@@ -163,7 +198,7 @@ test("administrator CMS resource requires login and role before writes", async (
   assert.equal(admin.headers["Cache-Control"], "private, no-store");
 });
 
-test("Apps Script home, full and fallback scopes never read migrated content tabs", () => {
+test("Apps Script home, full and fallback scopes never read migrated content or checkup tabs", () => {
   const accessed = [];
   const context = vm.createContext({
     Utilities: { formatDate: () => "2026-10-09 12:00:00" },
@@ -175,16 +210,15 @@ test("Apps Script home, full and fallback scopes never read migrated content tab
     getSpreadsheet_ = () => __source;
     getPortalTbConfig_ = () => ({});
     getUploads_ = () => [];
-    getCheckups_ = () => [{ title: "검진" }];
     getStudentCare_ = () => [];
     getMessages_ = () => [];
   `, context);
   const read = (scope, type = "") => JSON.parse(vm.runInContext(
     `JSON.stringify(getPortalData_(${JSON.stringify({ scope, type })}))`, context,
   ));
-  assert.equal(read("home").checkups.length, 1);
-  assert.equal(read("full").checkups.length, 1);
-  for (const type of ["today", "faq", "resources", "education"]) {
+  assert.equal("checkups" in read("home"), false);
+  assert.equal("checkups" in read("full"), false);
+  for (const type of ["today", "faq", "resources", "education", "checkups"]) {
     assert.equal(Object.keys(read("fallback", type)).length, 1);
   }
   assert.deepEqual(accessed, []);
