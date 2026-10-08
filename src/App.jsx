@@ -152,6 +152,7 @@ export default function App() {
     "/admin/infection-reports",
     "/admin",
     "/admin/roadmap",
+    "/admin/content",
   ].includes(window.location.pathname) || !portalScope;
   const [portalData, setPortalData] = useState(null);
   const [tbConfig, setTbConfig] = useState(null);
