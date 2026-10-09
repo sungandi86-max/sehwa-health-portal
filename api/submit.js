@@ -8,6 +8,7 @@ import {
 } from "../server/lib/tbScreeningStatus.js";
 import { buildCprExternalSubmissionStatus, saveCprTrainingStatus } from "../server/lib/cprTrainingStatus.js";
 import { buildScriptSubmission, resolveSubmissionWorkflow, validateSubmissionPayload } from "../server/lib/submissionWorkflows.js";
+import { buildSubmissionProxyEnvelope, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
 
 function scriptUrl() {
   return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
@@ -47,7 +48,7 @@ function buildTbStatusPayload(payload, staffId) {
   });
 }
 
-export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl() } = {}) {
+export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
@@ -59,7 +60,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     let requestBytes = 0;
     for await (const chunk of req) {
       requestBytes += chunk.length;
-      if (requestBytes > 15 * 1024 * 1024) return res.status(413).json({ status: "error", success: false, message: "제출 파일 크기를 확인해 주세요." });
+      if (requestBytes > 4_250_000) return res.status(413).json({ status: "error", success: false, message: "파일 크기는 3MiB 이하로 줄여 주세요." });
       chunks.push(chunk);
     }
     const rawBody = Buffer.concat(chunks).toString("utf-8");
@@ -98,10 +99,18 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {
       return res.status(503).json({ status: "error", success: false, message: "제출 저장소가 설정되지 않았습니다." });
     }
+    const visitor = workflow.id === "student_tb_reply" ? submissionVisitor(req, proxySecret) : "";
+    if (workflow.id === "student_tb_reply" && !visitor) {
+      return res.status(503).json({ status: "error", success: false, message: "익명 제출 보호 설정을 확인해 주세요." });
+    }
+    const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, payload), proxySecret, { visitor });
+    if (!envelope) {
+      return res.status(503).json({ status: "error", success: false, message: "제출 보안 설정이 필요합니다." });
+    }
     const scriptRes = await postScript(destinationUrl, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(buildScriptSubmission(workflow, payload)),
+      body: JSON.stringify(envelope),
     });
 
     const text = await scriptRes.text();

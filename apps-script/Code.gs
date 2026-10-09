@@ -306,15 +306,18 @@ function doGet(e) {
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
-  lock.tryLock(10000);
+  if (!lock.tryLock(10000)) return jsonOutput_({ status: "error", message: "잠시 후 다시 시도해 주세요." });
   try {
-    const payload = JSON.parse(e.postData.contents);
-    if (payload.action === "verifyAdminMaster") {
-      return jsonOutput_(verifyAdminMaster_(payload));
+    const request = JSON.parse(e.postData.contents);
+    if (request.action === "verifyAdminMaster") {
+      return jsonOutput_(verifyAdminMaster_(request));
     }
-    if (payload.action === "getAdminReceiptSummary") {
-      return jsonOutput_(getAdminReceiptSummary_(payload));
+    if (request.action === "getAdminReceiptSummary") {
+      return jsonOutput_(getAdminReceiptSummary_(request));
     }
+    const signed = request && request.version === 1;
+    const payload = signed ? verifySubmissionProxy_(request) : legacySubmissionDuringTransition_(request);
+    if (signed) reserveSubmissionProxy_(request, payload);
     if (payload.type === "student-file") {
       const result = appendStudentFileSubmission_(payload);
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -360,6 +363,86 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function legacySubmissionDuringTransition_(request) {
+  const properties = PropertiesService.getScriptProperties();
+  const secret = properties.getProperty("SUBMISSION_PROXY_SECRET");
+  const until = Number(properties.getProperty("SUBMISSION_PROXY_TRANSITION_UNTIL"));
+  if (!secret || Utilities.newBlob(secret).getBytes().length < 32 || !until || until <= Date.now() || until > Date.now() + 15 * 60 * 1000 ||
+      !request || typeof request !== "object" || Array.isArray(request) ||
+      ["version", "sentAt", "requestId", "visitor", "payloadJson", "payloadHash", "signature"].some(function(key) { return Object.prototype.hasOwnProperty.call(request, key); })) {
+    throw new Error("제출 인증에 실패했습니다.");
+  }
+  const legacyTypes = {
+    cpr: "응답_심폐소생술이수증",
+    tb: "응답_결핵검진확인증",
+    tb_registration: "응답_교직원결핵검진유형선택",
+    inbody: "응답_인바디측정신청",
+    "student-file": "응답_결핵검진진료회신"
+  };
+  const type = request.type || (request.sheetName === legacyTypes.tb_registration ? "tb_registration" : "");
+  if (!legacyTypes[type] || request.sheetName !== legacyTypes[type]) throw new Error("지원하지 않는 이전 제출 형식입니다.");
+  return { type: type, fields: request.fields, fileName: request.fileName, fileBase64: request.fileBase64, fileMimeType: request.fileMimeType };
+}
+
+function submissionProxyDigest_(value) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8)).replace(/=+$/, "");
+}
+
+function submissionProxySignature_(value, secret) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(value, secret, Utilities.Charset.UTF_8)).replace(/=+$/, "");
+}
+
+function submissionProxyEqual_(left, right) {
+  if (typeof left !== "string" || typeof right !== "string" || left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index++) difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  return difference === 0;
+}
+
+function verifySubmissionProxy_(request) {
+  const secret = PropertiesService.getScriptProperties().getProperty("SUBMISSION_PROXY_SECRET");
+  if (!secret || Utilities.newBlob(secret).getBytes().length < 32) throw new Error("제출 보안 설정이 필요합니다.");
+  if (request.version !== 1 || !Number.isSafeInteger(request.sentAt) || Math.abs(Date.now() - request.sentAt) > 120000 ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.requestId || "") ||
+      typeof request.payloadJson !== "string" || typeof request.payloadHash !== "string" ||
+      typeof request.signature !== "string" || typeof request.visitor !== "string" ||
+      (request.visitor && !/^[A-Za-z0-9_-]{43}$/.test(request.visitor))) throw new Error("제출 인증에 실패했습니다.");
+  const actualHash = submissionProxyDigest_(request.payloadJson);
+  const message = "v1\n" + request.sentAt + "\n" + request.requestId + "\n" + request.visitor + "\n" + request.payloadHash;
+  if (!submissionProxyEqual_(actualHash, request.payloadHash) ||
+      !submissionProxyEqual_(submissionProxySignature_(message, secret), request.signature)) throw new Error("제출 인증에 실패했습니다.");
+  const payload = JSON.parse(request.payloadJson);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload) || !payload.type) throw new Error("제출 형식이 올바르지 않습니다.");
+  if (payload.type === "student-file" && !request.visitor) throw new Error("익명 제출 보호 설정이 필요합니다.");
+  return payload;
+}
+
+function reserveSubmissionProxy_(request, payload) {
+  const properties = PropertiesService.getScriptProperties();
+  const now = Date.now();
+  const prefix = "SUBMISSION_GUARD_";
+  const keys = properties.getKeys().filter(function(key) { return key.indexOf(prefix) === 0; });
+  keys.forEach(function(key) {
+    const value = properties.getProperty(key);
+    const expiresAt = value && value.charAt(0) === "{" ? JSON.parse(value).expiresAt : Number(value);
+    if (!expiresAt || expiresAt <= now) properties.deleteProperty(key);
+  });
+  const activeCount = keys.filter(function(key) { return properties.getProperty(key) !== null; }).length;
+  if (activeCount >= 2000) throw new Error("제출 보호 저장소가 가득 찼습니다.");
+  const replayKey = prefix + "REQUEST_" + request.requestId;
+  if (properties.getProperty(replayKey)) throw new Error("중복 제출입니다.");
+  if (payload.type === "student-file") {
+    const repeatKey = prefix + "REPEAT_" + request.payloadHash;
+    const rateKey = prefix + "RATE_" + request.visitor;
+    if (properties.getProperty(repeatKey)) throw new Error("중복 제출입니다.");
+    const rate = JSON.parse(properties.getProperty(rateKey) || "null");
+    if (rate && rate.expiresAt > now && rate.count >= 3) throw new Error("잠시 후 다시 시도해 주세요.");
+    properties.setProperty(rateKey, JSON.stringify({ expiresAt: now + 600000, count: rate && rate.expiresAt > now ? rate.count + 1 : 1 }));
+    properties.setProperty(repeatKey, String(now + 600000));
+  }
+  properties.setProperty(replayKey, String(request.sentAt + 120000));
 }
 
 function appendStudentFileSubmission_(payload) {
@@ -421,8 +504,8 @@ function appendStudentFileSubmission_(payload) {
 function validateSubmissionBlob_(blob) {
   const mimeType = blob.getContentType();
   const bytes = blob.getBytes();
-  if (["application/pdf", "image/jpeg", "image/png"].indexOf(mimeType) === -1 || !bytes.length || bytes.length > 10 * 1024 * 1024) {
-    throw new Error("PDF, JPG, PNG 파일만 10MB 이하로 제출할 수 있습니다.");
+  if (["application/pdf", "image/jpeg", "image/png"].indexOf(mimeType) === -1 || !bytes.length || bytes.length > 3 * 1024 * 1024) {
+    throw new Error("PDF, JPG, PNG 파일만 3MiB 이하로 제출할 수 있습니다.");
   }
   const values = bytes.slice(0, 8).map(function(byte) { return byte & 255; });
   const pdf = mimeType === "application/pdf" && values.slice(0, 5).join(",") === "37,80,68,70,45";

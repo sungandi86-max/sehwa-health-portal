@@ -1,10 +1,9 @@
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
+import { prepareSubmissionFile, validateSelectableSubmissionFile, validateSubmissionFile } from "./submissionFiles.js";
 
 const SUBMIT_API_URL = "/api/submit";
 const RECRUIT_REQUEST_TYPE = "employment_checkup_substitution";
-const ALLOWED_SUBMISSION_FILE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const DRIVE_UPLOAD_TIMEOUT_MS = 60_000;
 
 function sanitizeFilename(filename) {
@@ -76,14 +75,8 @@ function getDriveReference(json, fileName, mimeType) {
   };
 }
 
-export function validateSubmissionFile(file) {
-  if (!file) return "제출할 파일을 선택해 주세요.";
-  if (!ALLOWED_SUBMISSION_FILE_TYPES.has(file.type)) return "PDF, JPG, PNG 파일만 제출할 수 있습니다.";
-  if (file.size > MAX_FILE_SIZE) return "파일 크기는 10MB 이하만 제출할 수 있습니다.";
-  return "";
-}
-
-export const validateCprFile = validateSubmissionFile;
+export { validateSubmissionFile, validateSelectableSubmissionFile };
+export const validateCprFile = validateSelectableSubmissionFile;
 
 export function validateRecruitRequest({ staffType, submittedToAdminOffice, xrayDateCheckAcknowledged }) {
   if (!staffType) return "교직원 구분을 선택해 주세요.";
@@ -135,12 +128,15 @@ async function saveStaffSubmission(
 }
 
 export async function createCprSubmission({ user, trainingDate, institution, staffType, file }) {
-  const fileError = validateSubmissionFile(file);
+  const selectionError = validateSelectableSubmissionFile(file);
+  if (selectionError) throw new Error(selectionError);
+  const preparedFile = await prepareSubmissionFile(file);
+  const fileError = validateSubmissionFile(preparedFile);
   if (fileError) throw new Error(fileError);
 
   const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
   const submitter = getSubmitter(user);
-  const originalName = sanitizeFilename(file.name || "cpr-certificate.pdf");
+  const originalName = sanitizeFilename(preparedFile.name || "cpr-certificate.pdf");
   const fileName = sanitizeFilename(`${submitter.name}_심폐소생술이수증_${todayString()}_${originalName}`);
   const uploadResult = await uploadDriveSubmission({
     type: "cpr",
@@ -152,9 +148,9 @@ export async function createCprSubmission({ user, trainingDate, institution, sta
       institution: institution || "",
     },
     fileName,
-    file,
+    file: preparedFile,
   });
-  const driveReference = getDriveReference(uploadResult, fileName, file.type);
+  const driveReference = getDriveReference(uploadResult, fileName, preparedFile.type);
 
   await saveStaffSubmission(submissionRef, {
     itemId: "cpr",
@@ -174,12 +170,15 @@ export async function createCprSubmission({ user, trainingDate, institution, sta
 }
 
 export async function createTbSubmission({ user, checkupDate, documentType, staffType, file }) {
-  const fileError = validateSubmissionFile(file);
+  const selectionError = validateSelectableSubmissionFile(file);
+  if (selectionError) throw new Error(selectionError);
+  const preparedFile = await prepareSubmissionFile(file);
+  const fileError = validateSubmissionFile(preparedFile);
   if (fileError) throw new Error(fileError);
 
   const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
   const submitter = getSubmitter(user);
-  const originalName = sanitizeFilename(file.name || "tb-certificate.pdf");
+  const originalName = sanitizeFilename(preparedFile.name || "tb-certificate.pdf");
   const fileName = sanitizeFilename(`${submitter.name}_결핵검진확인증_${todayString()}_${originalName}`);
   const uploadResult = await uploadDriveSubmission({
     type: "tb",
@@ -191,9 +190,9 @@ export async function createTbSubmission({ user, checkupDate, documentType, staf
       docType: documentType || "",
     },
     fileName,
-    file,
+    file: preparedFile,
   });
-  const driveReference = getDriveReference(uploadResult, fileName, file.type);
+  const driveReference = getDriveReference(uploadResult, fileName, preparedFile.type);
 
   await saveStaffSubmission(submissionRef, {
     itemId: "tb",

@@ -2,13 +2,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
+import { createHash, createHmac } from "node:crypto";
 import submitHandler from "../../api/submit.js";
+import { buildSubmissionProxyEnvelope } from "./submissionProxyEnvelope.js";
 import { buildScriptSubmission, publicSubmissionCard, resolveSubmissionWorkflow, SUBMISSION_WORKFLOWS, validateSubmissionPayload } from "./submissionWorkflows.js";
 
 const png = Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64");
 const file = { fields: { name: "QA", completionDate: "2026-10-09", checkupDate: "2026-10-09" }, fileBase64: png, fileMimeType: "image/png", fileName: "qa.png" };
 const inbodyFields = { name: "QA", dept: "QA", preferredDate: "2026-10-09", preferredTime: "12:00" };
 const destinationUrl = "https://script.google.com/macros/s/test/exec";
+const proxySecret = "fixture-only-submission-secret-32bytes-minimum";
 
 function response() {
   return { statusCode: 200, headers: {}, setHeader(k, v) { this.headers[k] = v; },
@@ -50,6 +53,24 @@ test("server-owned payload strips destination and validates file contract", () =
   assert.equal(validateSubmissionPayload(SUBMISSION_WORKFLOWS.inbody, { type: "inbody", fields: { name: "QA", dept: "QA" } }).ok, false);
 });
 
+test("server accepts a 3MiB PDF and rejects one byte over before forwarding", async () => {
+  const pdf = Buffer.alloc(3 * 1024 * 1024);
+  pdf.write("%PDF-", 0, "ascii");
+  const valid = { ...file, type: "cpr", fileName: "certificate.pdf", fileMimeType: "application/pdf", fileBase64: pdf.toString("base64") };
+  assert.equal(validateSubmissionPayload(SUBMISSION_WORKFLOWS.cpr, valid).ok, true);
+  const invalid = { ...valid, fileBase64: Buffer.concat([pdf, Buffer.from([0])]).toString("base64") };
+  const check = validateSubmissionPayload(SUBMISSION_WORKFLOWS.cpr, invalid);
+  assert.equal(check.status, 413);
+  assert.match(check.message, /3MiB/);
+  let calls = 0;
+  const result = response();
+  await submitHandler(request(invalid), result, { destinationUrl, proxySecret,
+    verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
+    postScript: async () => { calls++; throw new Error("unexpected upload"); } });
+  assert.equal(result.statusCode, 413);
+  assert.equal(calls, 0);
+});
+
 test("public card projection never exposes server-only destination", () => {
   const card = publicSubmissionCard({ title: "CPR", url: "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM", folderId: "private", sheetName: "private", auditSheet: "private" });
   assert.equal(card.title, "CPR");
@@ -88,9 +109,10 @@ test("submission API refuses cross-site simple form content types", async () => 
 test("authorized CPR and TB use the canonical server workflow", async () => {
   const forwarded = [];
   const options = { destinationUrl,
+    proxySecret,
     verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
     verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
-    postScript: async (_url, init) => { forwarded.push(JSON.parse(init.body));
+    postScript: async (_url, init) => { forwarded.push(JSON.parse(JSON.parse(init.body).payloadJson));
       return { text: async () => JSON.stringify({ status: "error", message: "fixture only" }) }; },
   };
   for (const type of ["cpr", "tb"]) {
@@ -107,16 +129,16 @@ test("authorized CPR and TB use the canonical server workflow", async () => {
 
 test("role mismatch rejects and authorized staff cannot override destinations", async () => {
   let calls = 0;
-  const postScript = async (_url, init) => { calls++; const body = JSON.parse(init.body);
+  const postScript = async (_url, init) => { calls++; const body = JSON.parse(JSON.parse(init.body).payloadJson);
     assert.equal(body.type, "inbody"); assert.equal(body.folderId, undefined); assert.equal(body.sheetName, undefined);
     return { text: async () => JSON.stringify({ status: "error", message: "fixture only" }) }; };
   const payload = { type: "inbody", fields: inbodyFields, sheetName: "secret", folderId: "secret" };
   const denied = response();
-  await submitHandler(request(payload), denied, { destinationUrl, postScript, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["student"] }) });
+  await submitHandler(request(payload), denied, { destinationUrl, proxySecret, postScript, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["student"] }) });
   assert.equal(denied.statusCode, 403);
   assert.equal(calls, 0);
   const allowed = response();
-  await submitHandler(request(payload), allowed, { destinationUrl, postScript, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
+  await submitHandler(request(payload), allowed, { destinationUrl, proxySecret, postScript, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
   assert.equal(allowed.statusCode, 200);
   assert.equal(calls, 1);
 });
@@ -132,10 +154,23 @@ test("missing or unexpected Apps Script endpoint fails closed", async () => {
   assert.equal(calls, 0);
 });
 
+test("missing dedicated proxy secret fails before Apps Script upload", async () => {
+  let calls = 0;
+  const result = response();
+  await submitHandler(request({ ...file, type: "cpr" }), result, {
+    destinationUrl, proxySecret: "", verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
+    postScript: async () => { calls++; throw new Error("unexpected upload"); },
+  });
+  assert.equal(result.statusCode, 503);
+  assert.equal(calls, 0);
+});
+
 test("anonymous student reply uses only fixed workflow and returns no storage destination", async () => {
   const result = response();
-  await submitHandler(request({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, folderId: "injected" }), result,
-    { destinationUrl, postScript: async (_url, init) => { const outbound = JSON.parse(init.body);
+  const req = request({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, folderId: "injected" });
+  req.headers["x-forwarded-for"] = "192.0.2.1";
+  await submitHandler(req, result,
+    { destinationUrl, proxySecret, postScript: async (_url, init) => { const outbound = JSON.parse(JSON.parse(init.body).payloadJson);
       assert.equal(outbound.type, "student-file"); assert.equal(outbound.folderId, undefined);
       return { text: async () => JSON.stringify({ status: "success", folderId: "private", fileUrl: "private", submittedAt: "now" }) }; } });
   assert.equal(result.statusCode, 200);
@@ -169,16 +204,40 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
   const sheets = [];
   const folders = [];
-  const sheet = { appendRow: (row) => { assert.ok(row.length > 0); } };
+  const properties = new Map([["SUBMISSION_PROXY_SECRET", proxySecret]]);
+  const recordHeaders = ["제출일시", "제출항목명", "제출유형", "학년", "반", "번호", "학생명", "진료일", "의료기관명", "비고", "파일명", "파일URL", "저장폴더ID"];
+  let appended = 0;
+  const sheet = { appendRow: (row) => { assert.ok(row.length > 0); appended++; },
+    getLastColumn: () => recordHeaders.length, getRange: () => ({ getDisplayValues: () => [recordHeaders] }) };
   const context = vm.createContext({
-    LockService: { getScriptLock: () => ({ tryLock() {}, releaseLock() {} }) },
+    LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (key) => properties.get(key) ?? null,
+      setProperty: (key, value) => properties.set(key, value), deleteProperty: (key) => properties.delete(key), getKeys: () => [...properties.keys()] }) },
     SpreadsheetApp: { openById: () => ({ getSheetByName: (name) => { sheets.push(name); return sheet; } }) },
     DriveApp: { getFolderById: (id) => { folders.push(id); return { createFile: () => ({ getUrl: () => "private", getId: () => "private" }) }; } },
-    Utilities: { base64Decode: (value) => [...Buffer.from(value, "base64")], newBlob: (bytes, mimeType) => ({ getContentType: () => mimeType, getBytes: () => bytes }), formatDate: () => "now" },
+    Utilities: { DigestAlgorithm: { SHA_256: "sha256" }, Charset: { UTF_8: "utf8" },
+      base64Decode: (value) => [...Buffer.from(value, "base64")],
+      base64EncodeWebSafe: (value) => Buffer.from(value).toString("base64url"),
+      computeDigest: (_algorithm, value) => [...createHash("sha256").update(value).digest()],
+      computeHmacSha256Signature: (value, secret) => [...createHmac("sha256", secret).update(value).digest()],
+      newBlob: (bytes, mimeType) => ({ getContentType: () => mimeType, getBytes: () => typeof bytes === "string" ? [...Buffer.from(bytes)] : bytes }),
+      formatDate: () => "now" },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: (body) => ({ getContent: () => body, setMimeType() { return this; } }) },
   });
   vm.runInContext(`${code}\nthis.submit = doPost;`, context);
-  const call = (payload) => JSON.parse(context.submit({ postData: { contents: JSON.stringify(payload) } }).getContent());
+  assert.throws(() => context.validateSubmissionBlob_({
+    getContentType: () => "application/pdf",
+    getBytes: () => new Uint8Array(3 * 1024 * 1024 + 1),
+  }), /3MiB/);
+  const callEnvelope = (envelope) => JSON.parse(context.submit({ postData: { contents: JSON.stringify(envelope) } }).getContent());
+  const call = (payload) => callEnvelope(buildSubmissionProxyEnvelope(payload, proxySecret));
+  assert.equal(callEnvelope({ type: "cpr", ...file }).status, "error");
+  assert.equal(sheets.length, 0);
+  const signed = buildSubmissionProxyEnvelope({ ...file, type: "cpr" }, proxySecret);
+  assert.equal(callEnvelope({ ...signed, signature: "bad" }).status, "error");
+  assert.equal(callEnvelope(buildSubmissionProxyEnvelope({ ...file, type: "cpr" }, proxySecret, { now: Date.now() - 180000 })).status, "error");
+  assert.equal(callEnvelope({ ...signed, payloadJson: signed.payloadJson.replace("qa.png", "changed.png") }).status, "error");
+  assert.equal(sheets.length, 0);
   for (const type of ["cpr", "tb"]) {
     const result = call({ ...file, type, sheetName: "Injected", folderId: "Injected" });
     assert.equal(result.status, "success");
@@ -189,4 +248,33 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.inbody.auditSheet);
   assert.equal(call({ type: "unknown", fields: {}, sheetName: "Injected" }).status, "error");
   assert.equal(sheets.includes("Injected"), false);
+  const replay = buildSubmissionProxyEnvelope({ type: "inbody", fields: inbodyFields }, proxySecret);
+  assert.equal(callEnvelope(replay).status, "success");
+  assert.equal(callEnvelope(replay).status, "error");
+  const visitor = createHmac("sha256", proxySecret).update("visitor").digest("base64url");
+  const student = (studentName) => ({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName } });
+  const studentCall = (studentName) => callEnvelope(buildSubmissionProxyEnvelope(student(studentName), proxySecret, { visitor }));
+  const beforeStudent = appended;
+  assert.equal(studentCall("QA1").status, "success");
+  assert.equal(studentCall("QA1").status, "error");
+  assert.equal(studentCall("QA2").status, "success");
+  assert.equal(studentCall("QA3").status, "success");
+  assert.equal(studentCall("QA4").status, "error");
+  assert.equal(appended - beforeStudent, 3);
+  assert.equal(callEnvelope({ ...buildSubmissionProxyEnvelope(student("QA5"), proxySecret, { visitor }), visitor: "altered" }).status, "error");
+  assert.equal(appended - beforeStudent, 3);
+  properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() + 10 * 60 * 1000));
+  const legacyCpr = { ...file, type: "cpr", sheetName: SUBMISSION_WORKFLOWS.cpr.auditSheet, folderId: "Injected" };
+  assert.equal(callEnvelope(legacyCpr).status, "success");
+  assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.cpr.auditSheet);
+  assert.notEqual(folders.at(-1), "Injected");
+  context.getTbRegistrationConfig_ = () => ({ enabled: "TRUE", startDate: "2020-01-01", endDate: "2030-01-01" });
+  assert.equal(callEnvelope({ fields: inbodyFields, sheetName: SUBMISSION_WORKFLOWS.tb_registration.auditSheet }).status, "success");
+  assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.tb_registration.auditSheet);
+  assert.equal(callEnvelope({ ...legacyCpr, sheetName: "Injected" }).status, "error");
+  assert.equal(callEnvelope({ ...legacyCpr, signature: "bad" }).status, "error");
+  properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() - 1));
+  assert.equal(callEnvelope(legacyCpr).status, "error");
+  properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() + 20 * 60 * 1000));
+  assert.equal(callEnvelope(legacyCpr).status, "error");
 });

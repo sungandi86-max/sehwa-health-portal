@@ -199,7 +199,7 @@ export default function FirebaseCprSubmitPage() {
               </div>
 
               <p className="mt-5 rounded-[22px] bg-[#F0FBF7] p-4 text-sm font-bold leading-6 text-[#08754B]">
-                PDF, JPG, PNG 파일만 제출할 수 있으며 파일 크기는 10MB 이하로 제한됩니다.
+                PDF는 3MiB 이하로 제출해 주세요. JPG·PNG 이미지는 크면 자동 압축되며, 압축 후에도 3MiB를 넘으면 제출할 수 없습니다.
               </p>
 
               {submitState.message && (

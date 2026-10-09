@@ -12,6 +12,7 @@ import {
 import { getFixedTbRegistrationType, getTbRegistrationWindowState } from "../lib/portalContent.js";
 import { getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
 import { getStaffSubmissionTaskStatus, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
+import { prepareSubmissionFile, validateSelectableSubmissionFile } from "../lib/submissionFiles.js";
 import {
   INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE,
   INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
@@ -57,20 +58,29 @@ function FileUploadArea({ file, onChange, error }) {
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={file ? `${file.name} 파일 다시 선택` : "PDF, JPG, PNG 파일 선택"}
         className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition
           ${file ? "border-[#1A3B8B] bg-[#EAF3FF]" : "border-slate-200 bg-[#F7F9FC] hover:border-[#1A3B8B]/50"}
-          ${error ? "border-[#D94F70] bg-[#FDEAF0]" : ""}`}
+          ${error ? "border-[#D94F70] bg-[#FDEAF0]" : ""} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A3B8B]`}
       >
         <span className="text-2xl">{file ? "📎" : "📁"}</span>
         {file ? (
           <div className="space-y-1">
             <p className="text-sm font-bold text-[#1A3B8B]">{file.name}</p>
-            <p className="text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+            <p className="text-xs text-slate-600">{(file.size / 1024 / 1024).toFixed(2)} MiB</p>
           </div>
         ) : (
           <>
             <p className="text-sm font-bold text-slate-600">파일을 여기에 드래그하거나 클릭해서 선택</p>
-            <p className="text-xs text-slate-400">PDF · JPG · PNG / 최대 10MB</p>
+            <p className="text-xs text-slate-600">PDF · JPG · PNG / 제출 파일 최대 3MiB<br />큰 이미지는 자동 압축</p>
           </>
         )}
       </div>
@@ -111,6 +121,30 @@ function todayStr() {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function usePreparedFile(setErrors) {
+  const busy = useRef(false);
+  const [preparing, setPreparing] = useState(false);
+  const run = async (file, submit) => {
+    if (busy.current) return;
+    busy.current = true;
+    setPreparing(true);
+    try {
+      let preparedFile;
+      try {
+        preparedFile = await prepareSubmissionFile(file);
+      } catch (error) {
+        setErrors((previous) => ({ ...previous, file: error.message }));
+        return;
+      }
+      await submit(preparedFile);
+    } finally {
+      busy.current = false;
+      setPreparing(false);
+    }
+  };
+  return { run, preparing };
+}
+
 // ───────── 심폐소생술 이수증 폼 ─────────
 function CprForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({
@@ -118,6 +152,7 @@ function CprForm({ onSubmit, submitting }) {
   });
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
+  const { run, preparing } = usePreparedFile(setErrors);
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
@@ -127,7 +162,7 @@ function CprForm({ onSubmit, submitting }) {
     if (!form.dept.trim()) e.dept = "소속/부서를 입력해주세요.";
     if (!form.completionDate) e.completionDate = "이수일자를 선택해주세요.";
     if (!file) e.file = "파일을 첨부해주세요.";
-    else if (file.size > 10 * 1024 * 1024) e.file = "파일 크기가 10MB를 초과합니다.";
+    else if (validateSelectableSubmissionFile(file)) e.file = validateSelectableSubmissionFile(file);
     return e;
   };
 
@@ -136,18 +171,20 @@ function CprForm({ onSubmit, submitting }) {
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
-    const base64 = await fileToBase64(file);
-    const ext = file.name.split(".").pop();
-    const fileName = `${form.name}_심폐소생술이수증_${todayStr()}.${ext}`;
+    await run(file, async (preparedFile) => {
+      const base64 = await fileToBase64(preparedFile);
+      const ext = preparedFile.name.split(".").pop();
+      const fileName = `${form.name}_심폐소생술이수증_${todayStr()}.${ext}`;
 
-    await onSubmit({
-      type: "cpr",
-      sheetName: "응답_심폐소생술이수증",
-      folderId: null,
-      fields: { ...form },
-      fileName,
-      fileBase64: base64,
-      fileMimeType: file.type,
+      await onSubmit({
+        type: "cpr",
+        sheetName: "응답_심폐소생술이수증",
+        folderId: null,
+        fields: { ...form },
+        fileName,
+        fileBase64: base64,
+        fileMimeType: preparedFile.type,
+      });
     });
   };
 
@@ -172,7 +209,7 @@ function CprForm({ onSubmit, submitting }) {
         <FileUploadArea file={file} onChange={setFile} error={errors.file} />
         <p className="mt-1.5 text-xs text-slate-400">권장 파일명: 성명_심폐소생술이수증</p>
       </Field>
-      <SubmitButton onClick={handleSubmit} submitting={submitting} />
+      <SubmitButton onClick={handleSubmit} submitting={submitting} preparing={preparing} />
     </div>
   );
 }
@@ -183,6 +220,7 @@ function TbForm({ onSubmit, submitting }) {
   });
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
+  const { run, preparing } = usePreparedFile(setErrors);
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
@@ -192,7 +230,7 @@ function TbForm({ onSubmit, submitting }) {
     if (!form.dept.trim()) e.dept = "소속/부서를 입력해주세요.";
     if (!form.checkupDate) e.checkupDate = "검진일자를 선택해주세요.";
     if (!file) e.file = "파일을 첨부해주세요.";
-    else if (file.size > 10 * 1024 * 1024) e.file = "파일 크기가 10MB를 초과합니다.";
+    else if (validateSelectableSubmissionFile(file)) e.file = validateSelectableSubmissionFile(file);
     return e;
   };
 
@@ -201,18 +239,20 @@ function TbForm({ onSubmit, submitting }) {
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
-    const base64 = await fileToBase64(file);
-    const ext = file.name.split(".").pop();
-    const fileName = `${form.name}_결핵검진확인증_${todayStr()}.${ext}`;
+    await run(file, async (preparedFile) => {
+      const base64 = await fileToBase64(preparedFile);
+      const ext = preparedFile.name.split(".").pop();
+      const fileName = `${form.name}_결핵검진확인증_${todayStr()}.${ext}`;
 
-    await onSubmit({
-      type: "tb",
-      sheetName: "응답_결핵검진확인증",
-      folderId: null,
-      fields: { ...form },
-      fileName,
-      fileBase64: base64,
-      fileMimeType: file.type,
+      await onSubmit({
+        type: "tb",
+        sheetName: "응답_결핵검진확인증",
+        folderId: null,
+        fields: { ...form },
+        fileName,
+        fileBase64: base64,
+        fileMimeType: preparedFile.type,
+      });
     });
   };
 
@@ -240,7 +280,7 @@ function TbForm({ onSubmit, submitting }) {
         </div>
         <FileUploadArea file={file} onChange={setFile} error={errors.file} />
       </Field>
-      <SubmitButton onClick={handleSubmit} submitting={submitting} />
+      <SubmitButton onClick={handleSubmit} submitting={submitting} preparing={preparing} />
     </div>
   );
 }
@@ -336,6 +376,7 @@ function OtherForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({ name: "", dept: "", staffType: "", note: "" });
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
+  const { run, preparing } = usePreparedFile(setErrors);
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
 
@@ -345,7 +386,7 @@ function OtherForm({ onSubmit, submitting }) {
     if (!form.dept.trim()) e.dept = "소속/부서를 입력해주세요.";
     if (!form.staffType) e.staffType = "교직원 구분을 선택해주세요.";
     if (!file) e.file = "파일을 첨부해주세요.";
-    else if (file.size > 10 * 1024 * 1024) e.file = "파일 크기가 10MB를 초과합니다.";
+    else if (validateSelectableSubmissionFile(file)) e.file = validateSelectableSubmissionFile(file);
     return e;
   };
 
@@ -354,18 +395,20 @@ function OtherForm({ onSubmit, submitting }) {
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
-    const base64 = await fileToBase64(file);
-    const ext = file.name.split(".").pop();
-    const fileName = `${form.name}_기타보건자료_${todayStr()}.${ext}`;
+    await run(file, async (preparedFile) => {
+      const base64 = await fileToBase64(preparedFile);
+      const ext = preparedFile.name.split(".").pop();
+      const fileName = `${form.name}_기타보건자료_${todayStr()}.${ext}`;
 
-    await onSubmit({
-      type: "other",
-      sheetName: "응답_기타보건자료",
-      folderId: null,
-      fields: { ...form },
-      fileName,
-      fileBase64: base64,
-      fileMimeType: file.type,
+      await onSubmit({
+        type: "other",
+        sheetName: "응답_기타보건자료",
+        folderId: null,
+        fields: { ...form },
+        fileName,
+        fileBase64: base64,
+        fileMimeType: preparedFile.type,
+      });
     });
   };
 
@@ -404,31 +447,31 @@ function OtherForm({ onSubmit, submitting }) {
       <Field label="자료 파일 업로드" required>
         <FileUploadArea file={file} onChange={setFile} error={errors.file} />
       </Field>
-      <SubmitButton onClick={handleSubmit} submitting={submitting} />
+      <SubmitButton onClick={handleSubmit} submitting={submitting} preparing={preparing} />
     </div>
   );
 }
 
 // ───────── 제출 버튼 ─────────
-function SubmitButton({ onClick, submitting, children = "제출하기" }) {
+function SubmitButton({ onClick, submitting, preparing = false, children = "제출하기" }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={submitting}
+      disabled={submitting || preparing}
       className={`w-full rounded-2xl px-5 py-4 text-sm font-semibold text-white shadow-sm transition
-        ${submitting
+        ${submitting || preparing
           ? "cursor-not-allowed bg-slate-300"
           : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md active:translate-y-0"
         }`}
     >
-      {submitting ? (
+      {submitting || preparing ? (
         <span className="flex items-center justify-center gap-2">
           <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="white" strokeWidth="4" />
             <path className="opacity-75" fill="white" d="M4 12a8 8 0 018-8v8z" />
           </svg>
-          제출 중...
+          {preparing ? "파일 준비 중..." : "제출 중..."}
         </span>
       ) : (
         children
@@ -455,6 +498,7 @@ function StudentFileUploadForm({
   });
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
+  const { run, preparing } = usePreparedFile(setErrors);
 
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
@@ -465,7 +509,7 @@ function StudentFileUploadForm({
     if (!form.studentNumber.trim()) nextErrors.studentNumber = "번호를 입력해주세요.";
     if (!form.studentName.trim()) nextErrors.studentName = "학생 이름을 입력해주세요.";
     if (!file) nextErrors.file = "진료회신 파일을 첨부해주세요.";
-    else if (file.size > 10 * 1024 * 1024) nextErrors.file = "파일 크기가 10MB를 초과합니다.";
+    else if (validateSelectableSubmissionFile(file)) nextErrors.file = validateSelectableSubmissionFile(file);
     return nextErrors;
   };
 
@@ -474,15 +518,26 @@ function StudentFileUploadForm({
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    const base64 = await fileToBase64(file);
-    const ext = file.name.split(".").pop();
-    const fileName = `${form.grade}학년_${form.classNumber}반_${form.studentNumber}번_${form.studentName}_${meta.fileNameLabel}_${todayStr()}.${ext}`;
+    await run(file, async (preparedFile) => {
+      const base64 = await fileToBase64(preparedFile);
+      const ext = preparedFile.name.split(".").pop();
+      const fileName = `${form.grade}학년_${form.classNumber}반_${form.studentNumber}번_${form.studentName}_${meta.fileNameLabel}_${todayStr()}.${ext}`;
 
-    await onSubmit({
-      type: meta.type,
-      sheetName: meta.sheetName,
-      folderId: meta.folderId,
-      fields: {
+      await onSubmit({
+        type: meta.type,
+        sheetName: meta.sheetName,
+        folderId: meta.folderId,
+        fields: {
+          grade: form.grade,
+          classNumber: form.classNumber,
+          studentNumber: form.studentNumber.trim(),
+          studentName: form.studentName.trim(),
+          visitDate: form.visitDate,
+          hospitalName: form.hospitalName.trim(),
+          note: form.note.trim(),
+        },
+        submissionType: meta.submissionType,
+        submissionTitle: meta.submissionTitle,
         grade: form.grade,
         classNumber: form.classNumber,
         studentNumber: form.studentNumber.trim(),
@@ -490,20 +545,11 @@ function StudentFileUploadForm({
         visitDate: form.visitDate,
         hospitalName: form.hospitalName.trim(),
         note: form.note.trim(),
-      },
-      submissionType: meta.submissionType,
-      submissionTitle: meta.submissionTitle,
-      grade: form.grade,
-      classNumber: form.classNumber,
-      studentNumber: form.studentNumber.trim(),
-      studentName: form.studentName.trim(),
-      visitDate: form.visitDate,
-      hospitalName: form.hospitalName.trim(),
-      note: form.note.trim(),
-      fileName,
-      fileBase64: base64,
-      fileMimeType: file.type,
-      mimeType: file.type,
+        fileName,
+        fileBase64: base64,
+        fileMimeType: preparedFile.type,
+        mimeType: preparedFile.type,
+      });
     });
   };
 
@@ -571,7 +617,7 @@ function StudentFileUploadForm({
         <p className="mt-1.5 text-xs text-slate-400">JPG · PNG · PDF 파일을 첨부해주세요.</p>
       </Field>
 
-      <SubmitButton onClick={handleSubmit} submitting={submitting}>
+      <SubmitButton onClick={handleSubmit} submitting={submitting} preparing={preparing}>
         {meta.submitLabel}
       </SubmitButton>
     </div>

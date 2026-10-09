@@ -16,7 +16,7 @@ import {
 } from "../data/individualHealthCheckupSubmission.js";
 import { getStaffDisplayName, getStaffRoleDisplay } from "../lib/staffIdentity.js";
 import { inferSubmissionStaffType } from "../lib/staffType.js";
-import { createTbSubmission, validateSubmissionFile } from "../lib/staffSubmissions.js";
+import { createTbSubmission, validateSelectableSubmissionFile as validateSubmissionFile } from "../lib/staffSubmissions.js";
 import { getStaffSubmissionTaskStatus, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
 
@@ -288,7 +288,7 @@ export default function FirebaseTbSubmitPage() {
               </div>
 
               <p className="mt-5 rounded-[22px] bg-[#F0FBF7] p-4 text-sm font-bold leading-6 text-[#08754B]">
-                {INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE} PDF, JPG, PNG 파일만 제출할 수 있으며 파일 크기는 10MB 이하로 제한됩니다.
+                {INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE} PDF는 3MiB 이하로 제출해 주세요. JPG·PNG 이미지는 크면 자동 압축되며, 압축 후에도 3MiB를 넘으면 제출할 수 없습니다.
               </p>
 
               {submitState.message && (

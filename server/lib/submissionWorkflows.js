@@ -1,5 +1,5 @@
 const FILE_MIME_TYPES = Object.freeze(["application/pdf", "image/jpeg", "image/png"]);
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = 3 * 1024 * 1024;
 const REQUIRED_FIELDS = Object.freeze({
   cpr: ["name", "completionDate"],
   tb: ["name", "checkupDate"],
@@ -42,12 +42,18 @@ export function validateSubmissionPayload(workflow, payload) {
     if (!payload.fileBase64 || !payload.fileName || !workflow.allowedMimeTypes.includes(payload.fileMimeType)) {
       return { ok: false, status: 400, message: "PDF, JPG, PNG 파일이 필요합니다." };
     }
-    if (typeof payload.fileBase64 !== "string" || payload.fileBase64.length > Math.ceil(workflow.maxFileSize / 3) * 4 + 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(payload.fileBase64)) {
-      return { ok: false, status: 413, message: "파일 형식 또는 크기를 확인해 주세요." };
+    if (typeof payload.fileBase64 !== "string" || payload.fileBase64.length > Math.ceil(workflow.maxFileSize / 3) * 4 + 4) {
+      return { ok: false, status: 413, message: "파일 크기는 3MiB 이하로 줄여 주세요." };
+    }
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(payload.fileBase64)) {
+      return { ok: false, status: 400, message: "파일 형식을 확인해 주세요." };
     }
     const decoded = Buffer.from(payload.fileBase64, "base64");
-    if (!decoded.length || decoded.length > workflow.maxFileSize || decoded.toString("base64") !== payload.fileBase64) {
-      return { ok: false, status: 413, message: "파일 형식 또는 크기를 확인해 주세요." };
+    if (decoded.length > workflow.maxFileSize) {
+      return { ok: false, status: 413, message: "파일 크기는 3MiB 이하로 줄여 주세요." };
+    }
+    if (!decoded.length || decoded.toString("base64") !== payload.fileBase64) {
+      return { ok: false, status: 400, message: "파일 형식을 확인해 주세요." };
     }
     const fileSignatureValid = payload.fileMimeType === "application/pdf"
       ? decoded.subarray(0, 5).toString("ascii") === "%PDF-"
