@@ -5,8 +5,8 @@ import { isCompletedTbStatus, isTbScreeningSubmission, TB_SCREENING_TASK_ID } fr
 test("TB confirmation and group registration payloads use the TB guard", () => {
   assert.equal(isTbScreeningSubmission({ type: "tb" }), true);
   assert.equal(isTbScreeningSubmission({ type: "tb_registration" }), true);
-  assert.equal(isTbScreeningSubmission({ sheetName: "응답_결핵검진확인증" }), true);
-  assert.equal(isTbScreeningSubmission({ sheetName: "응답_교직원결핵검진유형선택" }), true);
+  assert.equal(isTbScreeningSubmission({ sheetName: "응답_결핵검진확인증" }), false);
+  assert.equal(isTbScreeningSubmission({ sheetName: "응답_교직원결핵검진유형선택" }), false);
 });
 
 test("unrelated submissions do not use the TB guard", () => {

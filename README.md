@@ -51,51 +51,25 @@ Firebase v2 전환 작업은 `firebase-v2` 브랜치에서 진행합니다. 운�
 
 ---
 
-## 📋 제출·업로드 센터 Apps Script 설정
+## 제출·업로드 센터 저장 경계
 
-### 1단계: Apps Script 코드 적용
+브라우저는 같은 origin의 `/api/submit`에 canonical 제출 유형만 보냅니다. Apps Script URL은 서버의 `GAS_URL` 또는 `VITE_GAS_BASE_URL`에서만 읽으며, 클라이언트의 Sheet 이름이나 Drive 폴더 ID는 목적지로 사용하지 않습니다. 서버 workflow 정책과 운영 전 검증 항목은 [Submission workflow Phase 1](docs/SUBMISSION_WORKFLOW_PHASE1.md)을 참고하세요.
 
-1. [script.google.com](https://script.google.com) 에서 기존 프로젝트 열기
-2. `apps-script/Code.gs` 파일 내용을 기존 코드에 **추가** (doGet은 유지, doPost 추가)
-3. **배포 → 새 배포 → 웹 앱** 선택
-4. 설정:
-   - 실행 계정: **나**
-   - 액세스 권한: **모든 사용자** (익명 포함)
-5. **배포** 버튼 클릭 → 새 URL 복사
-
-### 2단계: React 앱 URL 업데이트
-
-`src/components/SubmitModal.jsx` 파일 상단:
-
-```js
-const SCRIPT_URL = "https://script.google.com/macros/s/여기에_새_배포_URL/exec";
-```
-
-> ⚠️ **주의**: `doPost`를 추가하면 반드시 **새 버전으로 재배포**해야 합니다.
-> 기존 배포 URL을 수정 배포하면 변경사항이 반영됩니다.
-
-### 3단계: Drive 폴더 권한 확인
-
-각 폴더 ID에 해당하는 Google Drive 폴더가 Apps Script 실행 계정에서 **편집 가능** 상태인지 확인하세요.
-
-| 제출 종류 | 폴더 ID |
-|---|---|
-| 심폐소생술 이수증 | `19foLN446v5ggGN6hxLBuH8tNAQuSXgtM` |
-| 결핵검진 확인증 | `1MfxNVL1muROzpi1ZbV7WDWr4SKMU7ghm` |
-| 기타 보건자료 | `1T2yMxeKmab1SDqdVCRgdxpHMx3Fu2EO6` |
+Apps Script 운영본을 갱신할 때는 현재 web app deployment ID/URL을 유지하고, 코드와 배포 버전의 차이를 검증해야 합니다. 공개 웹 앱 URL 자체의 직접 호출 방지는 별도 보안 과제이며, 이 브랜치만으로 운영 배포하지 않습니다.
 
 ---
 
-## 📊 자동 생성 시트
+## 제출 응답 시트
 
-doPost가 처음 호출될 때 아래 시트가 자동 생성됩니다:
+아래 응답 시트는 제출 전에 이미 존재해야 합니다. Apps Script는 없는 시트를 자동 생성하지 않고 제출을 거부합니다.
 
 | 시트명 | 열 구성 |
 |---|---|
 | 응답_심폐소생술이수증 | 제출일시 · 성명 · 소속/부서 · 교직원구분 · 이수일자 · 이수기관 · 파일명 · 파일링크 |
 | 응답_결핵검진확인증 | 제출일시 · 성명 · 소속/부서 · 교직원구분 · 검진일자 · 제출자료유형 · 파일명 · 파일링크 |
-| 응답_채용검진확인요청 | 제출일시 · 성명 · 소속/부서 · 교직원구분 · 행정실제출여부 · 제출시기 · 비고 |
-| 응답_기타보건자료 | 제출일시 · 성명 · 소속/부서 · 교직원구분 · 비고 · 파일명 · 파일링크 |
+| 응답_교직원결핵검진유형선택 | 제출일시 · 성명 · 소속/부서 · 검진유형 · 비고 |
+| 응답_인바디측정신청 | 제출일시 · 성명 · 소속/부서 · 희망날짜 · 희망시간대 |
+| 제출기록 | 학생 결핵검진 진료회신 파일 접수 기록 |
 
 ---
 

@@ -61,16 +61,6 @@ const HEALTH_ROOM_BACKUP = {
   ]
 };
 
-const SUBMIT_SHEET_HEADERS = {
-  "응답_심폐소생술이수증":        ["제출일시","성명","소속/부서","교직원구분","이수일자","이수기관","파일명","파일링크"],
-  "응답_결핵검진확인증":          ["제출일시","성명","소속/부서","교직원구분","검진일자","제출자료유형","파일명","파일링크"],
-  "응답_채용검진확인요청":        ["제출일시","성명","소속/부서","교직원구분","행정실제출여부","제출시기","비고"],
-  "응답_기타보건자료":            ["제출일시","성명","소속/부서","교직원구분","비고","파일명","파일링크"],
-  "응답_교직원결핵검진유형선택":  ["제출일시","성명","소속/부서","검진유형","비고"],
-  "응답_인바디측정신청": ["제출일시","성명","소속/부서","희망날짜","희망시간대"],
-  "응답_결핵검진진료회신": ["제출일시","학년","반","번호","학생 이름","진료일","의료기관명","파일명","파일링크"],
-};
-
 const TB_GROUP_REQUEST_RESPONSE_VALUE = "단체검진 신청";
 
 // ════════════════════════════════════════════════════════════════
@@ -325,21 +315,33 @@ function doPost(e) {
     if (payload.action === "getAdminReceiptSummary") {
       return jsonOutput_(getAdminReceiptSummary_(payload));
     }
-    if (payload.type === "student-file" || payload.submissionType === "student-file") {
+    if (payload.type === "student-file") {
       const result = appendStudentFileSubmission_(payload);
       return ContentService.createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    const { sheetName, folderId, fields, fileName, fileBase64, fileMimeType } = payload;
-    if (!sheetName) throw new Error("sheetName 누락");
+    const destinations = {
+      cpr: { sheetName: "응답_심폐소생술이수증", folderId: FOLDER_IDS.cpr },
+      tb: { sheetName: "응답_결핵검진확인증", folderId: FOLDER_IDS.tb },
+      tb_registration: { sheetName: "응답_교직원결핵검진유형선택", folderId: null },
+      inbody: { sheetName: "응답_인바디측정신청", folderId: null }
+    };
+    const destination = destinations[payload.type];
+    if (!destination) throw new Error("지원하지 않는 제출 유형입니다.");
+    const { sheetName, folderId } = destination;
+    const { fields, fileName, fileBase64, fileMimeType } = payload;
+    if (folderId ? (!fileBase64 || !fileName || !fileMimeType) : (fileBase64 || fileName || fileMimeType)) {
+      throw new Error("파일 제출 구성이 올바르지 않습니다.");
+    }
     const ss    = getSpreadsheet_();
-    const sheet = getOrCreateSubmitSheet_(ss, sheetName);
+    const sheet = getSubmitSheet_(ss, sheetName);
     let fileLink = "";
     let fileId = "";
     if (fileBase64 && folderId && fileName) {
-      const folder    = DriveApp.getFolderById(folderId);
       const blob      = Utilities.newBlob(Utilities.base64Decode(fileBase64), fileMimeType, fileName);
+      validateSubmissionBlob_(blob);
+      const folder    = DriveApp.getFolderById(folderId);
       const driveFile = folder.createFile(blob);
       fileLink = driveFile.getUrl();
       fileId = driveFile.getId();
@@ -353,7 +355,7 @@ function doPost(e) {
     }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." }))
       .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
@@ -363,18 +365,18 @@ function doPost(e) {
 function appendStudentFileSubmission_(payload) {
   const ss = getSpreadsheet_();
   const fields = payload.fields || {};
-  const submissionTitle = String(payload.submissionTitle || fields.submissionTitle || "결핵검진 진료회신 제출").trim();
-  const submissionType = String(payload.submissionType || payload.type || "student-file").trim();
-  const grade = String(payload.grade || fields.grade || "").trim();
-  const classNumber = String(payload.classNumber || fields.classNumber || "").trim();
-  const studentNumber = String(payload.studentNumber || fields.studentNumber || "").trim();
-  const studentName = String(payload.studentName || fields.studentName || "").trim();
-  const visitDate = String(payload.visitDate || fields.visitDate || fields.treatmentDate || "").trim();
-  const hospitalName = String(payload.hospitalName || fields.hospitalName || fields.medicalInstitution || "").trim();
-  const note = String(payload.note || fields.note || "").trim();
+  const submissionTitle = "결핵검진 진료회신 제출";
+  const submissionType = "student-file";
+  const grade = String(fields.grade || "").trim();
+  const classNumber = String(fields.classNumber || "").trim();
+  const studentNumber = String(fields.studentNumber || "").trim();
+  const studentName = String(fields.studentName || "").trim();
+  const visitDate = String(fields.visitDate || "").trim();
+  const hospitalName = String(fields.hospitalName || "").trim();
+  const note = String(fields.note || "").trim();
   const fileName = String(payload.fileName || "").trim();
-  const fileBase64 = payload.fileBase64 || payload.fileData || payload.base64 || "";
-  const mimeType = payload.fileMimeType || payload.mimeType || "";
+  const fileBase64 = payload.fileBase64 || "";
+  const mimeType = payload.fileMimeType || "";
 
   if (!grade || !classNumber || !studentNumber || !studentName) {
     throw new Error("학생 정보(학년, 반, 번호, 학생명)는 필수입니다.");
@@ -383,15 +385,16 @@ function appendStudentFileSubmission_(payload) {
     throw new Error("업로드 파일이 누락되었습니다.");
   }
 
-  const managedFolderId = getSubmissionManagedFolderId_(ss, submissionTitle);
-  const folderId = managedFolderId || payload.folderId || STUDENT_FILE_DEFAULT_FOLDER_ID;
-  const folder = DriveApp.getFolderById(folderId);
+  const recordDestination = getSubmissionRecordDestination_(ss);
+  const folderId = STUDENT_FILE_DEFAULT_FOLDER_ID;
   const blob = Utilities.newBlob(Utilities.base64Decode(fileBase64), mimeType, fileName);
+  validateSubmissionBlob_(blob);
+  const folder = DriveApp.getFolderById(folderId);
   const driveFile = folder.createFile(blob);
   const fileUrl = driveFile.getUrl();
   const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
 
-  appendSubmissionRecord_(ss, {
+  appendSubmissionRecord_(recordDestination, {
     "제출일시": now,
     "제출항목명": submissionTitle,
     "제출유형": submissionType,
@@ -411,10 +414,21 @@ function appendStudentFileSubmission_(payload) {
     status: "success",
     success: true,
     result: "success",
-    submittedAt: now,
-    fileUrl: fileUrl,
-    folderId: folderId
+    submittedAt: now
   };
+}
+
+function validateSubmissionBlob_(blob) {
+  const mimeType = blob.getContentType();
+  const bytes = blob.getBytes();
+  if (["application/pdf", "image/jpeg", "image/png"].indexOf(mimeType) === -1 || !bytes.length || bytes.length > 10 * 1024 * 1024) {
+    throw new Error("PDF, JPG, PNG 파일만 10MB 이하로 제출할 수 있습니다.");
+  }
+  const values = bytes.slice(0, 8).map(function(byte) { return byte & 255; });
+  const pdf = mimeType === "application/pdf" && values.slice(0, 5).join(",") === "37,80,68,70,45";
+  const jpeg = mimeType === "image/jpeg" && values.slice(0, 3).join(",") === "255,216,255";
+  const png = mimeType === "image/png" && values.join(",") === "137,80,78,71,13,10,26,10";
+  if (!pdf && !jpeg && !png) throw new Error("파일 내용과 형식이 일치하지 않습니다.");
 }
 
 function getSubmissionManagedFolderId_(ss, submissionTitle) {
@@ -438,44 +452,25 @@ function getSubmissionManagedFolderId_(ss, submissionTitle) {
   return "";
 }
 
-function appendSubmissionRecord_(ss, record) {
-  let sheet = ss.getSheetByName(SUBMISSION_RECORD_SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(SUBMISSION_RECORD_SHEET_NAME);
-    sheet.appendRow(STUDENT_FILE_RECORD_HEADERS);
-    const headerRange = sheet.getRange(1, 1, 1, STUDENT_FILE_RECORD_HEADERS.length);
-    headerRange.setBackground("#1A3B8B");
-    headerRange.setFontColor("#FFFFFF");
-    headerRange.setFontWeight("bold");
+function getSubmissionRecordDestination_(ss) {
+  const sheet = ss.getSheetByName(SUBMISSION_RECORD_SHEET_NAME);
+  if (!sheet) throw new Error("제출 기록 시트가 준비되지 않았습니다.");
+  const lastColumn = Math.max(sheet.getLastColumn(), 1);
+  const headers = sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0]
+    .map(function(header) { return String(header || "").trim(); });
+  if (STUDENT_FILE_RECORD_HEADERS.some(function(header) { return headers.indexOf(header) === -1; })) {
+    throw new Error("제출 기록 시트 헤더가 올바르지 않습니다.");
   }
+  return { sheet: sheet, headers: headers };
+}
 
-  const headers = ensureSubmissionRecordHeaders_(sheet, STUDENT_FILE_RECORD_HEADERS);
+function appendSubmissionRecord_(destination, record) {
+  const sheet = destination.sheet;
+  const headers = destination.headers;
   const row = headers.map(function(header) {
     return record[header] !== undefined ? record[header] : "";
   });
   sheet.appendRow(row);
-}
-
-function ensureSubmissionRecordHeaders_(sheet, requiredHeaders) {
-  const lastColumn = Math.max(sheet.getLastColumn(), 1);
-  let headers = sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0]
-    .map(function(header) { return String(header || "").trim(); });
-
-  if (headers.length === 1 && !headers[0]) {
-    sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
-    return requiredHeaders.slice();
-  }
-
-  const missing = requiredHeaders.filter(function(header) {
-    return headers.indexOf(header) === -1;
-  });
-
-  if (missing.length > 0) {
-    sheet.getRange(1, headers.length + 1, 1, missing.length).setValues([missing]);
-    headers = headers.concat(missing);
-  }
-
-  return headers;
 }
 
 function findHeaderIndex_(headers, candidates) {
@@ -486,20 +481,9 @@ function findHeaderIndex_(headers, candidates) {
   return -1;
 }
 
-function getOrCreateSubmitSheet_(ss, sheetName) {
-  let sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-    const headers = SUBMIT_SHEET_HEADERS[sheetName];
-    if (headers) {
-      sheet.appendRow(headers);
-      const range = sheet.getRange(1, 1, 1, headers.length);
-      range.setBackground("#1A3B8B");
-      range.setFontColor("#FFFFFF");
-      range.setFontWeight("bold");
-      sheet.setFrozenRows(1);
-    }
-  }
+function getSubmitSheet_(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error("제출 응답 시트가 준비되지 않았습니다.");
   return sheet;
 }
 
@@ -2668,11 +2652,16 @@ function getUploads_(ss) {
     deadline:     getValue_(r, ["마감"]),
     fileGuide:    getValue_(r, ["안내문"]),
     buttonText:   getValue_(r, ["버튼명"]),
-    url:          getValue_(r, ["링크"]),
+    url:          safeSubmissionCardUrl_(getValue_(r, ["링크"])),
     status:       getValue_(r, ["상태"], "접수 중"),
     uploadType:   getValue_(r, ["유형"], "file"),
     highlight:    isTrue_(getValue_(r, ["강조"], ""))
   }));
+}
+
+function safeSubmissionCardUrl_(value) {
+  const url = String(value || "").trim();
+  return /^(https:\/\/(?!drive\.google\.com\/)|\/(?!\/))/i.test(url) ? url : "";
 }
 
 function getStudentCare_(ss) {
@@ -2750,7 +2739,7 @@ function testDoPost() {
 
 function testSheetWrite() {
   const ss    = getSpreadsheet_();
-  const sheet = getOrCreateSubmitSheet_(ss, "응답_결핵검진확인증");
+  const sheet = getSubmitSheet_(ss, "응답_결핵검진확인증");
   sheet.appendRow(["테스트", "홍길동", "1학년부", "교사", "2025-05-20", "결핵검진 확인증", "", ""]);
   Logger.log("완료: " + sheet.getName());
 }

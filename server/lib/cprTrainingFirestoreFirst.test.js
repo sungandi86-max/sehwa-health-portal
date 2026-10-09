@@ -18,8 +18,12 @@ test("CPR runtime no longer names the legacy status sheet", async () => {
 });
 
 test("raw CPR evidence response remains available", async () => {
-  const content = await readFile("src/lib/staffSubmissions.js", "utf8");
-  assert.match(content, /응답_심폐소생술이수증/);
+  const registry = await readFile("server/lib/submissionWorkflows.js", "utf8");
+  const script = await readFile("apps-script/Code.gs", "utf8");
+  const client = await readFile("src/lib/staffSubmissions.js", "utf8");
+  assert.match(registry, /auditSheet: "응답_심폐소생술이수증"/);
+  assert.match(script, /cpr: \{ sheetName: "응답_심폐소생술이수증"/);
+  assert.doesNotMatch(client, /응답_심폐소생술이수증/);
 });
 
 test("CPR submissions and status writes remain staffId and admin bound", async () => {

@@ -7,9 +7,7 @@ export const TB_COMPLETED_MESSAGE = "이미 결핵검진 완료가 확인되어 
 export function isTbScreeningSubmission(payload) {
   return (
     payload?.type === "tb" ||
-    payload?.type === "tb_registration" ||
-    payload?.sheetName === "응답_결핵검진확인증" ||
-    payload?.sheetName === "응답_교직원결핵검진유형선택"
+    payload?.type === "tb_registration"
   );
 }
 
@@ -32,10 +30,11 @@ export async function verifyCurrentStaffSubmissionIdentity(req) {
     const snapshot = await db.collection("user_assignments").doc(getAssignmentId(decodedToken.uid)).get();
     const assignment = snapshot.exists ? snapshot.data() : null;
     const staffId = String(assignment?.staffId || "").trim();
-    if (!assignment || assignment.active !== true || (assignment.uid && assignment.uid !== decodedToken.uid) || !staffId) {
+    const roles = Array.isArray(assignment?.roles) ? assignment.roles : [];
+    if (!assignment || assignment.active !== true || (assignment.uid && assignment.uid !== decodedToken.uid) || !staffId || !roles.some((role) => ["staff", "homeroom", "health_teacher", "admin"].includes(role))) {
       return { ok: false, status: 403, message: "현재 학기 교직원 정보 연결이 필요합니다." };
     }
-    return { ok: true, db, staffId };
+    return { ok: true, db, staffId, roles };
   } catch {
     return { ok: false, status: 503, message: "교직원 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
@@ -45,12 +44,12 @@ export async function verifyTbSubmissionAllowed(req) {
   const identity = await verifyCurrentStaffSubmissionIdentity(req);
   if (!identity.ok) return identity;
   try {
-    const { db, staffId } = identity;
+    const { db, staffId, roles } = identity;
     const statusSnapshot = await db
       .collection("staff_submission_status")
       .doc(`${staffId}_${TB_SCREENING_TASK_ID}`)
       .get();
-    if (!statusSnapshot.exists) return { ok: true, staffId, statusValue: "unknown" };
+    if (!statusSnapshot.exists) return { ok: true, staffId, roles, statusValue: "unknown" };
 
     const statusData = statusSnapshot.data();
     const statusMatchesIdentity = statusData?.staffId === staffId && statusData?.taskId === TB_SCREENING_TASK_ID;
@@ -58,7 +57,7 @@ export async function verifyTbSubmissionAllowed(req) {
       return { ok: false, status: 409, message: TB_COMPLETED_MESSAGE };
     }
 
-    return { ok: true, staffId, statusValue: statusMatchesIdentity ? statusData?.status || "unknown" : "unknown" };
+    return { ok: true, staffId, roles, statusValue: statusMatchesIdentity ? statusData?.status || "unknown" : "unknown" };
   } catch {
     return { ok: false, status: 503, message: "결핵검진 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }

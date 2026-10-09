@@ -19,12 +19,6 @@ import {
 } from "../data/individualHealthCheckupSubmission.js";
 const SCRIPT_URL = "/api/submit";
 
-const FOLDER_IDS = {
-  cpr: "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM",
-  tb: "1MfxNVL1muROzpi1ZbV7WDWr4SKMU7ghm",
-  other: "1T2yMxeKmab1SDqdVCRgdxpHMx3Fu2EO6",
-};
-
 const STAFF_TYPES = ["교사", "강사", "행정직원"];
 const DEPT_TYPES = ["교무교육과정부", "진로진학홍보부", "연구정보부", "창의인성부", "생활안전부", "1학년부", "2학년부", "3학년부", "행정실", "관리자"];
 const INFECTION_TYPES = ["코로나19", "인플루엔자", "수두", "장염", "기타"];
@@ -149,7 +143,7 @@ function CprForm({ onSubmit, submitting }) {
     await onSubmit({
       type: "cpr",
       sheetName: "응답_심폐소생술이수증",
-      folderId: FOLDER_IDS.cpr,
+      folderId: null,
       fields: { ...form },
       fileName,
       fileBase64: base64,
@@ -214,7 +208,7 @@ function TbForm({ onSubmit, submitting }) {
     await onSubmit({
       type: "tb",
       sheetName: "응답_결핵검진확인증",
-      folderId: FOLDER_IDS.tb,
+      folderId: null,
       fields: { ...form },
       fileName,
       fileBase64: base64,
@@ -367,7 +361,7 @@ function OtherForm({ onSubmit, submitting }) {
     await onSubmit({
       type: "other",
       sheetName: "응답_기타보건자료",
-      folderId: FOLDER_IDS.other,
+      folderId: null,
       fields: { ...form },
       fileName,
       fileBase64: base64,
@@ -634,7 +628,7 @@ function StudentTbReplyForm({ onSubmit, submitting, publicMode = false }) {
         submissionType: "student-file",
         submissionTitle: "결핵검진 진료회신 제출",
         sheetName: "응답_결핵검진진료회신",
-        folderId: "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63",
+        folderId: null,
         fileNameLabel: "결핵검진진료회신",
         guide: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해 주세요.",
         submitLabel: "진료회신 업로드하기",
@@ -761,6 +755,7 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig, forceCompleted = f
     if (Object.keys(e).length > 0) return;
 
     await onSubmit({
+      type: "tb_registration",
       sheetName: "응답_교직원결핵검진유형선택",
       folderId: null,
       fields: { name: identity.name, dept: identity.department, registrationType: getFixedTbRegistrationType() },
@@ -1259,8 +1254,8 @@ export default function SubmitModal({ type, onClose, tbConfig, publicMode = fals
     setStatus("submitting");
     setSubmitError("");
     try {
-      const requiresTbAuth = type === "tb" || type === "tb_registration";
-      const idToken = requiresTbAuth ? await auth.currentUser?.getIdToken() : "";
+      const requiresStaffAuth = ["cpr", "tb", "tb_registration", "inbody"].includes(type);
+      const idToken = requiresStaffAuth ? await auth.currentUser?.getIdToken() : "";
       const res = await fetch(SCRIPT_URL, {
         method: "POST",
         headers: {

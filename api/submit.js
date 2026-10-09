@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import { isTbScreeningSubmission, verifyCurrentStaffSubmissionIdentity, verifyTbSubmissionAllowed } from "../server/lib/tbSubmissionGuard.js";
+import { verifyCurrentStaffSubmissionIdentity, verifyTbSubmissionAllowed } from "../server/lib/tbSubmissionGuard.js";
 import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 import {
   buildTbCertificateStatus,
@@ -7,10 +7,11 @@ import {
   saveTbScreeningStatus,
 } from "../server/lib/tbScreeningStatus.js";
 import { buildCprExternalSubmissionStatus, saveCprTrainingStatus } from "../server/lib/cprTrainingStatus.js";
+import { buildScriptSubmission, resolveSubmissionWorkflow, validateSubmissionPayload } from "../server/lib/submissionWorkflows.js";
 
-const SCRIPT_URL =
-  process.env.GAS_URL ||
-  "https://script.google.com/macros/s/AKfycby74IilU88WnpwbJNNcXxO1llF8VdBuhrMVk5PnFUzZy0DfXm-dSqyBhPB3_Uu2KNQ/exec";
+function scriptUrl() {
+  return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
+}
 
 export const config = {
   api: { bodyParser: false }
@@ -32,12 +33,8 @@ function isSuccessfulResponse(payload) {
   return payload?.status === "success" || payload?.success === true || payload?.ok === true;
 }
 
-function isCprSubmission(payload) {
-  return payload?.type === "cpr" || payload?.sheetName === "응답_심폐소생술이수증";
-}
-
 function buildTbStatusPayload(payload, staffId) {
-  if (payload?.type === "tb" || payload?.sheetName === "응답_결핵검진확인증") {
+  if (payload?.type === "tb") {
     return buildTbCertificateStatus({
       staffId,
       checkupDate: payload?.fields?.checkupDate,
@@ -50,17 +47,21 @@ function buildTbStatusPayload(payload, staffId) {
   });
 }
 
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-
-  if (req.method === "OPTIONS") return res.status(200).end();
+export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl() } = {}) {
+  res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
+  if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
+    return res.status(415).json({ status: "error", success: false, message: "JSON 제출 요청만 허용됩니다." });
+  }
 
   try {
     const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
+    let requestBytes = 0;
+    for await (const chunk of req) {
+      requestBytes += chunk.length;
+      if (requestBytes > 15 * 1024 * 1024) return res.status(413).json({ status: "error", success: false, message: "제출 파일 크기를 확인해 주세요." });
+      chunks.push(chunk);
+    }
     const rawBody = Buffer.concat(chunks).toString("utf-8");
     const payload = parseJsonBody(rawBody);
 
@@ -73,23 +74,34 @@ export default async function handler(req, res) {
       });
     }
 
+    const workflow = resolveSubmissionWorkflow(payload);
+    const validation = validateSubmissionPayload(workflow, payload);
+    if (!validation.ok) return res.status(validation.status).json({ status: "error", success: false, message: validation.message });
+
     let tbGuard = null;
     let cprIdentity = null;
-    if (isTbScreeningSubmission(payload)) {
-      tbGuard = await verifyTbSubmissionAllowed(req);
+    if (workflow.authPolicy === "current_staff_tb_guard") {
+      tbGuard = await verifyTb(req);
       if (!tbGuard.ok) {
         return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
       }
     }
-    if (isCprSubmission(payload)) {
-      cprIdentity = await verifyCurrentStaffSubmissionIdentity(req);
+    if (workflow.authPolicy === "current_staff") {
+      cprIdentity = await verifyStaff(req);
       if (!cprIdentity.ok) return res.status(cprIdentity.status).json({ status: "error", success: false, message: cprIdentity.message });
     }
+    const identity = tbGuard || cprIdentity;
+    if (workflow.requiresCanonicalStaffId && (!identity?.staffId || !identity.roles?.some((role) => workflow.allowedRoles.includes(role)))) {
+      return res.status(403).json({ status: "error", success: false, message: "이 제출 유형을 이용할 권한이 없습니다." });
+    }
 
-    const scriptRes = await fetch(SCRIPT_URL, {
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {
+      return res.status(503).json({ status: "error", success: false, message: "제출 저장소가 설정되지 않았습니다." });
+    }
+    const scriptRes = await postScript(destinationUrl, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: rawBody,
+      body: JSON.stringify(buildScriptSubmission(workflow, payload)),
     });
 
     const text = await scriptRes.text();
@@ -103,7 +115,10 @@ export default async function handler(req, res) {
         message: "Apps Script 응답을 JSON으로 해석할 수 없습니다.",
       });
     }
-    if (tbGuard && isSuccessfulResponse(json)) {
+    if (!isSuccessfulResponse(json)) {
+      return res.status(200).json({ status: "error", success: false, message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." });
+    }
+    if (tbGuard) {
       try {
         await saveTbScreeningStatus({
           db: getFirebaseAdminDb(),
@@ -119,7 +134,7 @@ export default async function handler(req, res) {
       }
       json = { ...json, staffId: tbGuard.staffId };
     }
-    if (cprIdentity && isSuccessfulResponse(json)) {
+    if (workflow.id === "cpr" && cprIdentity) {
       try {
         await saveCprTrainingStatus({
           db: cprIdentity.db,
@@ -135,8 +150,14 @@ export default async function handler(req, res) {
       }
       json = { ...json, staffId: cprIdentity.staffId };
     }
+    if (workflow.id === "inbody" && cprIdentity) json = { ...json, staffId: cprIdentity.staffId };
+    if (workflow.id === "student_tb_reply") {
+      const { folderId, fileUrl, ...safeJson } = json;
+      json = safeJson;
+    }
     return res.status(200).json(json);
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("[SUBMISSION_PROXY_FAILED]", { name: err?.name || "Error" });
+    return res.status(500).json({ status: "error", message: "제출을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." });
   }
 }

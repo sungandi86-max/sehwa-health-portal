@@ -2,6 +2,7 @@ import fetch from "node-fetch";
 import { buildHomeSchedules, filterCurrentPortalItems } from "../src/lib/portalSchedule.js";
 import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 import { CmsInputError, cmsPublicItems, readCms } from "../server/lib/portalContentCms.js";
+import { publicSubmissionCard } from "../server/lib/submissionWorkflows.js";
 
 const CMS_FALLBACK_TYPES = {
   today: ["notice", "notices"],
@@ -178,6 +179,9 @@ export default async function handler(req, res, { db, context = process.env, loa
 
     try {
       const json = JSON.parse(text);
+      if (scope === "upload" && Array.isArray(json?.uploads)) {
+        json.uploads = json.uploads.map(publicSubmissionCard);
+      }
       return res.status(200).json(
         json,
       );

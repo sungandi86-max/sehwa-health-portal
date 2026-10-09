@@ -1,8 +1,6 @@
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
 
-const CPR_FOLDER_ID = "19foLN446v5ggGN6hxLBuH8tNAQuSXgtM";
-const TB_FOLDER_ID = "1MfxNVL1muROzpi1ZbV7WDWr4SKMU7ghm";
 const SUBMIT_API_URL = "/api/submit";
 const RECRUIT_REQUEST_TYPE = "employment_checkup_substitution";
 const ALLOWED_SUBMISSION_FILE_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
@@ -105,12 +103,10 @@ function getSubmitter(user) {
   };
 }
 
-async function uploadDriveSubmission({ type, sheetName, folderId, fields, fileName, file }) {
+async function uploadDriveSubmission({ type, fields, fileName, file }) {
   const fileBase64 = await fileToBase64(file);
   return postWithTimeout({
     type,
-    sheetName,
-    folderId,
     fields,
     fileName,
     fileBase64,
@@ -148,8 +144,6 @@ export async function createCprSubmission({ user, trainingDate, institution, sta
   const fileName = sanitizeFilename(`${submitter.name}_심폐소생술이수증_${todayString()}_${originalName}`);
   const uploadResult = await uploadDriveSubmission({
     type: "cpr",
-    sheetName: "응답_심폐소생술이수증",
-    folderId: CPR_FOLDER_ID,
     fields: {
       name: submitter.name,
       dept: "Firebase v2 테스트",
@@ -189,8 +183,6 @@ export async function createTbSubmission({ user, checkupDate, documentType, staf
   const fileName = sanitizeFilename(`${submitter.name}_결핵검진확인증_${todayString()}_${originalName}`);
   const uploadResult = await uploadDriveSubmission({
     type: "tb",
-    sheetName: "응답_결핵검진확인증",
-    folderId: TB_FOLDER_ID,
     fields: {
       name: submitter.name,
       dept: "Firebase v2 테스트",
