@@ -26,8 +26,7 @@ export function trainingEventFromSheetRow(row) {
   event.sortOrder = Number(event.sortOrder || 0);
   event.useStatus = value(row["사용여부"]);
   event.enabled = ["사용", "TRUE", "Y", "1"].includes(event.useStatus.toUpperCase());
-  return { ...event, sourceType: "sheet-mirror", sourceSheet: "앱_교직원교육",
-    sourceRow: row.rowNumber, sourceFingerprint: trainingEventFingerprint(row) };
+  return event;
 }
 
 export function trainingEventToSheetRow(event) {

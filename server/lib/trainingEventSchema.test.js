@@ -29,9 +29,9 @@ test("training event schema preserves all 17 Sheet fields and separates migratio
   assert.equal(event.enabled, false);
   assert.equal(event.status, "진행중");
   assert.equal(event.trainingYear, 2026);
-  assert.equal(event.sourceType, "sheet-mirror");
-  assert.equal(event.sourceRow, 2);
-  assert.equal(event.sourceFingerprint, trainingEventFingerprint(source));
+  assert.equal("sourceType" in event, false);
+  assert.equal("sourceRow" in event, false);
+  assert.equal("sourceFingerprint" in event, false);
   assert.deepEqual(trainingEventToSheetRow(event), Object.fromEntries(Object.entries(source).filter(([key]) => key !== "rowNumber")));
   assert.equal("createdAt" in event, false);
   assert.equal("qrSecret" in event, false);

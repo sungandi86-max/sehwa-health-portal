@@ -97,8 +97,7 @@ export class TrainingCenterStore {
   }
 
   async saveEvent(values, existing = null) {
-    if (this.events.environment === "qa") return this.events.saveQaEvent(values, existing);
-    return this.saveRow(TRAINING_SHEETS.trainings, TRAINING_HEADERS, values, existing?.rowNumber);
+    return this.events.saveEvent(values, existing);
   }
 
   async sheetId(name) {

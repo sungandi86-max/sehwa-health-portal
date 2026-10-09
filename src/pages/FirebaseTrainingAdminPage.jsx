@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
-import { applyTrainingEventMirror, bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, inspectTrainingEventMirror, listManagedTrainings, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
+import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
 import { getTrainingStorageBootstrapUiState, performTrainingStorageBootstrap, summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
 
 const fieldClass = "mt-1 min-h-11 w-full min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm text-[#102047] outline-none focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/10";
@@ -119,55 +119,20 @@ export function TrainingRuntimePreflight({
   </section>;
 }
 
-function TrainingEventMirror({ onApplied }) {
-  const [report, setReport] = useState(null);
-  const [state, setState] = useState("idle");
-  const [message, setMessage] = useState("");
-
-  async function inspect() {
-    setState("loading"); setMessage("");
-    try { setReport(await inspectTrainingEventMirror()); setState("ready"); }
-    catch (error) { setMessage(error.message); setState("error"); }
-  }
-
-  async function apply() {
-    if (!report || report.counts.conflict || report.counts.update || !window.confirm("QA Sheet 교육 이벤트만 Firestore에 이관할까요?")) return;
-    setState("loading"); setMessage("");
-    try {
-      const result = await applyTrainingEventMirror();
-      await inspect();
-      setMessage(`QA mirror ${result.applied}건 적용 완료`);
-      onApplied();
-    } catch (error) { setMessage(error.message); setState("error"); }
-  }
-
-  return <section aria-label="QA 이벤트 mirror" className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div><h2 className="text-sm font-bold text-[#102047]">QA 이벤트 mirror</h2><p className="mt-1 text-xs text-[#627083]">QA Sheet 원본만 비교하며 Production 데이터는 변경하지 않습니다.</p></div>
-      <div className="flex gap-2"><button type="button" className={secondaryClass} disabled={state === "loading"} onClick={inspect}>이관 점검</button>
-        <button type="button" className={buttonClass} disabled={state !== "ready" || !report?.counts.create || report?.counts.conflict > 0} onClick={apply}>QA 이관 적용</button></div>
-    </div>
-    {report && <p className="mt-2 text-xs text-[#102047]" role="status">원본 {report.sourceCount}건 · 생성 {report.counts.create} · 건너뜀 {report.counts.skip} · 충돌 {report.counts.conflict}</p>}
-    {message && <p className={`mt-2 text-xs ${state === "error" ? "text-[#B42318]" : "text-[#08754B]"}`} role="status">{message}</p>}
-  </section>;
-}
-
 export function TrainingAdminContent({ displayName, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
   const [items, setItems] = useState([]);
   const [state, setState] = useState("loading");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(null);
-  const [mirrorAvailable, setMirrorAvailable] = useState(false);
   async function reload() {
     setState("loading");
-    try { const result = await loadTrainings(); setItems(result.items); setMirrorAvailable(result.mirrorAvailable === true); setState("ready"); }
+    try { const result = await loadTrainings(); setItems(result.items); setState("ready"); }
     catch (error) { setMessage(error.message); setState("error"); }
   }
   useEffect(() => { reload(); }, []);
   return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 관리" description="교육 등록과 대상·QR·출석 업무를 관리합니다." displayName={displayName}>
     <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to="/firebase-dashboard">관리자 화면으로</Link><button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button></div>
     <TrainingRuntimePreflight runPreflight={runPreflight} />
-    {mirrorAvailable && <TrainingEventMirror onApplied={reload} />}
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     {state === "loading" && <p className="text-sm text-[#627083]">교육 목록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}

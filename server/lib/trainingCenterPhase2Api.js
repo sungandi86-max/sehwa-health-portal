@@ -121,15 +121,6 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       const body = req.method === "POST" ? await readJsonBody(req, { maxBytes: 400000 }) : null;
       const eventId = param(req.query?.eventId || body?.eventId);
 
-      if (resource === "training-event-mirror") {
-        if (store.events?.environment !== "qa") return bad(res, 403, "QA 교육 이벤트 mirror만 허용됩니다.");
-        if (req.method === "GET") {
-          const { items, ...report } = await store.events.mirrorPlan();
-          return res.status(200).json({ ok: true, ...report, items: items.map(({ eventId: id, action }) => ({ eventId: id, action })) });
-        }
-        return res.status(200).json({ ok: true, ...await store.events.applyMirror() });
-      }
-
       if (resource === "training-attendance-recovery-candidates" && req.method === "GET") {
         return res.status(200).json({ ok: true, ...await listAttendanceRecoveryCandidates({ db: access.db, now: now().getTime() }) });
       }
@@ -152,7 +143,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (resource === "training-admin-list" && req.method === "GET") {
         const base = await store.readBase();
         const items = sheetRows(base.trainings, TRAINING_HEADERS).filter((row) => row.eventId).map(({ rowNumber, ...row }) => row);
-        return res.status(200).json({ ok: true, items, mirrorAvailable: store.events?.environment === "qa" });
+        return res.status(200).json({ ok: true, items });
       }
       if (resource === "training-admin-save" && req.method === "POST") {
         const base = await store.readBase();

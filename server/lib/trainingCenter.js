@@ -4,7 +4,6 @@ import { trainingEventStore } from "./trainingEventStore.js";
 import { TRAINING_HEADERS } from "./trainingEventSchema.js";
 
 export const TRAINING_SHEETS = {
-  trainings: "앱_교직원교육",
   targets: "교직원교육대상",
 };
 

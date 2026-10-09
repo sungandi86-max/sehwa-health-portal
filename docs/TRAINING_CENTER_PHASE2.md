@@ -4,12 +4,12 @@
 
 ## Sheet schema
 
-기존 `2026학년도 보건실 업무` 워크북의 `앱_교직원교육`, `교직원교육대상` 탭은 계속 사용한다. 데이터가 없던 `앱_교직원교육자료`의 runtime reader는 제거했으며 교육 상세 응답은 `materials: []`를 유지한다. 탭 자체는 운영 배포 후 별도 검증 전까지 삭제하지 않는다. 신규 backend 탭 `교직원교육전자서명`은 기본 숨김으로 생성하고 A1:M1에 아래 헤더를 순서대로 둔다. 샘플 데이터는 입력하지 않는다.
+교육 이벤트는 환경별 Firestore `training_events_qa`/`training_events_production`을 원본으로 사용한다. 이관 원본인 `앱_교직원교육`은 별도 삭제 승인 전까지 보존하지만 runtime에서는 읽거나 쓰지 않는다. `교직원교육대상`과 `교직원교육전자서명`은 기존 Sheet 원본으로 유지하며 eventId로 조인한다. 데이터가 없던 `앱_교직원교육자료`의 runtime reader는 제거했으며 교육 상세 응답은 `materials: []`를 유지한다. 신규 backend 탭 `교직원교육전자서명`은 기본 숨김으로 생성하고 A1:M1에 아래 헤더를 순서대로 둔다. 샘플 데이터는 입력하지 않는다.
 
 | 열 | 헤더 | 용도 |
 |---|---|---|
 | A | signatureId | 기록별 고유 ID |
-| B | eventId | `앱_교직원교육.eventId` |
+| B | eventId | `training_events_<environment>.eventId` |
 | C | eventGroupId | 묶음 교육 ID, 단일 교육이면 공란 가능 |
 | D | 교직원ID | 기존 canonical `교직원명단.교직원ID` |
 | E | 서명일시 | ISO 8601 시각 |
