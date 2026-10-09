@@ -23,19 +23,26 @@ const SUBMISSION_MANAGEMENT_SHEET_NAME = "제출항목관리";
 const SUBMISSION_RECORD_SHEET_NAME = "제출기록";
 const STUDENT_FILE_RECORD_HEADERS = [
   "제출일시",
-  "제출항목명",
-  "제출유형",
-  "학년",
-  "반",
-  "번호",
-  "학생명",
-  "진료일",
-  "의료기관명",
-  "비고",
+  "제출항목",
+  "구분",
+  "성명",
   "파일명",
   "파일URL",
-  "저장폴더ID"
+  "처리상태",
+  "비고",
+  "제출ID",
+  "제출항목ID",
+  "제출명_정규화",
+  "파일ID",
+  "파일MIME",
+  "최종수정일"
 ];
+const SUBMISSION_RESPONSE_HEADERS = {
+  cpr: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"],
+  tb: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"],
+  tb_registration: ["제출일시", "성명", "소속/부서", "검진유형", "비고"],
+  inbody: ["제출일시", "성명", "소속/부서", "희망날짜", "희망시간대"]
+};
 const STUDENT_CARE_PROJECTION_SYNC = {
   statusProperty: "STUDENT_CARE_PROJECTION_SYNC_STATUS",
   installableEditHandler: "handleStudentCareProjectionOnEdit",
@@ -317,40 +324,22 @@ function doPost(e) {
     }
     const signed = request && request.version === 1;
     const payload = signed ? verifySubmissionProxy_(request) : legacySubmissionDuringTransition_(request);
+    const prepared = preflightSubmission_(payload);
     if (signed) reserveSubmissionProxy_(request, payload);
     if (payload.type === "student-file") {
-      const result = appendStudentFileSubmission_(payload);
+      const result = appendStudentFileSubmission_(payload, prepared, signed ? request.requestId : "");
       return ContentService.createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
     }
-
-    const destinations = {
-      cpr: { sheetName: "응답_심폐소생술이수증", folderId: FOLDER_IDS.cpr },
-      tb: { sheetName: "응답_결핵검진확인증", folderId: FOLDER_IDS.tb },
-      tb_registration: { sheetName: "응답_교직원결핵검진유형선택", folderId: null },
-      inbody: { sheetName: "응답_인바디측정신청", folderId: null }
-    };
-    const destination = destinations[payload.type];
-    if (!destination) throw new Error("지원하지 않는 제출 유형입니다.");
-    const { sheetName, folderId } = destination;
-    const { fields, fileName, fileBase64, fileMimeType } = payload;
-    if (folderId ? (!fileBase64 || !fileName || !fileMimeType) : (fileBase64 || fileName || fileMimeType)) {
-      throw new Error("파일 제출 구성이 올바르지 않습니다.");
-    }
-    const ss    = getSpreadsheet_();
-    const sheet = getSubmitSheet_(ss, sheetName);
     let fileLink = "";
     let fileId = "";
-    if (fileBase64 && folderId && fileName) {
-      const blob      = Utilities.newBlob(Utilities.base64Decode(fileBase64), fileMimeType, fileName);
-      validateSubmissionBlob_(blob);
-      const folder    = DriveApp.getFolderById(folderId);
-      const driveFile = folder.createFile(blob);
+    if (prepared.folder) {
+      const driveFile = prepared.folder.createFile(prepared.blob);
       fileLink = driveFile.getUrl();
       fileId = driveFile.getId();
     }
     const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
-    appendSubmitRow_(sheet, sheetName, fields, now, fileName || "", fileLink);
+    appendSubmitRow_(prepared.sheet, prepared.sheetName, payload.fields, now, payload.fileName || "", fileLink);
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       fileId: fileId,
@@ -445,52 +434,100 @@ function reserveSubmissionProxy_(request, payload) {
   properties.setProperty(replayKey, String(request.sentAt + 120000));
 }
 
-function appendStudentFileSubmission_(payload) {
+function preflightSubmission_(payload) {
+  const destinations = {
+    cpr: { sheetName: "응답_심폐소생술이수증", folderId: FOLDER_IDS.cpr },
+    tb: { sheetName: "응답_결핵검진확인증", folderId: FOLDER_IDS.tb },
+    tb_registration: { sheetName: "응답_교직원결핵검진유형선택", folderId: null },
+    inbody: { sheetName: "응답_인바디측정신청", folderId: null }
+  };
+  if (!payload || (payload.type !== "student-file" && !destinations[payload.type])) {
+    throw new Error("지원하지 않는 제출 유형입니다.");
+  }
   const ss = getSpreadsheet_();
-  const fields = payload.fields || {};
+  if (payload.type === "student-file") {
+    const recordDestination = getSubmissionRecordDestination_(ss);
+    const fields = payload.fields;
+    if (!fields || typeof fields !== "object" || Array.isArray(fields) ||
+        ["grade", "classNumber", "studentNumber", "studentName"].some(function(key) { return !String(fields[key] || "").trim(); })) {
+      throw new Error("학생 정보(학년, 반, 번호, 학생명)는 필수입니다.");
+    }
+    const details = JSON.stringify({
+      grade: String(fields.grade).trim(), classNumber: String(fields.classNumber).trim(),
+      studentNumber: String(fields.studentNumber).trim(), visitDate: String(fields.visitDate || "").trim(),
+      hospitalName: String(fields.hospitalName || "").trim(), note: String(fields.note || "").trim(),
+      source: "public:/upload?mode=public&type=tbreply", route: "/api/submit"
+    });
+    if (String(fields.studentName).length > 1000 || details.length > 45000) throw new Error("제출 입력값이 너무 깁니다.");
+    if (!payload.fileName || !payload.fileBase64 || !payload.fileMimeType) throw new Error("업로드 파일이 누락되었습니다.");
+    const blob = Utilities.newBlob(Utilities.base64Decode(payload.fileBase64), payload.fileMimeType, payload.fileName);
+    validateSubmissionBlob_(blob);
+    const folder = DriveApp.getFolderById(STUDENT_FILE_DEFAULT_FOLDER_ID);
+    folder.getId();
+    return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details };
+  }
+  const destination = destinations[payload.type];
+  const sheet = getSubmitSheet_(ss, destination.sheetName);
+  const expectedHeaders = SUBMISSION_RESPONSE_HEADERS[payload.type];
+  const actualHeaders = sheet.getRange(1, 1, 1, expectedHeaders.length).getDisplayValues()[0]
+    .map(function(header) { return String(header || "").trim(); });
+  if (expectedHeaders.some(function(header, index) { return actualHeaders[index] !== header; })) {
+    throw new Error("제출 응답 시트 헤더가 올바르지 않습니다.");
+  }
+  if (!payload.fields || typeof payload.fields !== "object" || Array.isArray(payload.fields) ||
+      (destination.folderId ? (!payload.fileBase64 || !payload.fileName || !payload.fileMimeType) :
+        (payload.fileBase64 || payload.fileName || payload.fileMimeType))) {
+    throw new Error("파일 제출 구성이 올바르지 않습니다.");
+  }
+  const requiredFields = {
+    cpr: ["name", "completionDate"], tb: ["name", "checkupDate"],
+    tb_registration: ["name", "registrationType"], inbody: ["name", "dept", "preferredDate", "preferredTime"]
+  };
+  if (requiredFields[payload.type].some(function(key) { return !String(payload.fields[key] || "").trim(); })) {
+    throw new Error("제출 필수 항목을 확인해 주세요.");
+  }
+  if (payload.type === "tb_registration") validateTbRegistrationWindow_();
+  let blob = null;
+  let folder = null;
+  if (destination.folderId) {
+    blob = Utilities.newBlob(Utilities.base64Decode(payload.fileBase64), payload.fileMimeType, payload.fileName);
+    validateSubmissionBlob_(blob);
+    folder = DriveApp.getFolderById(destination.folderId);
+    folder.getId();
+  }
+  return { kind: "standard", sheetName: destination.sheetName, sheet: sheet, folder: folder, blob: blob };
+}
+
+function safeSubmissionCell_(value) {
+  const text = String(value || "");
+  return /^[=+\-@\t\r]/.test(text) ? "'" + text : text;
+}
+
+function appendStudentFileSubmission_(payload, prepared, requestId) {
+  const fields = payload.fields;
   const submissionTitle = "결핵검진 진료회신 제출";
-  const submissionType = "student-file";
-  const grade = String(fields.grade || "").trim();
-  const classNumber = String(fields.classNumber || "").trim();
-  const studentNumber = String(fields.studentNumber || "").trim();
   const studentName = String(fields.studentName || "").trim();
-  const visitDate = String(fields.visitDate || "").trim();
-  const hospitalName = String(fields.hospitalName || "").trim();
-  const note = String(fields.note || "").trim();
   const fileName = String(payload.fileName || "").trim();
-  const fileBase64 = payload.fileBase64 || "";
-  const mimeType = payload.fileMimeType || "";
-
-  if (!grade || !classNumber || !studentNumber || !studentName) {
-    throw new Error("학생 정보(학년, 반, 번호, 학생명)는 필수입니다.");
-  }
-  if (!fileName || !fileBase64) {
-    throw new Error("업로드 파일이 누락되었습니다.");
-  }
-
-  const recordDestination = getSubmissionRecordDestination_(ss);
-  const folderId = STUDENT_FILE_DEFAULT_FOLDER_ID;
-  const blob = Utilities.newBlob(Utilities.base64Decode(fileBase64), mimeType, fileName);
-  validateSubmissionBlob_(blob);
-  const folder = DriveApp.getFolderById(folderId);
-  const driveFile = folder.createFile(blob);
+  const driveFile = prepared.folder.createFile(prepared.blob);
   const fileUrl = driveFile.getUrl();
+  const fileId = driveFile.getId();
   const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
 
-  appendSubmissionRecord_(recordDestination, {
+  appendSubmissionRecord_(prepared.recordDestination, {
     "제출일시": now,
-    "제출항목명": submissionTitle,
-    "제출유형": submissionType,
-    "학년": grade,
-    "반": classNumber,
-    "번호": studentNumber,
-    "학생명": studentName,
-    "진료일": visitDate,
-    "의료기관명": hospitalName,
-    "비고": note,
-    "파일명": fileName,
+    "제출항목": submissionTitle,
+    "구분": "student_tb_reply",
+    "성명": safeSubmissionCell_(studentName),
+    "비고": prepared.details,
+    "파일명": safeSubmissionCell_(fileName),
     "파일URL": fileUrl,
-    "저장폴더ID": folderId
+    "처리상태": "접수",
+    "제출ID": requestId,
+    "제출항목ID": "student_tb_reply",
+    "제출명_정규화": submissionTitle,
+    "파일ID": fileId,
+    "파일MIME": payload.fileMimeType,
+    "최종수정일": now
   });
 
   return {
@@ -588,27 +625,6 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
       fields.note || "", fileName, fileLink]);
 
   } else if (sheetName === "응답_교직원결핵검진유형선택") {
-    const config        = getTbRegistrationConfig_();
-    const startDateRaw  = config.startDate;
-    const endDateRaw    = config.endDate;
-    const closedMsg     = config.closedMessage || "접수 기한이 마감되었습니다.";
-    const notStartedMsg = "접수 시작 전입니다. 접수 기간에 다시 이용해주세요.";
-
-    if (!isTrue_(config.enabled)) throw new Error(closedMsg);
-    if (!startDateRaw || !endDateRaw) throw new Error("접수 기간이 설정되지 않아 현재 신청할 수 없습니다.");
-
-    const nowDate = new Date();
-
-    if (startDateRaw) {
-      const startDate = parseTbRegistrationDate_(startDateRaw, "start");
-      if (startDate && nowDate < startDate) throw new Error(notStartedMsg);
-    }
-
-    if (endDateRaw) {
-      const endDate = parseTbRegistrationDate_(endDateRaw, "end");
-      if (endDate && nowDate > endDate) throw new Error(closedMsg);
-    }
-
     const responseRegistrationType = TB_GROUP_REQUEST_RESPONSE_VALUE;
     sheet.appendRow([now, fields.name, fields.dept, responseRegistrationType, ""]);
   } else if (sheetName === "응답_인바디측정신청") {
@@ -628,6 +644,18 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
   } else {
     sheet.appendRow([now, JSON.stringify(fields), fileName, fileLink]);
   }
+}
+
+function validateTbRegistrationWindow_() {
+  const config = getTbRegistrationConfig_();
+  const closedMsg = config.closedMessage || "접수 기한이 마감되었습니다.";
+  if (!isTrue_(config.enabled)) throw new Error(closedMsg);
+  if (!config.startDate || !config.endDate) throw new Error("접수 기간이 설정되지 않아 현재 신청할 수 없습니다.");
+  const now = new Date();
+  const start = parseTbRegistrationDate_(config.startDate, "start");
+  const end = parseTbRegistrationDate_(config.endDate, "end");
+  if (start && now < start) throw new Error("접수 시작 전입니다. 접수 기간에 다시 이용해주세요.");
+  if (end && now > end) throw new Error(closedMsg);
 }
 
 // ════════════════════════════════════════════════════════════════

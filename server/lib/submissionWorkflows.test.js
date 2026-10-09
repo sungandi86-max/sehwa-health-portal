@@ -8,6 +8,11 @@ import { buildSubmissionProxyEnvelope } from "./submissionProxyEnvelope.js";
 import { buildScriptSubmission, publicSubmissionCard, resolveSubmissionWorkflow, SUBMISSION_WORKFLOWS, validateSubmissionPayload } from "./submissionWorkflows.js";
 
 const png = Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64");
+const productionRecordHeaders = [
+  "제출일시", "제출항목", "구분", "성명", "소속부서", "이수일자", "파일명", "파일URL", "처리상태", "비고",
+  "제출ID", "제출항목ID", "제출명_정규화", "교직원ID", "파일ID", "파일MIME", "AI처리상태", "AI_이수번호",
+  "AI_기관명", "AI_이수일자", "AI_연수명", "AI_연수시간", "AI검증결과", "관리자확인", "AI추출메모", "최종수정일",
+];
 const file = { fields: { name: "QA", completionDate: "2026-10-09", checkupDate: "2026-10-09" }, fileBase64: png, fileMimeType: "image/png", fileName: "qa.png" };
 const inbodyFields = { name: "QA", dept: "QA", preferredDate: "2026-10-09", preferredTime: "12:00" };
 const destinationUrl = "https://script.google.com/macros/s/test/exec";
@@ -184,7 +189,7 @@ test("Apps Script refuses missing sheets and management reader is not a destinat
     SpreadsheetApp: { openById: () => ({ getSheetByName: () => null }) },
     DriveApp: { getFolderById: () => { driveReads++; throw new Error("Drive reached"); } },
   });
-  vm.runInContext(`${code}\nthis.sheetLookup = getSubmitSheet_; this.managedFolder = getSubmissionManagedFolderId_; this.safeCardUrl = safeSubmissionCardUrl_; this.validateBlob = validateSubmissionBlob_; this.studentSubmit = appendStudentFileSubmission_;`, context);
+  vm.runInContext(`${code}\nthis.sheetLookup = getSubmitSheet_; this.managedFolder = getSubmissionManagedFolderId_; this.safeCardUrl = safeSubmissionCardUrl_; this.validateBlob = validateSubmissionBlob_; this.preflight = preflightSubmission_;`, context);
   const sheet = { getSheetByName: () => null, insertSheet: () => { throw new Error("auto-create called"); } };
   assert.throws(() => context.sheetLookup(sheet, "missing"), /준비되지 않았습니다/);
   const management = { getDataRange: () => ({ getDisplayValues: () => [["제출명", "저장폴더ID"], ["결핵검진 진료회신 제출", "legacy-id"]] }) };
@@ -193,10 +198,10 @@ test("Apps Script refuses missing sheets and management reader is not a destinat
   assert.equal(context.safeCardUrl("https://drive.google.com/drive/folders/private"), "");
   assert.equal(context.safeCardUrl("https://school.example/guide"), "https://school.example/guide");
   assert.throws(() => context.validateBlob({ getContentType: () => "text/html", getBytes: () => [1] }), /PDF, JPG, PNG/);
-  assert.throws(() => context.studentSubmit({ fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /제출 기록 시트가 준비되지 않았습니다/);
+  assert.throws(() => context.preflight({ type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /제출 기록 시트가 준비되지 않았습니다/);
   assert.equal(driveReads, 0);
   context.SpreadsheetApp.openById = () => ({ getSheetByName: () => ({ getLastColumn: () => 1, getRange: () => ({ getDisplayValues: () => [["제출일시"]] }) }) });
-  assert.throws(() => context.studentSubmit({ fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /제출 기록 시트 헤더가 올바르지 않습니다/);
+  assert.throws(() => context.preflight({ type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /제출 기록 시트 헤더가 올바르지 않습니다/);
   assert.equal(driveReads, 0);
 });
 
@@ -204,17 +209,31 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
   const sheets = [];
   const folders = [];
+  let filesCreated = 0;
   const properties = new Map([["SUBMISSION_PROXY_SECRET", proxySecret]]);
-  const recordHeaders = ["제출일시", "제출항목명", "제출유형", "학년", "반", "번호", "학생명", "진료일", "의료기관명", "비고", "파일명", "파일URL", "저장폴더ID"];
+  let recordHeaders = productionRecordHeaders;
   let appended = 0;
-  const sheet = { appendRow: (row) => { assert.ok(row.length > 0); appended++; },
+  let failAppend = false;
+  const appendedRows = [];
+  const sheet = { appendRow: (row) => { if (failAppend) throw new Error("fixture append failed"); assert.ok(row.length > 0); appended++; appendedRows.push(row); },
     getLastColumn: () => recordHeaders.length, getRange: () => ({ getDisplayValues: () => [recordHeaders] }) };
+  const responseHeaders = {
+    [SUBMISSION_WORKFLOWS.cpr.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"],
+    [SUBMISSION_WORKFLOWS.tb.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"],
+    [SUBMISSION_WORKFLOWS.tb_registration.auditSheet]: ["제출일시", "성명", "소속/부서", "검진유형", "비고"],
+    [SUBMISSION_WORKFLOWS.inbody.auditSheet]: ["제출일시", "성명", "소속/부서", "희망날짜", "희망시간대"],
+  };
+  let recordSheetPresent = true;
+  let folderReady = true;
   const context = vm.createContext({
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (key) => properties.get(key) ?? null,
       setProperty: (key, value) => properties.set(key, value), deleteProperty: (key) => properties.delete(key), getKeys: () => [...properties.keys()] }) },
-    SpreadsheetApp: { openById: () => ({ getSheetByName: (name) => { sheets.push(name); return sheet; } }) },
-    DriveApp: { getFolderById: (id) => { folders.push(id); return { createFile: () => ({ getUrl: () => "private", getId: () => "private" }) }; } },
+    SpreadsheetApp: { openById: () => ({ getSheetByName: (name) => { sheets.push(name);
+      if (name === "제출기록") return recordSheetPresent ? sheet : null;
+      return responseHeaders[name] ? { ...sheet, getRange: () => ({ getDisplayValues: () => [responseHeaders[name]] }) } : null;
+    } }) },
+    DriveApp: { getFolderById: (id) => { folders.push(id); if (!folderReady) throw new Error("fixture folder missing"); return { getId: () => id, createFile: () => { filesCreated++; return { getUrl: () => "private", getId: () => "private" }; } }; } },
     Utilities: { DigestAlgorithm: { SHA_256: "sha256" }, Charset: { UTF_8: "utf8" },
       base64Decode: (value) => [...Buffer.from(value, "base64")],
       base64EncodeWebSafe: (value) => Buffer.from(value).toString("base64url"),
@@ -224,7 +243,7 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
       formatDate: () => "now" },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: (body) => ({ getContent: () => body, setMimeType() { return this; } }) },
   });
-  vm.runInContext(`${code}\nthis.submit = doPost;`, context);
+  vm.runInContext(`${code}\nthis.submit = doPost; this.preflight = preflightSubmission_; this.safeCell = safeSubmissionCell_;`, context);
   assert.throws(() => context.validateSubmissionBlob_({
     getContentType: () => "application/pdf",
     getBytes: () => new Uint8Array(3 * 1024 * 1024 + 1),
@@ -246,6 +265,12 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   }
   assert.equal(call({ type: "inbody", fields: inbodyFields, sheetName: "Injected", folderId: "Injected" }).status, "success");
   assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.inbody.auditSheet);
+  const originalCprHeaders = responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet];
+  responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet] = ["wrong", ...originalCprHeaders.slice(1)];
+  const badResponseHeader = buildSubmissionProxyEnvelope({ ...file, type: "cpr" }, proxySecret);
+  assert.equal(callEnvelope(badResponseHeader).status, "error");
+  assert.equal(properties.has(`SUBMISSION_GUARD_REQUEST_${badResponseHeader.requestId}`), false);
+  responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet] = originalCprHeaders;
   assert.equal(call({ type: "unknown", fields: {}, sheetName: "Injected" }).status, "error");
   assert.equal(sheets.includes("Injected"), false);
   const replay = buildSubmissionProxyEnvelope({ type: "inbody", fields: inbodyFields }, proxySecret);
@@ -254,8 +279,49 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   const visitor = createHmac("sha256", proxySecret).update("visitor").digest("base64url");
   const student = (studentName) => ({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName } });
   const studentCall = (studentName) => callEnvelope(buildSubmissionProxyEnvelope(student(studentName), proxySecret, { visitor }));
+  const guardKey = (envelope) => `SUBMISSION_GUARD_REQUEST_${envelope.requestId}`;
+  const beforeDryRun = [...properties.keys()].filter((key) => key.startsWith("SUBMISSION_GUARD_")).length;
+  const validPreflight = context.preflight(student("QA-DRY"));
+  assert.equal(validPreflight.kind, "student-file");
+  assert.equal([...properties.keys()].filter((key) => key.startsWith("SUBMISSION_GUARD_")).length, beforeDryRun);
+  recordHeaders = productionRecordHeaders.filter((header) => header !== "파일ID");
+  const badHeader = buildSubmissionProxyEnvelope(student("QA-MISSING-HEADER"), proxySecret, { visitor });
+  assert.equal(callEnvelope(badHeader).status, "error");
+  assert.equal(properties.has(guardKey(badHeader)), false);
+  recordHeaders = productionRecordHeaders;
+  recordSheetPresent = false;
+  const missingDestination = buildSubmissionProxyEnvelope(student("QA-MISSING-SHEET"), proxySecret, { visitor });
+  assert.equal(callEnvelope(missingDestination).status, "error");
+  assert.equal(properties.has(guardKey(missingDestination)), false);
+  recordSheetPresent = true;
+  folderReady = false;
+  const missingFolder = buildSubmissionProxyEnvelope(student("QA-MISSING-FOLDER"), proxySecret, { visitor });
+  assert.equal(callEnvelope(missingFolder).status, "error");
+  assert.equal(properties.has(guardKey(missingFolder)), false);
+  folderReady = true;
+  const invalidPayload = buildSubmissionProxyEnvelope({ ...student("QA-NO-FILE"), fileBase64: "" }, proxySecret, { visitor });
+  assert.equal(callEnvelope(invalidPayload).status, "error");
+  assert.equal(properties.has(guardKey(invalidPayload)), false);
+  const invalidMime = buildSubmissionProxyEnvelope({ ...student("QA-BAD-MIME"), fileMimeType: "text/html" }, proxySecret, { visitor });
+  assert.equal(callEnvelope(invalidMime).status, "error");
+  assert.equal(properties.has(guardKey(invalidMime)), false);
+  const invalidStaffPayload = buildSubmissionProxyEnvelope({ ...file, type: "cpr", fields: { completionDate: "2026-10-09" } }, proxySecret);
+  assert.equal(callEnvelope(invalidStaffPayload).status, "error");
+  assert.equal(properties.has(guardKey(invalidStaffPayload)), false);
+  assert.equal(context.safeCell("=SUM(1,1)"), "'=SUM(1,1)");
   const beforeStudent = appended;
   assert.equal(studentCall("QA1").status, "success");
+  const studentRow = Object.fromEntries(productionRecordHeaders.map((header, index) => [header, appendedRows.at(-1)[index]]));
+  assert.equal(studentRow["제출항목"], "결핵검진 진료회신 제출");
+  assert.equal(studentRow["구분"], "student_tb_reply");
+  assert.equal(studentRow["제출항목ID"], "student_tb_reply");
+  assert.equal(studentRow["성명"], "QA1");
+  assert.equal(studentRow["파일ID"], "private");
+  assert.equal(studentRow["파일MIME"], "image/png");
+  assert.equal(studentRow["처리상태"], "접수");
+  assert.match(studentRow["제출ID"], /^[0-9a-f-]{36}$/i);
+  assert.equal(JSON.parse(studentRow["비고"]).grade, "1");
+  assert.equal(JSON.parse(studentRow["비고"]).route, "/api/submit");
   assert.equal(studentCall("QA1").status, "error");
   assert.equal(studentCall("QA2").status, "success");
   assert.equal(studentCall("QA3").status, "success");
@@ -263,13 +329,22 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   assert.equal(appended - beforeStudent, 3);
   assert.equal(callEnvelope({ ...buildSubmissionProxyEnvelope(student("QA5"), proxySecret, { visitor }), visitor: "altered" }).status, "error");
   assert.equal(appended - beforeStudent, 3);
+  const retryVisitor = createHmac("sha256", proxySecret).update("write-failure").digest("base64url");
+  const failedWrite = buildSubmissionProxyEnvelope(student("QA-FAIL"), proxySecret, { visitor: retryVisitor });
+  failAppend = true;
+  assert.equal(callEnvelope(failedWrite).status, "error");
+  assert.equal(properties.has(guardKey(failedWrite)), true);
+  const beforeRetry = filesCreated;
+  assert.equal(callEnvelope(failedWrite).status, "error");
+  assert.equal(filesCreated, beforeRetry);
+  failAppend = false;
   properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() + 10 * 60 * 1000));
   const legacyCpr = { ...file, type: "cpr", sheetName: SUBMISSION_WORKFLOWS.cpr.auditSheet, folderId: "Injected" };
   assert.equal(callEnvelope(legacyCpr).status, "success");
   assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.cpr.auditSheet);
   assert.notEqual(folders.at(-1), "Injected");
   context.getTbRegistrationConfig_ = () => ({ enabled: "TRUE", startDate: "2020-01-01", endDate: "2030-01-01" });
-  assert.equal(callEnvelope({ fields: inbodyFields, sheetName: SUBMISSION_WORKFLOWS.tb_registration.auditSheet }).status, "success");
+  assert.equal(callEnvelope({ fields: { ...inbodyFields, registrationType: "학교 단체검진" }, sheetName: SUBMISSION_WORKFLOWS.tb_registration.auditSheet }).status, "success");
   assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.tb_registration.auditSheet);
   assert.equal(callEnvelope({ ...legacyCpr, sheetName: "Injected" }).status, "error");
   assert.equal(callEnvelope({ ...legacyCpr, signature: "bad" }).status, "error");
