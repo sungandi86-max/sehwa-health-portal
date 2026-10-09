@@ -83,6 +83,24 @@ test("production event reads never access the Sheet while targets remain Sheet-b
   assert.deepEqual(base.targets, [TARGET_HEADERS]);
 });
 
+test("production administrator updates a migrated event transactionally without writing its source Sheet", async () => {
+  const db = fakeDatabase();
+  const migrated = planTrainingEventMigration(source, [], "production").items[0].incoming;
+  db.records.set(`training_events_production/${values.eventId}`, { ...migrated,
+    migratedAt: new Date("2026-10-10T00:00:00Z"), firestoreCreatedAt: new Date("2026-10-10T00:00:00Z") });
+  const production = new TrainingEventStore({ database: () => db,
+    context: () => ({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }) });
+  const original = await production.getEvent(values.eventId);
+  await production.saveEvent({ ...original, "교육명": "[QA] edited in Production" }, original);
+  const saved = db.records.get(`training_events_production/${values.eventId}`);
+  assert.equal(saved.title, "[QA] edited in Production");
+  assert.equal(saved.sourceSheet, "앱_교직원교육");
+  assert.equal(saved.sourceFingerprint, null);
+  assert.equal(db.calls.updates, 1);
+  await assert.rejects(production.saveEvent({ ...original, "교육명": "stale edit" }, original), TrainingEventConflictError);
+  assert.equal(db.calls.updates, 1);
+});
+
 test("QA update rejects foreign markers and stale admin snapshots", async () => {
   const db = fakeDatabase();
   const qa = new TrainingEventStore({ database: () => db, context: () => context });
