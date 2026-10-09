@@ -4,6 +4,7 @@ const adminMenuItems = [
   { label: "관리자 홈", path: "/admin" },
   { label: "업무 로드맵", path: "/admin/roadmap" },
   { label: "콘텐츠 관리", path: "/admin/content" },
+  { label: "제출센터 설정", path: "/admin/submission-config" },
   { label: "접수 현황", path: "/admin/receipts" },
   { label: "감염병 사례관리", path: "/firebase-admin/infections" },
   { label: "메신저 문구 도우미", path: "/admin/messages" },
@@ -38,6 +39,7 @@ export default function AdminLayout({ children, alert }) {
               <NavLink
                 key={item.path}
                 to={item.path}
+                end={item.path === "/admin"}
                 className={({ isActive }) => {
                   const active = isActive || isMenuActive(item.path, location.pathname);
                   return `rounded-2xl px-4 py-3 text-sm font-semibold transition ${

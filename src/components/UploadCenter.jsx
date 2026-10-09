@@ -278,7 +278,7 @@ export default function UploadCenter({
         {!publicMode && (
           <div className="mt-3 flex gap-2 rounded-[10px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 text-sm leading-6 text-[#627083]">
             <span className="shrink-0 font-semibold text-[#0D4EA6]">안내</span>
-            <p>{uploadIntro.subNotice}</p>
+            <p className="break-keep">{uploadIntro.subNotice}</p>
           </div>
         )}
 

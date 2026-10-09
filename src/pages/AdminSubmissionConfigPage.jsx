@@ -40,7 +40,7 @@ export default function AdminSubmissionConfigPage() {
     <header className="rounded-[24px] border border-[#C9DFFF] bg-white p-5 shadow-sm">
       <p className="text-xs font-bold text-[#D94F70]">SUBMISSION CONFIG</p>
       <h1 className="mt-1 text-2xl font-semibold text-[#1A3B8B]">제출센터 설정</h1>
-      <p className="mt-2 text-sm text-slate-600">공개 카드와 단체검진 신청 기간만 관리합니다. 저장 시트·Drive 폴더·인증 정책은 서버 코드에서 고정됩니다.</p>
+      <p className="mt-2 break-keep text-sm text-slate-600">공개 카드와 단체검진 신청 기간을 관리합니다. 저장 대상과 인증 정책은 서버에서 고정합니다.</p>
     </header>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {message && <p role="status" className="rounded-xl bg-[#F2FBF7] p-3 text-sm text-[#2E7D32]">{message}</p>}
