@@ -14,8 +14,7 @@ function sheetRows(values) {
     throw new Error("교육 이벤트 원본 헤더가 올바르지 않습니다.");
   }
   return values.slice(1).map((cells, index) => ({ rowNumber: index + 2,
-    ...Object.fromEntries(TRAINING_HEADERS.map((header) => [header, String(cells[headers.indexOf(header)] ?? "").normalize("NFKC").trim()])) }))
-    .filter((row) => row.eventId);
+    ...Object.fromEntries(TRAINING_HEADERS.map((header) => [header, String(cells[headers.indexOf(header)] ?? "").normalize("NFKC").trim()])) }));
 }
 
 export class TrainingEventStore {
@@ -63,6 +62,10 @@ export class TrainingEventStore {
     await this.database().runTransaction(async (transaction) => {
       const current = await transaction.get(ref);
       if (existing ? !current.exists : current.exists) throw new TrainingEventConflictError("교육 이벤트가 다른 요청에서 변경되었습니다.");
+      if (current.exists && (current.data().eventId !== ref.id || current.data().environment !== "qa" ||
+        JSON.stringify(trainingEventToSheetRow(current.data())) !== JSON.stringify(trainingEventToSheetRow(trainingEventFromSheetRow(existing))))) {
+        throw new TrainingEventConflictError("교육 이벤트가 다른 요청에서 변경되었습니다.");
+      }
       const now = new Date();
       const data = { ...incoming, environment: "qa", sourceType: "admin", sourceSheet: current.exists ? current.data().sourceSheet || null : null,
         sourceRow: current.exists ? current.data().sourceRow || null : null, sourceFingerprint: null,
@@ -75,7 +78,7 @@ export class TrainingEventStore {
 
   async mirrorPlan() {
     if (this.environment !== "qa") throw new Error("QA 이벤트 mirror는 승인된 QA에서만 가능합니다.");
-    const rows = await this.sheetEvents();
+    const rows = (await this.sheetEvents()).filter((row) => row.eventId);
     const ids = rows.map((row) => row.eventId);
     if (new Set(ids).size !== ids.length) throw new Error("원본 교육 ID가 중복되었습니다.");
     const snapshot = await this.database().collection(this.collectionName).get();

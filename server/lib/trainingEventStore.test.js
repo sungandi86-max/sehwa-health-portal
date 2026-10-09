@@ -65,6 +65,32 @@ test("QA admin create and update stay in QA collection; production remains Sheet
   await assert.rejects(production.saveQaEvent(values), /QA 이벤트 저장/);
 });
 
+test("production preserves physical Sheet rows across blank event rows", async () => {
+  const production = new TrainingEventStore({ database: () => { throw new Error("Production Firestore accessed"); },
+    context: () => ({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }),
+    readSheet: async () => [TRAINING_HEADERS, [], TRAINING_HEADERS.map((header) => values[header])] });
+  const rows = await production.listEvents();
+  assert.equal(rows[0].eventId, "");
+  assert.equal(rows[1].rowNumber, 3);
+  const base = await readTrainingSheets({ events: production, workbook: () => "PRODUCTION_WORKBOOK", targets: async () => [TARGET_HEADERS] });
+  assert.equal(base.trainings[1][0], "");
+  assert.equal(base.trainings[2][0], values.eventId);
+});
+
+test("QA update rejects foreign markers and stale admin snapshots", async () => {
+  const db = fakeDatabase();
+  const qa = new TrainingEventStore({ database: () => db, context: () => context, readSheet: async () => source });
+  await qa.saveQaEvent(values, null);
+  const key = `training_events_qa/${values.eventId}`;
+  db.records.set(key, { ...db.records.get(key), environment: "production" });
+  await assert.rejects(qa.saveQaEvent({ ...values, "교육명": "changed" }, values), TrainingEventConflictError);
+  assert.equal(db.records.get(key).environment, "production");
+  db.records.set(key, { ...db.records.get(key), environment: "qa", title: "newer change" });
+  await assert.rejects(qa.saveQaEvent({ ...values, "교육명": "stale change" }, values), TrainingEventConflictError);
+  assert.equal(db.records.get(key).title, "newer change");
+  assert.equal(db.calls.updates, 0);
+});
+
 test("training source uses QA event store while target rows remain Sheet-backed", async () => {
   const calls = [];
   const result = await readTrainingSheets({ events: { listEvents: async () => [values] }, workbook: () => "QA_WORKBOOK", targets: async ({ range }) => {
