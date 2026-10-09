@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { readJsonBody, readStaffDirectory, sendCors } from "./staffDirectory.js";
 import { getTrainingSpreadsheetId, TARGET_HEADERS, TRAINING_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
@@ -13,6 +14,7 @@ import { recordRosterPdfVerification } from "./trainingSignatureLifecycle.js";
 import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 import { requireTrainingEnvironment, TrainingDeploymentError } from "./trainingDeployment.js";
 import { reconcileCprTrainingStatus, saveCompletedCprGroupTraining } from "./cprTrainingStatus.js";
+import { TrainingEventConflictError } from "./trainingEventStore.js";
 
 function bad(res, status, message, code = "") {
   return res.status(status).json({ ok: false, ...(code ? { code } : {}), message });
@@ -119,6 +121,15 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       const body = req.method === "POST" ? await readJsonBody(req, { maxBytes: 400000 }) : null;
       const eventId = param(req.query?.eventId || body?.eventId);
 
+      if (resource === "training-event-mirror") {
+        if (store.events?.environment !== "qa") return bad(res, 403, "QA 교육 이벤트 mirror만 허용됩니다.");
+        if (req.method === "GET") {
+          const { items, ...report } = await store.events.mirrorPlan();
+          return res.status(200).json({ ok: true, ...report, items: items.map(({ eventId: id, action }) => ({ eventId: id, action })) });
+        }
+        return res.status(200).json({ ok: true, ...await store.events.applyMirror() });
+      }
+
       if (resource === "training-attendance-recovery-candidates" && req.method === "GET") {
         return res.status(200).json({ ok: true, ...await listAttendanceRecoveryCandidates({ db: access.db, now: now().getTime() }) });
       }
@@ -141,16 +152,17 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (resource === "training-admin-list" && req.method === "GET") {
         const base = await store.readBase();
         const items = sheetRows(base.trainings, TRAINING_HEADERS).filter((row) => row.eventId).map(({ rowNumber, ...row }) => row);
-        return res.status(200).json({ ok: true, items });
+        return res.status(200).json({ ok: true, items, mirrorAvailable: store.events?.environment === "qa" });
       }
       if (resource === "training-admin-save" && req.method === "POST") {
         const base = await store.readBase();
         const rows = sheetRows(base.trainings, TRAINING_HEADERS);
         const existing = rows.find((row) => row.eventId === body?.eventId);
         if (body?.eventId && !existing) return bad(res, 404, "수정할 교육을 찾을 수 없습니다.");
-        const values = validateTrainingInput(body, { existing });
+        const input = !body?.eventId && store.events?.environment === "qa" ? { ...body, eventId: `QA-TR-${randomUUID()}` } : body;
+        const values = validateTrainingInput(input, { existing });
         if (!existing && rows.some((row) => row.eventId === values.eventId)) return bad(res, 409, "교육 ID가 이미 존재합니다.");
-        await store.saveRow(TRAINING_SHEETS.trainings, TRAINING_HEADERS, values, existing?.rowNumber);
+        await store.saveEvent(values, existing);
         return res.status(200).json({ ok: true, item: values });
       }
       if (resource === "training-admin-directory" && req.method === "GET") {
@@ -361,6 +373,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (error instanceof TrainingDeploymentError) return bad(res, 503, error.message, error.code);
       if (error instanceof AttendanceConflictError) return bad(res, 409, error.message, error.code);
       if (error instanceof RecoveryConflictError) return bad(res, 409, error.message, "recovery-conflict");
+      if (error instanceof TrainingEventConflictError) return bad(res, 409, error.message, "training-event-conflict");
       if (error instanceof TrainingSourceNotReadyError) return bad(res, 503, "교육센터 Sheet 또는 저장소 설정을 확인해 주세요.", error.code);
       if (error instanceof RangeError || error instanceof SyntaxError) return bad(res, 400, error.message);
       return bad(res, 500, "교육 업무를 처리하지 못했습니다.");

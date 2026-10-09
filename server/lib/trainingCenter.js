@@ -1,12 +1,14 @@
 import { readGoogleSheetValues } from "./staffDirectory.js";
 import { trainingCenterSpreadsheetId } from "./trainingDeployment.js";
+import { trainingEventStore } from "./trainingEventStore.js";
+import { TRAINING_HEADERS } from "./trainingEventSchema.js";
 
 export const TRAINING_SHEETS = {
   trainings: "앱_교직원교육",
   targets: "교직원교육대상",
 };
 
-export const TRAINING_HEADERS = ["eventId", "eventGroupId", "교육연도", "사용여부", "상태", "교육명", "담당부서", "담당자", "일자", "시작시간", "종료시간", "장소", "교육내용", "이수기준", "signatureOpenAt", "signatureCloseAt", "정렬순서"];
+export { TRAINING_HEADERS };
 export const TARGET_HEADERS = ["eventId", "교직원ID", "대상상태", "필수여부", "제외여부", "제외사유"];
 
 export function getTrainingSpreadsheetId() {
@@ -81,14 +83,14 @@ export function buildTrainingView({ trainings, targets }, staffId, { eventId = "
   };
 }
 
-export async function readTrainingSheets() {
-  const spreadsheetId = getTrainingSpreadsheetId();
+export async function readTrainingSheets({ events = trainingEventStore, targets: readTargets = readGoogleSheetValues, workbook = getTrainingSpreadsheetId } = {}) {
+  const spreadsheetId = workbook();
   try {
-    const [trainings, targets] = await Promise.all([
-      readGoogleSheetValues({ spreadsheetId, range: `'${TRAINING_SHEETS.trainings}'!A1:Z2000` }),
-      readGoogleSheetValues({ spreadsheetId, range: `'${TRAINING_SHEETS.targets}'!A1:Z10000` }),
+    const [eventRows, targets] = await Promise.all([
+      events.listEvents(),
+      readTargets({ spreadsheetId, range: `'${TRAINING_SHEETS.targets}'!A1:Z10000` }),
     ]);
-    return { trainings, targets };
+    return { trainings: [TRAINING_HEADERS, ...eventRows.map((row) => TRAINING_HEADERS.map((header) => row[header] || ""))], targets };
   } catch (error) {
     if (error?.response?.status === 400) throw new TrainingSourceNotReadyError();
     throw error;

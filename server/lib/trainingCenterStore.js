@@ -1,9 +1,10 @@
 import { JWT } from "google-auth-library";
 import { getFirebaseServiceAccount } from "./firebaseAdmin.js";
-import { getTrainingSpreadsheetId, readTrainingSheets, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
+import { getTrainingSpreadsheetId, readTrainingSheets, TRAINING_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { readGoogleSheetValues } from "./staffDirectory.js";
 import { SIGNATURE_HEADERS, SIGNATURE_SHEET } from "./trainingCenterPhase2.js";
 import { signatureStorage, signatureStorageYear } from "./trainingSignatureStorage.js";
+import { trainingEventStore } from "./trainingEventStore.js";
 
 export function hasSignatureSheetSchema(sheets, values) {
   const sheet = sheets?.find((item) => item.properties?.title === SIGNATURE_SHEET);
@@ -32,9 +33,10 @@ export function managedCellUpdates(sheetId, rowNumber, headers, values, actual) 
 }
 
 export class TrainingCenterStore {
-  constructor({ spreadsheetId = null, storage = signatureStorage } = {}) {
+  constructor({ spreadsheetId = null, storage = signatureStorage, events = trainingEventStore } = {}) {
     this.configuredSpreadsheetId = spreadsheetId;
     this.storage = storage;
+    this.events = events;
     this.sheetIdCache = new Map();
   }
 
@@ -80,7 +82,7 @@ export class TrainingCenterStore {
   }
 
   async readSource() {
-    const source = await readTrainingSheets();
+    const source = await readTrainingSheets({ events: this.events });
     try {
       const signatures = await readGoogleSheetValues({ spreadsheetId: this.spreadsheetId, range: `'${SIGNATURE_SHEET}'!A:Z` });
       return { ...source, signatures };
@@ -91,7 +93,12 @@ export class TrainingCenterStore {
   }
 
   async readBase() {
-    return readTrainingSheets();
+    return readTrainingSheets({ events: this.events });
+  }
+
+  async saveEvent(values, existing = null) {
+    if (this.events.environment === "qa") return this.events.saveQaEvent(values, existing);
+    return this.saveRow(TRAINING_SHEETS.trainings, TRAINING_HEADERS, values, existing?.rowNumber);
   }
 
   async sheetId(name) {

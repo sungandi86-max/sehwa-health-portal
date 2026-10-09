@@ -137,6 +137,11 @@ function fakeStore({ appendMode = "success" } = {}) {
     listSignatureFilesByRequest: async () => [],
     readBase: async () => values,
     readSource: async () => values,
+    saveEvent: async (fields, existing) => {
+      if (existing) values.trainings[existing.rowNumber - 1] = row(TRAINING_HEADERS, fields);
+      else values.trainings.push(row(TRAINING_HEADERS, fields));
+      calls.saved += 1;
+    },
     saveRow: async (name, headers, fields, rowNumber) => {
       const table = name === "앱_교직원교육" ? values.trainings : name === "교직원교육전자서명" ? values.signatures : values.targets;
       if (rowNumber) table[rowNumber - 1] = row(headers, fields); else table.push(row(headers, fields));
@@ -212,6 +217,24 @@ test("staff cannot access administrator education resources", async () => {
   assert.equal((await call("training-admin-list", { token: "admin2" })).statusCode, 200);
   assert.equal((await call("training-targets", { token: "staff", query: { eventId: "EVENT-1" } })).statusCode, 403);
   assert.equal((await call("training-final-sheet", { token: "staff", query: { eventId: "EVENT-1" } })).statusCode, 403);
+});
+
+test("QA event mirror is admin-only and does not expose source rows", async () => {
+  const store = fakeStore();
+  let applied = 0;
+  store.events = { environment: "qa", mirrorPlan: async () => ({ sourceCount: 1, existingCount: 0,
+    counts: { create: 1, update: 0, skip: 0, conflict: 0 }, items: [{ eventId: "QA-EVENT-1", action: "create", incoming: { title: "private source" } }] }),
+  applyMirror: async () => { applied++; return { create: 1, update: 0, skip: 0, conflict: 0, applied: 1 }; } };
+  const { call } = harness({ store });
+  assert.equal((await call("training-event-mirror", { token: "staff" })).statusCode, 403);
+  const preview = await call("training-event-mirror");
+  assert.equal(preview.statusCode, 200);
+  assert.equal(JSON.stringify(preview.body).includes("private source"), false);
+  assert.equal((await call("training-event-mirror", { method: "POST", body: {} })).statusCode, 200);
+  assert.equal(applied, 1);
+  store.events.environment = "production";
+  assert.equal((await call("training-event-mirror", { method: "POST", body: {} })).statusCode, 403);
+  assert.equal(applied, 1);
 });
 
 test("admin education and canonical target management use existing Sheet schema", async () => {
