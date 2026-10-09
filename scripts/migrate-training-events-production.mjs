@@ -20,6 +20,7 @@ const token = execFileSync("gcloud", ["auth", "print-access-token"], { encoding:
 
 async function googleRequest(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { Authorization: `Bearer ${token}`,
+    "x-goog-user-project": PROJECT,
     ...(options.body ? { "Content-Type": "application/json" } : {}) } });
   if (!response.ok) throw new Error(`Google API ${response.status}: ${(await response.text()).slice(0, 250)}`);
   return response.json();
