@@ -3,12 +3,10 @@ import { trainingCenterSpreadsheetId } from "./trainingDeployment.js";
 
 export const TRAINING_SHEETS = {
   trainings: "앱_교직원교육",
-  materials: "앱_교직원교육자료",
   targets: "교직원교육대상",
 };
 
 export const TRAINING_HEADERS = ["eventId", "eventGroupId", "교육연도", "사용여부", "상태", "교육명", "담당부서", "담당자", "일자", "시작시간", "종료시간", "장소", "교육내용", "이수기준", "signatureOpenAt", "signatureCloseAt", "정렬순서"];
-export const MATERIAL_HEADERS = ["materialId", "eventId", "사용여부", "자료명", "자료유형", "링크 또는 파일ID", "정렬순서"];
 export const TARGET_HEADERS = ["eventId", "교직원ID", "대상상태", "필수여부", "제외여부", "제외사유"];
 
 export function getTrainingSpreadsheetId() {
@@ -64,11 +62,10 @@ function publicTraining(row, staffId, targets) {
   };
 }
 
-export function buildTrainingView({ trainings, materials, targets }, staffId, { eventId = "" } = {}) {
+export function buildTrainingView({ trainings, targets }, staffId, { eventId = "" } = {}) {
   const trainingRows = rowsWithHeaders(trainings, TRAINING_HEADERS).filter((row) => row.eventId && enabled(row["사용여부"]));
   if (new Set(trainingRows.map((row) => row.eventId)).size !== trainingRows.length) throw new TrainingSourceNotReadyError();
   const targetRows = rowsWithHeaders(targets, TARGET_HEADERS);
-  const materialRows = rowsWithHeaders(materials, MATERIAL_HEADERS);
   const selected = trainingRows.filter((row) => !eventId || row.eventId === eventId);
   if (eventId && selected.length !== 1) return null;
   const items = selected.map((row) => publicTraining(row, staffId, targetRows));
@@ -80,26 +77,18 @@ export function buildTrainingView({ trainings, materials, targets }, staffId, { 
   return {
     ...items[0],
     description: row["교육내용"],
-    materials: materialRows
-      .filter((material) => material.eventId === eventId && enabled(material["사용여부"]))
-      .sort((a, b) => Number(a["정렬순서"] || 0) - Number(b["정렬순서"] || 0))
-      .map((material) => ({
-        title: material["자료명"],
-        type: material["자료유형"],
-        url: /^https:\/\//i.test(material["링크 또는 파일ID"]) ? material["링크 또는 파일ID"] : "",
-      })),
+    materials: [],
   };
 }
 
 export async function readTrainingSheets() {
   const spreadsheetId = getTrainingSpreadsheetId();
   try {
-    const [trainings, materials, targets] = await Promise.all([
+    const [trainings, targets] = await Promise.all([
       readGoogleSheetValues({ spreadsheetId, range: `'${TRAINING_SHEETS.trainings}'!A1:Z2000` }),
-      readGoogleSheetValues({ spreadsheetId, range: `'${TRAINING_SHEETS.materials}'!A1:Z4000` }),
       readGoogleSheetValues({ spreadsheetId, range: `'${TRAINING_SHEETS.targets}'!A1:Z10000` }),
     ]);
-    return { trainings, materials, targets };
+    return { trainings, targets };
   } catch (error) {
     if (error?.response?.status === 400) throw new TrainingSourceNotReadyError();
     throw error;

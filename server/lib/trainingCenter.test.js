@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildTrainingView, MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
+import { buildTrainingView, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { createTrainingHandler } from "./trainingCenterApi.js";
 import { trainingCenterSpreadsheetId } from "./trainingDeployment.js";
 import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
@@ -17,7 +17,6 @@ const target = (staffId, extra = {}) => row(TARGET_HEADERS, {
 });
 const source = {
   trainings: [TRAINING_HEADERS, training("event-1"), training("event-2", { 사용여부: "미사용" })],
-  materials: [MATERIAL_HEADERS, row(MATERIAL_HEADERS, { materialId: "m-1", eventId: "event-1", 사용여부: "사용", 자료명: "안내문", 자료유형: "링크", "링크 또는 파일ID": "https://example.com/guide" })],
   targets: [TARGET_HEADERS, target("T001"), target("T002", { 대상상태: "비대상" })],
 };
 
@@ -31,7 +30,7 @@ test("only enabled training and the authenticated staff target are returned", ()
 
   const detail = buildTrainingView(source, "T002", { eventId: "event-1" });
   assert.equal(detail.targetStatus, "대상 아님");
-  assert.equal(detail.materials.length, 1);
+  assert.deepEqual(detail.materials, []);
   assert.equal(detail.description, "교육 안내");
   assert.equal(JSON.stringify(detail).includes("T001"), false);
   assert.equal(buildTrainingView(source, "T001", { eventId: "missing" }), null);
@@ -95,7 +94,7 @@ test("training API returns list/detail without other staff data", async () => {
   assert.equal(JSON.stringify(list.body).includes("T002"), false);
   const detail = await call(handler, { resource: "training-detail", eventId: "event-1" });
   assert.equal(detail.statusCode, 200);
-  assert.equal(detail.body.item.materials[0].title, "안내문");
+  assert.deepEqual(detail.body.item.materials, []);
   assert.equal(JSON.stringify(detail.body).includes("T002"), false);
   assert.equal((await call(handler, { resource: "training-detail", eventId: "missing" })).statusCode, 404);
   assert.equal((await call(handler, { resource: "training-detail" })).statusCode, 404);
@@ -127,7 +126,7 @@ test("data-filled QA fixture returns only current staff fields in list and detai
 });
 
 test("valid staff receives an empty list from header-only sheets", async () => {
-  const empty = { trainings: [TRAINING_HEADERS], materials: [MATERIAL_HEADERS], targets: [TARGET_HEADERS] };
+  const empty = { trainings: [TRAINING_HEADERS], targets: [TARGET_HEADERS] };
   const result = await call(handlerFor({ sourceValue: empty }));
   assert.equal(result.statusCode, 200);
   assert.deepEqual(result.body, { ok: true, items: [] });
@@ -146,7 +145,7 @@ test("staff-directory dispatches training before admin gate and preserves admin 
 });
 
 test("training API reports absent sheets without exposing source data", async () => {
-  const result = await call(handlerFor({ sourceValue: { trainings: [], materials: [], targets: [] } }));
+  const result = await call(handlerFor({ sourceValue: { trainings: [], targets: [] } }));
   assert.equal(result.statusCode, 503);
   assert.equal(result.body.code, "training-source-not-ready");
 });

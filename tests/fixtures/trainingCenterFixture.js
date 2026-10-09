@@ -1,5 +1,4 @@
 const TRAINING_HEADERS = ["eventId", "eventGroupId", "교육연도", "사용여부", "상태", "교육명", "담당부서", "담당자", "일자", "시작시간", "종료시간", "장소", "교육내용", "이수기준", "signatureOpenAt", "signatureCloseAt", "정렬순서"];
-const MATERIAL_HEADERS = ["materialId", "eventId", "사용여부", "자료명", "자료유형", "링크 또는 파일ID", "정렬순서"];
 const TARGET_HEADERS = ["eventId", "교직원ID", "대상상태", "필수여부", "제외여부", "제외사유"];
 
 const row = (headers, fields) => headers.map((header) => fields[header] ?? "");
@@ -20,14 +19,6 @@ export const trainingCenterSheetFixture = {
       장소: "시청각실", 교육내용: "QA 두 번째 교육 내용", 정렬순서: "2",
     }),
     row(TRAINING_HEADERS, { eventId: "QA-TRAINING-003", 사용여부: "미사용", 상태: "예정", 교육명: "미사용 QA 교육" }),
-  ],
-  materials: [
-    MATERIAL_HEADERS,
-    row(MATERIAL_HEADERS, {
-      materialId: "QA-MATERIAL-001", eventId: "QA-TRAINING-001", 사용여부: "사용",
-      자료명: "QA 교육자료 · 긴 자료명을 사용해 모바일 상세 화면의 줄바꿈과 링크 너비를 확인하는 안내문",
-      자료유형: "링크", "링크 또는 파일ID": "https://example.com/qa-guide", 정렬순서: "1",
-    }),
   ],
   targets: [
     otherStaffHeaders,
@@ -55,8 +46,5 @@ export const expectedTrainingList = [
 export const expectedTrainingDetail = {
   ...expectedTrainingList[0],
   description: "QA 교육 내용",
-  materials: [{
-    title: "QA 교육자료 · 긴 자료명을 사용해 모바일 상세 화면의 줄바꿈과 링크 너비를 확인하는 안내문",
-    type: "링크", url: "https://example.com/qa-guide",
-  }],
+  materials: [],
 };

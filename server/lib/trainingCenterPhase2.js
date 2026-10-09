@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { PNG } from "pngjs";
-import { MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
+import { TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 
 export const SIGNATURE_SHEET = "교직원교육전자서명";
 export const SIGNATURE_HEADERS = [
@@ -42,15 +42,13 @@ function uniqueRows(rows, key, label) {
   if (new Set(values).size !== values.length) throw new TrainingSourceNotReadyError(`${label} 중복`);
 }
 
-export function parseTrainingSource({ trainings, materials, targets, signatures }) {
+export function parseTrainingSource({ trainings, targets, signatures }) {
   const result = {
     trainings: sheetRows(trainings, TRAINING_HEADERS).filter((row) => row.eventId),
-    materials: sheetRows(materials, MATERIAL_HEADERS).filter((row) => row.materialId),
     targets: sheetRows(targets, TARGET_HEADERS).filter((row) => row.eventId && row["교직원ID"]),
     signatures: sheetRows(signatures, SIGNATURE_HEADERS).filter((row) => row.signatureId),
   };
   uniqueRows(result.trainings, "eventId", "교육 ID");
-  uniqueRows(result.materials, "materialId", "자료 ID");
   const targetKeys = result.targets.map((row) => JSON.stringify([row.eventId, row["교직원ID"]]));
   if (new Set(targetKeys).size !== targetKeys.length) throw new TrainingSourceNotReadyError();
   uniqueRows(result.signatures, "signatureId", "서명 ID");

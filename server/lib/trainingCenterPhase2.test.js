@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
 import { PNG } from "pngjs";
 import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
-import { MATERIAL_HEADERS, TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
+import { TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { createTrainingPhase2Handler } from "./trainingCenterPhase2Api.js";
 import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { listAttendanceRecoveryCandidates } from "./trainingAttendanceRecovery.js";
@@ -27,7 +27,6 @@ const event = (eventId, extra = {}) => row(TRAINING_HEADERS, {
 const target = (eventId, staffId, extra = {}) => row(TARGET_HEADERS, { eventId, 교직원ID: staffId, 대상상태: "대상", 필수여부: "Y", 제외여부: "N", ...extra });
 const source = () => ({
   trainings: [TRAINING_HEADERS, event("EVENT-1"), event("EVENT-2")],
-  materials: [MATERIAL_HEADERS],
   targets: [TARGET_HEADERS, target("EVENT-1", "QA001"), target("EVENT-2", "QA001"), target("EVENT-1", "QA002")],
   signatures: [SIGNATURE_HEADERS],
 });
