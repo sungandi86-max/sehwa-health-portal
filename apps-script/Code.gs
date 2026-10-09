@@ -4,7 +4,6 @@ const CURRENT_STUDENT_CARE_SEMESTER = 2;
 
 const SHEET_NAMES = {
   visit: "학생 보건실 입실현황",
-  portalStudentCare: "앱_학생건강관리",
   portalMessages: "앱_메신저문구"
 };
 
@@ -58,7 +57,6 @@ const HEALTH_ROOM_BACKUP = {
   sourceMimeType: "application/vnd.google-apps.spreadsheet",
   expectedSheets: [
     SHEET_NAMES.visit,
-    SHEET_NAMES.portalStudentCare,
     "응답_심폐소생술이수증",
     "응답_결핵검진확인증",
     "응답_채용검진확인요청"
@@ -213,19 +211,7 @@ function doGet(e) {
   const action = e && e.parameter ? String(e.parameter.action || "").trim() : "";
   try {
     if (action === "verifyPrivate") {
-      const password   = e.parameter.password || "";
-      const correctPw  = getAppConfig_("요보호학생_비밀번호");
-      if (password === correctPw) {
-        const ss    = getSpreadsheet_();
-        const sheet = ss.getSheetByName(SHEET_NAMES.portalStudentCare);
-        if (!sheet) return jsonOutput_({ result: "error", message: "자료 시트를 찾을 수 없습니다." });
-        const data  = sheet.getDataRange().getDisplayValues();
-        const url   = data[1] && data[1][5] ? data[1][5] : "";
-        if (!url) return jsonOutput_({ result: "error", message: "링크가 설정되어 있지 않습니다." });
-        return jsonOutput_({ result: "success", url });
-      } else {
-        return jsonOutput_({ result: "error", message: "비밀번호가 올바르지 않습니다." });
-      }
+      return jsonOutput_({ result: "error", message: "이전 학생 자료 링크는 더 이상 제공되지 않습니다." });
     }
     if (action === "verifyAdminMaster") {
       return jsonOutput_(verifyAdminMaster_(e.parameter || {}));
@@ -2395,7 +2381,6 @@ function getPortalData_(options) {
       privacyNotice: "학생 개인정보 및 민감정보는 앱 화면에 직접 표시하지 않습니다.",
       managerNote:   "제출 자료 확인 및 세부 관리는 보건업무시트에서 별도로 진행됩니다."
     },
-    studentCare: getStudentCare_(ss),
     messages:    getMessages_(ss)
   });
 }
@@ -2641,38 +2626,6 @@ function getTitleLines_(row) {
 // 시트별 데이터 파싱
 // ════════════════════════════════════════════════════════════════
 
-function getStudentCare_(ss) {
-  return getRows_(ss, SHEET_NAMES.portalStudentCare).map(r => {
-    const title = getValue_(r, ["제목"]);
-    const buttonText = getValue_(r, ["버튼명"]);
-    const isHealthRoom =
-      title === "보건실 소재 확인" ||
-      title === "보건실 입실 현황 확인" ||
-      buttonText === "보건실 소재 확인하기" ||
-      buttonText === "보건실 입실현황 열기";
-
-    if (isHealthRoom) {
-      return {
-        title: "보건실 소재 확인",
-        description: "수업 중 보건실을 이용 중인 학생의 소재와 복귀 여부를 확인할 수 있습니다. 학생 건강정보, 증상, 처치내용은 표시하지 않습니다.",
-        privacyNotice: "권한 있는 교직원에게만 최소정보를 제한적으로 표시합니다.",
-        buttonText: "보건실 소재 확인하기",
-        url: "",
-        status: getValue_(r, ["상태"], "권한 필요")
-      };
-    }
-
-    return {
-      title,
-      description:   getValue_(r, ["설명"]),
-      privacyNotice: getValue_(r, ["개인정보안내","개인정보 안내"]),
-      buttonText,
-      url:           getValue_(r, ["링크"]),
-      status:        getValue_(r, ["상태"], "권한 필요")
-    };
-  });
-}
-
 function getMessages_(ss) {
   return getRows_(ss, SHEET_NAMES.portalMessages).map(r => ({
     title:    getValue_(r, ["제목"]),
@@ -2750,10 +2703,4 @@ function testTbConfig() {
     closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
     closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
   }, null, 2));
-}
-
-function testVerifyPrivate() {
-  const pw = getAppConfig_("요보호학생_비밀번호");
-  Logger.log("[" + pw + "]");
-  Logger.log("길이: " + pw.length);
 }
