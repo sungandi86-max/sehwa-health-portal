@@ -5,6 +5,8 @@ import { readGoogleSheetValues } from "./staffDirectory.js";
 import { SIGNATURE_HEADERS, SIGNATURE_SHEET } from "./trainingCenterPhase2.js";
 import { signatureStorage, signatureStorageYear } from "./trainingSignatureStorage.js";
 import { trainingEventStore } from "./trainingEventStore.js";
+import { requireTrainingEnvironment } from "./trainingDeployment.js";
+import { trainingSignatureLedger } from "./trainingSignatureLedger.js";
 
 export function hasSignatureSheetSchema(sheets, values) {
   const sheet = sheets?.find((item) => item.properties?.title === SIGNATURE_SHEET);
@@ -33,10 +35,13 @@ export function managedCellUpdates(sheetId, rowNumber, headers, values, actual) 
 }
 
 export class TrainingCenterStore {
-  constructor({ spreadsheetId = null, storage = signatureStorage, events = trainingEventStore } = {}) {
+  constructor({ spreadsheetId = null, storage = signatureStorage, events = trainingEventStore, ledger = trainingSignatureLedger,
+    environment = requireTrainingEnvironment } = {}) {
     this.configuredSpreadsheetId = spreadsheetId;
     this.storage = storage;
     this.events = events;
+    this.ledger = ledger;
+    this.environment = environment;
     this.sheetIdCache = new Map();
   }
 
@@ -47,6 +52,8 @@ export class TrainingCenterStore {
   get signatureStorageConfigured() {
     return this.storage.configured === true;
   }
+
+  get usesFirestoreSignatureLedger() { return this.environment() === "qa"; }
 
   assertSignatureStorageConfigured() {
     if (!this.signatureStorageConfigured) throw new TrainingSourceNotReadyError();
@@ -69,6 +76,9 @@ export class TrainingCenterStore {
   }
 
   async isSignatureSheetReady() {
+    if (this.usesFirestoreSignatureLedger) {
+      try { return await this.ledger.isReady(); } catch { return false; }
+    }
     try {
       const auth = googleAuth(["https://www.googleapis.com/auth/spreadsheets.readonly"]);
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}?fields=sheets(properties(title,hidden))`;
@@ -83,6 +93,11 @@ export class TrainingCenterStore {
 
   async readSource() {
     const source = await readTrainingSheets({ events: this.events });
+    if (this.usesFirestoreSignatureLedger) {
+      if (!await this.ledger.isReady()) throw new TrainingSourceNotReadyError();
+      const records = await this.ledger.listSignatures();
+      return { ...source, signatures: [SIGNATURE_HEADERS, ...records.map((record) => SIGNATURE_HEADERS.map((header) => record[header] || ""))] };
+    }
     try {
       const signatures = await readGoogleSheetValues({ spreadsheetId: this.spreadsheetId, range: `'${SIGNATURE_SHEET}'!A:Z` });
       return { ...source, signatures };
@@ -133,11 +148,17 @@ export class TrainingCenterStore {
   }
 
   async appendSignatures(records) {
+    if (this.usesFirestoreSignatureLedger) return this.ledger.appendSignatures(records);
     const sheetId = await this.sheetId(SIGNATURE_SHEET);
     const first = await readGoogleSheetValues({ spreadsheetId: this.spreadsheetId, range: `'${SIGNATURE_SHEET}'!A1:Z1` });
     const actual = (first[0] || []).map((header) => String(header ?? "").normalize("NFKC").trim());
     if (SIGNATURE_HEADERS.some((header) => actual.filter((item) => item === header).length !== 1)) throw new TrainingSourceNotReadyError();
     await this.batchUpdate([{ appendCells: { sheetId, rows: records.map((record) => rowData(SIGNATURE_HEADERS, record, actual)), fields: "userEnteredValue" } }]);
+  }
+
+  async cancelSignature(record, corrected) {
+    if (this.usesFirestoreSignatureLedger) return this.ledger.cancelSignature(record, corrected);
+    return this.saveRow(SIGNATURE_SHEET, SIGNATURE_HEADERS, corrected, record.rowNumber);
   }
 
   async uploadSignature(bytes, eventId, now = new Date(), requestId = "") {

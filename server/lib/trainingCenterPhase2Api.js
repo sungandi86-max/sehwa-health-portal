@@ -6,7 +6,7 @@ import { resolveTrainingAccess } from "./trainingCenterAccess.js";
 import { trainingCenterStore } from "./trainingCenterStore.js";
 import { AttendanceConflictError, assertCompletedAttendanceLock, attachAttendanceFile, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { applyAttendanceRecovery, inspectAttendanceRecovery, listAttendanceRecoveryCandidates, RecoveryConflictError } from "./trainingAttendanceRecovery.js";
-import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, SIGNATURE_HEADERS, SIGNATURE_SHEET, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
+import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx, trainingRosterPdfFilename, trainingRosterXlsxFilename } from "./trainingFinalSheet.js";
 import { trainingRosterPdfRenderer } from "./trainingRosterPdf.js";
 import { signatureStorageYear, SignatureStorageError } from "./trainingSignatureStorage.js";
@@ -15,6 +15,7 @@ import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 import { requireTrainingEnvironment, TrainingDeploymentError } from "./trainingDeployment.js";
 import { reconcileCprTrainingStatus, saveCompletedCprGroupTraining } from "./cprTrainingStatus.js";
 import { TrainingEventConflictError } from "./trainingEventStore.js";
+import { TrainingSignatureConflictError } from "./trainingSignatureLedger.js";
 
 function bad(res, status, message, code = "") {
   return res.status(status).json({ ok: false, ...(code ? { code } : {}), message });
@@ -22,7 +23,7 @@ function bad(res, status, message, code = "") {
 
 const ATTENDANCE_FAILURE_STAGES = new Set([
   "SIGNATURE_STORAGE_CONFIG", "SIGNATURE_STORAGE_SAVE", "SIGNATURE_STORAGE_READ", "SIGNATURE_STORAGE_DELETE",
-  "ROSTER_BUILD", "ROSTER_SIGNATURE_FETCH", "ROSTER_TEMPLATE_FILL", "ROSTER_PDF_GENERATE", "ROSTER_PDF_AUDIT", "SHEET_APPEND", "LOCK_FINALIZE",
+  "ROSTER_BUILD", "ROSTER_SIGNATURE_FETCH", "ROSTER_TEMPLATE_FILL", "ROSTER_PDF_GENERATE", "ROSTER_PDF_AUDIT", "SHEET_APPEND", "LEDGER_WRITE", "LOCK_FINALIZE",
 ]);
 
 function logAttendanceFailure(error, fallbackStage, eventCount) {
@@ -242,7 +243,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           stage = "LOCK_FINALIZE";
           await attachAttendanceFile(reservation, fileId, now().getTime(), storageRequestId);
           records = events.map((event) => createSignatureRecord(event, access.assignment.staffId, { fileId, now: now() }));
-          stage = "SHEET_APPEND";
+          stage = store.usesFirestoreSignatureLedger ? "LEDGER_WRITE" : "SHEET_APPEND";
           await markAttendanceAppendStarted(reservation, now().getTime());
           appendStarted = true;
           await store.appendSignatures(records);
@@ -255,7 +256,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
               const latest = parseTrainingSource(await store.readSource());
               const found = records.filter((record) => latest.signatures.some((row) => row.signatureId === record.signatureId));
               committed = found.length === records.length;
-              certain = committed || (!appendStarted && found.length === 0);
+              certain = committed || (found.length === 0 && (!appendStarted || store.usesFirestoreSignatureLedger));
             } catch { certain = false; }
           }
           if (!committed && certain) {
@@ -331,7 +332,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           }
           await assertCompletedAttendanceLock(access.db, eventId, staffId);
           const corrected = { ...active, "상태": "취소", "취소여부": "Y", "취소사유": reason, "정정자": access.assignment.staffId, "정정일시": now().toISOString() };
-          await store.saveRow(SIGNATURE_SHEET, SIGNATURE_HEADERS, corrected, active.rowNumber);
+          await store.cancelSignature(active, corrected);
           await cancelAttendanceLock(access.db, eventId, staffId, access.assignment.staffId);
           const nextSource = { ...source, signatures: source.signatures.map((row) => row.signatureId === active.signatureId ? corrected : row) };
           try { await reconcileCprStatus({ db: access.db, staffId, source: nextSource }); }
@@ -346,7 +347,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
             let committed = false;
             try { committed = parseTrainingSource(await store.readSource()).signatures.some((row) => row.signatureId === record.signatureId); }
             catch { return bad(res, 503, "출석 정정 결과를 확인 중입니다. 관리자에게 문의해 주세요."); }
-            if (!committed && !appendStarted) {
+            if (!committed && (!appendStarted || store.usesFirestoreSignatureLedger)) {
               await finishAttendance(reservation, "failed");
               return bad(res, 503, "출석 정정에 실패했습니다.");
             }
@@ -365,6 +366,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (error instanceof AttendanceConflictError) return bad(res, 409, error.message, error.code);
       if (error instanceof RecoveryConflictError) return bad(res, 409, error.message, "recovery-conflict");
       if (error instanceof TrainingEventConflictError) return bad(res, 409, error.message, "training-event-conflict");
+      if (error instanceof TrainingSignatureConflictError) return bad(res, 409, error.message, "training-signature-conflict");
       if (error instanceof TrainingSourceNotReadyError) return bad(res, 503, "교육센터 Sheet 또는 저장소 설정을 확인해 주세요.", error.code);
       if (error instanceof RangeError || error instanceof SyntaxError) return bad(res, 400, error.message);
       return bad(res, 500, "교육 업무를 처리하지 못했습니다.");

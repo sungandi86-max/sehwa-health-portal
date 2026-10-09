@@ -11,6 +11,7 @@ import { hasSignatureSheetSchema, managedCellUpdates, TrainingCenterStore } from
 import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
 import { SignatureStorageError } from "./trainingSignatureStorage.js";
+import { TrainingSignatureConflictError } from "./trainingSignatureLedger.js";
 
 process.env.VERCEL_ENV = "preview";
 process.env.VERCEL_GIT_COMMIT_REF = "qa";
@@ -145,6 +146,10 @@ function fakeStore({ appendMode = "success" } = {}) {
     saveRow: async (name, headers, fields, rowNumber) => {
       const table = name === "앱_교직원교육" ? values.trainings : name === "교직원교육전자서명" ? values.signatures : values.targets;
       if (rowNumber) table[rowNumber - 1] = row(headers, fields); else table.push(row(headers, fields));
+      calls.saved += 1;
+    },
+    cancelSignature: async (record, corrected) => {
+      values.signatures[record.rowNumber - 1] = row(SIGNATURE_HEADERS, corrected);
       calls.saved += 1;
     },
     uploadSignature: async () => { calls.uploads += 1; return "PRIVATE_FILE_1"; },
@@ -703,6 +708,17 @@ test("administrator correction also preserves an uncertain Sheet append", async 
   assert.equal([...db.records.values()].some((item) => item.state === "pending" && item.appendStartedAt), true);
 });
 
+test("QA atomic ledger failure with zero read-back releases a failed lock", async () => {
+  const { call, db, store } = harness({ appendMode: "before" });
+  store.usesFirestoreSignatureLedger = true;
+  const challenge = issueQrChallenge({ eventId: "EVENT-1", secret, now: now().getTime() });
+  const body = { eventId: "EVENT-1", challenge, signature: `data:image/png;base64,${inkPng().toString("base64")}` };
+  const result = await call("training-attendance-submit", { token: "staff", method: "POST", body });
+  assert.equal(result.statusCode, 503);
+  assert.equal([...db.records.values()].some((item) => item.state === "failed"), true);
+  assert.equal([...db.records.values()].some((item) => item.state === "pending"), false);
+});
+
 test("admin cancellation cannot rewrite a Sheet row while recovery owns a pending lock", async () => {
   const { call, db, store } = harness();
   await reserveAttendance(db, ["EVENT-1"], "QA001", now().getTime() - 16 * 60 * 1000);
@@ -758,6 +774,19 @@ test("admin correction preserves the cancelled row and records the reason and ac
   assert.equal(corrected.statusCode, 200);
   assert.equal(store.values.signatures.length, 3);
   assert.equal(store.values.signatures[2][SIGNATURE_HEADERS.indexOf("출석방식")], "correction");
+});
+
+test("QA cancellation ledger race returns conflict instead of generic failure", async () => {
+  const { call, store } = harness();
+  const challenge = issueQrChallenge({ eventId: "EVENT-1", secret, now: now().getTime() });
+  const body = { eventId: "EVENT-1", challenge, signature: `data:image/png;base64,${inkPng().toString("base64")}` };
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST", body })).statusCode, 200);
+  store.cancelSignature = async () => { throw new TrainingSignatureConflictError(); };
+  const result = await call("training-attendance-correct", { method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA001", action: "cancel", reason: "QA 경합 확인",
+  } });
+  assert.equal(result.statusCode, 409);
+  assert.equal(result.body.code, "training-signature-conflict");
 });
 
 test("existing staff-directory router preserves admin-only default and dispatches Phase 2", async () => {

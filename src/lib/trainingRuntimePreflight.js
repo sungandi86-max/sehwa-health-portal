@@ -6,7 +6,7 @@ export const TRAINING_RUNTIME_CHECKS = [
   { key: "signatureDriveRootReady", label: "서명 저장소 초기화" },
   { key: "signatureDriveRootPrivate", label: "서명 폴더 비공개" },
   { key: "signatureStorageReadReady", label: "서명 읽기 준비" },
-  { key: "signatureSheetReady", label: "서명 Sheet 준비" },
+  { key: "signatureSheetReady", label: "서명 원장 준비" },
   { key: "firebaseAdminReady", label: "Firebase Admin 준비" },
 ];
 
