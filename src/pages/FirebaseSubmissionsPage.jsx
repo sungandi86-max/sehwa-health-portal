@@ -69,7 +69,6 @@ const SHEET_SUBMISSION_TYPES = {
     keywords: ["결핵검진 확인증", "결핵검진확인증", "흉부 x-ray", "흉부x-ray"],
   },
   recruit: {
-    sheetName: "응답_채용검진확인요청",
     aliases: ["recruit", "recruit_checkup", "employment_checkup", "채용검진"],
     keywords: ["채용검진", "대체 인정", "확인 요청"],
   },
@@ -115,7 +114,7 @@ function resolveSheetSubmissionType(item) {
   if (SHEET_SUBMISSION_TYPE_ORDER.includes(explicitType)) return explicitType;
 
   const sheetName = normalizeSubmitValue(item.sheetName);
-  const sheetMatch = SHEET_SUBMISSION_TYPE_ORDER.find(
+  const sheetMatch = sheetName && SHEET_SUBMISSION_TYPE_ORDER.find(
     (type) => normalizeSubmitValue(SHEET_SUBMISSION_TYPES[type].sheetName) === sheetName,
   );
   if (sheetMatch) return sheetMatch;

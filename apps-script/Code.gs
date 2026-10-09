@@ -58,8 +58,7 @@ const HEALTH_ROOM_BACKUP = {
   expectedSheets: [
     SHEET_NAMES.visit,
     "응답_심폐소생술이수증",
-    "응답_결핵검진확인증",
-    "응답_채용검진확인요청"
+    "응답_결핵검진확인증"
   ]
 };
 
@@ -573,10 +572,6 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
   } else if (sheetName === "응답_결핵검진확인증") {
     sheet.appendRow([now, fields.name, fields.dept, fields.staffType,
       fields.checkupDate, fields.docType, fileName, fileLink]);
-
-  } else if (sheetName === "응답_채용검진확인요청") {
-    sheet.appendRow([now, fields.name, fields.dept, fields.staffType,
-      fields.adminSubmitted, fields.submitPeriod, fields.note || ""]);
 
   } else if (sheetName === "응답_기타보건자료") {
     sheet.appendRow([now, fields.name, fields.dept, fields.staffType,
@@ -2106,14 +2101,6 @@ function buildAdminReceiptSections_(ss) {
       id: "cpr",
       label: "심폐소생술 이수증 제출",
       sheetName: "응답_심폐소생술이수증",
-      startRow: 2,
-      dateColumn: 1,
-      requiredColumns: [1]
-    }),
-    summarizeAdminReceiptSheet_(ss, {
-      id: "recruit",
-      label: "채용검진 대체 확인 요청",
-      sheetName: "응답_채용검진확인요청",
       startRow: 2,
       dateColumn: 1,
       requiredColumns: [1]

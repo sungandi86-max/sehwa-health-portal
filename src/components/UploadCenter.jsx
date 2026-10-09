@@ -38,7 +38,6 @@ const SUBMIT_TYPE_CONFIG = {
   },
   recruit: {
     modalType: "recruit",
-    sheetName: "응답_채용검진확인요청",
     aliases: ["recruit", "recruit_checkup", "employment_checkup", "채용검진"],
     keywords: ["채용검진", "대체 인정", "확인 요청"],
   },
@@ -88,7 +87,7 @@ function resolveSubmitCardType(item) {
   if (VALID_MODAL_TYPES.has(explicitModalType)) return explicitModalType;
 
   const sheetName = normalizeSubmitValue(item.sheetName);
-  const sheetMatch = SUBMIT_TYPE_ORDER.find(
+  const sheetMatch = sheetName && SUBMIT_TYPE_ORDER.find(
     (type) => normalizeSubmitValue(SUBMIT_TYPE_CONFIG[type].sheetName) === sheetName
   );
   if (sheetMatch) return sheetMatch;

@@ -310,7 +310,6 @@ function RecruitForm({ onSubmit, submitting }) {
 
     await onSubmit({
       type: "recruit",
-      sheetName: "응답_채용검진확인요청",
       folderId: null,
       fields: { ...form },
       fileName: null,

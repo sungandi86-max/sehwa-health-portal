@@ -47,7 +47,7 @@ test("backup integrity keeps the visit tab but no longer requires the legacy men
   const result = JSON.parse(vm.runInContext(
     'JSON.stringify(readHealthRoomBackupIntegrity_("test-workbook"))', context,
   ));
-  assert.equal(result.expectedSheetCount, 4);
+  assert.equal(result.expectedSheetCount, 3);
   assert.equal(result.missingSheets.includes("학생 보건실 입실현황"), false);
   assert.equal(result.missingSheets.includes("앱_학생건강관리"), false);
 });
