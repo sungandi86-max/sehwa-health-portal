@@ -87,10 +87,10 @@ export class TrainingSignatureLedger {
   }
 
   async isReady() {
-    if (this.environment !== "qa") return false;
     const marker = await this.collection.doc(MIGRATION_ID).get();
-    if (!marker.exists || marker.data().environment !== "qa" || marker.data().status !== "ready" ||
-      !Number.isInteger(marker.data().sourceCount) || marker.data().sourceCount < 1 || !Array.isArray(marker.data().sourceSignatures) ||
+    if (!marker.exists || marker.data().environment !== this.environment || marker.data().status !== "ready" ||
+      !Number.isInteger(marker.data().sourceCount) || marker.data().sourceCount < (this.environment === "qa" ? 1 : 0) ||
+      this.environment === "production" && marker.data().schemaVersion !== 1 || !Array.isArray(marker.data().sourceSignatures) ||
       marker.data().sourceSignatures.length !== marker.data().sourceCount) return false;
     const imported = new Map((await this.listSignatures()).filter((entry) => entry.sourceType === "sheet-migration")
       .map((entry) => [entry.signatureId, entry.sourceFingerprint]));
@@ -112,7 +112,8 @@ export class TrainingSignatureLedger {
   async getSignatureFile(eventId, staffId) { return (await this.getSignature(eventId, staffId))?.signatureFileId || null; }
 
   async appendSignatures(records) {
-    this.assertQaWrite();
+    const environment = this.environment;
+    if (environment === "production" && !await this.isReady()) throw new TrainingSignatureConflictError("운영 서명 원장이 준비되지 않았습니다.");
     const rows = records.map(normalizedRow);
     if (!rows.length || new Set(rows.map(identity)).size !== rows.length || new Set(rows.map((row) => row.signatureId)).size !== rows.length ||
       rows.some((row) => !activeSignature(row))) throw new TrainingSignatureConflictError();
@@ -129,12 +130,12 @@ export class TrainingSignatureLedger {
         const ref = refs[index];
         const snapshot = snapshots[index];
         const pair = snapshot.exists ? snapshot.data() : null;
-        if (pair && (pair.environment !== "qa" || pair.eventId !== row.eventId || pair.staffId !== row["교직원ID"] || pair.activeSignatureId)) throw new TrainingSignatureConflictError();
+        if (pair && (pair.environment !== environment || pair.eventId !== row.eventId || pair.staffId !== row["교직원ID"] || pair.activeSignatureId)) throw new TrainingSignatureConflictError();
         const entryRef = entryRefs[index];
         if (entries[index].exists) throw new TrainingSignatureConflictError();
-        transaction.set(ref, { eventId: row.eventId, staffId: row["교직원ID"], environment: "qa",
+        transaction.set(ref, { eventId: row.eventId, staffId: row["교직원ID"], environment,
           activeSignatureId: row.signatureId, createdAt: pair?.createdAt || new Date(), updatedAt: new Date() }, { merge: true });
-        transaction.create(entryRef, ledgerEntry(row, "qa"));
+        transaction.create(entryRef, ledgerEntry(row, environment));
         transaction.create(entryRef.collection("history").doc(`create-${randomUUID()}`),
           { action: "created", at: row.createdAt || row["서명일시"], actor: row["정정자"] || null, row });
       }
@@ -142,7 +143,8 @@ export class TrainingSignatureLedger {
   }
 
   async cancelSignature(record, corrected) {
-    this.assertQaWrite();
+    const environment = this.environment;
+    if (environment === "production" && !await this.isReady()) throw new TrainingSignatureConflictError("운영 서명 원장이 준비되지 않았습니다.");
     const before = normalizedRow(record);
     const after = normalizedRow(corrected);
     if (identity(before) !== identity(after) || before.signatureId !== after.signatureId || !activeSignature(before) || activeSignature(after) || after["취소여부"] !== "Y") throw new TrainingSignatureConflictError();
@@ -151,7 +153,7 @@ export class TrainingSignatureLedger {
     await this.database().runTransaction(async (transaction) => {
       const pair = await transaction.get(pairRef);
       const entry = await transaction.get(entryRef);
-      if (!pair.exists || pair.data().environment !== "qa" || pair.data().activeSignatureId !== before.signatureId ||
+      if (!pair.exists || pair.data().environment !== environment || pair.data().activeSignatureId !== before.signatureId ||
         !entry.exists || SIGNATURE_HEADERS.some((header) => entry.data()[header] !== before[header])) throw new TrainingSignatureConflictError();
       transaction.update(entryRef, { ...after, active: false, attendanceStatus: after["상태"],
         cancelledAt: after["정정일시"] || null, cancelledBy: after["정정자"] || null, firestoreUpdatedAt: new Date() });
@@ -164,9 +166,11 @@ export class TrainingSignatureLedger {
   async migrationDryRun(sheetValues) { return planSignatureMigration(sheetValues, await this.listSignatures()); }
 
   async markMigrationReady(sheetValues) {
-    this.assertQaWrite();
+    const environment = this.environment;
     const plan = await this.migrationDryRun(sheetValues);
-    if (!plan.rows.length || plan.counts.create || plan.counts.update || plan.counts.conflict || plan.counts.skip !== plan.rows.length) throw new TrainingSignatureConflictError();
+    if (environment === "qa" && !plan.rows.length || environment === "production" && plan.rows.length ||
+      plan.counts.create || plan.counts.update || plan.counts.conflict || plan.counts.skip !== plan.rows.length) throw new TrainingSignatureConflictError();
+    if (environment === "production" && (await this.collection.get()).docs.some((doc) => doc.id !== MIGRATION_ID)) throw new TrainingSignatureConflictError();
     const fingerprint = createHash("sha256").update(JSON.stringify(plan.rows.map(normalizedRow))).digest("hex");
     const sourceSignatures = plan.rows.map((row) => ({ signatureId: row.signatureId,
       fingerprint: createHash("sha256").update(JSON.stringify(normalizedRow(row))).digest("hex") }));
@@ -174,12 +178,14 @@ export class TrainingSignatureLedger {
     await this.database().runTransaction(async (transaction) => {
       const current = await transaction.get(ref);
       if (current.exists) {
-        if (current.data().environment !== "qa" || current.data().status !== "ready" ||
+        if (current.data().environment !== environment || current.data().status !== "ready" ||
           current.data().sourceCount !== plan.rows.length || current.data().sourceFingerprint !== fingerprint) throw new TrainingSignatureConflictError();
         return;
       }
-      transaction.create(ref, { environment: "qa", status: "ready", sourceSheet: "교직원교육전자서명",
-        sourceCount: plan.rows.length, sourceFingerprint: fingerprint, sourceSignatures, markedAt: new Date() });
+      transaction.create(ref, { environment, status: "ready", schemaVersion: 1,
+        migrationSource: "교직원교육전자서명", sourceSheet: "교직원교육전자서명",
+        sourceCount: plan.rows.length, migratedRecordCount: plan.rows.length,
+        sourceFingerprint: fingerprint, sourceSignatures, activatedAt: new Date(), markedAt: new Date() });
     });
   }
 

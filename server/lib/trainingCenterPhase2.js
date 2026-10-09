@@ -2,7 +2,6 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 import { PNG } from "pngjs";
 import { TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 
-export const SIGNATURE_SHEET = "교직원교육전자서명";
 export const SIGNATURE_HEADERS = [
   "signatureId", "eventId", "eventGroupId", "교직원ID", "서명일시", "출석방식", "서명파일ID",
   "상태", "취소여부", "취소사유", "정정자", "정정일시", "createdAt",

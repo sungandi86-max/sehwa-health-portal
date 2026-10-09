@@ -113,23 +113,63 @@ test("empty QA source cannot mark a ledger ready", async () => {
   assert.equal(db.values.size, 0);
 });
 
-test("Phase 1 refuses all Production ledger writes", async () => {
+test("Production ledger stays closed until an empty-source readiness marker exists", async () => {
   const db = fakeFirestore();
   const ledger = new TrainingSignatureLedger({ database: () => db, context: () => production });
   await assert.rejects(ledger.appendSignatures([record("SIG-A", "P-A", "QA-SYNTHETIC")]), TrainingSignatureConflictError);
   await assert.rejects(ledger.importSheetRows(table()), TrainingSignatureConflictError);
-  assert.equal(db.values.size, 0);
+  assert.deepEqual((await ledger.migrationDryRun(table())).counts, { create: 0, update: 0, skip: 0, conflict: 0 });
+  await ledger.markMigrationReady(table());
+  assert.equal(await ledger.isReady(), true);
+  const marker = db.values.get("training_signature_ledger_production/__migration");
+  assert.equal(marker.environment, "production");
+  assert.equal(marker.schemaVersion, 1);
+  assert.equal(marker.migratedRecordCount, 0);
+  assert.ok(marker.activatedAt instanceof Date);
+  await ledger.appendSignatures([record("SIG-A", "P-A", "QA-SYNTHETIC")]);
+  assert.equal((await ledger.getSignature("P-A", "QA-SYNTHETIC")).signatureId, "SIG-A");
+  assert.equal((await ledger.listSignatures()).length, 1);
+  assert.equal(await ledger.isReady(), true);
+  const cancellation = record("SIG-A", "P-A", "QA-SYNTHETIC", { "상태": "취소", "취소여부": "Y", "정정일시": "2026-10-10T10:00:00.000Z" });
+  await ledger.cancelSignature(record("SIG-A", "P-A", "QA-SYNTHETIC"), cancellation);
+  assert.equal(await ledger.getSignature("P-A", "QA-SYNTHETIC"), null);
+  assert.equal([...db.values.keys()].filter((key) => key.includes("/history/")).length, 2);
 });
 
-test("training store routes QA writes to ledger while Production cancellation stays Sheet-backed", async () => {
+test("Production empty migration refuses pre-existing pair and mismatched marker", async () => {
+  const db = fakeFirestore();
+  const ledger = new TrainingSignatureLedger({ database: () => db, context: () => production });
+  db.values.set("training_signature_ledger_production/unexpected", { environment: "production" });
+  await assert.rejects(ledger.markMigrationReady(table()), TrainingSignatureConflictError);
+  db.values.clear();
+  db.values.set("training_signature_ledger_production/__migration", { environment: "qa", status: "ready", sourceCount: 0, sourceSignatures: [] });
+  assert.equal(await ledger.isReady(), false);
+  await assert.rejects(ledger.markMigrationReady(table()), TrainingSignatureConflictError);
+  assert.equal(db.values.size, 1);
+});
+
+test("Production write cannot cross QA collection or reuse an active identity", async () => {
+  const db = fakeFirestore();
+  const ledger = new TrainingSignatureLedger({ database: () => db, context: () => production });
+  await ledger.markMigrationReady(table());
+  const first = record("SIG-A", "P-A", "QA-SYNTHETIC");
+  await ledger.appendSignatures([first]);
+  await assert.rejects(ledger.appendSignatures([record("SIG-B", "P-A", "QA-SYNTHETIC")]), TrainingSignatureConflictError);
+  assert.equal((await new TrainingSignatureLedger({ database: () => db, context: () => qa }).listSignatures()).length, 0);
+});
+
+test("training store routes QA and Production writes only to a ready ledger", async () => {
   const calls = [];
-  const ledger = { appendSignatures: async () => calls.push("qa-append"),
-    cancelSignature: async () => calls.push("qa-cancel") };
+  let ready = false;
+  const ledger = { isReady: async () => ready, listSignatures: async () => [],
+    appendSignatures: async () => calls.push("append"), cancelSignature: async () => calls.push("cancel") };
   const qaStore = new TrainingCenterStore({ ledger, environment: () => "qa" });
+  await assert.rejects(qaStore.appendSignatures([record("SIG-A", "QA-A", "QA-SYNTHETIC")]));
+  ready = true;
   await qaStore.appendSignatures([record("SIG-A", "QA-A", "QA-SYNTHETIC")]);
   await qaStore.cancelSignature(record("SIG-A", "QA-A", "QA-SYNTHETIC"), record("SIG-A", "QA-A", "QA-SYNTHETIC"));
   const productionStore = new TrainingCenterStore({ ledger, environment: () => "production" });
-  productionStore.saveRow = async (name) => calls.push(name);
+  productionStore.saveRow = async () => { throw new Error("signature Sheet fallback"); };
   await productionStore.cancelSignature({ rowNumber: 2 }, {});
-  assert.deepEqual(calls, ["qa-append", "qa-cancel", "교직원교육전자서명"]);
+  assert.deepEqual(calls, ["append", "cancel", "cancel"]);
 });

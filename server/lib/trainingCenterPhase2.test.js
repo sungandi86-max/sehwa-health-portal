@@ -7,7 +7,7 @@ import { TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from ".
 import { createTrainingPhase2Handler } from "./trainingCenterPhase2Api.js";
 import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { listAttendanceRecoveryCandidates } from "./trainingAttendanceRecovery.js";
-import { hasSignatureSheetSchema, managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
+import { managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
 import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
 import { SignatureStorageError } from "./trainingSignatureStorage.js";
@@ -883,10 +883,10 @@ test("failed attendance stores stage only and logs a redacted storage category",
   assert.equal(store.values.signatures.length, 1);
 });
 
-test("runtime signature Sheet requires a hidden tab and exact A:M headers", () => {
-  const hidden = [{ properties: { title: "교직원교육전자서명", hidden: true } }];
-  assert.equal(hasSignatureSheetSchema(hidden, [SIGNATURE_HEADERS]), true);
-  assert.equal(hasSignatureSheetSchema(hidden, [[...SIGNATURE_HEADERS.slice(0, 12), "wrong"]]), false);
-  assert.equal(hasSignatureSheetSchema([{ properties: { title: "교직원교육전자서명", hidden: false } }], [SIGNATURE_HEADERS]), false);
-  assert.equal(hasSignatureSheetSchema([], [SIGNATURE_HEADERS]), false);
+test("runtime signature source is the readiness-gated ledger", async () => {
+  let ready = false;
+  const store = new TrainingCenterStore({ ledger: { isReady: async () => ready }, environment: () => "production" });
+  assert.equal(await store.isSignatureSheetReady(), false);
+  ready = true;
+  assert.equal(await store.isSignatureSheetReady(), true);
 });
