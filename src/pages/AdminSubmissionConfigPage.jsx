@@ -40,7 +40,7 @@ export default function AdminSubmissionConfigPage() {
     <header className="rounded-[24px] border border-[#C9DFFF] bg-white p-5 shadow-sm">
       <p className="text-xs font-bold text-[#D94F70]">SUBMISSION CONFIG</p>
       <h1 className="mt-1 text-2xl font-semibold text-[#1A3B8B]">제출센터 설정</h1>
-      <p className="mt-2 break-keep text-sm text-slate-600">공개 카드와 단체검진 신청 기간을 관리합니다. 저장 대상과 인증 정책은 서버에서 고정합니다.</p>
+      <p className="mt-2 break-keep text-sm text-slate-600">공개 카드와 신청 기간을 관리합니다.<span className="block">저장 대상과 인증 정책은 서버에서 고정합니다.</span></p>
     </header>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {message && <p role="status" className="rounded-xl bg-[#F2FBF7] p-3 text-sm text-[#2E7D32]">{message}</p>}
@@ -74,7 +74,7 @@ export default function AdminSubmissionConfigPage() {
       </article>)}</div>
     </section>
     {registration && <section className="rounded-[24px] bg-white p-5 shadow-sm"><h2 className="text-lg font-semibold text-[#1A3B8B]">단체검진 신청 운영 설정</h2>
-      <p className="mt-1 text-sm text-slate-600">기간과 운영 상태만 변경할 수 있습니다. 제출 대상 시트·폴더는 변경할 수 없습니다.</p>
+      <p className="mt-1 break-keep text-sm text-slate-600">기간과 상태만 관리합니다.<span className="block">제출 시트·폴더는 서버에서 고정합니다.</span></p>
       <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); change({ action: "registration", registration }); }}>
         {["startAt", "endAt"].map((key) => <label key={key} className="grid gap-1 text-sm font-semibold">{key === "startAt" ? "시작일" : "종료일"}<input className={inputClass} type="date" value={registration[key] || ""} onChange={(event) => setRegistration((current) => ({ ...current, [key]: event.target.value }))} /></label>)}
         {["status", "operationNote"].map((key) => <label key={key} className="grid gap-1 text-sm font-semibold">{key === "status" ? "상태" : "운영 메모"}<input className={inputClass} value={registration[key] || ""} onChange={(event) => setRegistration((current) => ({ ...current, [key]: event.target.value }))} /></label>)}
