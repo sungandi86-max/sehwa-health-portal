@@ -1987,21 +1987,6 @@ function isTruthy_(value) {
   return text === "TRUE" || text === "Y" || text === "YES" || text === "1" || text === "✓" || text === "✔";
 }
 
-// ════════════════════════════════════════════════════════════════
-// 앱 설정 헬퍼
-// ════════════════════════════════════════════════════════════════
-
-function getAppConfig_(key) {
-  const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName("앱_설정");
-  if (!sheet) return "";
-  const data = sheet.getDataRange().getValues();
-  for (let i = 0; i < data.length; i++) {
-    if (String(data[i][0]) === key) return String(data[i][1] || "");
-  }
-  return "";
-}
-
 function verifyAdminMaster_(params) {
   const access = verifyAdminMasterAccess_(params);
   if (!access.ok) return access.error;
@@ -2015,28 +2000,18 @@ function verifyAdminMaster_(params) {
 }
 
 function verifyAdminMasterAccess_(params) {
-  if (String(params.proxySecret || "")) {
-    const secretCheck = verifyStudentCareProxySecret_(params);
-    if (!secretCheck.ok) {
-      return {
-        ok: false,
-        error: { success: false, result: "error", message: "관리자 서버 권한을 확인할 수 없습니다." }
-      };
-    }
-    return { ok: true };
+  if (!String(params.proxySecret || "")) {
+    return {
+      ok: false,
+      error: { success: false, result: "error", message: "이전 관리자 비밀번호 인증은 종료되었습니다. 포털에서 Firebase 관리자 로그인을 이용해 주세요." }
+    };
   }
-
-  const password = String(params.password || "");
-  const correctPassword = getAppConfig_("관리자마스터_비밀번호");
-
-  if (!password) {
-    return { ok: false, error: { success: false, result: "error", message: "마스터 비밀번호를 입력해 주세요." } };
-  }
-  if (!correctPassword) {
-    return { ok: false, error: { success: false, result: "error", message: "관리자 마스터 비밀번호가 아직 설정되지 않았습니다. 앱_설정 시트를 확인해 주세요." } };
-  }
-  if (password !== correctPassword) {
-    return { ok: false, error: { success: false, result: "error", message: "마스터 비밀번호가 일치하지 않습니다." } };
+  const secretCheck = verifyStudentCareProxySecret_(params);
+  if (!secretCheck.ok) {
+    return {
+      ok: false,
+      error: { success: false, result: "error", message: "관리자 서버 권한을 확인할 수 없습니다." }
+    };
   }
   return { ok: true };
 }
@@ -2372,25 +2347,6 @@ function getPortalData_(options) {
   });
 }
 
-function getPortalAppConfigValues_(keys) {
-  const result = {};
-  const wanted = {};
-  keys.forEach(function(key) {
-    wanted[key] = true;
-    result[key] = "";
-  });
-
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("앱_설정");
-  if (!sheet) return result;
-
-  const data = sheet.getDataRange().getValues();
-  for (let i = 0; i < data.length; i++) {
-    const key = String(data[i][0]);
-    if (wanted[key]) result[key] = String(data[i][1] || "");
-  }
-  return result;
-}
-
 function getPortalFallbackData_(ss, base, type) {
   return Object.assign({}, base, {});
 }
@@ -2680,14 +2636,4 @@ function testPostData() {
 function testDriveAccess() {
   const folder = DriveApp.getFolderById("1MfxNVL1muROzpi1ZbV7WDWr4SKMU7ghm");
   Logger.log(folder.getName());
-}
-
-function testTbConfig() {
-  Logger.log(JSON.stringify({
-    enabled:       getAppConfig_("결핵검진유형선택_사용"),
-    startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
-    endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
-    closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
-    closedMessage: getAppConfig_("결핵검진유형선택_마감안내"),
-  }, null, 2));
 }
