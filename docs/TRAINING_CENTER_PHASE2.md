@@ -6,6 +6,8 @@
 
 교육 이벤트는 환경별 Firestore `training_events_qa`/`training_events_production`을 원본으로 사용한다. 이관 원본인 `앱_교직원교육`은 별도 삭제 승인 전까지 보존하지만 runtime에서는 읽거나 쓰지 않는다. `교직원교육대상`과 `교직원교육전자서명`은 기존 Sheet 원본으로 유지하며 eventId로 조인한다. 데이터가 없던 `앱_교직원교육자료`의 runtime reader는 제거했으며 교육 상세 응답은 `materials: []`를 유지한다. 신규 backend 탭 `교직원교육전자서명`은 기본 숨김으로 생성하고 A1:M1에 아래 헤더를 순서대로 둔다. 샘플 데이터는 입력하지 않는다.
 
+2026-10-10 이벤트 원본 전환: Production 원본 17컬럼 1행을 직접 재조회했고, `training_events_production` 기존 문서 0건을 확인했다. 이관 dry-run은 create 1/update 0/skip 0/conflict 0이었으며, 고정 eventId·원본 지문 검증 후 Firestore 문서 1건만 생성했다. 즉시 read-back은 skip 1/conflict 0, 별도 재실행 dry-run은 create 0/update 0/skip 1/conflict 0이었다. 해당 이벤트의 `미사용` 상태를 보존했다. 원본 Sheet는 삭제하지 않았고 대상·전자서명 Sheet는 변경하지 않았다. Production runtime smoke 결과는 배포 후 별도 기록한다.
+
 | 열 | 헤더 | 용도 |
 |---|---|---|
 | A | signatureId | 기록별 고유 ID |

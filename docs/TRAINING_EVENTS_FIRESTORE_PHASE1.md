@@ -1,5 +1,7 @@
 # 교직원교육 이벤트 Firestore 전환 Phase 1
 
+> 이 문서는 Phase 1 당시의 QA 전용 구현과 Production 전환 전 조건을 기록한 이력이다. 현재 runtime 계약은 `TRAINING_CENTER_PHASE2.md`를 따른다. Phase 2에서 Production 이벤트 1건을 `training_events_production`에 이관한 뒤 QA/Production 모두 Firestore 이벤트 store로 전환하며, 대상·전자서명 Sheet와의 `eventId` 조인은 유지한다. 이 문서의 “Production은 Sheet 원본” 문구는 Phase 1 시점에만 적용된다.
+
 ## 범위
 
 - 승인된 `preview + qa`에서만 `training_events_qa`를 교육 이벤트 원본으로 읽고 쓴다.
