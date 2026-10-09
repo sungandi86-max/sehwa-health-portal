@@ -208,8 +208,6 @@ test("Apps Script home, full and fallback scopes never read migrated content or 
   vm.runInContext(fs.readFileSync("apps-script/Code.gs", "utf8"), context, { timeout: 2000 });
   vm.runInContext(`
     getSpreadsheet_ = () => __source;
-    getPortalTbConfig_ = () => ({});
-    getUploads_ = () => [];
     getStudentCare_ = () => [];
     getMessages_ = () => [];
   `, context);

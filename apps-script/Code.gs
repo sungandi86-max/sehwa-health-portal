@@ -4,7 +4,6 @@ const CURRENT_STUDENT_CARE_SEMESTER = 2;
 
 const SHEET_NAMES = {
   visit: "학생 보건실 입실현황",
-  portalUploads: "앱_제출센터",
   portalStudentCare: "앱_학생건강관리",
   portalMessages: "앱_메신저문구"
 };
@@ -19,7 +18,6 @@ const FOLDER_IDS = {
 };
 
 const STUDENT_FILE_DEFAULT_FOLDER_ID = "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63";
-const SUBMISSION_MANAGEMENT_SHEET_NAME = "제출항목관리";
 const SUBMISSION_RECORD_SHEET_NAME = "제출기록";
 const STUDENT_FILE_RECORD_HEADERS = [
   "제출일시",
@@ -60,7 +58,6 @@ const HEALTH_ROOM_BACKUP = {
   sourceMimeType: "application/vnd.google-apps.spreadsheet",
   expectedSheets: [
     SHEET_NAMES.visit,
-    SHEET_NAMES.portalUploads,
     SHEET_NAMES.portalStudentCare,
     "응답_심폐소생술이수증",
     "응답_결핵검진확인증",
@@ -215,10 +212,6 @@ function doGet(e) {
   const mode   = e && e.parameter ? String(e.parameter.mode   || "").trim() : "";
   const action = e && e.parameter ? String(e.parameter.action || "").trim() : "";
   try {
-    if (action === "getTbConfig") {
-      const config = getTbRegistrationConfig_();
-      return jsonOutput_({ result: "success", config });
-    }
     if (action === "verifyPrivate") {
       const password   = e.parameter.password || "";
       const correctPw  = getAppConfig_("요보호학생_비밀번호");
@@ -372,6 +365,7 @@ function legacySubmissionDuringTransition_(request) {
   };
   const type = request.type || (request.sheetName === legacyTypes.tb_registration ? "tb_registration" : "");
   if (!legacyTypes[type] || request.sheetName !== legacyTypes[type]) throw new Error("지원하지 않는 이전 제출 형식입니다.");
+  if (type === "tb_registration") throw new Error("단체검진 신청은 서명된 서버 요청만 허용됩니다.");
   return { type: type, fields: request.fields, fileName: request.fileName, fileBase64: request.fileBase64, fileMimeType: request.fileMimeType };
 }
 
@@ -486,7 +480,6 @@ function preflightSubmission_(payload) {
   if (requiredFields[payload.type].some(function(key) { return !String(payload.fields[key] || "").trim(); })) {
     throw new Error("제출 필수 항목을 확인해 주세요.");
   }
-  if (payload.type === "tb_registration") validateTbRegistrationWindow_();
   let blob = null;
   let folder = null;
   if (destination.folderId) {
@@ -549,27 +542,6 @@ function validateSubmissionBlob_(blob) {
   const jpeg = mimeType === "image/jpeg" && values.slice(0, 3).join(",") === "255,216,255";
   const png = mimeType === "image/png" && values.join(",") === "137,80,78,71,13,10,26,10";
   if (!pdf && !jpeg && !png) throw new Error("파일 내용과 형식이 일치하지 않습니다.");
-}
-
-function getSubmissionManagedFolderId_(ss, submissionTitle) {
-  const sheet = ss.getSheetByName(SUBMISSION_MANAGEMENT_SHEET_NAME);
-  if (!sheet) return "";
-
-  const values = sheet.getDataRange().getDisplayValues();
-  if (values.length < 2) return "";
-
-  const headers = values[0].map(function(header) { return String(header || "").trim(); });
-  const titleIndex = findHeaderIndex_(headers, ["제출항목명", "제출항목", "제목"]);
-  const folderIndex = findHeaderIndex_(headers, ["저장폴더ID", "폴더ID", "folderId"]);
-  if (titleIndex === -1 || folderIndex === -1) return "";
-
-  for (let i = 1; i < values.length; i++) {
-    const rowTitle = String(values[i][titleIndex] || "").trim();
-    if (rowTitle === submissionTitle) {
-      return String(values[i][folderIndex] || "").trim();
-    }
-  }
-  return "";
 }
 
 function getSubmissionRecordDestination_(ss) {
@@ -644,18 +616,6 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
   } else {
     sheet.appendRow([now, JSON.stringify(fields), fileName, fileLink]);
   }
-}
-
-function validateTbRegistrationWindow_() {
-  const config = getTbRegistrationConfig_();
-  const closedMsg = config.closedMessage || "접수 기한이 마감되었습니다.";
-  if (!isTrue_(config.enabled)) throw new Error(closedMsg);
-  if (!config.startDate || !config.endDate) throw new Error("접수 기간이 설정되지 않아 현재 신청할 수 없습니다.");
-  const now = new Date();
-  const start = parseTbRegistrationDate_(config.startDate, "start");
-  const end = parseTbRegistrationDate_(config.endDate, "end");
-  if (start && now < start) throw new Error("접수 시작 전입니다. 접수 기간에 다시 이용해주세요.");
-  if (end && now > end) throw new Error(closedMsg);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2414,10 +2374,7 @@ function getPortalData_(options) {
   const type = String((options && options.type) || "").trim();
 
   if (scope === "upload") {
-    return Object.assign({}, base, {
-      tbConfig: getPortalTbConfig_(),
-      uploads: getUploads_(ss)
-    });
+    return Object.assign({}, base, { tbConfig: { enabled: "FALSE" }, uploads: [] });
   }
 
   if (scope === "admin") {
@@ -2438,15 +2395,9 @@ function getPortalData_(options) {
       privacyNotice: "학생 개인정보 및 민감정보는 앱 화면에 직접 표시하지 않습니다.",
       managerNote:   "제출 자료 확인 및 세부 관리는 보건업무시트에서 별도로 진행됩니다."
     },
-    tbConfig:    getPortalTbConfig_(),
-    uploads:     getUploads_(ss),
     studentCare: getStudentCare_(ss),
     messages:    getMessages_(ss)
   });
-}
-
-function getPortalTbConfig_() {
-  return getTbRegistrationConfig_();
 }
 
 function getPortalAppConfigValues_(keys) {
@@ -2515,57 +2466,6 @@ function getValue_(row, names, fallback) {
 function isTrue_(value) {
   const text = String(value).trim().toUpperCase();
   return text === "TRUE" || text === "사용" || text === "Y" || text === "YES" || text === "1";
-}
-
-function isTbRegistrationUploadRow_(row) {
-  const text = [
-    getValue_(row, ["유형"]),
-    getValue_(row, ["제목"]),
-    getValue_(row, ["제출 자료", "제출자료"]),
-    getValue_(row, ["버튼명"]),
-    getValue_(row, ["링크"])
-  ].join(" ").toLowerCase();
-
-  return text.indexOf("tb_registration") >= 0 ||
-    text.indexOf("tb-registration") >= 0 ||
-    text.indexOf("tb_group") >= 0 ||
-    text.indexOf("교직원 결핵검진 단체검진") >= 0 ||
-    text.indexOf("단체검진 신청") >= 0 ||
-    text.indexOf("결핵검진 유형") >= 0;
-}
-
-function getTbRegistrationUploadConfig_() {
-  const ss = getSpreadsheet_();
-  const row = getSheetRows_(ss, SHEET_NAMES.portalUploads).find(isTbRegistrationUploadRow_);
-  if (!row) return null;
-
-  return {
-    enabled: isTrue_(row["사용여부"]) ? "TRUE" : "FALSE",
-    startDate: getValue_(row, ["노출시작일"]),
-    endDate: getValue_(row, ["노출종료일"]),
-    closedButton: getValue_(row, ["마감버튼", "마감후버튼"]),
-    closedMessage: getValue_(row, ["마감안내"], "접수 기한이 지나 제출할 수 없습니다. 필요한 경우 보건실로 문의해주세요.")
-  };
-}
-
-function getLegacyTbRegistrationConfig_() {
-  return {
-    enabled:       getAppConfig_("결핵검진유형선택_사용"),
-    startDate:     getAppConfig_("결핵검진유형선택_접수시작"),
-    endDate:       getAppConfig_("결핵검진유형선택_접수마감"),
-    closedButton:  getAppConfig_("결핵검진유형선택_마감버튼") || getAppConfig_("결핵검진유형선택_마감후버튼"),
-    closedMessage: getAppConfig_("결핵검진유형선택_마감안내")
-  };
-}
-
-function getTbRegistrationConfig_() {
-  return getTbRegistrationUploadConfig_() || {
-    enabled: "FALSE",
-    startDate: "",
-    endDate: "",
-    closedButton: "",
-    closedMessage: "접수 기간이 설정되지 않아 현재 신청할 수 없습니다."
-  };
 }
 
 function parseExposureDateBoundary_(value, boundary) {
@@ -2728,17 +2628,6 @@ function isCurrentPortalDisplayDate_(value, now) {
   return range.end.getTime() >= today.getTime();
 }
 
-function isVisiblePortalUpload_(row, now) {
-  if (!isTbRegistrationUploadRow_(row)) return isVisibleByExposure_(row, now);
-  if (!isTrue_(getValue_(row, ["사용여부"]))) return false;
-
-  const startRaw = getValue_(row, ["노출시작일"]);
-  const endRaw = getValue_(row, ["노출종료일"]);
-  if (!startRaw || !endRaw) return false;
-
-  return isVisibleByExposure_(row, now);
-}
-
 function splitLines_(text) {
   if (!text) return [];
   return String(text).split(/\r?\n|<br\s*\/?>/i).map(v => v.trim()).filter(Boolean);
@@ -2751,29 +2640,6 @@ function getTitleLines_(row) {
 // ════════════════════════════════════════════════════════════════
 // 시트별 데이터 파싱
 // ════════════════════════════════════════════════════════════════
-
-function getUploads_(ss) {
-  const now = new Date();
-  return getRows_(ss, SHEET_NAMES.portalUploads).filter(r => isVisiblePortalUpload_(r, now)).map(r => ({
-    title:        getValue_(r, ["제목"]),
-    titleLines:   getTitleLines_(r),
-    description:  getValue_(r, ["설명"]),
-    target:       getValue_(r, ["대상"]),
-    documentType: getValue_(r, ["제출 자료","제출자료"]),
-    deadline:     getValue_(r, ["마감"]),
-    fileGuide:    getValue_(r, ["안내문"]),
-    buttonText:   getValue_(r, ["버튼명"]),
-    url:          safeSubmissionCardUrl_(getValue_(r, ["링크"])),
-    status:       getValue_(r, ["상태"], "접수 중"),
-    uploadType:   getValue_(r, ["유형"], "file"),
-    highlight:    isTrue_(getValue_(r, ["강조"], ""))
-  }));
-}
-
-function safeSubmissionCardUrl_(value) {
-  const url = String(value || "").trim();
-  return /^(https:\/\/(?!drive\.google\.com\/)|\/(?!\/))/i.test(url) ? url : "";
-}
 
 function getStudentCare_(ss) {
   return getRows_(ss, SHEET_NAMES.portalStudentCare).map(r => {

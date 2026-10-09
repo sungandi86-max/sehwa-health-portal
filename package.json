@@ -17,6 +17,7 @@
     "migrate:faqs": "node scripts/migrateFaqsToFirestore.mjs",
     "migrate:health-resources": "node scripts/migrateHealthResourcesToFirestore.mjs",
     "migrate:submission-items": "node scripts/migrateSubmissionItemsToFirestore.mjs",
+    "migrate:submission-config": "node scripts/migrateSubmissionConfig.mjs",
     "migrate:cpr-training-status": "node scripts/migrateCprTrainingStatus.mjs",
     "seed:staff-submission-tasks": "node scripts/seedStaffSubmissionTasks.mjs",
     "map:staff-ids": "node scripts/mapStaffIdsToUsers.mjs",

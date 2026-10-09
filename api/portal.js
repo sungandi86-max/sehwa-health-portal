@@ -2,7 +2,7 @@ import fetch from "node-fetch";
 import { buildHomeSchedules, filterCurrentPortalItems } from "../src/lib/portalSchedule.js";
 import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 import { CmsInputError, cmsPublicItems, readCms } from "../server/lib/portalContentCms.js";
-import { publicSubmissionCard } from "../server/lib/submissionWorkflows.js";
+import { publicSubmissionConfig, readSubmissionConfig, SubmissionConfigError } from "../server/lib/submissionConfig.js";
 
 const CMS_FALLBACK_TYPES = {
   today: ["notice", "notices"],
@@ -67,18 +67,7 @@ function updatedAt() {
     day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(new Date());
 }
 
-async function readTbConfig() {
-  const scriptUrl = getScriptUrl();
-  if (!scriptUrl || !/\/exec(?:\?|$)/.test(scriptUrl)) throw new Error("tb_config_not_configured");
-  const separator = scriptUrl.includes("?") ? "&" : "?";
-  const response = await fetch(`${scriptUrl}${separator}action=getTbConfig`, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error("tb_config_unavailable");
-  const result = await response.json();
-  if (result.result !== "success" || !result.config) throw new Error("tb_config_invalid");
-  return result.config;
-}
-
-export default async function handler(req, res, { db, context = process.env, loadTbConfig = readTbConfig, now = new Date() } = {}) {
+export default async function handler(req, res, { db, context = process.env, now = new Date(), loadSubmissionConfig = readSubmissionConfig } = {}) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -95,13 +84,23 @@ export default async function handler(req, res, { db, context = process.env, loa
   }
 
   const fallbackType = String(req.query?.type || "").trim();
+  if (scope === "upload") {
+    try {
+      const config = await loadSubmissionConfig(db || getFirebaseAdminDb(), { context });
+      return res.status(200).json({ updatedAt: updatedAt(), ...publicSubmissionConfig(config, now) });
+    } catch (error) {
+      return jsonError(res, error instanceof SubmissionConfigError ? 503 : 502, "제출 설정을 확인할 수 없습니다.");
+    }
+  }
   if (scope === "home" || (scope === "fallback" && fallbackType === "checkups")) {
     try {
       const items = await readCms(db || getFirebaseAdminDb(), { context });
       if (scope === "home") return res.status(200).json(buildHomeResponse({ updatedAt: updatedAt(),
         notices: cmsPublicItems(items, "notice", now), educations: cmsPublicItems(items, "education", now),
         checkups: cmsPublicItems(items, "checkup", now) }, now));
-      const tbConfig = await loadTbConfig().catch(() => ({ enabled: "FALSE", startDate: "", endDate: "" }));
+      const tbConfig = await loadSubmissionConfig(db || getFirebaseAdminDb(), { context })
+        .then((submission) => publicSubmissionConfig(submission, now).tbConfig)
+        .catch(() => ({ enabled: "FALSE", startDate: "", endDate: "", closedButton: "", closedMessage: "" }));
       return res.status(200).json({ updatedAt: updatedAt(), tbConfig, checkups: cmsPublicItems(items, "checkup", now) });
     } catch (error) {
       return jsonError(res, error instanceof CmsInputError ? 503 : 502, "검진·검사 콘텐츠 또는 신청 설정을 확인할 수 없습니다.");
@@ -179,9 +178,6 @@ export default async function handler(req, res, { db, context = process.env, loa
 
     try {
       const json = JSON.parse(text);
-      if (scope === "upload" && Array.isArray(json?.uploads)) {
-        json.uploads = json.uploads.map(publicSubmissionCard);
-      }
       return res.status(200).json(
         json,
       );

@@ -111,7 +111,7 @@ function normalizeSubmitValue(value) {
 }
 
 function resolveSheetSubmissionType(item) {
-  const explicitType = normalizeSubmitValue(item.uploadType || item.submissionType || item.type);
+  const explicitType = normalizeSubmitValue(item.canonicalType || item.uploadType || item.submissionType || item.type);
   if (SHEET_SUBMISSION_TYPE_ORDER.includes(explicitType)) return explicitType;
 
   const sheetName = normalizeSubmitValue(item.sheetName);

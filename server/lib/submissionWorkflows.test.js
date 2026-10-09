@@ -170,6 +170,27 @@ test("missing dedicated proxy secret fails before Apps Script upload", async () 
   assert.equal(calls, 0);
 });
 
+test("TB registration checks Firestore window before signing or forwarding", async () => {
+  let forwards = 0;
+  const payload = { type: "tb_registration", fields: { name: "QA", registrationType: "학교 단체검진" } };
+  const options = { destinationUrl, proxySecret, verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
+    postScript: async () => { forwards += 1; return { text: async () => JSON.stringify({ status: "error" }) }; } };
+  const closed = response();
+  await submitHandler(request(payload), closed, { ...options, loadSubmissionConfig: async () => ({ registration: {
+    enabled: true, startAt: "2026-09-11", endAt: "2026-09-14" } }) });
+  assert.equal(closed.statusCode, 409);
+  assert.equal(forwards, 0);
+  const missing = response();
+  await submitHandler(request(payload), missing, { ...options, loadSubmissionConfig: async () => { throw new Error("offline"); } });
+  assert.equal(missing.statusCode, 503);
+  assert.equal(forwards, 0);
+  const open = response();
+  await submitHandler(request(payload), open, { ...options, now: new Date("2026-09-12T03:00:00Z"), loadSubmissionConfig: async () => ({ registration: {
+    enabled: true, startAt: "2026-09-11", endAt: "2026-09-14" } }) });
+  assert.equal(open.statusCode, 200);
+  assert.equal(forwards, 1);
+});
+
 test("anonymous student reply uses only fixed workflow and returns no storage destination", async () => {
   const result = response();
   const req = request({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, folderId: "injected" });
@@ -182,21 +203,19 @@ test("anonymous student reply uses only fixed workflow and returns no storage de
   assert.deepEqual(result.body, { status: "success", submittedAt: "now" });
 });
 
-test("Apps Script refuses missing sheets and management reader is not a destination source", () => {
+test("Apps Script refuses missing sheets and never reads migrated submission configuration tabs", () => {
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
   let driveReads = 0;
   const context = vm.createContext({
     SpreadsheetApp: { openById: () => ({ getSheetByName: () => null }) },
     DriveApp: { getFolderById: () => { driveReads++; throw new Error("Drive reached"); } },
   });
-  vm.runInContext(`${code}\nthis.sheetLookup = getSubmitSheet_; this.managedFolder = getSubmissionManagedFolderId_; this.safeCardUrl = safeSubmissionCardUrl_; this.validateBlob = validateSubmissionBlob_; this.preflight = preflightSubmission_;`, context);
+  vm.runInContext(`${code}\nthis.sheetLookup = getSubmitSheet_; this.validateBlob = validateSubmissionBlob_; this.preflight = preflightSubmission_;`, context);
   const sheet = { getSheetByName: () => null, insertSheet: () => { throw new Error("auto-create called"); } };
   assert.throws(() => context.sheetLookup(sheet, "missing"), /준비되지 않았습니다/);
-  const management = { getDataRange: () => ({ getDisplayValues: () => [["제출명", "저장폴더ID"], ["결핵검진 진료회신 제출", "legacy-id"]] }) };
-  assert.equal(context.managedFolder({ getSheetByName: () => management }, "결핵검진 진료회신 제출"), "");
+  assert.equal(code.includes("앱_제출센터"), false);
+  assert.equal(code.includes("제출항목관리"), false);
   assert.equal(code.includes("managedFolderId || payload.folderId"), false);
-  assert.equal(context.safeCardUrl("https://drive.google.com/drive/folders/private"), "");
-  assert.equal(context.safeCardUrl("https://school.example/guide"), "https://school.example/guide");
   assert.throws(() => context.validateBlob({ getContentType: () => "text/html", getBytes: () => [1] }), /PDF, JPG, PNG/);
   assert.throws(() => context.preflight({ type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /제출 기록 시트가 준비되지 않았습니다/);
   assert.equal(driveReads, 0);
@@ -343,8 +362,9 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   assert.equal(callEnvelope(legacyCpr).status, "success");
   assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.cpr.auditSheet);
   assert.notEqual(folders.at(-1), "Injected");
-  context.getTbRegistrationConfig_ = () => ({ enabled: "TRUE", startDate: "2020-01-01", endDate: "2030-01-01" });
-  assert.equal(callEnvelope({ fields: { ...inbodyFields, registrationType: "학교 단체검진" }, sheetName: SUBMISSION_WORKFLOWS.tb_registration.auditSheet }).status, "success");
+  assert.equal(callEnvelope({ type: "tb_registration", fields: { ...inbodyFields, registrationType: "학교 단체검진" },
+    sheetName: SUBMISSION_WORKFLOWS.tb_registration.auditSheet }).status, "error");
+  assert.equal(callEnvelope(buildSubmissionProxyEnvelope({ type: "tb_registration", fields: { ...inbodyFields, registrationType: "학교 단체검진" } }, proxySecret)).status, "success");
   assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.tb_registration.auditSheet);
   assert.equal(callEnvelope({ ...legacyCpr, sheetName: "Injected" }).status, "error");
   assert.equal(callEnvelope({ ...legacyCpr, signature: "bad" }).status, "error");

@@ -5,6 +5,12 @@ import { requestPortalRoadmap } from "../lib/portalRoadmap.js";
 
 const quickLinks = [
   {
+    label: "제출센터 설정",
+    path: "/admin/submission-config",
+    tone: "blue",
+    description: "제출 카드와 단체검진 신청 기간을 관리합니다.",
+  },
+  {
     label: "업무 로드맵",
     path: "/admin/roadmap",
     tone: "pink",

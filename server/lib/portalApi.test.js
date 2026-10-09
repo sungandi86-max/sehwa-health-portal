@@ -30,18 +30,18 @@ test("checkup fallback keeps legacy response keys and separate registration conf
   const res = response();
   let configReads = 0;
   await handler({ method: "GET", query: { scope: "fallback", type: "checkups" } }, res,
-    { db, context: qa, loadTbConfig: async () => { configReads += 1; return { enabled: "FALSE" }; } });
+    { db, context: qa, loadSubmissionConfig: async () => { configReads += 1; return { registration: { enabled: false }, cards: [] }; } });
   assert.equal(res.statusCode, 200);
   assert.equal(configReads, 1);
   assert.deepEqual(Object.keys(res.body).sort(), ["checkups", "tbConfig", "updatedAt"]);
   assert.equal(res.body.checkups[0].url, "안내문 링크");
-  assert.deepEqual(res.body.tbConfig, { enabled: "FALSE" });
+  assert.deepEqual(res.body.tbConfig, { enabled: "FALSE", startDate: "", endDate: "", closedButton: "", closedMessage: "" });
 });
 
 test("missing registration config keeps CMS checkups visible but closes application card", async () => {
   const res = response();
   await handler({ method: "GET", query: { scope: "fallback", type: "checkups" } }, res,
-    { db, context: qa, loadTbConfig: async () => { throw new Error("not configured"); } });
+    { db, context: qa, loadSubmissionConfig: async () => { throw new Error("not configured"); } });
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.checkups.length, 1);
   assert.equal(res.body.tbConfig.enabled, "FALSE");

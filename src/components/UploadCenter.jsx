@@ -11,34 +11,6 @@ import { PortalSubmissionCard } from "./PortalSubpageLayout.jsx";
 import { SafeText } from "./ui.jsx";
 import SubmitModal from "./SubmitModal.jsx";
 
-const INFECTION_REPORT_CARD = {
-  title: "감염병 발생 보고",
-  titleLines: ["감염병 발생", "보고"],
-  description: "학생이 감염병 진단을 받은 경우, 로그인 후 Firebase 감염병 보고 화면에서 접수해 주세요.",
-  target: "담임교사",
-  documentType: "감염병 발생 정보",
-  deadline: "수시",
-  fileGuide: "감염병 보고는 로그인 후 제출할 수 있습니다. 제출 내용은 보건교사가 전용 사례관리 화면에서 확인합니다.",
-  buttonText: "감염병 발생 보고하기",
-  status: "로그인 후 접수",
-  uploadType: "infection",
-  highlight: true,
-};
-
-const TB_REPLY_PUBLIC_CARD = {
-  title: "결핵검진 진료회신 제출",
-  titleLines: ["결핵검진", "진료회신 제출"],
-  description: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해주세요.",
-  target: "결핵검진 진료회신 제출 대상 학생",
-  documentType: "진료회신란 또는 진료확인서",
-  deadline: "별도 안내일까지",
-  fileGuide: "학생이 제출한 진료회신란 또는 진료확인서를 사진 촬영 또는 스캔하여 업로드해 주세요.",
-  buttonText: "진료회신 업로드하기",
-  status: "접수 중",
-  uploadType: "student-file",
-  highlight: true,
-};
-
 const SUBMIT_TYPE_CONFIG = {
   cpr: {
     modalType: "cpr",
@@ -110,6 +82,8 @@ function includesSubmitKeyword(text, keyword) {
 }
 
 function resolveSubmitCardType(item) {
+  const canonicalType = normalizeSubmitValue(item.canonicalType);
+  if (VALID_MODAL_TYPES.has(canonicalType)) return canonicalType;
   const explicitModalType = normalizeSubmitValue(item.modalType);
   if (VALID_MODAL_TYPES.has(explicitModalType)) return explicitModalType;
 
@@ -194,20 +168,16 @@ export default function UploadCenter({
   const navigate = useNavigate();
   const [modalType, setModalType] = useState(null);
   const [viewer, setViewer] = useState({ status: publicMode ? "hidden" : "loading", name: "", role: "" });
-  const allItems = items.some((item) => resolveSubmitCardType(item) === "infection")
-    ? items
-    : [...items, INFECTION_REPORT_CARD];
+  const allItems = items;
   const publicItems = allItems.filter((item) => resolveSubmitCardType(item) === "student_tb_reply");
   const uploadItems = publicMode && publicType === "tbreply"
-    ? (publicItems.length ? publicItems : [TB_REPLY_PUBLIC_CARD])
+    ? publicItems
     : allItems;
   const groupedItems = uploadItems.reduce((groups, item) => {
     const submitType = resolveSubmitCardType(item);
     const group = publicMode ? "homeroom" : getSubmitGroup(submitType);
     const nextItem =
-      submitType === "infection"
-        ? { ...item, ...INFECTION_REPORT_CARD }
-        : submitType === "tb"
+      submitType === "tb"
           ? applyIndividualHealthCheckupDisplay(item)
           : item;
     return {
@@ -220,9 +190,9 @@ export default function UploadCenter({
   );
 
   useEffect(() => {
-    if (!publicMode || publicType !== "tbreply") return;
+    if (!publicMode || publicType !== "tbreply" || !publicItems.length) return;
     setModalType("student_tb_reply");
-  }, [publicMode, publicType]);
+  }, [publicMode, publicType, publicItems.length]);
 
   useEffect(() => {
     if (publicMode) {
