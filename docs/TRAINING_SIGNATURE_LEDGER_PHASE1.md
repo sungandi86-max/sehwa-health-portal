@@ -2,7 +2,7 @@
 
 ## 현재 원본과 13개 필드
 
-운영 `교직원교육전자서명`은 숨김 탭이며 헤더만 있고 데이터 행은 0건이다. 분리된 QA 탭에는 기존 감사 행 4건이 있다. Phase 1에서는 QA만 Firestore 원장을 쓰고, Production은 기존 Sheet를 계속 읽고 쓴다. `교직원교육대상`은 변경하지 않는다.
+운영 `교직원교육전자서명`은 숨김 탭이며 헤더만 있고 데이터 행은 0건이다. 분리된 QA 탭에는 기존 감사 행 4건이 있다. 작성 당시 Phase 1에서는 QA만 Firestore 원장을 쓰고, Production은 기존 Sheet를 계속 읽고 썼다. 이후 Production 전환은 [Phase 2](TRAINING_SIGNATURE_LEDGER_PHASE2.md)에 기록한다. `교직원교육대상`은 변경하지 않는다.
 
 | Sheet 필드 | 분류 | 현재 사용 |
 | --- | --- | --- |

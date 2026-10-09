@@ -4,6 +4,7 @@ import { GoogleAuth } from "google-auth-library";
 import { DEFAULT_HEALTH_SPREADSHEET_ID } from "../server/lib/trainingDeployment.js";
 import { SIGNATURE_HEADERS } from "../server/lib/trainingCenterPhase2.js";
 import { TrainingSignatureLedger } from "../server/lib/trainingSignatureLedger.js";
+import { activateEmptyProductionLedger, inspectProductionSignatureDrive } from "./trainingSignatureProductionDrive.js";
 
 const apply = process.argv.includes("--apply");
 const confirm = process.argv.includes("--confirm-empty-production-ledger");
@@ -33,13 +34,19 @@ async function main() {
   const locks = await db.collection("training_attendance_locks_production").get();
   const plan = await ledger.migrationDryRun(source);
   const existingPairs = pairs.docs.filter((doc) => doc.id !== "__migration").length;
+  const driveAuth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/drive.metadata.readonly"] });
+  const driveClient = await driveAuth.getClient();
+  const drive = await inspectProductionSignatureDrive((request) => driveClient.request(request));
   console.log(JSON.stringify({ phase: "dry-run", environment: "production", sourceRows: plan.rows.length,
-    existingPairs, lockDocs: locks.size, markerExists: pairs.docs.some((doc) => doc.id === "__migration"), ...plan.counts }));
-  if (plan.rows.length || existingPairs || locks.size || plan.counts.create || plan.counts.update || plan.counts.skip || plan.counts.conflict) {
-    throw new Error("production_signature_conflict");
+    existingPairs, lockDocs: locks.size, driveFiles: drive.fileCount,
+    markerExists: pairs.docs.some((doc) => doc.id === "__migration"), ...plan.counts }));
+  const safety = { sourceRows: plan.rows.length, existingPairs, lockDocs: locks.size,
+    driveFileCount: drive.fileCount, counts: plan.counts, mark: () => ledger.markMigrationReady(source) };
+  if (!apply) {
+    await activateEmptyProductionLedger({ ...safety, mark: async () => {} });
+    return;
   }
-  if (!apply) return;
-  await ledger.markMigrationReady(source);
+  await activateEmptyProductionLedger(safety);
   if (!await ledger.isReady()) throw new Error("production_ledger_not_ready");
   const repeat = await ledger.migrationDryRun(source);
   console.log(JSON.stringify({ phase: "read-back", environment: "production", sourceRows: repeat.rows.length,

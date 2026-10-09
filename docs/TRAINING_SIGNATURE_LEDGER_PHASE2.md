@@ -32,3 +32,18 @@ Production 서명/QR 실사용 write 검증은 이 단계에서 수행하지 않
 E2E와 transaction 회귀 테스트를 writer 근거로 사용한다. 운영 배포 후에는 읽기 전용으로
 서명 0건, 관리자 출석 0건, 연수등록부, 대상자 join, QA 분리, marker 및 Sheet runtime
 read/write 0건을 재확인한다. `교직원교육전자서명` 삭제는 별도 단계에서만 판단한다.
+
+## 2026-10-10 Production 이관 기록
+
+운영 Sheet는 A:M 13개 헤더와 데이터 0행을 재확인했다. Production ledger pair,
+signature entry, history, attendance lock은 각각 0건이었다. 운영 Drive 서명 루트는
+존재하고 그 안의 파일은 0건이어서 확인 범위에서 orphan PNG가 없었다. 실제 운영
+workbook/Firestore를 사용한 직전 dry-run은 create/update/skip/conflict 모두 0이었다.
+그 결과에 한해 Production `__migration` marker 1건을 생성했고 즉시 read-back에서
+`ready=true`, 재비교 create/update/skip/conflict 모두 0을 확인했다. 서명·대상·Drive
+파일을 생성하거나 수정하지 않았다.
+
+다른 9개 workbook 탭의 수식 270셀, 데이터 검증 5,074셀과 named range를 검사한
+결과, 대상 Sheet 참조 및 `#REF!`은 모두 0건이었다. 이관 시점의 marker 생성은
+구 Sheet writer를 원자적으로 멈추는 기능이 아니므로, 실제 배포 직전과 직후에
+Sheet/ledger/lock의 0건 상태를 다시 확인해야 한다.
