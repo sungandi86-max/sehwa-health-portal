@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import submitHandler from "../../api/submit.js";
 import { handleQaInbodyLogin } from "../../api/firebase/staff-directory.js";
-import adminHandler from "../../api/health-room-status.js";
+import adminHandler, { replaceQaInbodySummary } from "../../api/health-room-status.js";
 import { InbodyRequestStore } from "./inbodyRequestStore.js";
 import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { SUBMISSION_WORKFLOWS } from "./submissionWorkflows.js";
@@ -122,4 +122,21 @@ test("QA admin response exposes only the latest synthetic request detail", async
   assert.equal(result.body.qaSyntheticRequest.requestId, "QA-UI-001");
   assert.equal("name" in result.body.qaSyntheticRequest, false);
   assert.equal(result.body.totalCount, 1);
+});
+
+test("successful QA receipt summary keeps synthetic request detail on its Inbody card", async () => {
+  const summary = { success: true, sections: [{ id: "eventApplications", items: [
+    { id: "inbody", label: "인바디", totalCount: 0, todayCount: 0 },
+  ] }] };
+  const request = { requestId: "QA-UI-001", staffId: QA_INBODY_STAFF_ID, sourceType: "portal",
+    preferredDate: "2026-10-15", preferredTime: "오후1 (12:00~14:00)",
+    status: "received", submittedAt: new Date().toISOString() };
+  const result = await replaceQaInbodySummary(summary, {
+    backend: "firestore", listRequests: async () => [request],
+  });
+  const item = result.sections[0].items[0];
+  assert.equal(item.totalCount, 1);
+  assert.equal(item.source, "firestore");
+  assert.deepEqual(item.qaSyntheticRequest, { requestId: "QA-UI-001",
+    preferredDate: "2026-10-15", preferredTime: "오후1 (12:00~14:00)" });
 });

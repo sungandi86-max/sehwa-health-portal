@@ -145,11 +145,14 @@ async function qaInbodyCounts(store) {
 
 export async function replaceQaInbodySummary(summary, store) {
   if (summary?.success !== true || store.backend !== "firestore") return summary;
-  const { totalCount, todayCount, recentReceivedAt } = await qaInbodyCounts(store);
+  const { requests, totalCount, todayCount, recentReceivedAt } = await qaInbodyCounts(store);
+  const synthetic = requests.find((item) => item.staffId === QA_INBODY_STAFF_ID && item.sourceType === "portal");
   const counts = { totalCount, todayCount, recentReceivedAt };
   const sections = (summary.sections || []).map((section) => ({ ...section,
     items: (section.items || []).map((item) => item.id === "inbody"
-      ? { ...item, ...counts, sheetName: "QA Firestore", source: "firestore", available: true }
+      ? { ...item, ...counts, sheetName: "QA Firestore", source: "firestore", available: true,
+        qaSyntheticRequest: synthetic ? { requestId: synthetic.requestId, preferredDate: synthetic.preferredDate,
+          preferredTime: synthetic.preferredTime } : null }
       : item),
   }));
   const alertItems = (summary.alert?.items || []).map((item) => item.id === "inbody"

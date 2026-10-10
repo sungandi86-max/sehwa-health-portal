@@ -86,6 +86,11 @@ function ReceiptItemCard({ item }) {
           상세 개인정보와 파일은 원본 내부 시트에서 확인해 주세요.
         </p>
       </div>
+      {item.source === "firestore" && item.qaSyntheticRequest && (
+        <p className="mt-3 text-xs font-semibold text-[#3154A3]">
+          QA 신청 {item.qaSyntheticRequest.requestId} · {item.qaSyntheticRequest.preferredDate} · {item.qaSyntheticRequest.preferredTime}
+        </p>
+      )}
 
       <button
         type="button"
