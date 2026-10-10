@@ -1,6 +1,6 @@
 # 2026학년도 보건실 업무 백업/복구 안내
 
-이 문서는 `2026학년도 보건실 업무` Google Sheet 원본을 보호하기 위한 Apps Script 백업 절차를 정리합니다. 원본 Sheet는 계속 운영 master이며, 백업은 복구 가능성을 확보하기 위한 별도 Drive 복사본입니다.
+이 문서는 `2026학년도 보건실 업무` Google Sheet에 남은 원본을 보호하기 위한 Apps Script 백업 절차를 정리합니다. Sheet 백업은 Firestore로 이전한 인바디 신청 등 다른 원장의 백업·복구 수단이 아닙니다. Firestore 원장은 별도 Firebase/Google Cloud 백업·복구 정책으로 관리해야 하며, 이 문서의 복구 절차로 복원할 수 없습니다.
 
 ## 백업 방식
 

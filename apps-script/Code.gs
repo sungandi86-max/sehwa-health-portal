@@ -37,8 +37,7 @@ const STUDENT_FILE_RECORD_HEADERS = [
 const SUBMISSION_RESPONSE_HEADERS = {
   cpr: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"],
   tb: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"],
-  tb_registration: ["제출일시", "성명", "소속/부서", "검진유형", "비고"],
-  inbody: ["제출일시", "성명", "소속/부서", "희망날짜", "희망시간대"]
+  tb_registration: ["제출일시", "성명", "소속/부서", "검진유형", "비고"]
 };
 const STUDENT_CARE_PROJECTION_SYNC = {
   statusProperty: "STUDENT_CARE_PROJECTION_SYNC_STATUS",
@@ -345,7 +344,6 @@ function legacySubmissionDuringTransition_(request) {
     cpr: "응답_심폐소생술이수증",
     tb: "응답_결핵검진확인증",
     tb_registration: "응답_교직원결핵검진유형선택",
-    inbody: "응답_인바디측정신청",
     "student-file": "응답_결핵검진진료회신"
   };
   const type = request.type || (request.sheetName === legacyTypes.tb_registration ? "tb_registration" : "");
@@ -417,8 +415,7 @@ function preflightSubmission_(payload) {
   const destinations = {
     cpr: { sheetName: "응답_심폐소생술이수증", folderId: FOLDER_IDS.cpr },
     tb: { sheetName: "응답_결핵검진확인증", folderId: FOLDER_IDS.tb },
-    tb_registration: { sheetName: "응답_교직원결핵검진유형선택", folderId: null },
-    inbody: { sheetName: "응답_인바디측정신청", folderId: null }
+    tb_registration: { sheetName: "응답_교직원결핵검진유형선택", folderId: null }
   };
   if (!payload || (payload.type !== "student-file" && !destinations[payload.type])) {
     throw new Error("지원하지 않는 제출 유형입니다.");
@@ -460,7 +457,7 @@ function preflightSubmission_(payload) {
   }
   const requiredFields = {
     cpr: ["name", "completionDate"], tb: ["name", "checkupDate"],
-    tb_registration: ["name", "registrationType"], inbody: ["name", "dept", "preferredDate", "preferredTime"]
+    tb_registration: ["name", "registrationType"]
   };
   if (requiredFields[payload.type].some(function(key) { return !String(payload.fields[key] || "").trim(); })) {
     throw new Error("제출 필수 항목을 확인해 주세요.");
@@ -580,8 +577,6 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
   } else if (sheetName === "응답_교직원결핵검진유형선택") {
     const responseRegistrationType = TB_GROUP_REQUEST_RESPONSE_VALUE;
     sheet.appendRow([now, fields.name, fields.dept, responseRegistrationType, ""]);
-  } else if (sheetName === "응답_인바디측정신청") {
-    sheet.appendRow([now, fields.name, fields.dept, fields.preferredDate, fields.preferredTime]);
   } else if (sheetName === "응답_결핵검진진료회신") {
     sheet.appendRow([
       now,
@@ -2082,16 +2077,7 @@ function buildAdminReceiptSections_(ss) {
     })
   ];
 
-  const eventApplications = [
-    summarizeAdminReceiptSheet_(ss, {
-      id: "inbody",
-      label: "인바디 측정 신청",
-      sheetName: "응답_인바디측정신청",
-      startRow: 2,
-      dateColumn: 1,
-      requiredColumns: [1]
-    })
-  ];
+  const eventApplications = [];
 
   return [
     { id: "submitReports", title: "제출·보고 현황", items: submitReports },
@@ -2103,7 +2089,7 @@ function buildAdminReceiptAlert_(sections) {
   const alertItems = [];
   (sections || []).forEach(function(section) {
     (section.items || []).forEach(function(item) {
-      if (["tb", "cpr", "inbody"].indexOf(item.id) === -1) return;
+      if (["tb", "cpr"].indexOf(item.id) === -1) return;
       alertItems.push({
         id: item.id,
         label: item.label,

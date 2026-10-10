@@ -116,7 +116,7 @@ test("QA admin response exposes only the latest synthetic request detail", async
   await adminHandler({ method: "POST", headers: { authorization: "Bearer admin", "content-type": "application/json" },
     body: { action: "getInbodyRequests" } }, result, {
     verifyAccess: async () => ({ ok: true, assignment: { active: true, roles: ["admin"] } }),
-    inbodyStore: { backend: "firestore", listRequests: async () => requests },
+    inbodyStore: { backend: "firestore", environment: "qa", listRequests: async () => requests },
   });
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.qaSyntheticRequest.requestId, "QA-UI-001");
@@ -132,7 +132,7 @@ test("successful QA receipt summary keeps synthetic request detail on its Inbody
     preferredDate: "2026-10-15", preferredTime: "오후1 (12:00~14:00)",
     status: "received", submittedAt: new Date().toISOString() };
   const result = await replaceQaInbodySummary(summary, {
-    backend: "firestore", listRequests: async () => [request],
+    backend: "firestore", environment: "qa", listRequests: async () => [request],
   });
   const item = result.sections[0].items[0];
   assert.equal(item.totalCount, 1);

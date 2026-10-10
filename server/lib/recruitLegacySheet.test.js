@@ -24,9 +24,10 @@ test("admin receipt summary does not read the retired recruit sheet", () => {
   ));
   assert.deepEqual(sections.map((section) => section.items.map((item) => item.id)), [
     ["tb", "cpr"],
-    ["inbody"],
+    [],
   ]);
   assert.equal(reads.includes(legacySheetName), false);
+  assert.equal(reads.includes("응답_인바디측정신청"), false);
 });
 
 test("backup integrity does not require the retired recruit sheet", () => {

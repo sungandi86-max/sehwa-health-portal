@@ -146,17 +146,19 @@ async function qaInbodyCounts(store) {
 export async function replaceQaInbodySummary(summary, store) {
   if (summary?.success !== true || store.backend !== "firestore") return summary;
   const { requests, totalCount, todayCount, recentReceivedAt } = await qaInbodyCounts(store);
-  const synthetic = requests.find((item) => item.staffId === QA_INBODY_STAFF_ID && item.sourceType === "portal");
+  const synthetic = store.environment === "qa"
+    ? requests.find((item) => item.staffId === QA_INBODY_STAFF_ID && item.sourceType === "portal") : null;
   const counts = { totalCount, todayCount, recentReceivedAt };
   const sections = (summary.sections || []).map((section) => ({ ...section,
-    items: (section.items || []).map((item) => item.id === "inbody"
-      ? { ...item, ...counts, sheetName: "QA Firestore", source: "firestore", available: true,
+    items: section.id === "eventApplications"
+      ? [{ id: "inbody", label: "인바디 측정 신청", ...counts, source: "firestore", available: true,
         qaSyntheticRequest: synthetic ? { requestId: synthetic.requestId, preferredDate: synthetic.preferredDate,
-          preferredTime: synthetic.preferredTime } : null }
-      : item),
+          preferredTime: synthetic.preferredTime } : null },
+        ...(section.items || []).filter((item) => item.id !== "inbody")]
+      : section.items || [],
   }));
-  const alertItems = (summary.alert?.items || []).map((item) => item.id === "inbody"
-    ? { ...item, todayCount: counts.todayCount } : item);
+  const alertItems = [...(summary.alert?.items || []).filter((item) => item.id !== "inbody"),
+    { id: "inbody", label: "인바디 측정 신청", todayCount: counts.todayCount, group: "이벤트 신청 현황" }];
   return { ...summary, sections,
     alert: summary.alert ? { ...summary.alert, items: alertItems,
       totalToday: alertItems.reduce((sum, item) => sum + Number(item.todayCount || 0), 0) } : null };
@@ -450,11 +452,12 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
       const access = await verifyAccess(req);
       if (!access.ok) return jsonError(res, access.status, access.message);
       if (!isAdminAssignment(access.assignment)) return jsonError(res, 403, "관리자 권한이 없습니다.");
-      if (inbodyStore.backend !== "firestore") return jsonError(res, 409, "운영 인바디 접수 현황은 기존 관리자 집계에서 확인해 주세요.");
+      if (inbodyStore.backend !== "firestore") return jsonError(res, 503, "인바디 Firestore 원장을 확인할 수 없습니다.");
       const { requests, totalCount, todayCount, recentReceivedAt } = await qaInbodyCounts(inbodyStore);
-      const synthetic = requests.find((item) => item.staffId === QA_INBODY_STAFF_ID && item.sourceType === "portal");
+      const synthetic = inbodyStore.environment === "qa"
+        ? requests.find((item) => item.staffId === QA_INBODY_STAFF_ID && item.sourceType === "portal") : null;
       return res.status(200).json({ success: true, result: "success", source: "firestore",
-        environment: "qa", totalCount, todayCount, recentReceivedAt,
+        environment: inbodyStore.environment, totalCount, todayCount, recentReceivedAt,
         qaSyntheticRequest: synthetic ? { requestId: synthetic.requestId, staffId: synthetic.staffId,
           preferredDate: synthetic.preferredDate, preferredTime: synthetic.preferredTime, status: synthetic.status } : null });
     } catch (error) {
@@ -491,7 +494,7 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
         let inbodyBackend;
         try { inbodyBackend = inbodyStore.backend; }
         catch { return jsonError(res, 403, "승인되지 않은 배포 환경입니다."); }
-        if (inbodyBackend !== "firestore" && inbodyBackend !== "sheet") return jsonError(res, 403, "승인되지 않은 배포 환경입니다.");
+        if (inbodyBackend !== "firestore") return jsonError(res, 403, "승인되지 않은 배포 환경입니다.");
         const authorizedAdmin = buildAuthorizedLegacyAdminParams(params, access.assignment);
         if (!authorizedAdmin.ok) {
           return jsonError(res, authorizedAdmin.status, authorizedAdmin.message);

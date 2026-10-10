@@ -61,7 +61,7 @@ function ReceiptItemCard({ item }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-[#1A3B8B]">{item.label}</h3>
-          <p className="mt-1 text-xs font-bold text-slate-500">{item.sheetName}</p>
+          <p className="mt-1 text-xs font-bold text-slate-500">{item.source === "firestore" ? "Firestore 신청 원장" : item.sheetName}</p>
         </div>
         <Badge type={item.available ? "blue" : "pink"}>{item.source === "firestore" ? "Firestore" : item.available ? "시트 연결" : "요청형"}</Badge>
       </div>
@@ -83,7 +83,8 @@ function ReceiptItemCard({ item }) {
           {item.recentReceivedAt || "-"}
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          상세 개인정보와 파일은 원본 내부 시트에서 확인해 주세요.
+          {item.source === "firestore" ? "이 화면은 접수 건수만 표시하며 개별 신청 내용은 표시하지 않습니다."
+            : "상세 개인정보와 파일은 원본 내부 시트에서 확인해 주세요."}
         </p>
       </div>
       {item.source === "firestore" && item.qaSyntheticRequest && (
@@ -92,13 +93,15 @@ function ReceiptItemCard({ item }) {
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={() => setNotice("원본 허브 구글시트에서 해당 관련 시트를 확인해 주세요. 이 화면에는 개인정보를 표시하지 않습니다.")}
-        className="mt-4 min-h-11 w-full rounded-2xl border border-[#C9DFFF] bg-white px-4 py-3 text-sm font-semibold text-[#1A3B8B] transition hover:bg-[#EAF3FF]"
-      >
-        확인 방법 보기
-      </button>
+      {item.source !== "firestore" && (
+        <button
+          type="button"
+          onClick={() => setNotice("원본 허브 구글시트에서 해당 관련 시트를 확인해 주세요. 이 화면에는 개인정보를 표시하지 않습니다.")}
+          className="mt-4 min-h-11 w-full rounded-2xl border border-[#C9DFFF] bg-white px-4 py-3 text-sm font-semibold text-[#1A3B8B] transition hover:bg-[#EAF3FF]"
+        >
+          확인 방법 보기
+        </button>
+      )}
       {notice && (
         <p className="mt-2 rounded-2xl bg-[#FFF5F8] px-4 py-3 text-xs font-bold leading-5 text-[#D94F70]">
           {notice}
@@ -216,7 +219,7 @@ export default function AdminReceiptStatusPage({ adminUser }) {
           <AppCard className="mt-5 p-5">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-[#1A3B8B]">인바디 측정 신청</h2>
-              <Badge type="blue">QA Firestore</Badge>
+              <Badge type="blue">Firestore</Badge>
             </div>
             <p className="mt-3 text-sm font-semibold text-slate-600">전체 {numberText(qaInbody.totalCount)} · 오늘 {numberText(qaInbody.todayCount)}</p>
             <p className="mt-1 text-xs text-slate-500">{qaInbody.recentReceivedAt || "최근 접수 없음"}</p>

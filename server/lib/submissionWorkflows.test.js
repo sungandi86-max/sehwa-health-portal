@@ -33,6 +33,8 @@ test("canonical registry only enables current operating submit routes", () => {
   assert.equal(resolveSubmissionWorkflow({ type: "tb-registration" }).id, "tb_registration");
   assert.equal(resolveSubmissionWorkflow({ type: "unknown", sheetName: SUBMISSION_WORKFLOWS.cpr.auditSheet }), null);
   for (const id of ["infection", "recruit", "other"]) assert.equal(SUBMISSION_WORKFLOWS[id].enabled, false);
+  assert.equal(SUBMISSION_WORKFLOWS.inbody.auditSheet, null);
+  assert.equal(SUBMISSION_WORKFLOWS.inbody.firestoreWritePolicy, "inbody_requests");
 });
 
 test("legacy TB registration modal sends an explicit canonical type", () => {
@@ -134,16 +136,20 @@ test("authorized CPR and TB use the canonical server workflow", async () => {
 
 test("role mismatch rejects and authorized staff cannot override destinations", async () => {
   let calls = 0;
-  const postScript = async (_url, init) => { calls++; const body = JSON.parse(JSON.parse(init.body).payloadJson);
-    assert.equal(body.type, "inbody"); assert.equal(body.folderId, undefined); assert.equal(body.sheetName, undefined);
-    return { text: async () => JSON.stringify({ status: "error", message: "fixture only" }) }; };
+  const postScript = async () => { throw new Error("Apps Script must not receive Inbody"); };
+  const inbodyStore = { backend: "firestore", createRequest: async ({ fields }) => {
+    calls++;
+    assert.equal(fields.folderId, undefined);
+    assert.equal(fields.sheetName, undefined);
+    return { requestId: "INBODY-001", submittedAt: "2026-10-10T01:00:00.000Z", staffId: "T022" };
+  } };
   const payload = { type: "inbody", fields: inbodyFields, sheetName: "secret", folderId: "secret" };
   const denied = response();
-  await submitHandler(request(payload), denied, { destinationUrl, proxySecret, postScript, inbodyStore: { backend: "sheet" }, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["student"] }) });
+  await submitHandler(request(payload), denied, { destinationUrl, proxySecret, postScript, inbodyStore, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["student"] }) });
   assert.equal(denied.statusCode, 403);
   assert.equal(calls, 0);
   const allowed = response();
-  await submitHandler(request(payload), allowed, { destinationUrl, proxySecret, postScript, inbodyStore: { backend: "sheet" }, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
+  await submitHandler(request(payload), allowed, { destinationUrl, proxySecret, postScript, inbodyStore, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
   assert.equal(allowed.statusCode, 200);
   assert.equal(calls, 1);
 });
@@ -152,8 +158,8 @@ test("missing or unexpected Apps Script endpoint fails closed", async () => {
   let calls = 0;
   for (const url of ["", "https://example.com/exec"]) {
     const result = response();
-    await submitHandler(request({ type: "inbody", fields: inbodyFields }), result,
-      { destinationUrl: url, inbodyStore: { backend: "sheet" }, postScript: async () => { calls++; }, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
+    await submitHandler(request({ ...file, type: "cpr" }), result,
+      { destinationUrl: url, postScript: async () => { calls++; }, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
     assert.equal(result.statusCode, 503);
   }
   assert.equal(calls, 0);
@@ -240,7 +246,6 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
     [SUBMISSION_WORKFLOWS.cpr.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"],
     [SUBMISSION_WORKFLOWS.tb.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"],
     [SUBMISSION_WORKFLOWS.tb_registration.auditSheet]: ["제출일시", "성명", "소속/부서", "검진유형", "비고"],
-    [SUBMISSION_WORKFLOWS.inbody.auditSheet]: ["제출일시", "성명", "소속/부서", "희망날짜", "희망시간대"],
   };
   let recordSheetPresent = true;
   let folderReady = true;
@@ -282,8 +287,7 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
     assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS[type].auditSheet);
     assert.notEqual(folders.at(-1), "Injected");
   }
-  assert.equal(call({ type: "inbody", fields: inbodyFields, sheetName: "Injected", folderId: "Injected" }).status, "success");
-  assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.inbody.auditSheet);
+  assert.equal(call({ type: "inbody", fields: inbodyFields, sheetName: "Injected", folderId: "Injected" }).status, "error");
   const originalCprHeaders = responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet];
   responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet] = ["wrong", ...originalCprHeaders.slice(1)];
   const badResponseHeader = buildSubmissionProxyEnvelope({ ...file, type: "cpr" }, proxySecret);
@@ -292,7 +296,7 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet] = originalCprHeaders;
   assert.equal(call({ type: "unknown", fields: {}, sheetName: "Injected" }).status, "error");
   assert.equal(sheets.includes("Injected"), false);
-  const replay = buildSubmissionProxyEnvelope({ type: "inbody", fields: inbodyFields }, proxySecret);
+  const replay = buildSubmissionProxyEnvelope({ ...file, type: "cpr" }, proxySecret);
   assert.equal(callEnvelope(replay).status, "success");
   assert.equal(callEnvelope(replay).status, "error");
   const visitor = createHmac("sha256", proxySecret).update("visitor").digest("base64url");

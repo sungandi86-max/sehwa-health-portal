@@ -112,13 +112,11 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
 
     if (workflow.id === "inbody") {
-      if (inbodyStore.backend === "firestore") {
-        const fields = qaInbodyOnly ? { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } : payload.fields;
-        const saved = await inbodyStore.createRequest({ staffId: identity.staffId, fields, now });
-        return res.status(200).json({ status: "success", success: true, requestId: saved.requestId,
-          submittedAt: saved.submittedAt, staffId: saved.staffId });
-      }
-      if (inbodyStore.backend !== "sheet") throw new Error("인바디 신청 저장 환경을 확인할 수 없습니다.");
+      if (inbodyStore.backend !== "firestore") throw new Error("인바디 Firestore 원장을 확인할 수 없습니다.");
+      const fields = qaInbodyOnly ? { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } : payload.fields;
+      const saved = await inbodyStore.createRequest({ staffId: identity.staffId, fields, now });
+      return res.status(200).json({ status: "success", success: true, requestId: saved.requestId,
+        submittedAt: saved.submittedAt, staffId: saved.staffId });
     }
 
     if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {
