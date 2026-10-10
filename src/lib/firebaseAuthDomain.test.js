@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_FIREBASE_AUTH_DOMAIN, resolveFirebaseAuthDomain } from "./firebaseAuthDomain.js";
+import { DEFAULT_FIREBASE_AUTH_DOMAIN, resolveFirebaseAuthDomain, shouldUseQaRedirectLogin } from "./firebaseAuthDomain.js";
 
 const PRODUCTION_HOST = "sehwa-health-portal.vercel.app";
 const QA_HOST = "sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app";
@@ -27,4 +27,11 @@ test("localhost keeps the configured auth domain or Firebase default", () => {
 test("unknown and per-deployment hosts do not become auth domains", () => {
   assert.equal(resolveFirebaseAuthDomain("unknown.example", "custom.example"), "custom.example");
   assert.equal(resolveFirebaseAuthDomain("sehwa-health-portal-54i0inqkx-sungandi86-maxs-projects.vercel.app"), DEFAULT_FIREBASE_AUTH_DOMAIN);
+});
+
+test("only fixed QA can explicitly choose redirect login when popup closes", () => {
+  assert.equal(shouldUseQaRedirectLogin(QA_HOST, "?qa-login=redirect"), true);
+  assert.equal(shouldUseQaRedirectLogin(QA_HOST, ""), false);
+  assert.equal(shouldUseQaRedirectLogin(PRODUCTION_HOST, "?qa-login=redirect"), false);
+  assert.equal(shouldUseQaRedirectLogin(FEATURE_HOST, "?qa-login=redirect"), false);
 });

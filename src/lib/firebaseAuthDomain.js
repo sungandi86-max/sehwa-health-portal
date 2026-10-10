@@ -5,6 +5,11 @@ const FIRST_PARTY_AUTH_HOSTS = new Set([
   "sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app",
 ]);
 
+export function shouldUseQaRedirectLogin(hostname, search = "") {
+  return hostname === "sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app" &&
+    new URLSearchParams(search).get("qa-login") === "redirect";
+}
+
 export function resolveFirebaseAuthDomain(hostname, configuredAuthDomain = "") {
   if (FIRST_PARTY_AUTH_HOSTS.has(hostname)) return hostname;
   return configuredAuthDomain || DEFAULT_FIREBASE_AUTH_DOMAIN;

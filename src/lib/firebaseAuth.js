@@ -7,6 +7,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { auth, googleProvider, microsoftProvider } from "./firebase.js";
+import { shouldUseQaRedirectLogin } from "./firebaseAuthDomain.js";
 
 const SCHOOL_MICROSOFT_DOMAIN = "@sehwa-gs.hs.kr";
 const REDIRECT_ROUTE_KEY = "sehwa-health-portal:auth-redirect-route";
@@ -131,7 +132,8 @@ export function ensureAuthLocalPersistence() {
 }
 
 export function shouldUseRedirectSignIn() {
-  return isStandalonePwa() || (isCoarseTouchDevice() && isMobileLikeViewport());
+  return isStandalonePwa() || (isCoarseTouchDevice() && isMobileLikeViewport()) ||
+    (hasBrowserWindow() && shouldUseQaRedirectLogin(window.location.hostname, window.location.search));
 }
 
 function currentInternalRoute() {
