@@ -10,6 +10,7 @@ import { buildCprExternalSubmissionStatus, saveCprTrainingStatus } from "../serv
 import { buildScriptSubmission, resolveSubmissionWorkflow, validateSubmissionPayload } from "../server/lib/submissionWorkflows.js";
 import { buildSubmissionProxyEnvelope, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
 import { assertRegistrationOpen, readSubmissionConfig, SubmissionConfigError } from "../server/lib/submissionConfig.js";
+import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
 
 function scriptUrl() {
   return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
@@ -50,7 +51,7 @@ function buildTbStatusPayload(payload, staffId) {
 }
 
 export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
-  loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), now = new Date() } = {}) {
+  loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
@@ -105,6 +106,15 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
           status: "error", success: false, message: error instanceof SubmissionConfigError ? error.message : "단체검진 신청 설정을 확인할 수 없습니다.",
         });
       }
+    }
+
+    if (workflow.id === "inbody") {
+      if (inbodyStore.backend === "firestore") {
+        const saved = await inbodyStore.createRequest({ staffId: identity.staffId, fields: payload.fields, now });
+        return res.status(200).json({ status: "success", success: true, requestId: saved.requestId,
+          submittedAt: saved.submittedAt, staffId: saved.staffId });
+      }
+      if (inbodyStore.backend !== "sheet") throw new Error("인바디 신청 저장 환경을 확인할 수 없습니다.");
     }
 
     if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {

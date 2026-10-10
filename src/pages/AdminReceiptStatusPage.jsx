@@ -37,6 +37,18 @@ async function requestReceiptSummary(firebaseUser) {
   throw new Error(`HTTP ${response.status}`);
 }
 
+async function requestQaInbody(firebaseUser) {
+  const idToken = await firebaseUser.getIdToken();
+  const response = await fetch(ADMIN_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ action: "getInbodyRequests" }),
+  });
+  if (response.status === 409) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
 function numberText(value) {
   return `${Number(value || 0).toLocaleString("ko-KR")}건`;
 }
@@ -51,7 +63,7 @@ function ReceiptItemCard({ item }) {
           <h3 className="text-lg font-semibold text-[#1A3B8B]">{item.label}</h3>
           <p className="mt-1 text-xs font-bold text-slate-500">{item.sheetName}</p>
         </div>
-        <Badge type={item.available ? "blue" : "pink"}>{item.available ? "시트 연결" : "요청형"}</Badge>
+        <Badge type={item.available ? "blue" : "pink"}>{item.source === "firestore" ? "Firestore" : item.available ? "시트 연결" : "요청형"}</Badge>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
@@ -113,6 +125,7 @@ function SectionBlock({ section }) {
 export default function AdminReceiptStatusPage({ adminUser }) {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
+  const [qaInbody, setQaInbody] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -129,14 +142,17 @@ export default function AdminReceiptStatusPage({ adminUser }) {
       const json = await requestReceiptSummary(adminUser);
       if (json?.success === true || json?.result === "success") {
         setSummary(json);
+        setQaInbody(null);
       } else {
         setSummary(null);
         setMessage(json?.message || "접수 현황을 불러올 수 없습니다.");
+        setQaInbody(await requestQaInbody(adminUser).catch(() => null));
       }
     } catch (error) {
       console.error("[admin-receipts] summary failed", error);
       setSummary(null);
       setMessage("접수 현황 조회 중 오류가 발생했습니다.");
+      setQaInbody(await requestQaInbody(adminUser).catch(() => null));
     } finally {
       setLoading(false);
     }
@@ -190,6 +206,17 @@ export default function AdminReceiptStatusPage({ adminUser }) {
             </p>
           )}
         </AppCard>
+
+        {qaInbody && !summary && (
+          <AppCard className="mt-5 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-[#1A3B8B]">인바디 측정 신청</h2>
+              <Badge type="blue">QA Firestore</Badge>
+            </div>
+            <p className="mt-3 text-sm font-semibold text-slate-600">전체 {numberText(qaInbody.totalCount)} · 오늘 {numberText(qaInbody.todayCount)}</p>
+            <p className="mt-1 text-xs text-slate-500">{qaInbody.recentReceivedAt || "최근 접수 없음"}</p>
+          </AppCard>
+        )}
 
         {summary && (
           <>

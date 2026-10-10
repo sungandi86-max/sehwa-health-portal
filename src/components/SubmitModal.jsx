@@ -1018,8 +1018,6 @@ function InbodyRegistrationForm({ onSubmit, submitting }) {
 
     await onSubmit({
       type: "inbody",
-      sheetName: "응답_인바디측정신청",
-      folderId: null,
       fields: {
         name: identity.name,
         dept: identity.department,

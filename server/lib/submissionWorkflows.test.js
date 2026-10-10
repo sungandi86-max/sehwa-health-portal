@@ -139,11 +139,11 @@ test("role mismatch rejects and authorized staff cannot override destinations", 
     return { text: async () => JSON.stringify({ status: "error", message: "fixture only" }) }; };
   const payload = { type: "inbody", fields: inbodyFields, sheetName: "secret", folderId: "secret" };
   const denied = response();
-  await submitHandler(request(payload), denied, { destinationUrl, proxySecret, postScript, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["student"] }) });
+  await submitHandler(request(payload), denied, { destinationUrl, proxySecret, postScript, inbodyStore: { backend: "sheet" }, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["student"] }) });
   assert.equal(denied.statusCode, 403);
   assert.equal(calls, 0);
   const allowed = response();
-  await submitHandler(request(payload), allowed, { destinationUrl, proxySecret, postScript, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
+  await submitHandler(request(payload), allowed, { destinationUrl, proxySecret, postScript, inbodyStore: { backend: "sheet" }, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
   assert.equal(allowed.statusCode, 200);
   assert.equal(calls, 1);
 });
@@ -153,7 +153,7 @@ test("missing or unexpected Apps Script endpoint fails closed", async () => {
   for (const url of ["", "https://example.com/exec"]) {
     const result = response();
     await submitHandler(request({ type: "inbody", fields: inbodyFields }), result,
-      { destinationUrl: url, postScript: async () => { calls++; }, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
+      { destinationUrl: url, inbodyStore: { backend: "sheet" }, postScript: async () => { calls++; }, verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }) });
     assert.equal(result.statusCode, 503);
   }
   assert.equal(calls, 0);

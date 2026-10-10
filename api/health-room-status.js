@@ -1,6 +1,7 @@
 import fetch from "node-fetch";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 import { readRoadmap } from "../server/lib/portalRoadmap.js";
+import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
@@ -127,6 +128,34 @@ function isFirebaseAuthenticationError(error) {
     "auth/id-token-revoked",
     "auth/invalid-id-token",
   ].includes(String(error?.code || ""));
+}
+
+const inbodyDay = (date) => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+const inbodyReceiptTime = (date) => `최근 접수 ${new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul",
+  year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date)}`;
+
+async function qaInbodyCounts(store) {
+  const requests = await store.listRequests();
+  const today = inbodyDay(new Date());
+  return { requests, totalCount: requests.length,
+    todayCount: requests.filter((item) => inbodyDay(new Date(item.submittedAt)) === today).length,
+    recentReceivedAt: requests[0] ? inbodyReceiptTime(new Date(requests[0].submittedAt)) : "" };
+}
+
+export async function replaceQaInbodySummary(summary, store) {
+  if (summary?.success !== true || store.backend !== "firestore") return summary;
+  const { totalCount, todayCount, recentReceivedAt } = await qaInbodyCounts(store);
+  const counts = { totalCount, todayCount, recentReceivedAt };
+  const sections = (summary.sections || []).map((section) => ({ ...section,
+    items: (section.items || []).map((item) => item.id === "inbody"
+      ? { ...item, ...counts, sheetName: "QA Firestore", source: "firestore", available: true }
+      : item),
+  }));
+  const alertItems = (summary.alert?.items || []).map((item) => item.id === "inbody"
+    ? { ...item, todayCount: counts.todayCount } : item);
+  return { ...summary, sections,
+    alert: summary.alert ? { ...summary.alert, items: alertItems,
+      totalToday: alertItems.reduce((sum, item) => sum + Number(item.todayCount || 0), 0) } : null };
 }
 
 async function getVerifiedStudentCareAccess(req) {
@@ -400,7 +429,7 @@ async function postToAppsScript(payload, scriptUrl, res, transform) {
   }
 }
 
-export default async function handler(req, res) {
+export default async function handler(req, res, { verifyAccess = getVerifiedStudentCareAccess, inbodyStore = inbodyRequestStore } = {}) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
@@ -412,6 +441,21 @@ export default async function handler(req, res) {
 
   const params = await getRequestParams(req);
   const token = getBearerToken(req);
+  if (params.action === "getInbodyRequests") {
+    try {
+      const access = await verifyAccess(req);
+      if (!access.ok) return jsonError(res, access.status, access.message);
+      if (!isAdminAssignment(access.assignment)) return jsonError(res, 403, "관리자 권한이 없습니다.");
+      if (inbodyStore.backend !== "firestore") return jsonError(res, 409, "운영 인바디 접수 현황은 기존 관리자 집계에서 확인해 주세요.");
+      const { totalCount, todayCount, recentReceivedAt } = await qaInbodyCounts(inbodyStore);
+      return res.status(200).json({ success: true, result: "success", source: "firestore",
+        environment: "qa", totalCount, todayCount, recentReceivedAt });
+    } catch (error) {
+      console.error("[INBODY_ADMIN_READ_FAILED]", { name: error?.name || "Error" });
+      return jsonError(res, isFirebaseAuthenticationError(error) ? 401 : 503,
+        "인바디 신청 원장을 확인할 수 없습니다.");
+    }
+  }
   const scriptUrl = getScriptUrl();
   if (!scriptUrl) {
     return jsonError(
@@ -437,6 +481,10 @@ export default async function handler(req, res) {
       if (!access.ok) return jsonError(res, access.status, access.message);
 
       if (isLegacyAdminAction(params)) {
+        let inbodyBackend;
+        try { inbodyBackend = inbodyStore.backend; }
+        catch { return jsonError(res, 403, "승인되지 않은 배포 환경입니다."); }
+        if (inbodyBackend !== "firestore" && inbodyBackend !== "sheet") return jsonError(res, 403, "승인되지 않은 배포 환경입니다.");
         const authorizedAdmin = buildAuthorizedLegacyAdminParams(params, access.assignment);
         if (!authorizedAdmin.ok) {
           return jsonError(res, authorizedAdmin.status, authorizedAdmin.message);
@@ -450,6 +498,7 @@ export default async function handler(req, res) {
             { ...authorizedAdmin.payload, action: "getAdminReceiptSummary" }, scriptUrl, res,
             async (summary) => {
               if (summary?.success !== true) return summary;
+              summary = await replaceQaInbodySummary(summary, inbodyStore);
               const items = (summary.sections || []).flatMap((section) => section.items || []);
               const todayReceiptCount = items.reduce((sum, item) => sum + Number(item.todayCount || 0), 0);
               const recentReceiptAt = items.map((item) => String(item.recentReceivedAt || "")).sort().at(-1) || "";
@@ -468,7 +517,8 @@ export default async function handler(req, res) {
             },
           );
         }
-        return postToAppsScript(authorizedAdmin.payload, scriptUrl, res);
+        return postToAppsScript(authorizedAdmin.payload, scriptUrl, res,
+          (summary) => replaceQaInbodySummary(summary, inbodyStore));
       }
 
       const authorized = buildAuthorizedStudentCareParams(params, access.assignment);
