@@ -215,6 +215,11 @@ export default function AdminReceiptStatusPage({ adminUser }) {
             </div>
             <p className="mt-3 text-sm font-semibold text-slate-600">전체 {numberText(qaInbody.totalCount)} · 오늘 {numberText(qaInbody.todayCount)}</p>
             <p className="mt-1 text-xs text-slate-500">{qaInbody.recentReceivedAt || "최근 접수 없음"}</p>
+            {qaInbody.qaSyntheticRequest && (
+              <p className="mt-2 text-xs font-semibold text-[#3154A3]">
+                QA 신청 {qaInbody.qaSyntheticRequest.requestId} · {qaInbody.qaSyntheticRequest.preferredDate} · {qaInbody.qaSyntheticRequest.preferredTime}
+              </p>
+            )}
           </AppCard>
         )}
 

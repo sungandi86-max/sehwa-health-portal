@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
 import { auth } from "../lib/firebase.js";
 import {
   getFriendlyAuthErrorMessage,
   getMicrosoftSchoolDomainBlockMessage,
+  ensureAuthLocalPersistence,
   signInWithGoogle,
   signInWithMicrosoft,
   signOutFirebase,
@@ -19,6 +20,8 @@ import {
   INDIVIDUAL_HEALTH_CHECKUP_TITLE,
 } from "../data/individualHealthCheckupSubmission.js";
 const SCRIPT_URL = "/api/submit";
+const QA_INBODY_HOST = "sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app";
+const QA_INBODY_UID = "qa-inbody-test-001";
 
 const STAFF_TYPES = ["교사", "강사", "행정직원"];
 const DEPT_TYPES = ["교무교육과정부", "진로진학홍보부", "연구정보부", "창의인성부", "생활안전부", "1학년부", "2학년부", "3학년부", "행정실", "관리자"];
@@ -928,8 +931,33 @@ function InbodyRegistrationForm({ onSubmit, submitting }) {
   const [signingIn, setSigningIn] = useState(false);
   const [form, setForm] = useState({ preferredDate: "", preferredTime: "" });
   const [errors, setErrors] = useState({});
+  const [qaSwitching, setQaSwitching] = useState(false);
+  const [qaSwitchError, setQaSwitchError] = useState("");
+  const qaLoginVisible = window.location.hostname === QA_INBODY_HOST &&
+    new URLSearchParams(window.location.search).get("qa-inbody-test") === "1" &&
+    auth.currentUser?.uid !== QA_INBODY_UID;
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const handleQaSyntheticSignIn = async () => {
+    setQaSwitching(true);
+    setQaSwitchError("");
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error("QA 관리자 로그인이 필요합니다.");
+      const response = await fetch("/api/firebase/staff-directory?resource=qa-inbody-login", {
+        method: "POST", headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.customToken) throw new Error(result?.message || "QA 계정으로 전환하지 못했습니다.");
+      await ensureAuthLocalPersistence();
+      await signInWithCustomToken(auth, result.customToken);
+    } catch (error) {
+      setQaSwitchError(error.message || "QA 계정으로 전환하지 못했습니다.");
+    } finally {
+      setQaSwitching(false);
+    }
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -1055,6 +1083,15 @@ function InbodyRegistrationForm({ onSubmit, submitting }) {
       {identityStatus === "blocked" && (
         <div className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] px-3.5 py-3 text-sm font-semibold leading-6 text-[#B42318]">
           {identityMessage || "교직원 정보가 연결되지 않아 신청할 수 없습니다. 관리자에게 문의해 주세요."}
+        </div>
+      )}
+      {identityStatus === "ready" && qaLoginVisible && (
+        <div className="rounded-[10px] border border-[#C8D8FF] bg-[#EEF4FF] px-3.5 py-3 text-sm">
+          <button type="button" onClick={handleQaSyntheticSignIn} disabled={qaSwitching}
+            className="min-h-10 font-semibold text-[#0D4EA6] underline disabled:opacity-60">
+            {qaSwitching ? "QA 계정으로 전환 중..." : "QA 전용 합성 신청 계정으로 전환"}
+          </button>
+          {qaSwitchError && <p role="alert" className="mt-1 text-[#B42318]">{qaSwitchError}</p>}
         </div>
       )}
       {identityStatus === "ready" && (

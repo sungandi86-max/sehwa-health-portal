@@ -11,6 +11,7 @@ import { buildScriptSubmission, resolveSubmissionWorkflow, validateSubmissionPay
 import { buildSubmissionProxyEnvelope, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
 import { assertRegistrationOpen, readSubmissionConfig, SubmissionConfigError } from "../server/lib/submissionConfig.js";
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
+import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
 
 function scriptUrl() {
   return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
@@ -91,11 +92,13 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       }
     }
     if (workflow.authPolicy === "current_staff") {
-      cprIdentity = await verifyStaff(req);
+      cprIdentity = await verifyStaff(req, { allowQaInbodySynthetic: workflow.id === "inbody" && trainingEnvironment() === "qa" });
       if (!cprIdentity.ok) return res.status(cprIdentity.status).json({ status: "error", success: false, message: cprIdentity.message });
     }
     const identity = tbGuard || cprIdentity;
-    if (workflow.requiresCanonicalStaffId && (!identity?.staffId || !identity.roles?.some((role) => workflow.allowedRoles.includes(role)))) {
+    const qaInbodyOnly = workflow.id === "inbody" && inbodyStore.backend === "firestore" && identity?.qaSynthetic === true;
+    if (workflow.requiresCanonicalStaffId && (!identity?.staffId ||
+      (!qaInbodyOnly && !identity.roles?.some((role) => workflow.allowedRoles.includes(role))))) {
       return res.status(403).json({ status: "error", success: false, message: "이 제출 유형을 이용할 권한이 없습니다." });
     }
     if (workflow.id === "tb_registration") {
@@ -110,7 +113,8 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
 
     if (workflow.id === "inbody") {
       if (inbodyStore.backend === "firestore") {
-        const saved = await inbodyStore.createRequest({ staffId: identity.staffId, fields: payload.fields, now });
+        const fields = qaInbodyOnly ? { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } : payload.fields;
+        const saved = await inbodyStore.createRequest({ staffId: identity.staffId, fields, now });
         return res.status(200).json({ status: "success", success: true, requestId: saved.requestId,
           submittedAt: saved.submittedAt, staffId: saved.staffId });
       }

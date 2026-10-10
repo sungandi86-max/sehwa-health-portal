@@ -2,6 +2,7 @@ import fetch from "node-fetch";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 import { readRoadmap } from "../server/lib/portalRoadmap.js";
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
+import { QA_INBODY_STAFF_ID } from "../server/lib/qaInbodySynthetic.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
 const CURRENT_SEMESTER = 2;
@@ -447,9 +448,12 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
       if (!access.ok) return jsonError(res, access.status, access.message);
       if (!isAdminAssignment(access.assignment)) return jsonError(res, 403, "관리자 권한이 없습니다.");
       if (inbodyStore.backend !== "firestore") return jsonError(res, 409, "운영 인바디 접수 현황은 기존 관리자 집계에서 확인해 주세요.");
-      const { totalCount, todayCount, recentReceivedAt } = await qaInbodyCounts(inbodyStore);
+      const { requests, totalCount, todayCount, recentReceivedAt } = await qaInbodyCounts(inbodyStore);
+      const synthetic = requests.find((item) => item.staffId === QA_INBODY_STAFF_ID && item.sourceType === "portal");
       return res.status(200).json({ success: true, result: "success", source: "firestore",
-        environment: "qa", totalCount, todayCount, recentReceivedAt });
+        environment: "qa", totalCount, todayCount, recentReceivedAt,
+        qaSyntheticRequest: synthetic ? { requestId: synthetic.requestId, staffId: synthetic.staffId,
+          preferredDate: synthetic.preferredDate, preferredTime: synthetic.preferredTime, status: synthetic.status } : null });
     } catch (error) {
       console.error("[INBODY_ADMIN_READ_FAILED]", { name: error?.name || "Error" });
       return jsonError(res, isFirebaseAuthenticationError(error) ? 401 : 503,
