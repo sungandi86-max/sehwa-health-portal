@@ -14,6 +14,7 @@ export async function handleStudentSubmissionAuditResource(req, res, {
   }, items: records.map((record) => ({
     submissionId: record.submissionId, submittedAt: record.submittedAt,
     submissionType: record.submissionType, source: record.source, status: record.status,
+    signedPath: record.signedPath === true, legacy: record.legacy === true,
     matchStatus: record.matchStatus, manualReview: record.manualReview,
     originalRowNumber: record.originalRowNumber,
     evidence: (record.evidenceFiles || []).map((file) => ({

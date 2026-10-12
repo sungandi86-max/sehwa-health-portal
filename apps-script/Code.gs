@@ -296,7 +296,7 @@ function doPost(e) {
     const signed = request && request.version === 1;
     const payload = signed ? verifySubmissionProxy_(request) : legacySubmissionDuringTransition_(request);
     const prepared = preflightSubmission_(payload);
-    if (signed) reserveSubmissionProxy_(request, payload);
+    if (signed) reserveSubmissionProxy_(request, payload, prepared);
     if (payload.type === "student-file") {
       const result = appendStudentFileSubmission_(payload, prepared, signed ? request.requestId : "");
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -378,7 +378,7 @@ function verifySubmissionProxy_(request) {
   return payload;
 }
 
-function reserveSubmissionProxy_(request, payload) {
+function reserveSubmissionProxy_(request, payload, prepared) {
   const properties = PropertiesService.getScriptProperties();
   const now = Date.now();
   const prefix = "SUBMISSION_GUARD_";
@@ -395,11 +395,11 @@ function reserveSubmissionProxy_(request, payload) {
   if (payload.type === "student-file") {
     const repeatKey = prefix + "REPEAT_" + request.payloadHash;
     const rateKey = prefix + "RATE_" + request.visitor;
-    if (properties.getProperty(repeatKey)) throw new Error("중복 제출입니다.");
+    if (properties.getProperty(repeatKey) && !prepared.existingEvidence) throw new Error("중복 제출입니다.");
     const rate = JSON.parse(properties.getProperty(rateKey) || "null");
     if (rate && rate.expiresAt > now && rate.count >= 3) throw new Error("잠시 후 다시 시도해 주세요.");
     properties.setProperty(rateKey, JSON.stringify({ expiresAt: now + 600000, count: rate && rate.expiresAt > now ? rate.count + 1 : 1 }));
-    properties.setProperty(repeatKey, String(now + 600000));
+    if (!prepared.existingEvidence) properties.setProperty(repeatKey, String(now + 600000));
   }
   properties.setProperty(replayKey, String(request.sentAt + 120000));
 }
@@ -435,8 +435,26 @@ function preflightSubmission_(payload) {
     validateSubmissionBlob_(blob);
     const folder = DriveApp.getFolderById(qaFirestoreAudit ? payload.qaEvidenceFolderId : STUDENT_FILE_DEFAULT_FOLDER_ID);
     folder.getId();
+    let existingEvidence = null;
+    let evidenceName = "";
+    if (qaFirestoreAudit) {
+      if (!/^QA-STUDENT-TB-[a-f0-9]{32}$/.test(String(payload.qaSubmissionId || "")) ||
+          !/^[a-f0-9]{64}$/.test(String(payload.qaRequestFingerprint || "")) ||
+          payload.qaSubmissionId !== "QA-STUDENT-TB-" + payload.qaRequestFingerprint.slice(0, 32)) {
+        throw new Error("QA 제출 식별자가 올바르지 않습니다.");
+      }
+      const suffix = payload.fileMimeType === "application/pdf" ? ".pdf" :
+        payload.fileMimeType === "image/png" ? ".png" : ".jpg";
+      evidenceName = payload.qaSubmissionId + suffix;
+      const matches = folder.getFilesByName(evidenceName);
+      if (matches.hasNext()) {
+        existingEvidence = matches.next();
+        if (matches.hasNext() || existingEvidence.getMimeType() !== payload.fileMimeType ||
+            existingEvidence.getSize() !== blob.getBytes().length) throw new Error("QA 증빙 재시도 충돌입니다.");
+      }
+    }
     return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details,
-      firestoreAudit: qaFirestoreAudit };
+      firestoreAudit: qaFirestoreAudit, existingEvidence: existingEvidence, evidenceName: evidenceName };
   }
   const ss = getSpreadsheet_();
   let destination = destinations[payload.type];
@@ -492,7 +510,8 @@ function appendStudentFileSubmission_(payload, prepared, requestId) {
   const submissionTitle = "결핵검진 진료회신 제출";
   const studentName = String(fields.studentName || "").trim();
   const fileName = String(payload.fileName || "").trim();
-  const driveFile = prepared.folder.createFile(prepared.blob);
+  if (prepared.firestoreAudit && !prepared.existingEvidence) prepared.blob.setName(prepared.evidenceName);
+  const driveFile = prepared.existingEvidence || prepared.folder.createFile(prepared.blob);
   const fileUrl = driveFile.getUrl();
   const fileId = driveFile.getId();
   const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");

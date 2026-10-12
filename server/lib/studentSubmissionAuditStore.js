@@ -89,7 +89,15 @@ export class StudentSubmissionAuditStore {
   get environment() { return submissionEnvironment(this.context()); }
   get collectionName() { return STUDENT_SUBMISSION_AUDIT_COLLECTIONS[this.environment]; }
   assertQa() { if (this.environment !== "qa") throw new Error("QA 감사 원장에만 기록할 수 있습니다."); }
-  async createQaRequest({ requestId, fields, evidenceFile, now = new Date() }) {
+  async getQaRequest(requestId) {
+    this.assertQa();
+    const snapshot = await this.database().collection(this.collectionName).doc(requestId).get();
+    if (!snapshot.exists) return null;
+    const record = snapshot.data();
+    if (record.environment !== "qa" || record.submissionId !== requestId) throw new Error("QA 감사 원장 출처가 올바르지 않습니다.");
+    return record;
+  }
+  async createQaRequest({ requestId, requestFingerprint, fields, evidenceFile, now = new Date() }) {
     this.assertQa();
     const studentName = text(fields?.studentName);
     if (studentName !== "[QA] synthetic" || !["grade", "classNumber", "studentNumber"].every((key) => text(fields?.[key])) ||
@@ -97,14 +105,15 @@ export class StudentSubmissionAuditStore {
       throw new Error("QA 합성 제출 필수값이 없습니다.");
     }
     const submittedAt = now.toISOString();
-    const record = { submissionId: requestId, canonicalStudentKey: null,
+    const record = { submissionId: requestId, requestFingerprint: text(requestFingerprint),
+      signedPath: true, legacy: false, canonicalStudentKey: null,
       studentIdentity: { grade: text(fields.grade), classNumber: text(fields.classNumber),
         studentNumber: text(fields.studentNumber), name: studentName },
       submissionType: "student_tb_reply", submittedAt, source: "qa_signed_submission", environment: "qa",
       originalRowNumber: null, originalRowFingerprint: null, originalSubmissionId: null, originalFields: {},
       evidenceFiles: [{ fileId: text(evidenceFile.fileId), originalUrl: "", fileName: text(evidenceFile.fileName),
         mimeType: text(evidenceFile.mimeType), exists: true, lookupStatus: "uploaded_private" }],
-      matchStatus: "synthetic", manualReview: false, manualReviewReasons: [], status: "received", schemaVersion: 1,
+      matchStatus: "synthetic", manualReview: false, manualReviewReasons: [], status: "recorded", schemaVersion: 1,
       migration: { imported: false }, createdAt: submittedAt, updatedAt: submittedAt };
     await this.database().collection(this.collectionName).doc(requestId).create(record);
     return record;
