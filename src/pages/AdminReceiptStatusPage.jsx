@@ -49,16 +49,6 @@ async function requestQaInbody(firebaseUser) {
   return response.json();
 }
 
-async function requestQaStudentAudit(firebaseUser) {
-  const idToken = await firebaseUser.getIdToken();
-  const response = await fetch("/api/firebase/staff-directory?resource=student-submission-audit", {
-    headers: { Authorization: `Bearer ${idToken}` },
-  });
-  if (response.status === 403) return null;
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
-}
-
 function numberText(value) {
   return `${Number(value || 0).toLocaleString("ko-KR")}건`;
 }
@@ -144,7 +134,6 @@ export default function AdminReceiptStatusPage({ adminUser }) {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [qaInbody, setQaInbody] = useState(null);
-  const [qaStudentAudit, setQaStudentAudit] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -157,7 +146,6 @@ export default function AdminReceiptStatusPage({ adminUser }) {
 
     setLoading(true);
     setMessage("");
-    setQaStudentAudit(await requestQaStudentAudit(adminUser).catch(() => null));
     try {
       const json = await requestReceiptSummary(adminUser);
       if (json?.success === true || json?.result === "success") {
@@ -240,26 +228,6 @@ export default function AdminReceiptStatusPage({ adminUser }) {
                 QA 신청 {qaInbody.qaSyntheticRequest.requestId} · {qaInbody.qaSyntheticRequest.preferredDate} · {qaInbody.qaSyntheticRequest.preferredTime}
               </p>
             )}
-          </AppCard>
-        )}
-
-        {qaStudentAudit?.ok && (
-          <AppCard className="mt-5 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-[#1A3B8B]">QA 학생 진료회신 감사 원장</h2>
-              <Badge type="blue">Firestore QA</Badge>
-            </div>
-            <p className="mt-3 text-sm font-semibold text-slate-600">
-              전체 {numberText(qaStudentAudit.summary?.total)} · 수동 검토 {numberText(qaStudentAudit.summary?.manualReview)}
-            </p>
-            <ul className="mt-3 space-y-2 text-xs text-slate-600">
-              {(qaStudentAudit.items || []).map((item) => (
-                <li key={item.submissionId} className="break-all rounded-xl bg-slate-50 p-3">
-                  {item.submissionId} · {item.status} · signed {String(item.signedPath)} · 검토 {String(item.manualReview)}
-                  {item.evidence?.[0]?.fileId && ` · fileId ${item.evidence[0].fileId}`}
-                </li>
-              ))}
-            </ul>
           </AppCard>
         )}
 
