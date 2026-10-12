@@ -97,15 +97,34 @@ export class StudentSubmissionAuditStore {
     if (record.environment !== "qa" || record.submissionId !== requestId) throw new Error("QA 감사 원장 출처가 올바르지 않습니다.");
     return record;
   }
-  async createQaRequest({ requestId, requestFingerprint, fields, evidenceFile, now = new Date() }) {
+  async getQaEvidenceMatch({ evidenceSha256, fileMimeType, fields }) {
+    this.assertQa();
+    if (!/^[a-f0-9]{64}$/.test(text(evidenceSha256))) throw new Error("QA 증빙 지문이 올바르지 않습니다.");
+    const snapshot = await this.database().collection(this.collectionName)
+      .where("evidenceSha256", "==", evidenceSha256).get();
+    const normalize = (value) => text(value).normalize("NFKC");
+    const matches = snapshot.docs.map((doc) => doc.data()).filter((record) =>
+      record.submissionId && record.environment === "qa" && record.source === "qa_signed_submission" &&
+      record.submissionType === "student_tb_reply" && record.evidenceSha256 === evidenceSha256 &&
+      text(record.evidenceFiles?.[0]?.mimeType).toLowerCase() === text(fileMimeType).toLowerCase() &&
+      [["grade", "grade"], ["classNumber", "classNumber"], ["studentNumber", "studentNumber"],
+        ["name", "studentName"]].every(([saved, incoming]) =>
+        normalize(record.studentIdentity?.[saved]) === normalize(fields?.[incoming])));
+    if (matches.length > 1) throw new Error("QA 증빙 중복 원장을 확인해야 합니다.");
+    return matches[0] || null;
+  }
+  async createQaRequest({ requestId, requestFingerprint, evidenceSha256, idempotencyVersion = 2,
+    fields, evidenceFile, now = new Date() }) {
     this.assertQa();
     const studentName = text(fields?.studentName);
     if (studentName !== "[QA] synthetic" || !["grade", "classNumber", "studentNumber"].every((key) => text(fields?.[key])) ||
-      !text(requestId) || !text(evidenceFile?.fileId) || !text(evidenceFile?.fileName).includes("QA")) {
+      !text(requestId) || !/^[a-f0-9]{64}$/.test(text(evidenceSha256)) ||
+      !text(evidenceFile?.fileId) || !text(evidenceFile?.fileName).includes("QA")) {
       throw new Error("QA 합성 제출 필수값이 없습니다.");
     }
     const submittedAt = now.toISOString();
     const record = { submissionId: requestId, requestFingerprint: text(requestFingerprint),
+      evidenceSha256: text(evidenceSha256), idempotencyVersion,
       signedPath: true, legacy: false, canonicalStudentKey: null,
       studentIdentity: { grade: text(fields.grade), classNumber: text(fields.classNumber),
         studentNumber: text(fields.studentNumber), name: studentName },

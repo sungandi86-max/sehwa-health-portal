@@ -76,6 +76,11 @@ function database() {
     } }; },
     async get() { return { docs: [...(collections.get(name) || new Map())].map(([id, value]) =>
       ({ id, data: () => value })) }; },
+    where(field, operator, expected) { assert.equal(operator, "=="); return { async get() {
+      return { docs: [...(collections.get(name) || new Map())]
+        .filter(([, value]) => value[field] === expected)
+        .map(([id, value]) => ({ id, data: () => value })) };
+    } }; },
   }; } };
 }
 
@@ -101,7 +106,8 @@ test("QA request create is isolated, create-only and rejects non-synthetic names
   const db = database();
   const qa = new StudentSubmissionAuditStore({ database: () => db,
     context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
-  const input = { requestId: "QA-REQUEST-001", fields: { grade: "2", classNumber: "1", studentNumber: "99",
+  const input = { requestId: "QA-REQUEST-001", evidenceSha256: "a".repeat(64),
+    fields: { grade: "2", classNumber: "1", studentNumber: "99",
     studentName: "[QA] synthetic" }, evidenceFile: { fileId: "QA-FILE-001", fileName: "QA-test.pdf",
     mimeType: "application/pdf" } };
   const created = await qa.createQaRequest(input);
@@ -113,6 +119,24 @@ test("QA request create is isolated, create-only and rejects non-synthetic names
   await assert.rejects(qa.createQaRequest({ ...input, requestId: "QA-REQUEST-002",
     fields: { ...input.fields, studentName: "[QA] actual person" } }), /QA 합성/);
   assert.equal(db.collections.has("student_submission_audit_production"), false);
+});
+
+test("QA evidence lookup recognizes additive v1 tag without copying or changing original audit", async () => {
+  const db = database();
+  const digest = createHash("sha256").update("same evidence").digest("hex");
+  const v1 = { submissionId: "QA-STUDENT-TB-v1", environment: "qa", source: "qa_signed_submission",
+    submissionType: "student_tb_reply", status: "recorded", evidenceSha256: digest,
+    studentIdentity: { grade: "1", classNumber: "1", studentNumber: "99", name: "[QA] synthetic" },
+    evidenceFiles: [{ fileId: "QA-DRIVE-V1", mimeType: "image/png", exists: true }] };
+  db.collections.set("student_submission_audit_qa", new Map([[v1.submissionId, v1]]));
+  const store = new StudentSubmissionAuditStore({ database: () => db,
+    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
+  const matched = await store.getQaEvidenceMatch({ evidenceSha256: digest, fileMimeType: "image/png",
+    fields: { grade: "1", classNumber: "1", studentNumber: "99", studentName: "[QA] synthetic" } });
+  assert.equal(matched.submissionId, v1.submissionId);
+  assert.equal(db.collections.get("student_submission_audit_qa").size, 1);
+  assert.equal(await store.getQaEvidenceMatch({ evidenceSha256: digest, fileMimeType: "image/png",
+    fields: { grade: "1", classNumber: "1", studentNumber: "100", studentName: "[QA] synthetic" } }), null);
 });
 
 const request = (payload) => ({ method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.9",
@@ -133,6 +157,25 @@ test("QA visitor ignores spoofed XFF and rejects missing, chained, or malformed 
   }
 });
 
+test("QA student identity stays stable across generated date and display-name changes", () => {
+  const secret = "fixture-only-submission-secret-32bytes-minimum";
+  const payload = { type: "student_tb_reply", fields: { grade: "1", classNumber: "1", studentNumber: "99",
+    studentName: "[QA] synthetic", visitDate: "", hospitalName: "", note: "QA first note" },
+  fileName: "1학년_1반_99번_[QA] synthetic_결핵검진진료회신_20261012.png", fileMimeType: "image/png",
+  fileBase64: Buffer.from("same evidence").toString("base64") };
+  const first = qaStudentSubmissionIdentity(payload, secret);
+  const nextDay = qaStudentSubmissionIdentity({ ...payload,
+    fileName: payload.fileName.replace("20261012", "20261013"),
+    fields: { ...payload.fields, note: "QA corrected display note" } }, secret);
+  assert.equal(first.submissionId, nextDay.submissionId);
+  assert.equal(first.requestFingerprint, nextDay.requestFingerprint);
+  assert.match(first.evidenceSha256, /^[a-f0-9]{64}$/);
+  assert.notEqual(first.submissionId, qaStudentSubmissionIdentity({ ...payload,
+    fileBase64: Buffer.from("different evidence").toString("base64") }, secret).submissionId);
+  assert.notEqual(first.submissionId, qaStudentSubmissionIdentity({ ...payload,
+    fields: { ...payload.fields, studentNumber: "100" } }, secret).submissionId);
+});
+
 test("QA anonymous submit signs a QA-only Drive payload, writes ledger, and never requests Sheet append", async () => {
   const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "QA",
     studentName: "[QA] synthetic" }, fileName: "QA-reply.png", fileMimeType: "image/png",
@@ -143,7 +186,8 @@ test("QA anonymous submit signs a QA-only Drive payload, writes ledger, and neve
   await submitHandler(request(payload), res, { destinationUrl: "https://script.google.com/macros/s/test/exec",
     proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
     qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001", now: new Date("2026-10-12T00:00:00Z"),
-    studentAuditStore: { getQaRequest: async () => null, createQaRequest: async (record) => writes.push(record) },
+    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
+      createQaRequest: async (record) => writes.push(record) },
     postScript: async (_url, init) => {
       const envelope = JSON.parse(init.body);
       const forwarded = JSON.parse(envelope.payloadJson);
@@ -159,10 +203,31 @@ test("QA anonymous submit signs a QA-only Drive payload, writes ledger, and neve
   assert.equal(res.statusCode, 200);
   assert.equal(writes.length, 1);
   assert.equal(writes[0].evidenceFile.fileId, "QA-DRIVE-FILE-001");
+  assert.match(writes[0].evidenceSha256, /^[a-f0-9]{64}$/);
+  assert.equal(writes[0].idempotencyVersion, 2);
   assert.equal(res.body.fileId, undefined);
   assert.equal(res.body.submissionId, writes[0].requestId);
   const prodPayload = buildScriptSubmission(SUBMISSION_WORKFLOWS.student_tb_reply, payload);
   assert.equal(prodPayload.recordMode, undefined);
+});
+
+test("same QA evidence across midnight rejects before a second Drive upload", async () => {
+  const payload = { type: "student_tb_reply", fields: { grade: "1", classNumber: "1", studentNumber: "99",
+    studentName: "[QA] synthetic" }, fileName: "QA-20261012.png", fileMimeType: "image/png",
+    fileBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl9mN8AAAAASUVORK5CYII=" };
+  const existing = { submissionId: "QA-STUDENT-TB-v1", evidenceFiles: [{ fileId: "QA-DRIVE-V1", exists: true }] };
+  let uploads = 0;
+  const res = response();
+  await submitHandler(request({ ...payload, fileName: "QA-20261013.png" }), res, {
+    destinationUrl: "https://script.google.com/macros/s/test/exec",
+    proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
+    qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
+    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => existing },
+    postScript: async () => { uploads++; throw new Error("duplicate must not upload"); },
+  });
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.submissionId, existing.submissionId);
+  assert.equal(uploads, 0);
 });
 
 test("QA missing evidence destination and arbitrary Preview fail before Apps Script", async () => {
@@ -192,7 +257,8 @@ test("QA Drive failure does not write audit; Firestore failure reports recoverab
   let auditWrites = 0;
   const driveFailed = response();
   await submitHandler(request(payload), driveFailed, { ...options,
-    studentAuditStore: { getQaRequest: async () => null, createQaRequest: async () => { auditWrites++; } },
+    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
+      createQaRequest: async () => { auditWrites++; } },
     postScript: async () => ({ text: async () => JSON.stringify({ status: "error" }) }) });
   assert.equal(driveFailed.body.success, false);
   assert.equal(auditWrites, 0);
@@ -201,7 +267,8 @@ test("QA Drive failure does not write audit; Firestore failure reports recoverab
   console.error = () => {};
   try {
     await submitHandler(request(payload), auditFailed, { ...options,
-      studentAuditStore: { getQaRequest: async () => null, createQaRequest: async () => { throw new Error("QA Firestore unavailable"); } },
+      studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
+        createQaRequest: async () => { throw new Error("QA Firestore unavailable"); } },
       postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-DRIVE-FILE-001" }) }) });
   } finally { console.error = originalError; }
   assert.equal(auditFailed.statusCode, 503);
@@ -276,20 +343,25 @@ test("QA evidence reuse survives audit failure without duplicate Drive upload or
   const uploaded = context.append(scriptPayload, first, signed1.requestId);
   assert.equal(uploaded.fileId, "QA-DRIVE-FILE-001");
   assert.equal(uploads, 1);
-  const second = context.preflight(scriptPayload);
+  const nextDayPayload = { ...payload, fileName: "QA-reply-20261013.png" };
+  assert.equal(qaStudentSubmissionIdentity(nextDayPayload, secret).submissionId, id.submissionId);
+  const nextDayScriptPayload = { ...scriptPayload, fileName: nextDayPayload.fileName };
+  const second = context.preflight(nextDayScriptPayload);
   assert.equal(second.existingEvidence.getId(), uploaded.fileId);
-  const signed2 = buildSubmissionProxyEnvelope(scriptPayload, secret, { requestId: "QA-REQUEST-TWO", visitor: "visitor" });
-  context.reserve(signed2, scriptPayload, second);
-  context.append(scriptPayload, second, signed2.requestId);
+  const signed2 = buildSubmissionProxyEnvelope(nextDayScriptPayload, secret, { requestId: "QA-REQUEST-TWO", visitor: "visitor" });
+  context.reserve(signed2, nextDayScriptPayload, second);
+  context.append(nextDayScriptPayload, second, signed2.requestId);
   assert.equal(uploads, 1);
   const db = database();
   const store = new StudentSubmissionAuditStore({ database: () => db,
     context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
   await store.createQaRequest({ requestId: id.submissionId, requestFingerprint: id.requestFingerprint,
+    evidenceSha256: id.evidenceSha256,
     fields: payload.fields, evidenceFile: { fileId: uploaded.fileId, fileName: payload.fileName,
       mimeType: payload.fileMimeType } });
   ledgerWrites++;
-  await assert.rejects(store.createQaRequest({ requestId: id.submissionId, fields: payload.fields,
+  await assert.rejects(store.createQaRequest({ requestId: id.submissionId, evidenceSha256: id.evidenceSha256,
+    fields: payload.fields,
     evidenceFile: { fileId: uploaded.fileId, fileName: payload.fileName } }), /duplicate/);
   assert.equal(ledgerWrites, 1);
   assert.throws(() => context.reserve(signed1, scriptPayload, second), /중복 제출/);

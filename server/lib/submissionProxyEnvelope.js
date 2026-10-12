@@ -21,8 +21,14 @@ export function submissionVisitor(req, secret, { trustedVercel = false } = {}) {
 
 export function qaStudentSubmissionIdentity(payload, secret) {
   if (typeof secret !== "string" || Buffer.byteLength(secret, "utf8") < 32) return null;
+  const studentIdentity = Object.fromEntries(["grade", "classNumber", "studentNumber", "studentName"]
+    .map((key) => [key, String(payload.fields?.[key] ?? "").normalize("NFKC").trim()]));
+  const evidence = Buffer.from(String(payload.fileBase64 || ""), "base64");
+  const evidenceSha256 = createHash("sha256").update(evidence).digest("hex");
   const fingerprint = createHmac("sha256", secret)
-    .update(`qa-student-submission-v1:${JSON.stringify({ fields: payload.fields, fileName: payload.fileName,
-      fileMimeType: payload.fileMimeType, fileBase64: payload.fileBase64 })}`, "utf8").digest("hex");
-  return { submissionId: `QA-STUDENT-TB-${fingerprint.slice(0, 32)}`, requestFingerprint: fingerprint };
+    .update(`qa-student-submission-v2:${JSON.stringify({ type: "student_tb_reply", studentIdentity,
+      fileMimeType: String(payload.fileMimeType || "").toLowerCase(), fileSize: evidence.length, evidenceSha256 })}`,
+    "utf8").digest("hex");
+  return { submissionId: `QA-STUDENT-TB-${fingerprint.slice(0, 32)}`, requestFingerprint: fingerprint,
+    evidenceSha256, idempotencyVersion: 2 };
 }

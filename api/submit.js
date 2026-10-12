@@ -190,8 +190,18 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     const qaIdentity = qaStudentAudit ? qaStudentSubmissionIdentity(payload, proxySecret) : null;
     if (qaStudentAudit && !qaIdentity) return res.status(503).json({ status: "error", success: false,
       message: "QA 접수 식별자를 생성할 수 없습니다." });
-    if (qaStudentAudit && await studentAuditStore.getQaRequest(qaIdentity.submissionId)) {
-      return res.status(409).json({ status: "error", success: false, message: "이미 접수된 QA 제출입니다." });
+    if (qaStudentAudit) {
+      const existing = await studentAuditStore.getQaRequest(qaIdentity.submissionId) ||
+        await studentAuditStore.getQaEvidenceMatch({ evidenceSha256: qaIdentity.evidenceSha256,
+          fileMimeType: payload.fileMimeType, fields: payload.fields });
+      if (existing) {
+        if (!existing.evidenceFiles?.[0]?.fileId || existing.evidenceFiles[0].exists !== true) {
+          return res.status(409).json({ status: "error", success: false,
+            message: "기존 QA 접수의 증빙 파일을 확인할 수 없습니다. 관리자에게 문의해 주세요." });
+        }
+        return res.status(409).json({ status: "error", success: false,
+          submissionId: existing.submissionId, message: "이미 접수된 QA 제출입니다." });
+      }
     }
     const cprEnvironment = workflow.id === "cpr" ? environment() : null;
     const cprAudit = workflow.id === "cpr" && ["qa", "production"].includes(cprEnvironment);
@@ -250,7 +260,8 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         message: "QA 증빙 파일 ID를 확인할 수 없습니다." });
       try {
         await studentAuditStore.createQaRequest({ requestId: qaIdentity.submissionId,
-          requestFingerprint: qaIdentity.requestFingerprint, fields: payload.fields,
+          requestFingerprint: qaIdentity.requestFingerprint, evidenceSha256: qaIdentity.evidenceSha256,
+          idempotencyVersion: qaIdentity.idempotencyVersion, fields: payload.fields,
           evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType }, now });
       } catch {
         console.error("[STUDENT_REPLY_QA_AUDIT_WRITE] Partial failure", {
