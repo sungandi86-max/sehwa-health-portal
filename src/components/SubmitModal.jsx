@@ -22,6 +22,7 @@ import {
 const SCRIPT_URL = "/api/submit";
 const QA_INBODY_HOST = "sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app";
 const QA_INBODY_UID = "qa-inbody-test-001";
+const QA_CPR_UID = "qa-cpr-test-001";
 
 const STAFF_TYPES = ["교사", "강사", "행정직원"];
 const DEPT_TYPES = ["교무교육과정부", "진로진학홍보부", "연구정보부", "창의인성부", "생활안전부", "1학년부", "2학년부", "3학년부", "행정실", "관리자"];
@@ -155,9 +156,35 @@ function CprForm({ onSubmit, submitting }) {
   });
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
+  const [qaSwitching, setQaSwitching] = useState(false);
+  const [qaSwitchError, setQaSwitchError] = useState("");
   const { run, preparing } = usePreparedFile(setErrors);
+  const qaLoginVisible = window.location.hostname === QA_INBODY_HOST &&
+    new URLSearchParams(window.location.search).get("qa-cpr-test") === "1" &&
+    auth.currentUser?.uid !== QA_CPR_UID;
 
   const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const handleQaSyntheticSignIn = async () => {
+    setQaSwitching(true);
+    setQaSwitchError("");
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error("QA 관리자 로그인이 필요합니다.");
+      const response = await fetch("/api/firebase/staff-directory?resource=qa-cpr-login", {
+        method: "POST", headers: { Authorization: `Bearer ${idToken}` },
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.customToken) throw new Error(result?.message || "QA CPR 계정으로 전환하지 못했습니다.");
+      await ensureAuthLocalPersistence();
+      await signInWithCustomToken(auth, result.customToken);
+      setForm((current) => ({ ...current, name: "[QA-CPR-TEST]", dept: "관리자" }));
+    } catch (error) {
+      setQaSwitchError(error.message || "QA CPR 계정으로 전환하지 못했습니다.");
+    } finally {
+      setQaSwitching(false);
+    }
+  };
 
   const validate = () => {
     const e = {};
@@ -193,6 +220,15 @@ function CprForm({ onSubmit, submitting }) {
 
   return (
     <div className="space-y-4">
+      {qaLoginVisible && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <button type="button" onClick={handleQaSyntheticSignIn} disabled={qaSwitching}
+            className="rounded-md border border-amber-500 bg-white px-3 py-2 text-sm font-bold text-amber-900 disabled:opacity-60">
+            {qaSwitching ? "QA 계정 전환 중" : "CPR QA 합성 계정으로 전환"}
+          </button>
+          {qaSwitchError && <p className="mt-2 text-xs font-bold text-[#D94F70]">{qaSwitchError}</p>}
+        </div>
+      )}
       <Field label="성명" required>
         <input className={inputCls} placeholder="홍길동" value={form.name} onChange={set("name")} />
         {errors.name && <p className="mt-1 text-xs font-bold text-[#D94F70]">{errors.name}</p>}

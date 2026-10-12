@@ -4,6 +4,7 @@ import submitHandler from "../../api/submit.js";
 import { handleQaCprLogin } from "../../api/firebase/staff-directory.js";
 import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { isQaCprAssignment, QA_CPR_EMAIL, QA_CPR_ROLE, QA_CPR_STAFF_ID, QA_CPR_UID } from "./qaCprSynthetic.js";
+import fs from "node:fs";
 
 const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
@@ -85,4 +86,12 @@ test("CPR synthetic login is admin-gated and unavailable in Production", async (
   assert.equal(accepted.statusCode, 200);
   assert.equal(accepted.body.customToken, "qa-cpr-token");
   assert.equal(authWrites, 1);
+});
+
+test("CPR synthetic switch is visible only behind the fixed QA query gate", () => {
+  const source = fs.readFileSync(new URL("../../src/components/SubmitModal.jsx", import.meta.url), "utf8");
+  assert.match(source, /window\.location\.hostname === QA_INBODY_HOST/);
+  assert.match(source, /get\("qa-cpr-test"\) === "1"/);
+  assert.match(source, /resource=qa-cpr-login/);
+  assert.match(source, /auth\.currentUser\?\.uid !== QA_CPR_UID/);
 });
