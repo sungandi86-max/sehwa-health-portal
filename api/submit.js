@@ -11,6 +11,7 @@ import { buildScriptSubmission, resolveSubmissionWorkflow, validateSubmissionPay
 import { buildSubmissionProxyEnvelope, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
 import { assertRegistrationOpen, readSubmissionConfig, SubmissionConfigError } from "../server/lib/submissionConfig.js";
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
+import { tbRegistrationRequestStore } from "../server/lib/tbRegistrationRequestStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
 
 function scriptUrl() {
@@ -52,7 +53,8 @@ function buildTbStatusPayload(payload, staffId) {
 }
 
 export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
-  loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore, now = new Date() } = {}) {
+  loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore,
+  tbRegistrationStore = tbRegistrationRequestStore, saveTbStatus = saveTbScreeningStatus, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
@@ -119,6 +121,34 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         submittedAt: saved.submittedAt, staffId: saved.staffId });
     }
 
+    if (workflow.id === "tb_registration" && tbRegistrationStore.environment === "qa") {
+      const saved = await tbRegistrationStore.createRequest({
+        staffId: tbGuard.staffId,
+        selectedType: payload?.fields?.registrationType,
+        now,
+      });
+      try {
+        await saveTbStatus({
+          db: tbGuard.db || getFirebaseAdminDb(),
+          payload: buildTbStatusPayload(payload, tbGuard.staffId),
+        });
+      } catch {
+        console.error("[TB_STATUS_WRITE] Firestore status update failed.");
+        return res.status(503).json({
+          status: "error",
+          success: false,
+          message: "신청 자료는 접수되었지만 결핵검진 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요.",
+        });
+      }
+      return res.status(200).json({
+        status: "success",
+        success: true,
+        requestId: saved.requestId,
+        submittedAt: saved.submittedAt,
+        staffId: tbGuard.staffId,
+      });
+    }
+
     if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {
       return res.status(503).json({ status: "error", success: false, message: "제출 저장소가 설정되지 않았습니다." });
     }
@@ -152,7 +182,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
     if (tbGuard) {
       try {
-        await saveTbScreeningStatus({
+        await saveTbStatus({
           db: getFirebaseAdminDb(),
           payload: buildTbStatusPayload(payload, tbGuard.staffId),
         });

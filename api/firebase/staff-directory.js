@@ -22,6 +22,7 @@ import { TRAINING_PHASE2_RESOURCES } from "../../server/lib/trainingCenterPhase2
 import { trainingEnvironment } from "../../server/lib/trainingDeployment.js";
 import { isQaInbodyAssignment, isQaInbodyUid, qaInbodyDirectoryIdentity,
   QA_INBODY_EMAIL, QA_INBODY_ROLE, QA_INBODY_UID } from "../../server/lib/qaInbodySynthetic.js";
+import { handleTbRegistrationAuditResource } from "../../server/lib/tbRegistrationAuditApi.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
 
@@ -163,6 +164,9 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
     }
     if (req.query?.resource === "submission-config") {
       return await handleSubmissionConfigResource(req, res);
+    }
+    if (req.query?.resource === "tb-registration-audit") {
+      return await handleTbRegistrationAuditResource(req, res);
     }
 
     if (["training-list", "training-detail"].includes(req.query?.resource)) {

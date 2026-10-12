@@ -180,6 +180,7 @@ test("TB registration checks Firestore window before signing or forwarding", asy
   let forwards = 0;
   const payload = { type: "tb_registration", fields: { name: "QA", registrationType: "학교 단체검진" } };
   const options = { destinationUrl, proxySecret, verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
+    tbRegistrationStore: { environment: "production" },
     postScript: async () => { forwards += 1; return { text: async () => JSON.stringify({ status: "error" }) }; } };
   const closed = response();
   await submitHandler(request(payload), closed, { ...options, loadSubmissionConfig: async () => ({ registration: {
@@ -195,6 +196,66 @@ test("TB registration checks Firestore window before signing or forwarding", asy
     enabled: true, startAt: "2026-09-11", endAt: "2026-09-14" } }) });
   assert.equal(open.statusCode, 200);
   assert.equal(forwards, 1);
+});
+
+test("QA TB registration writes the Firestore audit ledger and status without Apps Script", async () => {
+  let forwards = 0;
+  let ledgerWrites = 0;
+  let statusWrites = 0;
+  const payload = { type: "tb_registration", fields: { name: "QA", registrationType: "단체검진 신청" } };
+  const result = response();
+  await submitHandler(request(payload), result, {
+    destinationUrl,
+    proxySecret,
+    now: new Date("2026-09-12T03:00:00Z"),
+    verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
+    loadSubmissionConfig: async () => ({ registration: { enabled: true, startAt: "2026-09-11", endAt: "2026-09-14" } }),
+    tbRegistrationStore: {
+      environment: "qa",
+      createRequest: async ({ staffId, selectedType }) => {
+        ledgerWrites += 1;
+        assert.equal(staffId, "T022");
+        assert.equal(selectedType, "단체검진 신청");
+        return { requestId: "qa-ledger-1", submittedAt: "2026-09-12T03:00:00.000Z" };
+      },
+    },
+    saveTbStatus: async ({ payload: status }) => {
+      statusWrites += 1;
+      assert.equal(status.staffId, "T022");
+    },
+    postScript: async () => { forwards += 1; throw new Error("QA must not call Apps Script"); },
+  });
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.requestId, "qa-ledger-1");
+  assert.equal(ledgerWrites, 1);
+  assert.equal(statusWrites, 1);
+  assert.equal(forwards, 0);
+});
+
+test("Production TB registration preserves the legacy Sheet append path", async () => {
+  let forwards = 0;
+  let ledgerWrites = 0;
+  let statusWrites = 0;
+  const result = response();
+  await submitHandler(request({ type: "tb_registration", fields: { name: "QA", registrationType: "단체검진 신청" } }), result, {
+    destinationUrl,
+    proxySecret,
+    now: new Date("2026-09-12T03:00:00Z"),
+    verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
+    loadSubmissionConfig: async () => ({ registration: { enabled: true, startAt: "2026-09-11", endAt: "2026-09-14" } }),
+    tbRegistrationStore: { environment: "production", createRequest: async () => { ledgerWrites += 1; } },
+    saveTbStatus: async () => { statusWrites += 1; },
+    postScript: async () => {
+      forwards += 1;
+      return { text: async () => JSON.stringify({ status: "success", success: true }) };
+    },
+  });
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(forwards, 1);
+  assert.equal(statusWrites, 1);
+  assert.equal(ledgerWrites, 0);
 });
 
 test("anonymous student reply uses only fixed workflow and returns no storage destination", async () => {
