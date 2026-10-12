@@ -258,7 +258,7 @@ test("TB registration checks Firestore window before signing or forwarding", asy
   let forwards = 0;
   let ledgerWrites = 0;
   const payload = { type: "tb_registration", fields: { name: "QA", registrationType: "학교 단체검진" } };
-  const options = { destinationUrl, proxySecret, verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
+  const options = { destinationUrl, proxySecret, verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
     tbRegistrationStore: { environment: "production", createRequest: async () => {
       ledgerWrites += 1;
       return { requestId: "production-ledger-1", submittedAt: "2026-09-12T03:00:00.000Z" };
@@ -354,7 +354,7 @@ test("anonymous student reply uses only fixed workflow and returns no storage de
   const req = request({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, folderId: "injected" });
   req.headers["x-forwarded-for"] = "192.0.2.1";
   await submitHandler(req, result,
-    { destinationUrl, proxySecret, postScript: async (_url, init) => { const outbound = JSON.parse(JSON.parse(init.body).payloadJson);
+    { destinationUrl, proxySecret, environment: () => "production", postScript: async (_url, init) => { const outbound = JSON.parse(JSON.parse(init.body).payloadJson);
       assert.equal(outbound.type, "student-file"); assert.equal(outbound.folderId, undefined);
       return { text: async () => JSON.stringify({ status: "success", folderId: "private", fileUrl: "private", submittedAt: "now" }) }; } });
   assert.equal(result.statusCode, 200);

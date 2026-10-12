@@ -14,6 +14,7 @@ import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
 import { tbRegistrationRequestStore } from "../server/lib/tbRegistrationRequestStore.js";
 import { cprCertificateSubmissionStore } from "../server/lib/cprCertificateSubmissionStore.js";
 import { tbCertificateSubmissionStore } from "../server/lib/tbCertificateSubmissionStore.js";
+import { studentSubmissionAuditStore } from "../server/lib/studentSubmissionAuditStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
 
 function scriptUrl() {
@@ -57,9 +58,11 @@ function buildTbStatusPayload(payload, staffId) {
 export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
   qaCprFolderId = process.env.QA_CPR_DRIVE_FOLDER_ID,
   qaTbCertificateFolderId = process.env.QA_TB_CERTIFICATE_DRIVE_FOLDER_ID,
+  qaStudentReplyFolderId = process.env.QA_STUDENT_REPLY_DRIVE_FOLDER_ID,
   loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore,
   tbRegistrationStore = tbRegistrationRequestStore, cprCertificateStore = cprCertificateSubmissionStore,
   tbCertificateStore = tbCertificateSubmissionStore,
+  studentAuditStore = studentSubmissionAuditStore,
   saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
   environment = trainingEnvironment, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
@@ -170,6 +173,19 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     if (workflow.id === "student_tb_reply" && !visitor) {
       return res.status(503).json({ status: "error", success: false, message: "익명 제출 보호 설정을 확인해 주세요." });
     }
+    const studentEnvironment = workflow.id === "student_tb_reply" ? environment() : null;
+    if (workflow.id === "student_tb_reply" && !["qa", "production"].includes(studentEnvironment)) {
+      return res.status(403).json({ status: "error", success: false, message: "승인된 배포 환경에서만 제출할 수 있습니다." });
+    }
+    const qaStudentAudit = studentEnvironment === "qa";
+    if (qaStudentAudit && !qaStudentReplyFolderId) {
+      return res.status(503).json({ status: "error", success: false,
+        message: "QA 학생 증빙 저장소가 설정되지 않았습니다." });
+    }
+    if (qaStudentAudit && (String(payload.fields?.studentName || "").trim() !== "[QA] synthetic" ||
+      !String(payload.fileName || "").includes("QA"))) {
+      return res.status(403).json({ status: "error", success: false, message: "QA 합성 제출만 허용됩니다." });
+    }
     const cprEnvironment = workflow.id === "cpr" ? environment() : null;
     const cprAudit = workflow.id === "cpr" && ["qa", "production"].includes(cprEnvironment);
     const qaCprAudit = cprAudit && cprEnvironment === "qa";
@@ -188,9 +204,10 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
       : payload;
     const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, scriptPayload, {
-      firestoreAudit: cprAudit || tbCertificateAudit,
-      runtimeEnvironment: cprEnvironment || tbCertificateEnvironment || "",
-      qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : qaTbCertificateAudit ? qaTbCertificateFolderId : "",
+      firestoreAudit: cprAudit || tbCertificateAudit || qaStudentAudit,
+      runtimeEnvironment: cprEnvironment || tbCertificateEnvironment || studentEnvironment || "",
+      qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : qaTbCertificateAudit ? qaTbCertificateFolderId
+        : qaStudentAudit ? qaStudentReplyFolderId : "",
     }), proxySecret, { visitor });
     if (!envelope) {
       return res.status(503).json({ status: "error", success: false, message: "제출 보안 설정이 필요합니다." });
@@ -214,6 +231,20 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
     if (!isSuccessfulResponse(json)) {
       return res.status(200).json({ status: "error", success: false, message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." });
+    }
+    if (qaStudentAudit) {
+      if (!json.fileId) return res.status(502).json({ status: "error", success: false,
+        message: "QA 증빙 파일 ID를 확인할 수 없습니다." });
+      try {
+        await studentAuditStore.createQaRequest({ requestId: envelope.requestId, fields: payload.fields,
+          evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType }, now });
+      } catch {
+        console.error("[STUDENT_REPLY_QA_AUDIT_WRITE] Evidence stored but audit ledger write failed.");
+        return res.status(503).json({ status: "error", success: false,
+          message: "증빙 파일은 저장되었지만 QA 접수 이력을 기록하지 못했습니다. 관리자에게 문의해 주세요." });
+      }
+      return res.status(200).json({ status: "success", success: true, submittedAt: json.submittedAt,
+        submissionId: envelope.requestId });
     }
     if (tbGuard) {
       if (tbCertificateAudit) {

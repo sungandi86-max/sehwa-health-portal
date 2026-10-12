@@ -365,7 +365,7 @@ function verifySubmissionProxy_(request) {
       (request.visitor && !/^[A-Za-z0-9_-]{43}$/.test(request.visitor))) throw new Error("제출 인증에 실패했습니다.");
   const payload = JSON.parse(request.payloadJson);
   if (!payload || typeof payload !== "object" || Array.isArray(payload) || !payload.type) throw new Error("제출 형식이 올바르지 않습니다.");
-  const qaAuditRequest = (payload.type === "cpr" || payload.type === "tb") &&
+  const qaAuditRequest = (payload.type === "cpr" || payload.type === "tb" || payload.type === "student-file") &&
     payload.recordMode === "firestore" && payload.runtimeEnvironment === "qa";
   const secretKey = qaAuditRequest ? "QA_SUBMISSION_PROXY_SECRET" : "SUBMISSION_PROXY_SECRET";
   const secret = PropertiesService.getScriptProperties().getProperty(secretKey);
@@ -412,9 +412,12 @@ function preflightSubmission_(payload) {
   if (!payload || (payload.type !== "student-file" && !destinations[payload.type])) {
     throw new Error("지원하지 않는 제출 유형입니다.");
   }
-  const ss = getSpreadsheet_();
   if (payload.type === "student-file") {
-    const recordDestination = getSubmissionRecordDestination_(ss);
+    const qaFirestoreAudit = payload.recordMode === "firestore" && payload.runtimeEnvironment === "qa" &&
+      /^[A-Za-z0-9_-]{10,}$/.test(String(payload.qaEvidenceFolderId || "")) &&
+      payload.qaEvidenceFolderId !== STUDENT_FILE_DEFAULT_FOLDER_ID;
+    if (payload.recordMode && !qaFirestoreAudit) throw new Error("QA 학생 제출 저장소 구성이 올바르지 않습니다.");
+    const recordDestination = qaFirestoreAudit ? null : getSubmissionRecordDestination_(getSpreadsheet_());
     const fields = payload.fields;
     if (!fields || typeof fields !== "object" || Array.isArray(fields) ||
         ["grade", "classNumber", "studentNumber", "studentName"].some(function(key) { return !String(fields[key] || "").trim(); })) {
@@ -430,10 +433,12 @@ function preflightSubmission_(payload) {
     if (!payload.fileName || !payload.fileBase64 || !payload.fileMimeType) throw new Error("업로드 파일이 누락되었습니다.");
     const blob = Utilities.newBlob(Utilities.base64Decode(payload.fileBase64), payload.fileMimeType, payload.fileName);
     validateSubmissionBlob_(blob);
-    const folder = DriveApp.getFolderById(STUDENT_FILE_DEFAULT_FOLDER_ID);
+    const folder = DriveApp.getFolderById(qaFirestoreAudit ? payload.qaEvidenceFolderId : STUDENT_FILE_DEFAULT_FOLDER_ID);
     folder.getId();
-    return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details };
+    return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details,
+      firestoreAudit: qaFirestoreAudit };
   }
+  const ss = getSpreadsheet_();
   let destination = destinations[payload.type];
   const firestoreAudit = (payload.type === "cpr" || payload.type === "tb") && payload.recordMode === "firestore";
   const qaFirestoreAudit = firestoreAudit && payload.runtimeEnvironment === "qa" &&
@@ -492,7 +497,7 @@ function appendStudentFileSubmission_(payload, prepared, requestId) {
   const fileId = driveFile.getId();
   const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
 
-  appendSubmissionRecord_(prepared.recordDestination, {
+  if (!prepared.firestoreAudit) appendSubmissionRecord_(prepared.recordDestination, {
     "제출일시": now,
     "제출항목": submissionTitle,
     "구분": "student_tb_reply",
@@ -513,7 +518,8 @@ function appendStudentFileSubmission_(payload, prepared, requestId) {
     status: "success",
     success: true,
     result: "success",
-    submittedAt: now
+    submittedAt: now,
+    fileId: prepared.firestoreAudit ? fileId : undefined
   };
 }
 

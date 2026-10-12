@@ -78,7 +78,15 @@ export function buildScriptSubmission(workflow, payload, { firestoreAudit = fals
     result.runtimeEnvironment = runtimeEnvironment;
     result.qaEvidenceFolderId = qaEvidenceFolderId;
   }
-  if (workflow.id === "student_tb_reply") return { ...result, submissionType: "student-file" };
+  if (workflow.id === "student_tb_reply") {
+    const student = { ...result, submissionType: "student-file" };
+    if (firestoreAudit && runtimeEnvironment === "qa") {
+      student.recordMode = "firestore";
+      student.runtimeEnvironment = "qa";
+      student.qaEvidenceFolderId = qaEvidenceFolderId;
+    }
+    return student;
+  }
   return result;
 }
 

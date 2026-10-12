@@ -28,6 +28,7 @@ import { isQaTbCertificateAssignment, QA_TB_CERTIFICATE_EMAIL,
 import { handleTbRegistrationAuditResource } from "../../server/lib/tbRegistrationAuditApi.js";
 import { handleCprCertificateAuditResource } from "../../server/lib/cprCertificateAuditApi.js";
 import { handleTbCertificateAuditResource } from "../../server/lib/tbCertificateAuditApi.js";
+import { handleStudentSubmissionAuditResource } from "../../server/lib/studentSubmissionAuditApi.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
 
@@ -234,6 +235,9 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
     }
     if (req.query?.resource === "tb-certificate-audit") {
       return await handleTbCertificateAuditResource(req, res);
+    }
+    if (req.query?.resource === "student-submission-audit") {
+      return await handleStudentSubmissionAuditResource(req, res);
     }
 
     if (["training-list", "training-detail"].includes(req.query?.resource)) {
