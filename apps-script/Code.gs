@@ -365,19 +365,21 @@ function submissionProxyEqual_(left, right) {
 }
 
 function verifySubmissionProxy_(request) {
-  const secret = PropertiesService.getScriptProperties().getProperty("SUBMISSION_PROXY_SECRET");
-  if (!secret || Utilities.newBlob(secret).getBytes().length < 32) throw new Error("제출 보안 설정이 필요합니다.");
   if (request.version !== 1 || !Number.isSafeInteger(request.sentAt) || Math.abs(Date.now() - request.sentAt) > 120000 ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.requestId || "") ||
       typeof request.payloadJson !== "string" || typeof request.payloadHash !== "string" ||
       typeof request.signature !== "string" || typeof request.visitor !== "string" ||
       (request.visitor && !/^[A-Za-z0-9_-]{43}$/.test(request.visitor))) throw new Error("제출 인증에 실패했습니다.");
+  const payload = JSON.parse(request.payloadJson);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload) || !payload.type) throw new Error("제출 형식이 올바르지 않습니다.");
+  const qaCprRequest = payload.type === "cpr" && payload.recordMode === "firestore" && payload.runtimeEnvironment === "qa";
+  const secretKey = qaCprRequest ? "QA_SUBMISSION_PROXY_SECRET" : "SUBMISSION_PROXY_SECRET";
+  const secret = PropertiesService.getScriptProperties().getProperty(secretKey);
+  if (!secret || Utilities.newBlob(secret).getBytes().length < 32) throw new Error("제출 보안 설정이 필요합니다.");
   const actualHash = submissionProxyDigest_(request.payloadJson);
   const message = "v1\n" + request.sentAt + "\n" + request.requestId + "\n" + request.visitor + "\n" + request.payloadHash;
   if (!submissionProxyEqual_(actualHash, request.payloadHash) ||
       !submissionProxyEqual_(submissionProxySignature_(message, secret), request.signature)) throw new Error("제출 인증에 실패했습니다.");
-  const payload = JSON.parse(request.payloadJson);
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) || !payload.type) throw new Error("제출 형식이 올바르지 않습니다.");
   if (payload.type === "student-file" && !request.visitor) throw new Error("익명 제출 보호 설정이 필요합니다.");
   return payload;
 }
