@@ -73,7 +73,7 @@ export function buildScriptSubmission(workflow, payload, { firestoreAudit = fals
     fileBase64: workflow.acceptsFile ? payload.fileBase64 : null,
     fileMimeType: workflow.acceptsFile ? payload.fileMimeType : null,
   };
-  if (workflow.id === "cpr" && firestoreAudit) {
+  if (["cpr", "tb"].includes(workflow.id) && firestoreAudit) {
     result.recordMode = "firestore";
     result.runtimeEnvironment = runtimeEnvironment;
     result.qaEvidenceFolderId = qaEvidenceFolderId;

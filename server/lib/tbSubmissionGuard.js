@@ -2,6 +2,8 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { getAssignmentId, getBearerToken, readStaffDirectory } from "./staffDirectory.js";
 import { isQaInbodyAssignment, isQaInbodyUid, qaInbodyDirectoryIdentity, QA_INBODY_ROLE } from "./qaInbodySynthetic.js";
 import { isQaCprAssignment, isQaCprUid, qaCprIdentity, QA_CPR_ROLE } from "./qaCprSynthetic.js";
+import { isQaTbCertificateAssignment, isQaTbCertificateUid, qaTbCertificateIdentity,
+  QA_TB_CERTIFICATE_ROLE } from "./qaTbCertificateSynthetic.js";
 
 export const TB_SCREENING_TASK_ID = "tb-screening-2026";
 export const TB_COMPLETED_MESSAGE = "이미 결핵검진 완료가 확인되어 추가 신청할 수 없습니다.";
@@ -22,6 +24,7 @@ export function isCompletedTbStatus(statusData, staffId) {
 }
 
 export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodySynthetic = false, allowQaCprSynthetic = false,
+  allowQaTbCertificateSynthetic = false,
   auth = getFirebaseAdminAuth, database = getFirebaseAdminDb, directory = readStaffDirectory,
   context = process.env } = {}) {
   const idToken = getBearerToken(req);
@@ -35,15 +38,20 @@ export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodyS
   if (isQaCprUid(decodedToken.uid) && !allowQaCprSynthetic) {
     return { ok: false, status: 403, message: "이 제출 유형을 이용할 권한이 없습니다." };
   }
+  if (isQaTbCertificateUid(decodedToken.uid) && !allowQaTbCertificateSynthetic) {
+    return { ok: false, status: 403, message: "이 제출 유형을 이용할 권한이 없습니다." };
+  }
   try {
     const db = database();
-    const assignmentCollection = isQaCprUid(decodedToken.uid) ? "user_assignments_qa" : "user_assignments";
+    const assignmentCollection = (isQaCprUid(decodedToken.uid) || isQaTbCertificateUid(decodedToken.uid))
+      ? "user_assignments_qa" : "user_assignments";
     const snapshot = await db.collection(assignmentCollection).doc(getAssignmentId(decodedToken.uid)).get();
     const assignment = snapshot.exists ? snapshot.data() : null;
     const staffId = String(assignment?.staffId || "").trim();
     const roles = Array.isArray(assignment?.roles) ? assignment.roles : [];
-    if (assignment?.qaOnly === true || roles.includes(QA_INBODY_ROLE) || roles.includes(QA_CPR_ROLE)) {
-      if (!isQaInbodyUid(decodedToken.uid) && !isQaCprUid(decodedToken.uid)) {
+    if (assignment?.qaOnly === true || roles.includes(QA_INBODY_ROLE) || roles.includes(QA_CPR_ROLE)
+      || roles.includes(QA_TB_CERTIFICATE_ROLE)) {
+      if (!isQaInbodyUid(decodedToken.uid) && !isQaCprUid(decodedToken.uid) && !isQaTbCertificateUid(decodedToken.uid)) {
         return { ok: false, status: 403, message: "QA 전용 신청 권한이 없습니다." };
       }
     }
@@ -52,6 +60,13 @@ export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodyS
         return { ok: false, status: 403, message: "QA 전용 신청 권한이 없습니다." };
       }
       return { ok: true, db, staffId, roles: [QA_CPR_ROLE], qaCprSynthetic: true, identity: qaCprIdentity(assignment) };
+    }
+    if (isQaTbCertificateUid(decodedToken.uid)) {
+      if (!isQaTbCertificateAssignment(decodedToken.uid, assignment, context)) {
+        return { ok: false, status: 403, message: "QA 전용 신청 권한이 없습니다." };
+      }
+      return { ok: true, db, staffId, roles: [QA_TB_CERTIFICATE_ROLE], qaTbCertificateSynthetic: true,
+        identity: qaTbCertificateIdentity(assignment) };
     }
     if (isQaInbodyUid(decodedToken.uid)) {
       if (!isQaInbodyAssignment(decodedToken.uid, assignment, context)) {
@@ -71,16 +86,17 @@ export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodyS
   }
 }
 
-export async function verifyTbSubmissionAllowed(req) {
-  const identity = await verifyCurrentStaffSubmissionIdentity(req);
+export async function verifyTbSubmissionAllowed(req, options = {}) {
+  const identity = await verifyCurrentStaffSubmissionIdentity(req, options);
   if (!identity.ok) return identity;
   try {
     const { db, staffId, roles } = identity;
+    const statusCollection = identity.qaTbCertificateSynthetic ? "staff_submission_status_qa" : "staff_submission_status";
     const statusSnapshot = await db
-      .collection("staff_submission_status")
+      .collection(statusCollection)
       .doc(`${staffId}_${TB_SCREENING_TASK_ID}`)
       .get();
-    if (!statusSnapshot.exists) return { ok: true, staffId, roles, statusValue: "unknown" };
+    if (!statusSnapshot.exists) return { ...identity, ok: true, staffId, roles, statusValue: "unknown" };
 
     const statusData = statusSnapshot.data();
     const statusMatchesIdentity = statusData?.staffId === staffId && statusData?.taskId === TB_SCREENING_TASK_ID;
@@ -88,7 +104,8 @@ export async function verifyTbSubmissionAllowed(req) {
       return { ok: false, status: 409, message: TB_COMPLETED_MESSAGE };
     }
 
-    return { ok: true, staffId, roles, statusValue: statusMatchesIdentity ? statusData?.status || "unknown" : "unknown" };
+    return { ...identity, ok: true, staffId, roles,
+      statusValue: statusMatchesIdentity ? statusData?.status || "unknown" : "unknown" };
   } catch {
     return { ok: false, status: 503, message: "결핵검진 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }

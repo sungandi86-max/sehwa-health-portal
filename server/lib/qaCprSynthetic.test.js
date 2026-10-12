@@ -98,5 +98,5 @@ test("CPR synthetic switch is visible only behind the fixed QA query gate", () =
 
 test("Apps Script isolates the QA CPR proxy secret from Production submissions", () => {
   const source = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
-  assert.match(source, /qaCprRequest \? "QA_SUBMISSION_PROXY_SECRET" : "SUBMISSION_PROXY_SECRET"/);
+  assert.match(source, /qaAuditRequest \? "QA_SUBMISSION_PROXY_SECRET" : "SUBMISSION_PROXY_SECRET"/);
 });

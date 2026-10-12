@@ -13,6 +13,7 @@ import { assertRegistrationOpen, readSubmissionConfig, SubmissionConfigError } f
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
 import { tbRegistrationRequestStore } from "../server/lib/tbRegistrationRequestStore.js";
 import { cprCertificateSubmissionStore } from "../server/lib/cprCertificateSubmissionStore.js";
+import { tbCertificateSubmissionStore } from "../server/lib/tbCertificateSubmissionStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
 
 function scriptUrl() {
@@ -55,8 +56,10 @@ function buildTbStatusPayload(payload, staffId) {
 
 export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
   qaCprFolderId = process.env.QA_CPR_DRIVE_FOLDER_ID,
+  qaTbCertificateFolderId = process.env.QA_TB_CERTIFICATE_DRIVE_FOLDER_ID,
   loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore,
   tbRegistrationStore = tbRegistrationRequestStore, cprCertificateStore = cprCertificateSubmissionStore,
+  tbCertificateStore = tbCertificateSubmissionStore,
   saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
   environment = trainingEnvironment, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
@@ -92,7 +95,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     let tbGuard = null;
     let cprIdentity = null;
     if (workflow.authPolicy === "current_staff_tb_guard") {
-      tbGuard = await verifyTb(req);
+      tbGuard = await verifyTb(req, { allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa" });
       if (!tbGuard.ok) {
         return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
       }
@@ -107,8 +110,10 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     const identity = tbGuard || cprIdentity;
     const qaInbodyOnly = workflow.id === "inbody" && inbodyStore.backend === "firestore" && identity?.qaSynthetic === true;
     const qaCprOnly = workflow.id === "cpr" && environment() === "qa" && identity?.qaCprSynthetic === true;
+    const qaTbCertificateOnly = workflow.id === "tb" && environment() === "qa" && identity?.qaTbCertificateSynthetic === true;
     if (workflow.requiresCanonicalStaffId && (!identity?.staffId ||
-      (!qaInbodyOnly && !qaCprOnly && !identity.roles?.some((role) => workflow.allowedRoles.includes(role))))) {
+      (!qaInbodyOnly && !qaCprOnly && !qaTbCertificateOnly
+        && !identity.roles?.some((role) => workflow.allowedRoles.includes(role))))) {
       return res.status(403).json({ status: "error", success: false, message: "이 제출 유형을 이용할 권한이 없습니다." });
     }
     if (workflow.id === "tb_registration") {
@@ -171,11 +176,19 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     if (qaCprAudit && !qaCprFolderId) {
       return res.status(503).json({ status: "error", success: false, message: "QA CPR 증빙 저장소가 설정되지 않았습니다." });
     }
-    const scriptPayload = qaCprOnly
+    const tbCertificateEnvironment = workflow.id === "tb" ? environment() : null;
+    const qaTbCertificateAudit = workflow.id === "tb" && tbCertificateEnvironment === "qa";
+    if (qaTbCertificateAudit && !qaTbCertificateFolderId) {
+      return res.status(503).json({ status: "error", success: false,
+        message: "QA 결핵검진 확인증 증빙 저장소가 설정되지 않았습니다." });
+    }
+    const scriptPayload = (qaCprOnly || qaTbCertificateOnly)
       ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
       : payload;
     const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, scriptPayload, {
-      firestoreAudit: cprAudit, runtimeEnvironment: cprEnvironment || "", qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : "",
+      firestoreAudit: cprAudit || qaTbCertificateAudit,
+      runtimeEnvironment: cprEnvironment || tbCertificateEnvironment || "",
+      qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : qaTbCertificateAudit ? qaTbCertificateFolderId : "",
     }), proxySecret, { visitor });
     if (!envelope) {
       return res.status(503).json({ status: "error", success: false, message: "제출 보안 설정이 필요합니다." });
@@ -201,10 +214,22 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       return res.status(200).json({ status: "error", success: false, message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." });
     }
     if (tbGuard) {
+      if (qaTbCertificateAudit) {
+        try {
+          await tbCertificateStore.createRequest({ staffId: tbGuard.staffId, submittedAt: now,
+            checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
+            evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType } });
+        } catch {
+          console.error("[TB_CERTIFICATE_AUDIT_WRITE] Firestore audit write failed.");
+          return res.status(503).json({ status: "error", success: false,
+            message: "확인증 파일은 저장되었지만 접수 이력을 기록하지 못했습니다. 보건실에 문의해 주세요." });
+        }
+      }
       try {
         await saveTbStatus({
-          db: getFirebaseAdminDb(),
+          db: tbGuard.db || getFirebaseAdminDb(),
           payload: buildTbStatusPayload(payload, tbGuard.staffId),
+          collectionName: qaTbCertificateAudit ? "staff_submission_status_qa" : undefined,
         });
       } catch {
         console.error("[TB_STATUS_WRITE] Firestore status update failed.");
@@ -214,7 +239,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
           message: "신청 자료는 접수되었지만 결핵검진 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요.",
         });
       }
-      json = { ...json, staffId: tbGuard.staffId };
+      json = qaTbCertificateAudit
+        ? { status: "success", success: true, staffId: tbGuard.staffId }
+        : { ...json, staffId: tbGuard.staffId };
     }
     if (workflow.id === "cpr" && cprIdentity) {
       if (cprAudit) {

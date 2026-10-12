@@ -204,7 +204,7 @@ test("Production CPR writes Drive evidence to the Production audit ledger withou
 
 test("Apps Script skips CPR response Sheet append in QA and Production", () => {
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
-  assert.match(code, /payload\.type === "cpr" && payload\.recordMode === "firestore"/);
+  assert.match(code, /\(payload\.type === "cpr" \|\| payload\.type === "tb"\) && payload\.recordMode === "firestore"/);
   assert.match(code, /if \(!prepared\.firestoreAudit\) \{\s*appendSubmitRow_/);
   assert.match(code, /payload\.runtimeEnvironment === "qa"/);
   assert.match(code, /payload\.runtimeEnvironment === "production"/);

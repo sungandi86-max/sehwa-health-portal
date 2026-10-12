@@ -370,8 +370,9 @@ function verifySubmissionProxy_(request) {
       (request.visitor && !/^[A-Za-z0-9_-]{43}$/.test(request.visitor))) throw new Error("제출 인증에 실패했습니다.");
   const payload = JSON.parse(request.payloadJson);
   if (!payload || typeof payload !== "object" || Array.isArray(payload) || !payload.type) throw new Error("제출 형식이 올바르지 않습니다.");
-  const qaCprRequest = payload.type === "cpr" && payload.recordMode === "firestore" && payload.runtimeEnvironment === "qa";
-  const secretKey = qaCprRequest ? "QA_SUBMISSION_PROXY_SECRET" : "SUBMISSION_PROXY_SECRET";
+  const qaAuditRequest = (payload.type === "cpr" || payload.type === "tb") &&
+    payload.recordMode === "firestore" && payload.runtimeEnvironment === "qa";
+  const secretKey = qaAuditRequest ? "QA_SUBMISSION_PROXY_SECRET" : "SUBMISSION_PROXY_SECRET";
   const secret = PropertiesService.getScriptProperties().getProperty(secretKey);
   if (!secret || Utilities.newBlob(secret).getBytes().length < 32) throw new Error("제출 보안 설정이 필요합니다.");
   const actualHash = submissionProxyDigest_(request.payloadJson);
@@ -439,12 +440,13 @@ function preflightSubmission_(payload) {
     return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details };
   }
   let destination = destinations[payload.type];
-  const firestoreAudit = payload.type === "cpr" && payload.recordMode === "firestore";
+  const firestoreAudit = (payload.type === "cpr" || payload.type === "tb") && payload.recordMode === "firestore";
   const qaFirestoreAudit = firestoreAudit && payload.runtimeEnvironment === "qa" &&
     /^[A-Za-z0-9_-]{10,}$/.test(String(payload.qaEvidenceFolderId || ""));
-  const productionFirestoreAudit = firestoreAudit && payload.runtimeEnvironment === "production" && !payload.qaEvidenceFolderId;
+  const productionFirestoreAudit = payload.type === "cpr" && firestoreAudit &&
+    payload.runtimeEnvironment === "production" && !payload.qaEvidenceFolderId;
   if (payload.type === "cpr" && !firestoreAudit) throw new Error("CPR 감사 원장 구성이 올바르지 않습니다.");
-  if (firestoreAudit && !qaFirestoreAudit && !productionFirestoreAudit) throw new Error("CPR 저장소 구성이 올바르지 않습니다.");
+  if (firestoreAudit && !qaFirestoreAudit && !productionFirestoreAudit) throw new Error("감사 원장 저장소 구성이 올바르지 않습니다.");
   if (qaFirestoreAudit) destination = { folderId: payload.qaEvidenceFolderId };
   const sheet = firestoreAudit ? null : getSubmitSheet_(ss, destination.sheetName);
   if (!firestoreAudit) {
