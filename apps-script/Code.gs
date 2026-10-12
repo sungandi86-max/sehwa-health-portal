@@ -313,7 +313,9 @@ function doPost(e) {
       fileId = driveFile.getId();
     }
     const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
-    appendSubmitRow_(prepared.sheet, prepared.sheetName, payload.fields, now, payload.fileName || "", fileLink);
+    if (!prepared.firestoreAudit) {
+      appendSubmitRow_(prepared.sheet, prepared.sheetName, payload.fields, now, payload.fileName || "", fileLink);
+    }
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       fileId: fileId,
@@ -437,12 +439,15 @@ function preflightSubmission_(payload) {
     return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details };
   }
   const destination = destinations[payload.type];
-  const sheet = getSubmitSheet_(ss, destination.sheetName);
-  const expectedHeaders = SUBMISSION_RESPONSE_HEADERS[payload.type];
-  const actualHeaders = sheet.getRange(1, 1, 1, expectedHeaders.length).getDisplayValues()[0]
-    .map(function(header) { return String(header || "").trim(); });
-  if (expectedHeaders.some(function(header, index) { return actualHeaders[index] !== header; })) {
-    throw new Error("제출 응답 시트 헤더가 올바르지 않습니다.");
+  const firestoreAudit = payload.type === "cpr" && payload.recordMode === "firestore";
+  const sheet = firestoreAudit ? null : getSubmitSheet_(ss, destination.sheetName);
+  if (!firestoreAudit) {
+    const expectedHeaders = SUBMISSION_RESPONSE_HEADERS[payload.type];
+    const actualHeaders = sheet.getRange(1, 1, 1, expectedHeaders.length).getDisplayValues()[0]
+      .map(function(header) { return String(header || "").trim(); });
+    if (expectedHeaders.some(function(header, index) { return actualHeaders[index] !== header; })) {
+      throw new Error("제출 응답 시트 헤더가 올바르지 않습니다.");
+    }
   }
   if (!payload.fields || typeof payload.fields !== "object" || Array.isArray(payload.fields) ||
       (destination.folderId ? (!payload.fileBase64 || !payload.fileName || !payload.fileMimeType) :
@@ -463,7 +468,8 @@ function preflightSubmission_(payload) {
     folder = DriveApp.getFolderById(destination.folderId);
     folder.getId();
   }
-  return { kind: "standard", sheetName: destination.sheetName, sheet: sheet, folder: folder, blob: blob };
+  return { kind: "standard", sheetName: destination.sheetName, sheet: sheet, folder: folder, blob: blob,
+    firestoreAudit: firestoreAudit };
 }
 
 function safeSubmissionCell_(value) {

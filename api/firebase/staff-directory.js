@@ -23,6 +23,7 @@ import { trainingEnvironment } from "../../server/lib/trainingDeployment.js";
 import { isQaInbodyAssignment, isQaInbodyUid, qaInbodyDirectoryIdentity,
   QA_INBODY_EMAIL, QA_INBODY_ROLE, QA_INBODY_UID } from "../../server/lib/qaInbodySynthetic.js";
 import { handleTbRegistrationAuditResource } from "../../server/lib/tbRegistrationAuditApi.js";
+import { handleCprCertificateAuditResource } from "../../server/lib/cprCertificateAuditApi.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
 
@@ -167,6 +168,9 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
     }
     if (req.query?.resource === "tb-registration-audit") {
       return await handleTbRegistrationAuditResource(req, res);
+    }
+    if (req.query?.resource === "cpr-certificate-audit") {
+      return await handleCprCertificateAuditResource(req, res);
     }
 
     if (["training-list", "training-detail"].includes(req.query?.resource)) {

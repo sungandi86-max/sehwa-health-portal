@@ -12,6 +12,7 @@ import { buildSubmissionProxyEnvelope, submissionVisitor } from "../server/lib/s
 import { assertRegistrationOpen, readSubmissionConfig, SubmissionConfigError } from "../server/lib/submissionConfig.js";
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
 import { tbRegistrationRequestStore } from "../server/lib/tbRegistrationRequestStore.js";
+import { cprCertificateSubmissionStore } from "../server/lib/cprCertificateSubmissionStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
 
 function scriptUrl() {
@@ -54,7 +55,9 @@ function buildTbStatusPayload(payload, staffId) {
 
 export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
   loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore,
-  tbRegistrationStore = tbRegistrationRequestStore, saveTbStatus = saveTbScreeningStatus, now = new Date() } = {}) {
+  tbRegistrationStore = tbRegistrationRequestStore, cprCertificateStore = cprCertificateSubmissionStore,
+  saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
+  environment = trainingEnvironment, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
@@ -157,7 +160,8 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     if (workflow.id === "student_tb_reply" && !visitor) {
       return res.status(503).json({ status: "error", success: false, message: "익명 제출 보호 설정을 확인해 주세요." });
     }
-    const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, payload), proxySecret, { visitor });
+    const qaCprAudit = workflow.id === "cpr" && environment() === "qa";
+    const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, payload, { firestoreAudit: qaCprAudit }), proxySecret, { visitor });
     if (!envelope) {
       return res.status(503).json({ status: "error", success: false, message: "제출 보안 설정이 필요합니다." });
     }
@@ -198,8 +202,23 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       json = { ...json, staffId: tbGuard.staffId };
     }
     if (workflow.id === "cpr" && cprIdentity) {
+      if (qaCprAudit) {
+        try {
+          await cprCertificateStore.createRequest({
+            staffId: cprIdentity.staffId,
+            submittedAt: now,
+            completionDate: payload?.fields?.completionDate,
+            institution: payload?.fields?.institution,
+            evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType },
+          });
+        } catch {
+          console.error("[CPR_AUDIT_WRITE] Firestore audit write failed.");
+          return res.status(503).json({ status: "error", success: false,
+            message: "이수증 파일은 저장되었지만 접수 이력을 기록하지 못했습니다. 보건실에 문의해 주세요." });
+        }
+      }
       try {
-        await saveCprTrainingStatus({
+        await saveCprStatus({
           db: cprIdentity.db,
           payload: buildCprExternalSubmissionStatus({
             staffId: cprIdentity.staffId,
@@ -211,7 +230,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         console.error("[CPR_STATUS_WRITE] Firestore status update failed.");
         return res.status(503).json({ status: "error", success: false, message: "이수증은 접수되었지만 CPR 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요." });
       }
-      json = { ...json, staffId: cprIdentity.staffId };
+      json = qaCprAudit
+        ? { status: "success", success: true, staffId: cprIdentity.staffId }
+        : { ...json, staffId: cprIdentity.staffId };
     }
     if (workflow.id === "inbody" && cprIdentity) json = { ...json, staffId: cprIdentity.staffId };
     if (workflow.id === "student_tb_reply") {

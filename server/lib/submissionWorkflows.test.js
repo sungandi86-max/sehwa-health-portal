@@ -61,6 +61,13 @@ test("server-owned payload strips destination and validates file contract", () =
   assert.equal(validateSubmissionPayload(SUBMISSION_WORKFLOWS.inbody, { type: "inbody", fields: { name: "QA", dept: "QA" } }).ok, false);
 });
 
+test("QA CPR payload requests Drive-only storage while Production keeps the Sheet path", () => {
+  const qa = buildScriptSubmission(SUBMISSION_WORKFLOWS.cpr, { ...file, type: "cpr" }, { firestoreAudit: true });
+  const production = buildScriptSubmission(SUBMISSION_WORKFLOWS.cpr, { ...file, type: "cpr" });
+  assert.equal(qa.recordMode, "firestore");
+  assert.equal("recordMode" in production, false);
+});
+
 test("server accepts a 3MiB PDF and rejects one byte over before forwarding", async () => {
   const pdf = Buffer.alloc(3 * 1024 * 1024);
   pdf.write("%PDF-", 0, "ascii");
@@ -133,6 +140,60 @@ test("authorized CPR and TB use the canonical server workflow", async () => {
     assert.equal(item.sheetName, undefined);
     assert.equal(item.folderId, undefined);
   }
+});
+
+test("QA CPR writes Drive evidence to Firestore audit and status without a Sheet record", async () => {
+  let forwarded;
+  let auditWrites = 0;
+  let statusWrites = 0;
+  const result = response();
+  await submitHandler(request({ ...file, type: "cpr", fields: { ...file.fields, institution: "QA fixture" } }), result, {
+    destinationUrl, proxySecret, now: new Date("2026-10-12T03:00:00Z"),
+    environment: () => "qa",
+    verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
+    cprCertificateStore: { environment: "qa", createRequest: async (input) => {
+      auditWrites += 1;
+      assert.equal(input.staffId, "T022");
+      assert.equal(input.evidenceFile.fileId, "qa-drive-file");
+      assert.equal(input.evidenceFile.mimeType, "image/png");
+      return { submissionId: "qa-cpr-audit-1" };
+    } },
+    postScript: async (_url, init) => {
+      forwarded = JSON.parse(JSON.parse(init.body).payloadJson);
+      return { text: async () => JSON.stringify({ status: "success", fileId: "qa-drive-file", fileUrl: "private" }) };
+    },
+    saveCprStatus: async ({ payload }) => { statusWrites += 1; assert.equal(payload.staffId, "T022"); },
+  });
+  assert.equal(result.statusCode, 200);
+  assert.equal(forwarded.recordMode, "firestore");
+  assert.equal(auditWrites, 1);
+  assert.equal(result.body.fileId, undefined);
+  assert.equal(result.body.fileUrl, undefined);
+  assert.equal(statusWrites, 1);
+});
+
+test("Production CPR preserves the existing Sheet response contract", async () => {
+  const result = response();
+  await submitHandler(request({ ...file, type: "cpr" }), result, {
+    destinationUrl, proxySecret,
+    environment: () => "production",
+    verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
+    postScript: async () => ({ text: async () => JSON.stringify({
+      status: "success", fileId: "production-drive-file", fileUrl: "private",
+    }) }),
+    saveCprStatus: async () => {},
+  });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.fileId, "production-drive-file");
+  assert.equal(result.body.fileUrl, "private");
+  assert.equal(result.body.staffId, "T022");
+});
+
+test("Apps Script skips only the QA CPR response Sheet append", () => {
+  const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
+  assert.match(code, /payload\.type === "cpr" && payload\.recordMode === "firestore"/);
+  assert.match(code, /if \(!prepared\.firestoreAudit\) \{\s*appendSubmitRow_/);
+  assert.match(code, /cpr: \{ sheetName: "응답_심폐소생술이수증"/);
 });
 
 test("role mismatch rejects and authorized staff cannot override destinations", async () => {

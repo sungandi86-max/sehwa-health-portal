@@ -65,7 +65,7 @@ export function validateSubmissionPayload(workflow, payload) {
   return { ok: true };
 }
 
-export function buildScriptSubmission(workflow, payload) {
+export function buildScriptSubmission(workflow, payload, { firestoreAudit = false } = {}) {
   const result = {
     type: workflow.id === "student_tb_reply" ? "student-file" : workflow.id,
     fields: payload.fields,
@@ -73,6 +73,7 @@ export function buildScriptSubmission(workflow, payload) {
     fileBase64: workflow.acceptsFile ? payload.fileBase64 : null,
     fileMimeType: workflow.acceptsFile ? payload.fileMimeType : null,
   };
+  if (workflow.id === "cpr" && firestoreAudit) result.recordMode = "firestore";
   if (workflow.id === "student_tb_reply") return { ...result, submissionType: "student-file" };
   return result;
 }
