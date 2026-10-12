@@ -11,6 +11,7 @@ import { buildScriptSubmission, resolveSubmissionWorkflow, validateSubmissionPay
 import { buildSubmissionProxyEnvelope, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
 import { assertRegistrationOpen, readSubmissionConfig, SubmissionConfigError } from "../server/lib/submissionConfig.js";
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
+import { tbRegistrationAuditStore, TbRegistrationAuditError } from "../server/lib/tbRegistrationAuditStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
 
 function scriptUrl() {
@@ -52,7 +53,8 @@ function buildTbStatusPayload(payload, staffId) {
 }
 
 export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
-  loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore, now = new Date() } = {}) {
+  loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore,
+  tbAuditStore = tbRegistrationAuditStore, deploymentEnvironment = trainingEnvironment(), now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
@@ -108,6 +110,23 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         return res.status(error instanceof SubmissionConfigError ? 409 : 503).json({
           status: "error", success: false, message: error instanceof SubmissionConfigError ? error.message : "단체검진 신청 설정을 확인할 수 없습니다.",
         });
+      }
+    }
+
+    if (workflow.id === "tb_registration" && !["qa", "production"].includes(deploymentEnvironment)) {
+      return res.status(403).json({ status: "error", success: false, message: "승인된 QA 배포에서만 신청할 수 있습니다." });
+    }
+    if (workflow.id === "tb_registration" && deploymentEnvironment === "qa") {
+      try {
+        const saved = await tbAuditStore.createQaRequest({ staffId: tbGuard.staffId, identity: tbGuard.identity,
+          registrationType: payload.fields?.registrationType, now });
+        return res.status(200).json({ status: "success", success: true, requestId: saved.requestId,
+          submittedAt: saved.submittedAt, staffId: saved.staffId });
+      } catch (error) {
+        if (error instanceof TbRegistrationAuditError) {
+          return res.status(error.status).json({ status: "error", success: false, message: error.message });
+        }
+        throw error;
       }
     }
 

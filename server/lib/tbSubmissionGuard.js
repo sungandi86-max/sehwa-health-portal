@@ -1,6 +1,7 @@
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { getAssignmentId, getBearerToken, readStaffDirectory } from "./staffDirectory.js";
 import { isQaInbodyAssignment, isQaInbodyUid, qaInbodyDirectoryIdentity, QA_INBODY_ROLE } from "./qaInbodySynthetic.js";
+import { trainingEnvironment } from "./trainingDeployment.js";
 
 export const TB_SCREENING_TASK_ID = "tb-screening-2026";
 export const TB_COMPLETED_MESSAGE = "이미 결핵검진 완료가 확인되어 추가 신청할 수 없습니다.";
@@ -60,16 +61,18 @@ export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodyS
   }
 }
 
-export async function verifyTbSubmissionAllowed(req) {
-  const identity = await verifyCurrentStaffSubmissionIdentity(req);
+export async function verifyTbSubmissionAllowed(req, { context = process.env,
+  verifyIdentity = verifyCurrentStaffSubmissionIdentity } = {}) {
+  const identity = await verifyIdentity(req);
   if (!identity.ok) return identity;
   try {
     const { db, staffId, roles } = identity;
+    const statusCollection = trainingEnvironment(context) === "qa" ? "staff_submission_status_qa" : "staff_submission_status";
     const statusSnapshot = await db
-      .collection("staff_submission_status")
+      .collection(statusCollection)
       .doc(`${staffId}_${TB_SCREENING_TASK_ID}`)
       .get();
-    if (!statusSnapshot.exists) return { ok: true, staffId, roles, statusValue: "unknown" };
+    if (!statusSnapshot.exists) return { ok: true, staffId, roles, identity: identity.identity, statusValue: "unknown" };
 
     const statusData = statusSnapshot.data();
     const statusMatchesIdentity = statusData?.staffId === staffId && statusData?.taskId === TB_SCREENING_TASK_ID;
@@ -77,7 +80,8 @@ export async function verifyTbSubmissionAllowed(req) {
       return { ok: false, status: 409, message: TB_COMPLETED_MESSAGE };
     }
 
-    return { ok: true, staffId, roles, statusValue: statusMatchesIdentity ? statusData?.status || "unknown" : "unknown" };
+    return { ok: true, staffId, roles, identity: identity.identity,
+      statusValue: statusMatchesIdentity ? statusData?.status || "unknown" : "unknown" };
   } catch {
     return { ok: false, status: 503, message: "결핵검진 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }

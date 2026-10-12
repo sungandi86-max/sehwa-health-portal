@@ -2,6 +2,7 @@ import fetch from "node-fetch";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 import { readRoadmap } from "../server/lib/portalRoadmap.js";
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
+import { tbRegistrationAuditStore } from "../server/lib/tbRegistrationAuditStore.js";
 import { QA_INBODY_STAFF_ID } from "../server/lib/qaInbodySynthetic.js";
 
 const CURRENT_SCHOOL_YEAR = 2026;
@@ -435,7 +436,8 @@ async function postToAppsScript(payload, scriptUrl, res, transform) {
   }
 }
 
-export default async function handler(req, res, { verifyAccess = getVerifiedStudentCareAccess, inbodyStore = inbodyRequestStore } = {}) {
+export default async function handler(req, res, { verifyAccess = getVerifiedStudentCareAccess, inbodyStore = inbodyRequestStore,
+  tbAuditStore = tbRegistrationAuditStore } = {}) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
@@ -447,6 +449,21 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
 
   const params = await getRequestParams(req);
   const token = getBearerToken(req);
+  if (params.action === "getTbRegistrationAudit") {
+    try {
+      const access = await verifyAccess(req);
+      if (!access.ok) return jsonError(res, access.status, access.message);
+      if (!isAdminAssignment(access.assignment)) return jsonError(res, 403, "관리자 권한이 없습니다.");
+      if (tbAuditStore.environment !== "qa") return jsonError(res, 403, "QA 감사 원장만 조회할 수 있습니다.");
+      const requests = await tbAuditStore.listQaRequests();
+      return res.status(200).json({ success: true, result: "success", source: "firestore", environment: "qa",
+        totalCount: requests.length, items: requests.map(({ requestId, staffId, submittedAt, selectedType, status, source }) =>
+          ({ requestId, staffId, submittedAt, selectedType, status, source })) });
+    } catch (error) {
+      console.error("[TB_AUDIT_ADMIN_READ_FAILED]", { name: error?.name || "Error" });
+      return jsonError(res, isFirebaseAuthenticationError(error) ? 401 : 503, "TB 접수 감사 원장을 확인할 수 없습니다.");
+    }
+  }
   if (params.action === "getInbodyRequests") {
     try {
       const access = await verifyAccess(req);
