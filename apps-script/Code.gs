@@ -431,8 +431,11 @@ function preflightSubmission_(payload) {
     const qaFirestoreAudit = payload.recordMode === "firestore" && payload.runtimeEnvironment === "qa" &&
       /^[A-Za-z0-9_-]{10,}$/.test(String(payload.qaEvidenceFolderId || "")) &&
       payload.qaEvidenceFolderId !== STUDENT_FILE_DEFAULT_FOLDER_ID;
-    if (payload.recordMode && !qaFirestoreAudit) throw new Error("QA 학생 제출 저장소 구성이 올바르지 않습니다.");
-    const recordDestination = qaFirestoreAudit ? null : getSubmissionRecordDestination_(getSpreadsheet_());
+    const productionFirestoreAudit = payload.recordMode === "firestore" &&
+      payload.runtimeEnvironment === "production" && !payload.qaEvidenceFolderId;
+    const firestoreAudit = qaFirestoreAudit || productionFirestoreAudit;
+    if (payload.recordMode && !firestoreAudit) throw new Error("학생 제출 감사 원장 구성이 올바르지 않습니다.");
+    const recordDestination = firestoreAudit ? null : getSubmissionRecordDestination_(getSpreadsheet_());
     const fields = payload.fields;
     if (!fields || typeof fields !== "object" || Array.isArray(fields) ||
         ["grade", "classNumber", "studentNumber", "studentName"].some(function(key) { return !String(fields[key] || "").trim(); })) {
@@ -452,11 +455,12 @@ function preflightSubmission_(payload) {
     folder.getId();
     let existingEvidence = null;
     let evidenceName = "";
-    if (qaFirestoreAudit) {
-      if (!/^QA-STUDENT-TB-[a-f0-9]{32}$/.test(String(payload.qaSubmissionId || "")) ||
+    if (firestoreAudit) {
+      const expectedPrefix = qaFirestoreAudit ? "QA-STUDENT-TB-" : "PROD-STUDENT-TB-";
+      if (!new RegExp("^" + expectedPrefix + "[a-f0-9]{32}$").test(String(payload.qaSubmissionId || "")) ||
           !/^[a-f0-9]{64}$/.test(String(payload.qaRequestFingerprint || "")) ||
-          payload.qaSubmissionId !== "QA-STUDENT-TB-" + payload.qaRequestFingerprint.slice(0, 32)) {
-        throw new Error("QA 제출 식별자가 올바르지 않습니다.");
+          payload.qaSubmissionId !== expectedPrefix + payload.qaRequestFingerprint.slice(0, 32)) {
+        throw new Error("제출 식별자가 올바르지 않습니다.");
       }
       const suffix = payload.fileMimeType === "application/pdf" ? ".pdf" :
         payload.fileMimeType === "image/png" ? ".png" : ".jpg";
@@ -465,11 +469,11 @@ function preflightSubmission_(payload) {
       if (matches.hasNext()) {
         existingEvidence = matches.next();
         if (matches.hasNext() || existingEvidence.getMimeType() !== payload.fileMimeType ||
-            existingEvidence.getSize() !== blob.getBytes().length) throw new Error("QA 증빙 재시도 충돌입니다.");
+            existingEvidence.getSize() !== blob.getBytes().length) throw new Error("증빙 재시도 충돌입니다.");
       }
     }
     return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details,
-      firestoreAudit: qaFirestoreAudit, existingEvidence: existingEvidence, evidenceName: evidenceName };
+      firestoreAudit: firestoreAudit, existingEvidence: existingEvidence, evidenceName: evidenceName };
   }
   const ss = getSpreadsheet_();
   let destination = destinations[payload.type];
