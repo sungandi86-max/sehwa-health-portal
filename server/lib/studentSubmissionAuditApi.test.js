@@ -12,13 +12,17 @@ test("QA admin audit read returns only bounded metadata without student identity
     store: { environment: "qa", listRequests: async () => [{
       submissionId: "QA-1", submittedAt: "2026-10-12T00:00:00Z", submissionType: "student_tb_reply",
       source: "qa_legacy_fixture", status: "manual_review", matchStatus: "unmatched", manualReview: true,
-      originalRowNumber: null, studentIdentity: { name: "SECRET" }, originalFields: { "학생명": "SECRET" },
+      originalRowNumber: 2, originalRowFingerprint: "fingerprint-fixture", canonicalStudentKey: null,
+      studentIdentity: { name: "SECRET" }, originalFields: { "학생명": "SECRET" },
       evidenceFiles: [{ fileId: "QA-FILE", originalUrl: "https://drive.google.com/secret", mimeType: "application/pdf",
         lookupStatus: "synthetic_metadata_only" }],
     }] },
   });
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.body.summary, { total: 1, manualReview: 1 });
+  assert.equal(res.body.items[0].hasOriginalRowFingerprint, true);
+  assert.equal(res.body.items[0].hasCanonicalStudentKey, false);
+  assert.equal(res.body.items[0].originalRowFingerprint, undefined);
   assert.equal(JSON.stringify(res.body).includes("SECRET"), false);
   assert.equal(JSON.stringify(res.body).includes("drive.google.com"), false);
 });

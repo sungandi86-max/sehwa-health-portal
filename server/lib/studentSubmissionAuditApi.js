@@ -19,6 +19,8 @@ export async function handleStudentSubmissionAuditResource(req, res, {
     signedPath: record.signedPath === true, legacy: record.legacy === true,
     matchStatus: record.matchStatus, manualReview: record.manualReview,
     originalRowNumber: record.originalRowNumber,
+    hasOriginalRowFingerprint: Boolean(record.originalRowFingerprint),
+    hasCanonicalStudentKey: Boolean(record.canonicalStudentKey),
     evidence: (record.evidenceFiles || []).map((file) => ({
       fileId: file.fileId, mimeType: file.mimeType, lookupStatus: file.lookupStatus,
     })),

@@ -63,11 +63,10 @@ Relevant tabs:
 - CPR 운영 상태는 Firestore `staff_submission_status/{staffId}_cpr-training-2026`를 사용한다. 과거 `교직원 심폐소생술 연수 이수` 탭은 migration 승인 전 legacy 대조 자료로만 유지한다.
 - `교직원명단`
 - `제출항목관리`
-- `제출기록`
+- `제출기록` (과거 3행 이관 원본만 유지; 신규 학생 진료회신은 `student_submission_audit_{environment}` Firestore 원장)
 - `제출현황`
 
-These tabs are managed by the health office and remain operational source
-records. Do not replace or delete them during the first implementation phases.
+This list records the original Sheet dependencies from the first implementation phase. Current runtime sources have since moved to Firestore where noted; do not treat the historical list as a backup-required or runtime-read list.
 
 ### External Research Department Sheet
 

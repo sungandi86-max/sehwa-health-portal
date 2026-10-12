@@ -1,5 +1,13 @@
 # 제출기록 Firestore 감사 원장 Phase 1
 
+## 현재 운영 상태 (2026-10-13)
+
+Production은 Apps Script v112와 Firestore `student_submission_audit_production`을 사용한다. 원본 `제출기록` 35열·3행은 모두 create-only로 이관됐으며 read-back parity 3/3, 재실행 dry-run skip 3/conflict 0이다. 세 문서 모두 `manualReview=true`, `canonicalStudentKey=null`이다. 신규 signed 학생 진료회신은 고정 비공개 Drive 폴더에 증빙을 저장하고 Firestore 원장에 create-only 기록한다. Sheet runtime read/write와 backup 필수 참조는 0이며 Sheet는 삭제 승인 전까지 원본 대조용으로 유지한다. QA 원장·Drive 폴더와 Production은 분리된다.
+
+동일 신원·증빙이 이미 `recorded`이고 파일 메타데이터가 일치하면 재제출은 `HTTP 200`, `success=true`, `duplicate=true`로 응답한다. 동시 create 충돌도 문서를 재조회해 일치하면 같은 성공 응답을 준다. 기록·파일이 불일치하면 409로 수동 확인을 요구하고, Drive 업로드 후 실제 Firestore 기록 실패는 `submissionId`가 포함된 503으로 남긴다. 실제 Production signed 제출은 이 전환 과정에서 실행하지 않았다.
+
+아래 Phase 1~1.6의 배포 전제와 Sheet append 설명은 당시 기록이며 현재 runtime 계약이 아니다.
+
 ## 운영 원본 (2026-10-12, 읽기 전용)
 
 운영 workbook의 숨김 `제출기록`(sheetId 310103)은 35개 헤더와 데이터 3행(row 2–4)이다. 헤더는 다음과 같다.
@@ -22,9 +30,9 @@
 
 ## runtime 경계와 배포 전제
 
-현재 운영 익명 제출은 `/upload?mode=public&type=tbreply` → `/api/submit`의 3MiB·PDF/JPEG/PNG 검사 및 HMAC/visitor/replay 보호 → Apps Script의 고정 Drive 폴더 업로드 → `제출기록` append다. 신규 QA 코드에서는 고정 QA 배포에만 서버 소유 `QA_STUDENT_REPLY_DRIVE_FOLDER_ID`를 요구한다. 값이 없으면 Apps Script 호출 전에 실패한다. signed envelope에 QA 전용 폴더·`recordMode=firestore`가 포함되고 Apps Script는 QA 전용 `QA_SUBMISSION_PROXY_SECRET`으로 검증한 뒤 QA 폴더에만 업로드한다. Sheet를 열거나 append하지 않고 fileId를 반환한다. Vercel은 fileId를 QA 감사 원장에 create-only 기록한다. 다른 Preview는 거부하고 Production은 기존 저장 경로를 유지한다. 관리자는 기존 resource router의 `student-submission-audit`으로 제한된 QA 원장 메타데이터만 읽으며, 일반 교직원·Production에는 신규 조회를 허용하지 않는다.
+Phase 1 당시 Production은 익명 `/api/submit` → Apps Script → `제출기록` append였고, QA에서만 별도 비공개 Drive 폴더·QA HMAC secret·Firestore 원장을 준비했다. 이 문단은 과거 배포 경계의 기록이며 현재 Production 경로가 아니다.
 
-위 문장은 Phase 1 당시의 배포 전제였다. Phase 1.5에서는 QA Apps Script v110과 별도 비공개 QA Drive 폴더를 설정하고, 실제 익명 `/api/submit` → signed HMAC → Apps Script → Drive PNG → Firestore 감사 원장 E2E를 1건 완료했다. QA Drive fileId `1jSvLkg4vJwZpXX3W2P_XGyrDK8n9PuT1`, 감사 문서 `QA-STUDENT-TB-2d25d40c8cdb4e6c1e943738b39b4fa5`는 `recorded`, `signedPath=true`, `manualReview=false`로 확인됐다. QA `제출기록` append는 0건이며, HMAC·replay·부분 실패 복구는 테스트를 통과했다. Production Apps Script v108과 기존 Sheet 저장 경로는 그대로다.
+Phase 1.5 당시 QA Apps Script v110과 별도 비공개 QA Drive 폴더로 실제 signed E2E 1건을 검증했다. QA 감사 문서는 `recorded`, `signedPath=true`, `manualReview=false`였고 Sheet append는 0건이었다. 그 시점의 Production은 Apps Script v108·Sheet 저장 경로였으나 현재는 위의 운영 상태로 전환됐다.
 
 ## Phase 1.5 QA 보안·부분 실패 복구 계약
 

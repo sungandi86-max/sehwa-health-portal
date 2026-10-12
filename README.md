@@ -61,15 +61,15 @@ Apps Script 운영본을 갱신할 때는 현재 web app deployment ID/URL을 �
 
 ## 제출 응답 시트
 
-아래 응답 시트는 제출 전에 이미 존재해야 합니다. Apps Script는 없는 시트를 자동 생성하지 않고 제출을 거부합니다.
+아래는 과거 응답 시트와 현재 저장 원장의 구분입니다. Firestore로 전환된 제출은 원본 시트 없이 동작하며, Apps Script는 필요한 기존 응답 시트를 자동 생성하지 않습니다.
 
 | 시트명 | 열 구성 |
 |---|---|
 | 결핵검진 확인증 감사 원장 | Drive 증빙 fileId와 접수 이력은 Firestore `tb_certificate_submissions_*`에 보존 |
 | 응답_교직원결핵검진유형선택 | Firestore 감사원장 전환 전 legacy 원본. runtime read/write 없음 |
-| 제출기록 | 학생 결핵검진 진료회신 파일 접수 기록 |
+| 제출기록 | 과거 학생 결핵 진료회신 3행의 이관 원본. 신규 접수는 비공개 Drive 증빙과 `student_submission_audit_{environment}` Firestore 원장에 기록 |
 
-인바디 측정 신청의 신규 운영 원장은 `inbody_requests_production` Firestore 컬렉션입니다. 기존 `응답_인바디측정신청` 탭은 삭제 전 검증을 위해 유지하지만 신규 신청을 기록하지 않습니다.
+인바디 측정 신청의 운영 원장은 `inbody_requests_production` Firestore 컬렉션입니다. 과거 `응답_인바디측정신청` 탭은 전환 검증 후 삭제됐습니다.
 CPR 이수증은 Drive에 증빙 파일을 저장하고 `cpr_certificate_submissions_{environment}`에 접수 이력을 기록합니다. 기존 CPR 응답 탭은 migration 원본일 뿐 runtime read/write 및 백업 필수 탭이 아닙니다.
 
 ---

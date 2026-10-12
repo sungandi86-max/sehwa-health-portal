@@ -211,11 +211,14 @@ test("QA anonymous submit signs a QA-only Drive payload, writes ledger, and neve
   assert.equal(prodPayload.recordMode, undefined);
 });
 
-test("same QA evidence across midnight rejects before a second Drive upload", async () => {
+test("same QA evidence across midnight returns success without a second Drive upload", async () => {
   const payload = { type: "student_tb_reply", fields: { grade: "1", classNumber: "1", studentNumber: "99",
     studentName: "[QA] synthetic" }, fileName: "QA-20261012.png", fileMimeType: "image/png",
     fileBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl9mN8AAAAASUVORK5CYII=" };
-  const existing = { submissionId: "QA-STUDENT-TB-v1", evidenceFiles: [{ fileId: "QA-DRIVE-V1", exists: true }] };
+  const existing = { submissionId: "QA-STUDENT-TB-v1", environment: "qa", source: "qa_signed_submission",
+    status: "recorded", signedPath: true, manualReview: false,
+    evidenceSha256: qaStudentSubmissionIdentity(payload, "fixture-only-submission-secret-32bytes-minimum").evidenceSha256,
+    evidenceFiles: [{ fileId: "QA-DRIVE-V1", exists: true, mimeType: "image/png" }] };
   let uploads = 0;
   const res = response();
   await submitHandler(request({ ...payload, fileName: "QA-20261013.png" }), res, {
@@ -225,9 +228,81 @@ test("same QA evidence across midnight rejects before a second Drive upload", as
     studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => existing },
     postScript: async () => { uploads++; throw new Error("duplicate must not upload"); },
   });
-  assert.equal(res.statusCode, 409);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.duplicate, true);
   assert.equal(res.body.submissionId, existing.submissionId);
   assert.equal(uploads, 0);
+});
+
+test("recorded submissionId replay succeeds without calling Drive again", async () => {
+  const secret = "fixture-only-submission-secret-32bytes-minimum";
+  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "004",
+    studentName: "[QA] synthetic" }, fileName: "QA-recorded.png", fileMimeType: "image/png",
+    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
+  const identity = qaStudentSubmissionIdentity(payload, secret);
+  let driveCalls = 0;
+  const result = response();
+  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
+    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
+    studentAuditStore: { environment: "qa", getRequest: async () => ({
+      submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
+      evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
+      status: "recorded", signedPath: true, manualReview: false,
+      evidenceFiles: [{ fileId: "QA-RECORDED-FILE", exists: true, mimeType: "image/png" }] }),
+      getEvidenceMatch: async () => null },
+    postScript: async () => { driveCalls++; throw new Error("recorded replay must not upload"); } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.duplicate, true);
+  assert.equal(result.body.submissionId, identity.submissionId);
+  assert.equal(driveCalls, 0);
+});
+
+test("concurrent identical create resolves to the recorded request, not a partial failure", async () => {
+  const secret = "fixture-only-submission-secret-32bytes-minimum";
+  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "002",
+    studentName: "[QA] synthetic" }, fileName: "QA-race.png", fileMimeType: "image/png",
+    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
+  const identity = qaStudentSubmissionIdentity(payload, secret);
+  const recorded = { submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
+    evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
+    status: "recorded", signedPath: true, manualReview: false,
+    evidenceFiles: [{ fileId: "QA-RACE-FILE", exists: true, mimeType: "image/png" }] };
+  let reads = 0;
+  const result = response();
+  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
+    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
+    studentAuditStore: { environment: "qa", getRequest: async () => (++reads === 1 ? null : recorded),
+      getEvidenceMatch: async () => null, createRequest: async () => { throw new Error("ALREADY_EXISTS"); } },
+    postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-RACE-FILE" }) }) });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.success, true);
+  assert.equal(result.body.duplicate, true);
+  assert.equal(result.body.submissionId, identity.submissionId);
+  assert.equal(result.body.fileId, undefined);
+  assert.equal(reads, 2);
+});
+
+test("conflicting evidence after create race stays a conflict", async () => {
+  const secret = "fixture-only-submission-secret-32bytes-minimum";
+  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "003",
+    studentName: "[QA] synthetic" }, fileName: "QA-conflict.png", fileMimeType: "image/png",
+    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
+  const identity = qaStudentSubmissionIdentity(payload, secret);
+  let reads = 0;
+  const result = response();
+  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
+    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
+    studentAuditStore: { environment: "qa", getRequest: async () => (++reads === 1 ? null : {
+      submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
+      evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
+      status: "recorded", signedPath: true, manualReview: false,
+      evidenceFiles: [{ fileId: "DIFFERENT-FILE", exists: true, mimeType: "image/png" }] }),
+      getEvidenceMatch: async () => null, createRequest: async () => { throw new Error("ALREADY_EXISTS"); } },
+    postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-RACE-FILE" }) }) });
+  assert.equal(result.statusCode, 409);
+  assert.equal(result.body.success, false);
+  assert.equal(result.body.fileId, undefined);
 });
 
 test("QA missing evidence destination and arbitrary Preview fail before Apps Script", async () => {

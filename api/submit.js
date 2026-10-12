@@ -41,6 +41,17 @@ function isSuccessfulResponse(payload) {
   return payload?.status === "success" || payload?.success === true || payload?.ok === true;
 }
 
+function isRecordedStudentSubmission(record, identity, environment, mimeType, fileId = null) {
+  const evidence = record?.evidenceFiles?.[0];
+  return record?.submissionId && record.environment === environment &&
+    record.source === `${environment}_signed_submission` && record.status === "recorded" &&
+    record.signedPath === true && record.manualReview === false &&
+    record.evidenceSha256 === identity.evidenceSha256 && evidence?.exists === true &&
+    evidence.fileId && evidence.mimeType?.toLowerCase() === mimeType.toLowerCase() &&
+    (!fileId || evidence.fileId === fileId) &&
+    (record.submissionId !== identity.submissionId || record.requestFingerprint === identity.requestFingerprint);
+}
+
 function buildTbStatusPayload(payload, staffId) {
   if (payload?.type === "tb") {
     return buildTbCertificateStatus({
@@ -201,12 +212,12 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         await studentAuditStore.getEvidenceMatch({ evidenceSha256: studentIdentity.evidenceSha256,
           fileMimeType: payload.fileMimeType, fields: payload.fields });
       if (existing) {
-        if (!existing.evidenceFiles?.[0]?.fileId || existing.evidenceFiles[0].exists !== true) {
+        if (!isRecordedStudentSubmission(existing, studentIdentity, studentEnvironment, payload.fileMimeType)) {
           return res.status(409).json({ status: "error", success: false,
             message: "기존 접수의 증빙 파일을 확인할 수 없습니다. 관리자에게 문의해 주세요." });
         }
-        return res.status(409).json({ status: "error", success: false,
-          submissionId: existing.submissionId, message: "이미 접수된 제출입니다." });
+        return res.status(200).json({ status: "success", success: true, duplicate: true,
+          submissionId: existing.submissionId, submittedAt: existing.submittedAt });
       }
     }
     const cprEnvironment = workflow.id === "cpr" ? environment() : null;
@@ -270,6 +281,18 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
           idempotencyVersion: studentIdentity.idempotencyVersion, fields: payload.fields,
           evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType }, now });
       } catch {
+        try {
+          const recorded = await studentAuditStore.getRequest(studentIdentity.submissionId);
+          if (isRecordedStudentSubmission(recorded, studentIdentity, studentEnvironment, payload.fileMimeType, json.fileId)) {
+            return res.status(200).json({ status: "success", success: true, duplicate: true,
+              submissionId: recorded.submissionId, submittedAt: recorded.submittedAt });
+          }
+          if (recorded) return res.status(409).json({ status: "error", success: false,
+            submissionId: studentIdentity.submissionId, message: "접수 기록과 증빙 파일이 일치하지 않습니다. 관리자에게 문의해 주세요." });
+        } catch (readError) {
+          console.error("[STUDENT_REPLY_AUDIT_READ] Unable to verify recorded submission", { environment: studentEnvironment,
+            submissionId: studentIdentity.submissionId, code: readError?.code || "unknown" });
+        }
         console.error("[STUDENT_REPLY_AUDIT_WRITE] Partial failure", {
           environment: studentEnvironment, submissionId: studentIdentity.submissionId, fileId: json.fileId,
           requestFingerprint: studentIdentity.requestFingerprint, status: "partial_failure" });
