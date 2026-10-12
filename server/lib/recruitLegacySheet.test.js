@@ -23,7 +23,7 @@ test("admin receipt summary does not read the retired recruit sheet", () => {
     "JSON.stringify(buildAdminReceiptSections_(__spreadsheet))", context,
   ));
   assert.deepEqual(sections.map((section) => section.items.map((item) => item.id)), [
-    ["tb"],
+    [],
     [],
   ]);
   assert.equal(reads.includes(legacySheetName), false);
@@ -36,8 +36,6 @@ test("backup integrity does not require the retired recruit sheet", () => {
       openById: () => ({
         getSheets: () => [
           "학생 보건실 입실현황",
-          "응답_심폐소생술이수증",
-          "응답_결핵검진확인증",
         ].map((name) => ({ getName: () => name })),
       }),
     },
@@ -47,8 +45,21 @@ test("backup integrity does not require the retired recruit sheet", () => {
   const result = JSON.parse(vm.runInContext(
     'JSON.stringify(readHealthRoomBackupIntegrity_("test-workbook"))', context,
   ));
-  assert.equal(result.expectedSheetCount, 2);
+  assert.equal(result.expectedSheetCount, 1);
   assert.deepEqual(result.missingSheets, []);
+});
+
+test("TB certificate response sheet is absent from runtime and backup requirements", () => {
+  const retiredTbSheet = "응답_결핵검진확인증";
+  for (const path of [
+    "apps-script/Code.gs",
+    "src/components/SubmitModal.jsx",
+    "src/components/UploadCenter.jsx",
+    "src/pages/FirebaseSubmissionsPage.jsx",
+    "server/lib/submissionWorkflows.js",
+  ]) {
+    assert.equal(fs.readFileSync(path, "utf8").includes(retiredTbSheet), false, path);
+  }
 });
 
 test("retired recruit sheet name is absent from runtime sources", () => {

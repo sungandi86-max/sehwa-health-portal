@@ -35,8 +35,7 @@ const STUDENT_FILE_RECORD_HEADERS = [
   "최종수정일"
 ];
 const SUBMISSION_RESPONSE_HEADERS = {
-  cpr: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"],
-  tb: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"]
+  cpr: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"]
 };
 const STUDENT_CARE_PROJECTION_SYNC = {
   statusProperty: "STUDENT_CARE_PROJECTION_SYNC_STATUS",
@@ -54,8 +53,7 @@ const HEALTH_ROOM_BACKUP = {
   nightlyHandler: "backupHealthRoomSpreadsheetNightly_",
   sourceMimeType: "application/vnd.google-apps.spreadsheet",
   expectedSheets: [
-    SHEET_NAMES.visit,
-    "응답_결핵검진확인증"
+    SHEET_NAMES.visit
   ]
 };
 
@@ -338,10 +336,7 @@ function legacySubmissionDuringTransition_(request) {
       ["version", "sentAt", "requestId", "visitor", "payloadJson", "payloadHash", "signature"].some(function(key) { return Object.prototype.hasOwnProperty.call(request, key); })) {
     throw new Error("제출 인증에 실패했습니다.");
   }
-  const legacyTypes = {
-    tb: "응답_결핵검진확인증",
-    "student-file": "응답_결핵검진진료회신"
-  };
+  const legacyTypes = { "student-file": "응답_결핵검진진료회신" };
   const type = request.type || "";
   if (!legacyTypes[type] || request.sheetName !== legacyTypes[type]) throw new Error("지원하지 않는 이전 제출 형식입니다.");
   return { type: type, fields: request.fields, fileName: request.fileName, fileBase64: request.fileBase64, fileMimeType: request.fileMimeType };
@@ -412,7 +407,7 @@ function reserveSubmissionProxy_(request, payload) {
 function preflightSubmission_(payload) {
   const destinations = {
     cpr: { folderId: FOLDER_IDS.cpr },
-    tb: { sheetName: "응답_결핵검진확인증", folderId: FOLDER_IDS.tb }
+    tb: { folderId: FOLDER_IDS.tb }
   };
   if (!payload || (payload.type !== "student-file" && !destinations[payload.type])) {
     throw new Error("지원하지 않는 제출 유형입니다.");
@@ -443,9 +438,11 @@ function preflightSubmission_(payload) {
   const firestoreAudit = (payload.type === "cpr" || payload.type === "tb") && payload.recordMode === "firestore";
   const qaFirestoreAudit = firestoreAudit && payload.runtimeEnvironment === "qa" &&
     /^[A-Za-z0-9_-]{10,}$/.test(String(payload.qaEvidenceFolderId || ""));
-  const productionFirestoreAudit = payload.type === "cpr" && firestoreAudit &&
+  const productionFirestoreAudit = (payload.type === "cpr" || payload.type === "tb") && firestoreAudit &&
     payload.runtimeEnvironment === "production" && !payload.qaEvidenceFolderId;
-  if (payload.type === "cpr" && !firestoreAudit) throw new Error("CPR 감사 원장 구성이 올바르지 않습니다.");
+  if ((payload.type === "cpr" || payload.type === "tb") && !firestoreAudit) {
+    throw new Error("감사 원장 구성이 올바르지 않습니다.");
+  }
   if (firestoreAudit && !qaFirestoreAudit && !productionFirestoreAudit) throw new Error("감사 원장 저장소 구성이 올바르지 않습니다.");
   if (qaFirestoreAudit) destination = { folderId: payload.qaEvidenceFolderId };
   const sheet = firestoreAudit ? null : getSubmitSheet_(ss, destination.sheetName);
@@ -569,11 +566,7 @@ function getSubmitSheet_(ss, sheetName) {
 }
 
 function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
-  if (sheetName === "응답_결핵검진확인증") {
-    sheet.appendRow([now, fields.name, fields.dept, fields.staffType,
-      fields.checkupDate, fields.docType, fileName, fileLink]);
-
-  } else if (sheetName === "응답_기타보건자료") {
+  if (sheetName === "응답_기타보건자료") {
     sheet.appendRow([now, fields.name, fields.dept, fields.staffType,
       fields.note || "", fileName, fileLink]);
 
@@ -2058,16 +2051,7 @@ function getAdminReceiptSummary_(params) {
 }
 
 function buildAdminReceiptSections_(ss) {
-  const submitReports = [
-    summarizeAdminReceiptSheet_(ss, {
-      id: "tb",
-      label: "결핵검진 확인증 제출",
-      sheetName: "응답_결핵검진확인증",
-      startRow: 2,
-      dateColumn: 1,
-      requiredColumns: [1]
-    })
-  ];
+  const submitReports = [];
 
   const eventApplications = [];
 
@@ -2571,27 +2555,9 @@ function testVisitSummaryData() {
   Logger.log(JSON.stringify(getVisitSummaryData_(), null, 2));
 }
 
-function testSheetWrite() {
-  const ss    = getSpreadsheet_();
-  const sheet = getSubmitSheet_(ss, "응답_결핵검진확인증");
-  sheet.appendRow(["테스트", "홍길동", "1학년부", "교사", "2025-05-20", "결핵검진 확인증", "", ""]);
-  Logger.log("완료: " + sheet.getName());
-}
-
 function testSheetName() {
   const ss = getSpreadsheet_();
   ss.getSheets().forEach(s => Logger.log("[" + s.getName() + "]"));
-}
-
-function testPostData() {
-  const fakeEvent = {
-    postData: {
-      contents: '{"sheetName":"응답_결핵검진확인증","folderId":null,"fields":{"name":"테스트","dept":"1학년부","staffType":"교사","checkupDate":"2025-05-20","docType":"결핵검진 확인증"},"fileName":null,"fileBase64":null,"fileMimeType":null}',
-      type: "text/plain"
-    },
-    parameter: {}
-  };
-  Logger.log(doPost(fakeEvent).getContent());
 }
 
 function testDriveAccess() {

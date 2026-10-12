@@ -283,7 +283,6 @@ function TbForm({ onSubmit, submitting }) {
 
       await onSubmit({
         type: "tb",
-        sheetName: "응답_결핵검진확인증",
         folderId: null,
         fields: { ...form },
         fileName,

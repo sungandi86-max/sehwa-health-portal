@@ -65,7 +65,7 @@ Apps Script 운영본을 갱신할 때는 현재 web app deployment ID/URL을 �
 
 | 시트명 | 열 구성 |
 |---|---|
-| 응답_결핵검진확인증 | 제출일시 · 성명 · 소속/부서 · 교직원구분 · 검진일자 · 제출자료유형 · 파일명 · 파일링크 |
+| 결핵검진 확인증 감사 원장 | Drive 증빙 fileId와 접수 이력은 Firestore `tb_certificate_submissions_*`에 보존 |
 | 응답_교직원결핵검진유형선택 | Firestore 감사원장 전환 전 legacy 원본. runtime read/write 없음 |
 | 제출기록 | 학생 결핵검진 진료회신 파일 접수 기록 |
 

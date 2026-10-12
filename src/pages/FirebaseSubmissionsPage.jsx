@@ -62,7 +62,6 @@ const SHEET_SUBMISSION_TYPES = {
     keywords: ["교직원 결핵검진 단체검진", "교직원 결핵검진 유형", "단체검진 신청", "결핵검진 유형 선택"],
   },
   tb: {
-    sheetName: "응답_결핵검진확인증",
     aliases: ["tb", "tb_certificate", "tuberculosis_certificate", "결핵검진확인증"],
     keywords: ["결핵검진 확인증", "결핵검진확인증", "흉부 x-ray", "흉부x-ray"],
   },

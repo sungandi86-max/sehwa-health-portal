@@ -394,9 +394,7 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   const appendedRows = [];
   const sheet = { appendRow: (row) => { if (failAppend) throw new Error("fixture append failed"); assert.ok(row.length > 0); appended++; appendedRows.push(row); },
     getLastColumn: () => recordHeaders.length, getRange: () => ({ getDisplayValues: () => [recordHeaders] }) };
-  const responseHeaders = {
-    [SUBMISSION_WORKFLOWS.tb.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"],
-  };
+  const responseHeaders = {};
   let recordSheetPresent = true;
   let folderReady = true;
   const context = vm.createContext({
@@ -432,12 +430,10 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   assert.equal(callEnvelope({ ...signed, payloadJson: signed.payloadJson.replace("qa.png", "changed.png") }).status, "error");
   assert.equal(sheets.length, 0);
   for (const type of ["cpr", "tb"]) {
-    const payload = type === "cpr"
-      ? { ...file, type, recordMode: "firestore", runtimeEnvironment: "production", qaEvidenceFolderId: "" }
-      : { ...file, type, sheetName: "Injected", folderId: "Injected" };
+    const payload = { ...file, type, recordMode: "firestore",
+      runtimeEnvironment: "production", qaEvidenceFolderId: "", sheetName: "Injected", folderId: "Injected" };
     const result = call(payload);
     assert.equal(result.status, "success");
-    if (type === "tb") assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS[type].auditSheet);
     assert.notEqual(folders.at(-1), "Injected");
   }
   assert.equal(call({ type: "inbody", fields: inbodyFields, sheetName: "Injected", folderId: "Injected" }).status, "error");

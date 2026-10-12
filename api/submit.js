@@ -177,7 +177,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       return res.status(503).json({ status: "error", success: false, message: "QA CPR 증빙 저장소가 설정되지 않았습니다." });
     }
     const tbCertificateEnvironment = workflow.id === "tb" ? environment() : null;
-    const qaTbCertificateAudit = workflow.id === "tb" && tbCertificateEnvironment === "qa";
+    const tbCertificateAudit = workflow.id === "tb" &&
+      ["qa", "production"].includes(tbCertificateEnvironment);
+    const qaTbCertificateAudit = tbCertificateAudit && tbCertificateEnvironment === "qa";
     if (qaTbCertificateAudit && !qaTbCertificateFolderId) {
       return res.status(503).json({ status: "error", success: false,
         message: "QA 결핵검진 확인증 증빙 저장소가 설정되지 않았습니다." });
@@ -186,7 +188,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
       : payload;
     const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, scriptPayload, {
-      firestoreAudit: cprAudit || qaTbCertificateAudit,
+      firestoreAudit: cprAudit || tbCertificateAudit,
       runtimeEnvironment: cprEnvironment || tbCertificateEnvironment || "",
       qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : qaTbCertificateAudit ? qaTbCertificateFolderId : "",
     }), proxySecret, { visitor });
@@ -214,7 +216,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       return res.status(200).json({ status: "error", success: false, message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." });
     }
     if (tbGuard) {
-      if (qaTbCertificateAudit) {
+      if (tbCertificateAudit) {
         try {
           await tbCertificateStore.createRequest({ staffId: tbGuard.staffId, submittedAt: now,
             checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
@@ -239,7 +241,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
           message: "신청 자료는 접수되었지만 결핵검진 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요.",
         });
       }
-      json = qaTbCertificateAudit
+      json = tbCertificateAudit
         ? { status: "success", success: true, staffId: tbGuard.staffId }
         : { ...json, staffId: tbGuard.staffId };
     }

@@ -30,7 +30,6 @@ const SUBMIT_TYPE_CONFIG = {
   },
   tb: {
     modalType: "tb",
-    sheetName: "응답_결핵검진확인증",
     aliases: ["tb", "tb_certificate", "tuberculosis_certificate", "결핵검진확인증"],
     keywords: ["결핵검진 확인증", "결핵검진확인증", "흉부 x-ray", "흉부x-ray"],
   },
