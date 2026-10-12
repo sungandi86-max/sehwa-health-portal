@@ -8,7 +8,7 @@ import {
 } from "../server/lib/tbScreeningStatus.js";
 import { buildCprExternalSubmissionStatus, saveCprTrainingStatus } from "../server/lib/cprTrainingStatus.js";
 import { buildScriptSubmission, resolveSubmissionWorkflow, validateSubmissionPayload } from "../server/lib/submissionWorkflows.js";
-import { buildSubmissionProxyEnvelope, qaStudentSubmissionIdentity, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
+import { buildSubmissionProxyEnvelope, studentSubmissionIdentity, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
 import { assertRegistrationOpen, readSubmissionConfig, SubmissionConfigError } from "../server/lib/submissionConfig.js";
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
 import { tbRegistrationRequestStore } from "../server/lib/tbRegistrationRequestStore.js";
@@ -171,8 +171,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
     const studentEnvironment = workflow.id === "student_tb_reply" ? environment() : null;
     const qaStudentAudit = studentEnvironment === "qa";
+    const studentAudit = ["qa", "production"].includes(studentEnvironment);
     const visitor = workflow.id === "student_tb_reply"
-      ? submissionVisitor(req, proxySecret, { trustedVercel: qaStudentAudit }) : "";
+      ? submissionVisitor(req, proxySecret, { trustedVercel: studentAudit }) : "";
     if (workflow.id === "student_tb_reply" && !visitor) {
       return res.status(503).json({ status: "error", success: false, message: "익명 제출 보호 설정을 확인해 주세요." });
     }
@@ -187,20 +188,25 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       !String(payload.fileName || "").includes("QA"))) {
       return res.status(403).json({ status: "error", success: false, message: "QA 합성 제출만 허용됩니다." });
     }
-    const qaIdentity = qaStudentAudit ? qaStudentSubmissionIdentity(payload, proxySecret) : null;
-    if (qaStudentAudit && !qaIdentity) return res.status(503).json({ status: "error", success: false,
-      message: "QA 접수 식별자를 생성할 수 없습니다." });
-    if (qaStudentAudit) {
-      const existing = await studentAuditStore.getQaRequest(qaIdentity.submissionId) ||
-        await studentAuditStore.getQaEvidenceMatch({ evidenceSha256: qaIdentity.evidenceSha256,
+    if (studentEnvironment === "production" &&
+      /\[QA(?:-|\])/.test(String(payload.fields?.studentName || ""))) {
+      return res.status(403).json({ status: "error", success: false, message: "QA 테스트 제출은 운영에서 허용되지 않습니다." });
+    }
+    const studentIdentity = studentAudit ? studentSubmissionIdentity(payload, proxySecret, studentEnvironment) : null;
+    if (studentAudit && !studentIdentity) return res.status(503).json({ status: "error", success: false,
+      message: "접수 식별자를 생성할 수 없습니다." });
+    if (studentAudit) {
+      if (studentAuditStore.environment !== studentEnvironment) throw new Error("감사 원장 환경이 일치하지 않습니다.");
+      const existing = await studentAuditStore.getRequest(studentIdentity.submissionId) ||
+        await studentAuditStore.getEvidenceMatch({ evidenceSha256: studentIdentity.evidenceSha256,
           fileMimeType: payload.fileMimeType, fields: payload.fields });
       if (existing) {
         if (!existing.evidenceFiles?.[0]?.fileId || existing.evidenceFiles[0].exists !== true) {
           return res.status(409).json({ status: "error", success: false,
-            message: "기존 QA 접수의 증빙 파일을 확인할 수 없습니다. 관리자에게 문의해 주세요." });
+            message: "기존 접수의 증빙 파일을 확인할 수 없습니다. 관리자에게 문의해 주세요." });
         }
         return res.status(409).json({ status: "error", success: false,
-          submissionId: existing.submissionId, message: "이미 접수된 QA 제출입니다." });
+          submissionId: existing.submissionId, message: "이미 접수된 제출입니다." });
       }
     }
     const cprEnvironment = workflow.id === "cpr" ? environment() : null;
@@ -221,14 +227,14 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
       : payload;
     const scriptSubmission = buildScriptSubmission(workflow, scriptPayload, {
-      firestoreAudit: cprAudit || tbCertificateAudit || qaStudentAudit,
+      firestoreAudit: cprAudit || tbCertificateAudit || studentAudit,
       runtimeEnvironment: cprEnvironment || tbCertificateEnvironment || studentEnvironment || "",
       qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : qaTbCertificateAudit ? qaTbCertificateFolderId
         : qaStudentAudit ? qaStudentReplyFolderId : "",
     });
-    if (qaIdentity) {
-      scriptSubmission.qaSubmissionId = qaIdentity.submissionId;
-      scriptSubmission.qaRequestFingerprint = qaIdentity.requestFingerprint;
+    if (studentIdentity) {
+      scriptSubmission.qaSubmissionId = studentIdentity.submissionId;
+      scriptSubmission.qaRequestFingerprint = studentIdentity.requestFingerprint;
     }
     const envelope = buildSubmissionProxyEnvelope(scriptSubmission, proxySecret, { visitor });
     if (!envelope) {
@@ -255,24 +261,24 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       if (qaStudentAudit && json.qaFailureStage) console.error("[STUDENT_REPLY_QA_SCRIPT]", json.qaFailureStage);
       return res.status(200).json({ status: "error", success: false, message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." });
     }
-    if (qaStudentAudit) {
+    if (studentAudit) {
       if (!json.fileId) return res.status(502).json({ status: "error", success: false,
-        message: "QA 증빙 파일 ID를 확인할 수 없습니다." });
+        message: "증빙 파일 ID를 확인할 수 없습니다." });
       try {
-        await studentAuditStore.createQaRequest({ requestId: qaIdentity.submissionId,
-          requestFingerprint: qaIdentity.requestFingerprint, evidenceSha256: qaIdentity.evidenceSha256,
-          idempotencyVersion: qaIdentity.idempotencyVersion, fields: payload.fields,
+        await studentAuditStore.createRequest({ requestId: studentIdentity.submissionId,
+          requestFingerprint: studentIdentity.requestFingerprint, evidenceSha256: studentIdentity.evidenceSha256,
+          idempotencyVersion: studentIdentity.idempotencyVersion, fields: payload.fields,
           evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType }, now });
       } catch {
-        console.error("[STUDENT_REPLY_QA_AUDIT_WRITE] Partial failure", {
-          submissionId: qaIdentity.submissionId, fileId: json.fileId,
-          requestFingerprint: qaIdentity.requestFingerprint, status: "partial_failure" });
+        console.error("[STUDENT_REPLY_AUDIT_WRITE] Partial failure", {
+          environment: studentEnvironment, submissionId: studentIdentity.submissionId, fileId: json.fileId,
+          requestFingerprint: studentIdentity.requestFingerprint, status: "partial_failure" });
         return res.status(503).json({ status: "error", success: false,
-          submissionId: qaIdentity.submissionId,
-          message: "증빙 파일은 저장되었지만 QA 접수 이력을 기록하지 못했습니다. 관리자에게 문의해 주세요." });
+          submissionId: studentIdentity.submissionId,
+          message: "증빙 파일은 저장되었지만 접수 이력을 기록하지 못했습니다. 관리자에게 문의해 주세요." });
       }
       return res.status(200).json({ status: "success", success: true, submittedAt: json.submittedAt,
-        submissionId: qaIdentity.submissionId });
+        submissionId: studentIdentity.submissionId });
     }
     if (tbGuard) {
       if (tbCertificateAudit) {

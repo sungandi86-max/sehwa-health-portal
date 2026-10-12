@@ -186,8 +186,8 @@ test("QA anonymous submit signs a QA-only Drive payload, writes ledger, and neve
   await submitHandler(request(payload), res, { destinationUrl: "https://script.google.com/macros/s/test/exec",
     proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
     qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001", now: new Date("2026-10-12T00:00:00Z"),
-    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
-      createQaRequest: async (record) => writes.push(record) },
+    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
+      createRequest: async (record) => writes.push(record) },
     postScript: async (_url, init) => {
       const envelope = JSON.parse(init.body);
       const forwarded = JSON.parse(envelope.payloadJson);
@@ -222,7 +222,7 @@ test("same QA evidence across midnight rejects before a second Drive upload", as
     destinationUrl: "https://script.google.com/macros/s/test/exec",
     proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
     qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
-    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => existing },
+    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => existing },
     postScript: async () => { uploads++; throw new Error("duplicate must not upload"); },
   });
   assert.equal(res.statusCode, 409);
@@ -257,8 +257,8 @@ test("QA Drive failure does not write audit; Firestore failure reports recoverab
   let auditWrites = 0;
   const driveFailed = response();
   await submitHandler(request(payload), driveFailed, { ...options,
-    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
-      createQaRequest: async () => { auditWrites++; } },
+    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
+      createRequest: async () => { auditWrites++; } },
     postScript: async () => ({ text: async () => JSON.stringify({ status: "error" }) }) });
   assert.equal(driveFailed.body.success, false);
   assert.equal(auditWrites, 0);
@@ -267,8 +267,8 @@ test("QA Drive failure does not write audit; Firestore failure reports recoverab
   console.error = () => {};
   try {
     await submitHandler(request(payload), auditFailed, { ...options,
-      studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
-        createQaRequest: async () => { throw new Error("QA Firestore unavailable"); } },
+      studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
+        createRequest: async () => { throw new Error("QA Firestore unavailable"); } },
       postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-DRIVE-FILE-001" }) }) });
   } finally { console.error = originalError; }
   assert.equal(auditFailed.statusCode, 503);

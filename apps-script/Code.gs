@@ -17,23 +17,6 @@ const FOLDER_IDS = {
 };
 
 const STUDENT_FILE_DEFAULT_FOLDER_ID = "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63";
-const SUBMISSION_RECORD_SHEET_NAME = "제출기록";
-const STUDENT_FILE_RECORD_HEADERS = [
-  "제출일시",
-  "제출항목",
-  "구분",
-  "성명",
-  "파일명",
-  "파일URL",
-  "처리상태",
-  "비고",
-  "제출ID",
-  "제출항목ID",
-  "제출명_정규화",
-  "파일ID",
-  "파일MIME",
-  "최종수정일"
-];
 const SUBMISSION_RESPONSE_HEADERS = {
   cpr: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"]
 };
@@ -431,8 +414,9 @@ function preflightSubmission_(payload) {
     const qaFirestoreAudit = payload.recordMode === "firestore" && payload.runtimeEnvironment === "qa" &&
       /^[A-Za-z0-9_-]{10,}$/.test(String(payload.qaEvidenceFolderId || "")) &&
       payload.qaEvidenceFolderId !== STUDENT_FILE_DEFAULT_FOLDER_ID;
-    if (payload.recordMode && !qaFirestoreAudit) throw new Error("QA 학생 제출 저장소 구성이 올바르지 않습니다.");
-    const recordDestination = qaFirestoreAudit ? null : getSubmissionRecordDestination_(getSpreadsheet_());
+    const productionFirestoreAudit = payload.recordMode === "firestore" &&
+      payload.runtimeEnvironment === "production" && !payload.qaEvidenceFolderId;
+    if (!qaFirestoreAudit && !productionFirestoreAudit) throw new Error("학생 제출 감사 원장 구성이 올바르지 않습니다.");
     const fields = payload.fields;
     if (!fields || typeof fields !== "object" || Array.isArray(fields) ||
         ["grade", "classNumber", "studentNumber", "studentName"].some(function(key) { return !String(fields[key] || "").trim(); })) {
@@ -452,11 +436,13 @@ function preflightSubmission_(payload) {
     folder.getId();
     let existingEvidence = null;
     let evidenceName = "";
-    if (qaFirestoreAudit) {
-      if (!/^QA-STUDENT-TB-[a-f0-9]{32}$/.test(String(payload.qaSubmissionId || "")) ||
+    const firestoreAudit = qaFirestoreAudit || productionFirestoreAudit;
+    if (firestoreAudit) {
+      const expectedPrefix = qaFirestoreAudit ? "QA-STUDENT-TB-" : "PROD-STUDENT-TB-";
+      if (!new RegExp("^" + expectedPrefix + "[a-f0-9]{32}$").test(String(payload.qaSubmissionId || "")) ||
           !/^[a-f0-9]{64}$/.test(String(payload.qaRequestFingerprint || "")) ||
-          payload.qaSubmissionId !== "QA-STUDENT-TB-" + payload.qaRequestFingerprint.slice(0, 32)) {
-        throw new Error("QA 제출 식별자가 올바르지 않습니다.");
+          payload.qaSubmissionId !== expectedPrefix + payload.qaRequestFingerprint.slice(0, 32)) {
+        throw new Error("제출 식별자가 올바르지 않습니다.");
       }
       const suffix = payload.fileMimeType === "application/pdf" ? ".pdf" :
         payload.fileMimeType === "image/png" ? ".png" : ".jpg";
@@ -465,11 +451,11 @@ function preflightSubmission_(payload) {
       if (matches.hasNext()) {
         existingEvidence = matches.next();
         if (matches.hasNext() || existingEvidence.getMimeType() !== payload.fileMimeType ||
-            existingEvidence.getSize() !== blob.getBytes().length) throw new Error("QA 증빙 재시도 충돌입니다.");
+            existingEvidence.getSize() !== blob.getBytes().length) throw new Error("증빙 재시도 충돌입니다.");
       }
     }
-    return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details,
-      firestoreAudit: qaFirestoreAudit, existingEvidence: existingEvidence, evidenceName: evidenceName };
+    return { kind: "student-file", folder: folder, blob: blob, details: details,
+      firestoreAudit: firestoreAudit, existingEvidence: existingEvidence, evidenceName: evidenceName };
   }
   const ss = getSpreadsheet_();
   let destination = destinations[payload.type];
@@ -515,45 +501,18 @@ function preflightSubmission_(payload) {
     firestoreAudit: firestoreAudit };
 }
 
-function safeSubmissionCell_(value) {
-  const text = String(value || "");
-  return /^[=+\-@\t\r]/.test(text) ? "'" + text : text;
-}
-
 function appendStudentFileSubmission_(payload, prepared, requestId) {
-  const fields = payload.fields;
-  const submissionTitle = "결핵검진 진료회신 제출";
-  const studentName = String(fields.studentName || "").trim();
-  const fileName = String(payload.fileName || "").trim();
-  if (prepared.firestoreAudit && !prepared.existingEvidence) prepared.blob.setName(prepared.evidenceName);
+  if (!prepared.existingEvidence) prepared.blob.setName(prepared.evidenceName);
   const driveFile = prepared.existingEvidence || prepared.folder.createFile(prepared.blob);
-  const fileUrl = driveFile.getUrl();
   const fileId = driveFile.getId();
   const now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
-
-  if (!prepared.firestoreAudit) appendSubmissionRecord_(prepared.recordDestination, {
-    "제출일시": now,
-    "제출항목": submissionTitle,
-    "구분": "student_tb_reply",
-    "성명": safeSubmissionCell_(studentName),
-    "비고": prepared.details,
-    "파일명": safeSubmissionCell_(fileName),
-    "파일URL": fileUrl,
-    "처리상태": "접수",
-    "제출ID": requestId,
-    "제출항목ID": "student_tb_reply",
-    "제출명_정규화": submissionTitle,
-    "파일ID": fileId,
-    "파일MIME": payload.fileMimeType,
-    "최종수정일": now
-  });
 
   return {
     status: "success",
     success: true,
     result: "success",
     submittedAt: now,
-    fileId: prepared.firestoreAudit ? fileId : undefined
+    fileId: fileId
   };
 }
 
@@ -568,27 +527,6 @@ function validateSubmissionBlob_(blob) {
   const jpeg = mimeType === "image/jpeg" && values.slice(0, 3).join(",") === "255,216,255";
   const png = mimeType === "image/png" && values.join(",") === "137,80,78,71,13,10,26,10";
   if (!pdf && !jpeg && !png) throw new Error("파일 내용과 형식이 일치하지 않습니다.");
-}
-
-function getSubmissionRecordDestination_(ss) {
-  const sheet = ss.getSheetByName(SUBMISSION_RECORD_SHEET_NAME);
-  if (!sheet) throw new Error("제출 기록 시트가 준비되지 않았습니다.");
-  const lastColumn = Math.max(sheet.getLastColumn(), 1);
-  const headers = sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0]
-    .map(function(header) { return String(header || "").trim(); });
-  if (STUDENT_FILE_RECORD_HEADERS.some(function(header) { return headers.indexOf(header) === -1; })) {
-    throw new Error("제출 기록 시트 헤더가 올바르지 않습니다.");
-  }
-  return { sheet: sheet, headers: headers };
-}
-
-function appendSubmissionRecord_(destination, record) {
-  const sheet = destination.sheet;
-  const headers = destination.headers;
-  const row = headers.map(function(header) {
-    return record[header] !== undefined ? record[header] : "";
-  });
-  sheet.appendRow(row);
 }
 
 function findHeaderIndex_(headers, candidates) {

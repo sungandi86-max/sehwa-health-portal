@@ -13,7 +13,7 @@ export const SUBMISSION_WORKFLOWS = Object.freeze({
   cpr: Object.freeze({ id: "cpr", enabled: true, authPolicy: "current_staff", allowedRoles: ["staff", "homeroom", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: true, allowedMimeTypes: FILE_MIME_TYPES, maxFileSize: MAX_FILE_SIZE, destinationPolicy: "cpr_certificate", auditSheet: null, firestoreWritePolicy: "cpr_certificate_submissions+staff_submission_status", publicCardId: "cpr" }),
   tb: Object.freeze({ id: "tb", enabled: true, authPolicy: "current_staff_tb_guard", allowedRoles: ["staff", "homeroom", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: true, allowedMimeTypes: FILE_MIME_TYPES, maxFileSize: MAX_FILE_SIZE, destinationPolicy: "tb_certificate", auditSheet: null, firestoreWritePolicy: "tb_certificate_submissions+staff_submission_status", publicCardId: "tb" }),
   tb_registration: Object.freeze({ id: "tb_registration", enabled: true, authPolicy: "current_staff_tb_guard", allowedRoles: ["staff", "homeroom", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: false, allowedMimeTypes: [], maxFileSize: 0, destinationPolicy: "tb_registration_firestore", auditSheet: null, firestoreWritePolicy: "tb_registration_requests+staff_submission_status", publicCardId: "tb_registration" }),
-  student_tb_reply: Object.freeze({ id: "student_tb_reply", enabled: true, authPolicy: "public_student_reply", allowedRoles: ["student_or_guardian"], requiresCanonicalStaffId: false, acceptsFile: true, allowedMimeTypes: FILE_MIME_TYPES, maxFileSize: MAX_FILE_SIZE, destinationPolicy: "student_tb_reply", auditSheet: "제출기록", firestoreWritePolicy: "none", publicCardId: "student_tb_reply" }),
+  student_tb_reply: Object.freeze({ id: "student_tb_reply", enabled: true, authPolicy: "public_student_reply", allowedRoles: ["student_or_guardian"], requiresCanonicalStaffId: false, acceptsFile: true, allowedMimeTypes: FILE_MIME_TYPES, maxFileSize: MAX_FILE_SIZE, destinationPolicy: "student_tb_reply", auditSheet: null, firestoreWritePolicy: "student_submission_audit", publicCardId: "student_tb_reply" }),
   inbody: Object.freeze({ id: "inbody", enabled: true, authPolicy: "current_staff", allowedRoles: ["staff", "homeroom", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: false, allowedMimeTypes: [], maxFileSize: 0, destinationPolicy: "inbody_firestore", auditSheet: null, firestoreWritePolicy: "inbody_requests", publicCardId: "inbody" }),
   infection: Object.freeze({ id: "infection", enabled: false, authPolicy: "firestore_route_only", allowedRoles: ["homeroom_teacher", "health_teacher", "admin"], requiresCanonicalStaffId: false, acceptsFile: false, allowedMimeTypes: [], maxFileSize: 0, destinationPolicy: "none", auditSheet: null, firestoreWritePolicy: "student_health_submissions", publicCardId: "infection" }),
   recruit: Object.freeze({ id: "recruit", enabled: false, authPolicy: "firestore_route_only", allowedRoles: ["staff", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: false, allowedMimeTypes: [], maxFileSize: 0, destinationPolicy: "none", auditSheet: null, firestoreWritePolicy: "staff_submissions", publicCardId: "recruit" }),
@@ -80,10 +80,10 @@ export function buildScriptSubmission(workflow, payload, { firestoreAudit = fals
   }
   if (workflow.id === "student_tb_reply") {
     const student = { ...result, submissionType: "student-file" };
-    if (firestoreAudit && runtimeEnvironment === "qa") {
+    if (firestoreAudit && ["qa", "production"].includes(runtimeEnvironment)) {
       student.recordMode = "firestore";
-      student.runtimeEnvironment = "qa";
-      student.qaEvidenceFolderId = qaEvidenceFolderId;
+      student.runtimeEnvironment = runtimeEnvironment;
+      if (runtimeEnvironment === "qa") student.qaEvidenceFolderId = qaEvidenceFolderId;
     }
     return student;
   }
