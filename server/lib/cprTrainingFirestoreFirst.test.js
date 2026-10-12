@@ -17,12 +17,12 @@ test("CPR runtime no longer names the legacy status sheet", async () => {
   assert.equal(contents.some((content) => content.includes("교직원 심폐소생술 연수 이수")), false);
 });
 
-test("raw CPR evidence response remains available", async () => {
+test("CPR evidence audit is Firestore-first and no runtime Sheet destination remains", async () => {
   const registry = await readFile("server/lib/submissionWorkflows.js", "utf8");
   const script = await readFile("apps-script/Code.gs", "utf8");
   const client = await readFile("src/lib/staffSubmissions.js", "utf8");
-  assert.match(registry, /auditSheet: "응답_심폐소생술이수증"/);
-  assert.match(script, /cpr: \{ sheetName: "응답_심폐소생술이수증"/);
+  assert.match(registry, /auditSheet: null, firestoreWritePolicy: "cpr_certificate_submissions\+staff_submission_status"/);
+  assert.doesNotMatch(script, /응답_심폐소생술이수증/);
   assert.doesNotMatch(client, /응답_심폐소생술이수증/);
 });
 

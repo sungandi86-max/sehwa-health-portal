@@ -208,8 +208,6 @@ function CprForm({ onSubmit, submitting }) {
 
       await onSubmit({
         type: "cpr",
-        sheetName: "응답_심폐소생술이수증",
-        folderId: null,
         fields: { ...form },
         fileName,
         fileBase64: base64,

@@ -14,7 +14,6 @@ import SubmitModal from "./SubmitModal.jsx";
 const SUBMIT_TYPE_CONFIG = {
   cpr: {
     modalType: "cpr",
-    sheetName: "응답_심폐소생술이수증",
     aliases: ["cpr", "cpr_certificate", "심폐소생술", "심폐소생술이수증"],
     keywords: ["심폐소생술", "cpr", "이수증"],
   },

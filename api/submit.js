@@ -165,7 +165,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     if (workflow.id === "student_tb_reply" && !visitor) {
       return res.status(503).json({ status: "error", success: false, message: "익명 제출 보호 설정을 확인해 주세요." });
     }
-    const qaCprAudit = workflow.id === "cpr" && environment() === "qa";
+    const cprEnvironment = workflow.id === "cpr" ? environment() : null;
+    const cprAudit = workflow.id === "cpr" && ["qa", "production"].includes(cprEnvironment);
+    const qaCprAudit = cprAudit && cprEnvironment === "qa";
     if (qaCprAudit && !qaCprFolderId) {
       return res.status(503).json({ status: "error", success: false, message: "QA CPR 증빙 저장소가 설정되지 않았습니다." });
     }
@@ -173,7 +175,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
       : payload;
     const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, scriptPayload, {
-      firestoreAudit: qaCprAudit, runtimeEnvironment: qaCprAudit ? "qa" : "", qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : "",
+      firestoreAudit: cprAudit, runtimeEnvironment: cprEnvironment || "", qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : "",
     }), proxySecret, { visitor });
     if (!envelope) {
       return res.status(503).json({ status: "error", success: false, message: "제출 보안 설정이 필요합니다." });
@@ -215,7 +217,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       json = { ...json, staffId: tbGuard.staffId };
     }
     if (workflow.id === "cpr" && cprIdentity) {
-      if (qaCprAudit) {
+      if (cprAudit) {
         try {
           await cprCertificateStore.createRequest({
             staffId: cprIdentity.staffId,
@@ -244,7 +246,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         console.error("[CPR_STATUS_WRITE] Firestore status update failed.");
         return res.status(503).json({ status: "error", success: false, message: "이수증은 접수되었지만 CPR 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요." });
       }
-      json = qaCprAudit
+      json = cprAudit
         ? { status: "success", success: true, staffId: cprIdentity.staffId }
         : { ...json, staffId: cprIdentity.staffId };
     }

@@ -12,7 +12,9 @@
   Drive 파일은 `NOT_FOUND`이므로 canonical staffId를 유지한 `manual_review` 및
   `evidenceMissing=true`로 보존한다.
 - fileId 중복은 0건이다. Drive 파일의 이동·복사·삭제·권한 변경은 수행하지 않았다.
-- Production dry-run은 create 1, manual-review 5, skip 0, conflict 0이다. Production write는 0건이다.
+- Production 최초 dry-run은 create 1, manual-review 5, skip 0, conflict 0이었다. create-only apply 후
+  ledger 6건을 read-back했고 재실행 dry-run은 skip 6, conflict 0이다. 기존 CPR current status 94건은
+  migration에서 수정하지 않았다.
 
 ## QA runtime contract
 
@@ -21,11 +23,12 @@ QA의 CPR 제출은 기존 Firebase canonical staff 인증, 3MiB 파일 제한, 
 Vercel은 반환된 fileId를 QA audit ledger에 기록한 뒤 기존 QA CPR status를 갱신한다.
 관리자 read는 기존 `staff-directory` resource router의 `cpr-certificate-audit`을 사용한다.
 
-Production은 Phase 2 승인 전까지 기존 Drive 저장, `응답_심폐소생술이수증` append, Production CPR
-status 갱신을 그대로 유지한다. Sheet 삭제와 Production ledger migration은 Phase 1 범위가 아니다.
+Production도 Drive 파일 저장 후 `cpr_certificate_submissions_production`에 접수 이력을 기록하고 기존
+CPR status를 갱신한다. Apps Script는 Production과 QA 모두 CPR 응답 Sheet append를 수행하지 않는다.
+Production은 기존 CPR Drive 폴더와 proxy secret을, QA는 별도 폴더와 secret을 사용한다.
 
 ## Phase 2 gate
 
-Production migration 전에는 6행 mapping과 5개 missing evidence를 명시적으로 승인해야 한다.
-승인 후 migration read-back, idempotent dry-run, Production runtime 전환, Apps Script 기존 deployment
-갱신, 관리자 smoke, workbook dependency 0을 모두 확인해야 Sheet 삭제를 검토할 수 있다.
+6행 mapping과 5개 missing evidence 승인, migration read-back, idempotent dry-run 및 runtime 코드 전환은
+완료됐다. 기존 deployment ID를 유지한 Apps Script 운영 배포, 관리자 read-only smoke, workbook dependency
+0 및 Production 배포 확인을 모두 통과한 뒤에만 Sheet 삭제를 검토한다.

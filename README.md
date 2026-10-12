@@ -65,12 +65,12 @@ Apps Script 운영본을 갱신할 때는 현재 web app deployment ID/URL을 �
 
 | 시트명 | 열 구성 |
 |---|---|
-| 응답_심폐소생술이수증 | 제출일시 · 성명 · 소속/부서 · 교직원구분 · 이수일자 · 이수기관 · 파일명 · 파일링크 |
 | 응답_결핵검진확인증 | 제출일시 · 성명 · 소속/부서 · 교직원구분 · 검진일자 · 제출자료유형 · 파일명 · 파일링크 |
 | 응답_교직원결핵검진유형선택 | Firestore 감사원장 전환 전 legacy 원본. runtime read/write 없음 |
 | 제출기록 | 학생 결핵검진 진료회신 파일 접수 기록 |
 
 인바디 측정 신청의 신규 운영 원장은 `inbody_requests_production` Firestore 컬렉션입니다. 기존 `응답_인바디측정신청` 탭은 삭제 전 검증을 위해 유지하지만 신규 신청을 기록하지 않습니다.
+CPR 이수증은 Drive에 증빙 파일을 저장하고 `cpr_certificate_submissions_{environment}`에 접수 이력을 기록합니다. 기존 CPR 응답 탭은 migration 원본일 뿐 runtime read/write 및 백업 필수 탭이 아닙니다.
 
 ---
 

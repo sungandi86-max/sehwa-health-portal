@@ -61,11 +61,12 @@ test("server-owned payload strips destination and validates file contract", () =
   assert.equal(validateSubmissionPayload(SUBMISSION_WORKFLOWS.inbody, { type: "inbody", fields: { name: "QA", dept: "QA" } }).ok, false);
 });
 
-test("QA CPR payload requests Drive-only storage while Production keeps the Sheet path", () => {
+test("QA and Production CPR payloads both request Drive-only Firestore audit storage", () => {
   const qa = buildScriptSubmission(SUBMISSION_WORKFLOWS.cpr, { ...file, type: "cpr" }, { firestoreAudit: true });
-  const production = buildScriptSubmission(SUBMISSION_WORKFLOWS.cpr, { ...file, type: "cpr" });
+  const production = buildScriptSubmission(SUBMISSION_WORKFLOWS.cpr, { ...file, type: "cpr" },
+    { firestoreAudit: true, runtimeEnvironment: "production" });
   assert.equal(qa.recordMode, "firestore");
-  assert.equal("recordMode" in production, false);
+  assert.equal(production.recordMode, "firestore");
 });
 
 test("server accepts a 3MiB PDF and rejects one byte over before forwarding", async () => {
@@ -173,30 +174,42 @@ test("QA CPR writes Drive evidence to Firestore audit and status without a Sheet
   assert.equal(statusWrites, 1);
 });
 
-test("Production CPR preserves the existing Sheet response contract", async () => {
+test("Production CPR writes Drive evidence to the Production audit ledger without a Sheet record", async () => {
+  let forwarded;
+  let auditWrites = 0;
   const result = response();
   await submitHandler(request({ ...file, type: "cpr" }), result, {
     destinationUrl, proxySecret,
     environment: () => "production",
     verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
-    postScript: async () => ({ text: async () => JSON.stringify({
+    cprCertificateStore: { environment: "production", createRequest: async (input) => {
+      auditWrites += 1;
+      assert.equal(input.evidenceFile.fileId, "production-drive-file");
+      return { submissionId: "production-ledger-1" };
+    } },
+    postScript: async (_url, init) => { forwarded = JSON.parse(JSON.parse(init.body).payloadJson); return { text: async () => JSON.stringify({
       status: "success", fileId: "production-drive-file", fileUrl: "private",
-    }) }),
+    }) }; },
     saveCprStatus: async () => {},
   });
   assert.equal(result.statusCode, 200);
-  assert.equal(result.body.fileId, "production-drive-file");
-  assert.equal(result.body.fileUrl, "private");
+  assert.equal(forwarded.recordMode, "firestore");
+  assert.equal(forwarded.runtimeEnvironment, "production");
+  assert.equal(forwarded.qaEvidenceFolderId, "");
+  assert.equal(auditWrites, 1);
+  assert.equal(result.body.fileId, undefined);
+  assert.equal(result.body.fileUrl, undefined);
   assert.equal(result.body.staffId, "T022");
 });
 
-test("Apps Script skips only the QA CPR response Sheet append", () => {
+test("Apps Script skips CPR response Sheet append in QA and Production", () => {
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
   assert.match(code, /payload\.type === "cpr" && payload\.recordMode === "firestore"/);
   assert.match(code, /if \(!prepared\.firestoreAudit\) \{\s*appendSubmitRow_/);
   assert.match(code, /payload\.runtimeEnvironment === "qa"/);
+  assert.match(code, /payload\.runtimeEnvironment === "production"/);
   assert.match(code, /payload\.qaEvidenceFolderId/);
-  assert.match(code, /cpr: \{ sheetName: "응답_심폐소생술이수증"/);
+  assert.doesNotMatch(code, /응답_심폐소생술이수증/);
 });
 
 test("role mismatch rejects and authorized staff cannot override destinations", async () => {
@@ -382,7 +395,6 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   const sheet = { appendRow: (row) => { if (failAppend) throw new Error("fixture append failed"); assert.ok(row.length > 0); appended++; appendedRows.push(row); },
     getLastColumn: () => recordHeaders.length, getRange: () => ({ getDisplayValues: () => [recordHeaders] }) };
   const responseHeaders = {
-    [SUBMISSION_WORKFLOWS.cpr.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"],
     [SUBMISSION_WORKFLOWS.tb.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"],
   };
   let recordSheetPresent = true;
@@ -420,21 +432,22 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   assert.equal(callEnvelope({ ...signed, payloadJson: signed.payloadJson.replace("qa.png", "changed.png") }).status, "error");
   assert.equal(sheets.length, 0);
   for (const type of ["cpr", "tb"]) {
-    const result = call({ ...file, type, sheetName: "Injected", folderId: "Injected" });
+    const payload = type === "cpr"
+      ? { ...file, type, recordMode: "firestore", runtimeEnvironment: "production", qaEvidenceFolderId: "" }
+      : { ...file, type, sheetName: "Injected", folderId: "Injected" };
+    const result = call(payload);
     assert.equal(result.status, "success");
-    assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS[type].auditSheet);
+    if (type === "tb") assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS[type].auditSheet);
     assert.notEqual(folders.at(-1), "Injected");
   }
   assert.equal(call({ type: "inbody", fields: inbodyFields, sheetName: "Injected", folderId: "Injected" }).status, "error");
-  const originalCprHeaders = responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet];
-  responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet] = ["wrong", ...originalCprHeaders.slice(1)];
-  const badResponseHeader = buildSubmissionProxyEnvelope({ ...file, type: "cpr" }, proxySecret);
-  assert.equal(callEnvelope(badResponseHeader).status, "error");
-  assert.equal(properties.has(`SUBMISSION_GUARD_REQUEST_${badResponseHeader.requestId}`), false);
-  responseHeaders[SUBMISSION_WORKFLOWS.cpr.auditSheet] = originalCprHeaders;
+  const badCprContract = buildSubmissionProxyEnvelope({ ...file, type: "cpr" }, proxySecret);
+  assert.equal(callEnvelope(badCprContract).status, "error");
+  assert.equal(properties.has(`SUBMISSION_GUARD_REQUEST_${badCprContract.requestId}`), false);
   assert.equal(call({ type: "unknown", fields: {}, sheetName: "Injected" }).status, "error");
   assert.equal(sheets.includes("Injected"), false);
-  const replay = buildSubmissionProxyEnvelope({ ...file, type: "cpr" }, proxySecret);
+  const replay = buildSubmissionProxyEnvelope({ ...file, type: "cpr", recordMode: "firestore",
+    runtimeEnvironment: "production", qaEvidenceFolderId: "" }, proxySecret);
   assert.equal(callEnvelope(replay).status, "success");
   assert.equal(callEnvelope(replay).status, "error");
   const visitor = createHmac("sha256", proxySecret).update("visitor").digest("base64url");
@@ -500,10 +513,8 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   assert.equal(filesCreated, beforeRetry);
   failAppend = false;
   properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() + 10 * 60 * 1000));
-  const legacyCpr = { ...file, type: "cpr", sheetName: SUBMISSION_WORKFLOWS.cpr.auditSheet, folderId: "Injected" };
-  assert.equal(callEnvelope(legacyCpr).status, "success");
-  assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.cpr.auditSheet);
-  assert.notEqual(folders.at(-1), "Injected");
+  const legacyCpr = { ...file, type: "cpr", sheetName: "retired-cpr-sheet", folderId: "Injected" };
+  assert.equal(callEnvelope(legacyCpr).status, "error");
   assert.equal(callEnvelope({ type: "tb_registration", fields: { ...inbodyFields, registrationType: "학교 단체검진" },
     sheetName: "응답_교직원결핵검진유형선택" }).status, "error");
   assert.equal(callEnvelope(buildSubmissionProxyEnvelope({ type: "tb_registration", fields: { ...inbodyFields, registrationType: "학교 단체검진" } }, proxySecret)).status, "error");

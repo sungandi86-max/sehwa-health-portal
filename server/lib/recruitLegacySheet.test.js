@@ -23,7 +23,7 @@ test("admin receipt summary does not read the retired recruit sheet", () => {
     "JSON.stringify(buildAdminReceiptSections_(__spreadsheet))", context,
   ));
   assert.deepEqual(sections.map((section) => section.items.map((item) => item.id)), [
-    ["tb", "cpr"],
+    ["tb"],
     [],
   ]);
   assert.equal(reads.includes(legacySheetName), false);
@@ -47,7 +47,7 @@ test("backup integrity does not require the retired recruit sheet", () => {
   const result = JSON.parse(vm.runInContext(
     'JSON.stringify(readHealthRoomBackupIntegrity_("test-workbook"))', context,
   ));
-  assert.equal(result.expectedSheetCount, 3);
+  assert.equal(result.expectedSheetCount, 2);
   assert.deepEqual(result.missingSheets, []);
 });
 

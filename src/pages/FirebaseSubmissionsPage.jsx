@@ -54,7 +54,6 @@ const INTERNAL_TB_REGISTRATION_GUIDE_MARKERS = [
 
 const SHEET_SUBMISSION_TYPES = {
   cpr: {
-    sheetName: "응답_심폐소생술이수증",
     aliases: ["cpr", "cpr_certificate", "심폐소생술", "심폐소생술이수증"],
     keywords: ["심폐소생술", "cpr", "이수증"],
   },
