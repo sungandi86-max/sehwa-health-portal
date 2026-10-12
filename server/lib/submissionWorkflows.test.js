@@ -149,7 +149,7 @@ test("QA CPR writes Drive evidence to Firestore audit and status without a Sheet
   const result = response();
   await submitHandler(request({ ...file, type: "cpr", fields: { ...file.fields, institution: "QA fixture" } }), result, {
     destinationUrl, proxySecret, now: new Date("2026-10-12T03:00:00Z"),
-    environment: () => "qa",
+    environment: () => "qa", qaCprFolderId: "qa-folder-id",
     verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
     cprCertificateStore: { environment: "qa", createRequest: async (input) => {
       auditWrites += 1;
@@ -162,7 +162,8 @@ test("QA CPR writes Drive evidence to Firestore audit and status without a Sheet
       forwarded = JSON.parse(JSON.parse(init.body).payloadJson);
       return { text: async () => JSON.stringify({ status: "success", fileId: "qa-drive-file", fileUrl: "private" }) };
     },
-    saveCprStatus: async ({ payload }) => { statusWrites += 1; assert.equal(payload.staffId, "T022"); },
+    saveCprStatus: async ({ payload, collectionName }) => { statusWrites += 1; assert.equal(payload.staffId, "T022");
+      assert.equal(collectionName, "staff_submission_status_qa"); },
   });
   assert.equal(result.statusCode, 200);
   assert.equal(forwarded.recordMode, "firestore");
@@ -193,6 +194,8 @@ test("Apps Script skips only the QA CPR response Sheet append", () => {
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
   assert.match(code, /payload\.type === "cpr" && payload\.recordMode === "firestore"/);
   assert.match(code, /if \(!prepared\.firestoreAudit\) \{\s*appendSubmitRow_/);
+  assert.match(code, /payload\.runtimeEnvironment === "qa"/);
+  assert.match(code, /payload\.qaEvidenceFolderId/);
   assert.match(code, /cpr: \{ sheetName: "응답_심폐소생술이수증"/);
 });
 

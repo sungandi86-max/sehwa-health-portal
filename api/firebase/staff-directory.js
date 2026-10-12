@@ -22,6 +22,7 @@ import { TRAINING_PHASE2_RESOURCES } from "../../server/lib/trainingCenterPhase2
 import { trainingEnvironment } from "../../server/lib/trainingDeployment.js";
 import { isQaInbodyAssignment, isQaInbodyUid, qaInbodyDirectoryIdentity,
   QA_INBODY_EMAIL, QA_INBODY_ROLE, QA_INBODY_UID } from "../../server/lib/qaInbodySynthetic.js";
+import { isQaCprAssignment, QA_CPR_EMAIL, QA_CPR_UID } from "../../server/lib/qaCprSynthetic.js";
 import { handleTbRegistrationAuditResource } from "../../server/lib/tbRegistrationAuditApi.js";
 import { handleCprCertificateAuditResource } from "../../server/lib/cprCertificateAuditApi.js";
 
@@ -142,6 +143,30 @@ export async function handleQaInbodyLogin(req, res, { environment = trainingEnvi
   return res.status(200).json({ ok: true, customToken });
 }
 
+export async function handleQaCprLogin(req, res, { environment = trainingEnvironment,
+  verifyAdmin = verifyDirectoryAdmin, getAuth = getFirebaseAdminAuth, context = process.env } = {}) {
+  res.setHeader("Cache-Control", "private, no-store");
+  if (req.method !== "POST") return res.status(405).json({ ok: false, message: "지원하지 않는 요청입니다." });
+  if (environment(context) !== "qa") return res.status(403).json({ ok: false, message: "QA 전용 경로입니다." });
+  const access = await verifyAdmin(req);
+  if (!access.ok) return res.status(access.status).json({ ok: false, message: access.message });
+  const snapshot = await access.db.collection("user_assignments").doc(getAssignmentId(QA_CPR_UID)).get();
+  if (!snapshot.exists || !isQaCprAssignment(QA_CPR_UID, snapshot.data(), context)) {
+    return res.status(403).json({ ok: false, message: "QA CPR 신청 권한이 준비되지 않았습니다." });
+  }
+  const auth = getAuth();
+  let user;
+  try { user = await auth.getUser(QA_CPR_UID); }
+  catch (error) {
+    if (error?.code !== "auth/user-not-found") throw error;
+    user = await auth.createUser({ uid: QA_CPR_UID, email: QA_CPR_EMAIL, displayName: "[QA-CPR-TEST]" });
+  }
+  if (user.email !== QA_CPR_EMAIL || user.disabled) {
+    return res.status(409).json({ ok: false, message: "QA CPR 합성 계정 상태가 예상과 다릅니다." });
+  }
+  return res.status(200).json({ ok: true, customToken: await auth.createCustomToken(QA_CPR_UID) });
+}
+
 export async function staffDirectoryHandler(req, res, { trainingHandler = handleTrainingResource, trainingPhase2Handler = null } = {}) {
   sendCors(res, "GET, POST, OPTIONS");
 
@@ -154,6 +179,9 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
     }
     if (req.query?.resource === "qa-inbody-login") {
       return await handleQaInbodyLogin(req, res);
+    }
+    if (req.query?.resource === "qa-cpr-login") {
+      return await handleQaCprLogin(req, res);
     }
 
     if (req.query?.resource === "portal-roadmap") {

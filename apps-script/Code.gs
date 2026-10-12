@@ -438,8 +438,12 @@ function preflightSubmission_(payload) {
     folder.getId();
     return { kind: "student-file", recordDestination: recordDestination, folder: folder, blob: blob, details: details };
   }
-  const destination = destinations[payload.type];
+  let destination = destinations[payload.type];
   const firestoreAudit = payload.type === "cpr" && payload.recordMode === "firestore";
+  const qaFirestoreAudit = firestoreAudit && payload.runtimeEnvironment === "qa" &&
+    /^[A-Za-z0-9_-]{10,}$/.test(String(payload.qaEvidenceFolderId || ""));
+  if (firestoreAudit && !qaFirestoreAudit) throw new Error("QA CPR 저장소 구성이 올바르지 않습니다.");
+  if (qaFirestoreAudit) destination = { sheetName: destination.sheetName, folderId: payload.qaEvidenceFolderId };
   const sheet = firestoreAudit ? null : getSubmitSheet_(ss, destination.sheetName);
   if (!firestoreAudit) {
     const expectedHeaders = SUBMISSION_RESPONSE_HEADERS[payload.type];

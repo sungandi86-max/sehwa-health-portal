@@ -54,6 +54,7 @@ function buildTbStatusPayload(payload, staffId) {
 }
 
 export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
+  qaCprFolderId = process.env.QA_CPR_DRIVE_FOLDER_ID,
   loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore,
   tbRegistrationStore = tbRegistrationRequestStore, cprCertificateStore = cprCertificateSubmissionStore,
   saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
@@ -97,13 +98,17 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       }
     }
     if (workflow.authPolicy === "current_staff") {
-      cprIdentity = await verifyStaff(req, { allowQaInbodySynthetic: workflow.id === "inbody" && trainingEnvironment() === "qa" });
+      cprIdentity = await verifyStaff(req, {
+        allowQaInbodySynthetic: workflow.id === "inbody" && trainingEnvironment() === "qa",
+        allowQaCprSynthetic: workflow.id === "cpr" && trainingEnvironment() === "qa",
+      });
       if (!cprIdentity.ok) return res.status(cprIdentity.status).json({ status: "error", success: false, message: cprIdentity.message });
     }
     const identity = tbGuard || cprIdentity;
     const qaInbodyOnly = workflow.id === "inbody" && inbodyStore.backend === "firestore" && identity?.qaSynthetic === true;
+    const qaCprOnly = workflow.id === "cpr" && environment() === "qa" && identity?.qaCprSynthetic === true;
     if (workflow.requiresCanonicalStaffId && (!identity?.staffId ||
-      (!qaInbodyOnly && !identity.roles?.some((role) => workflow.allowedRoles.includes(role))))) {
+      (!qaInbodyOnly && !qaCprOnly && !identity.roles?.some((role) => workflow.allowedRoles.includes(role))))) {
       return res.status(403).json({ status: "error", success: false, message: "이 제출 유형을 이용할 권한이 없습니다." });
     }
     if (workflow.id === "tb_registration") {
@@ -161,7 +166,15 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       return res.status(503).json({ status: "error", success: false, message: "익명 제출 보호 설정을 확인해 주세요." });
     }
     const qaCprAudit = workflow.id === "cpr" && environment() === "qa";
-    const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, payload, { firestoreAudit: qaCprAudit }), proxySecret, { visitor });
+    if (qaCprAudit && !qaCprFolderId) {
+      return res.status(503).json({ status: "error", success: false, message: "QA CPR 증빙 저장소가 설정되지 않았습니다." });
+    }
+    const scriptPayload = qaCprOnly
+      ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
+      : payload;
+    const envelope = buildSubmissionProxyEnvelope(buildScriptSubmission(workflow, scriptPayload, {
+      firestoreAudit: qaCprAudit, runtimeEnvironment: qaCprAudit ? "qa" : "", qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : "",
+    }), proxySecret, { visitor });
     if (!envelope) {
       return res.status(503).json({ status: "error", success: false, message: "제출 보안 설정이 필요합니다." });
     }
@@ -225,6 +238,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
             trainingDate: payload?.fields?.completionDate,
             submissionStatus: "submitted",
           }),
+          collectionName: qaCprAudit ? "staff_submission_status_qa" : undefined,
         });
       } catch {
         console.error("[CPR_STATUS_WRITE] Firestore status update failed.");

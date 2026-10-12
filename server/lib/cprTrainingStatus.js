@@ -44,10 +44,10 @@ export function buildCprGroupTrainingStatus({ staffId, event }) {
   };
 }
 
-export async function saveCprTrainingStatus({ db, payload }) {
+export async function saveCprTrainingStatus({ db, payload, collectionName = "staff_submission_status" }) {
   if (!db || !payload?.staffId || payload.taskId !== CPR_TRAINING_TASK_ID) throw new RangeError("CPR 교육 상태 정보를 확인해 주세요.");
   const now = new Date();
-  await db.collection("staff_submission_status").doc(`${payload.staffId}_${CPR_TRAINING_TASK_ID}`).set({
+  await db.collection(collectionName).doc(`${payload.staffId}_${CPR_TRAINING_TASK_ID}`).set({
     ...payload,
     syncedAt: now,
     updatedAt: now,
