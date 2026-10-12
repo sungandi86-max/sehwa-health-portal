@@ -219,9 +219,10 @@ test("QA TB registration writes the Firestore audit ledger and status without Ap
         return { requestId: "qa-ledger-1", submittedAt: "2026-09-12T03:00:00.000Z" };
       },
     },
-    saveTbStatus: async ({ payload: status }) => {
+    saveTbStatus: async ({ payload: status, collectionName }) => {
       statusWrites += 1;
       assert.equal(status.staffId, "T022");
+      assert.equal(collectionName, "staff_submission_status_qa");
     },
     postScript: async () => { forwards += 1; throw new Error("QA must not call Apps Script"); },
   });
@@ -245,7 +246,10 @@ test("Production TB registration preserves the legacy Sheet append path", async 
     verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
     loadSubmissionConfig: async () => ({ registration: { enabled: true, startAt: "2026-09-11", endAt: "2026-09-14" } }),
     tbRegistrationStore: { environment: "production", createRequest: async () => { ledgerWrites += 1; } },
-    saveTbStatus: async () => { statusWrites += 1; },
+    saveTbStatus: async ({ collectionName }) => {
+      statusWrites += 1;
+      assert.equal(collectionName, undefined);
+    },
     postScript: async () => {
       forwards += 1;
       return { text: async () => JSON.stringify({ status: "success", success: true }) };

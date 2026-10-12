@@ -4,6 +4,7 @@ import {
   buildTbCertificateStatus,
   buildTbRegistrationStatus,
   getTbStatusFromSubmissionState,
+  saveTbScreeningStatus,
 } from "./tbScreeningStatus.js";
 
 test("registration status uses the authenticated canonical staffId", () => {
@@ -51,5 +52,21 @@ test("TB status builders reject missing canonical staffId", () => {
   assert.throws(
     () => buildTbRegistrationStatus({ staffId: "", registrationType: "단체검진 신청" }),
     /staffId/
+  );
+});
+
+test("TB status writer allows only the production and isolated QA collections", async () => {
+  const writes = [];
+  const db = { collection: (name) => ({ doc: (id) => ({
+    id,
+    get: async () => ({ exists: false }),
+    set: async () => writes.push({ name, id }),
+  }) }) };
+  const payload = buildTbRegistrationStatus({ staffId: "QA-001", registrationType: "QA" });
+  await saveTbScreeningStatus({ db, payload, collectionName: "staff_submission_status_qa" });
+  assert.equal(writes[0].name, "staff_submission_status_qa");
+  await assert.rejects(
+    saveTbScreeningStatus({ db, payload, collectionName: "staff_submission_status_untrusted" }),
+    /not allowed/
   );
 });

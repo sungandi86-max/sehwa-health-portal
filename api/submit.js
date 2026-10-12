@@ -131,6 +131,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         await saveTbStatus({
           db: tbGuard.db || getFirebaseAdminDb(),
           payload: buildTbStatusPayload(payload, tbGuard.staffId),
+          collectionName: "staff_submission_status_qa",
         });
       } catch {
         console.error("[TB_STATUS_WRITE] Firestore status update failed.");
