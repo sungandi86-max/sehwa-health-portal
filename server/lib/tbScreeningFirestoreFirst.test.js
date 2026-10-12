@@ -15,9 +15,9 @@ test("TB runtime no longer references the legacy status sheet", async () => {
   assert.equal(sources.some((source) => source.includes("교직원 결핵검진현황")), false);
 });
 
-test("Apps Script keeps the raw response tab without name-based master updates", async () => {
+test("Apps Script no longer reads or writes the TB registration response tab", async () => {
   const source = await readFile("apps-script/Code.gs", "utf8");
-  assert.equal(source.includes("응답_교직원결핵검진유형선택"), true);
+  assert.equal(source.includes("응답_교직원결핵검진유형선택"), false);
   assert.equal(source.includes("findTbScreeningMasterRow_"), false);
   assert.equal(source.includes("TB_GROUP_SCREENING_MASTER_TYPE"), false);
 });

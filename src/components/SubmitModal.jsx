@@ -804,7 +804,6 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig, forceCompleted = f
 
     await onSubmit({
       type: "tb_registration",
-      sheetName: "응답_교직원결핵검진유형선택",
       folderId: null,
       fields: { name: identity.name, dept: identity.department, registrationType: getFixedTbRegistrationType() },
       fileName: null,

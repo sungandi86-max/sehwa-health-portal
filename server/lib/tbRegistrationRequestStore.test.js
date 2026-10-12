@@ -5,16 +5,26 @@ import { buildLegacyTbRegistrationAuditRecord, planLegacyTbRegistrationMigration
 
 function databaseFixture() {
   const documents = new Map();
+  const createDocument = (name, id, value) => {
+    const key = `${name}/${id}`;
+    if (documents.has(key)) throw new Error("already exists");
+    documents.set(key, value);
+  };
   return {
     documents,
     database: () => ({
+      batch: () => {
+        const creates = [];
+        return {
+          create: (reference, value) => creates.push({ reference, value }),
+          commit: async () => creates.forEach(({ reference, value }) => createDocument(reference.name, reference.id, value)),
+        };
+      },
       collection: (name) => ({
         doc: (id) => ({
-          create: async (value) => {
-            const key = `${name}/${id}`;
-            if (documents.has(key)) throw new Error("already exists");
-            documents.set(key, value);
-          },
+          name,
+          id,
+          create: async (value) => createDocument(name, id, value),
           get: async () => {
             const value = documents.get(`${name}/${id}`);
             return { exists: Boolean(value), id, data: () => value };
@@ -100,9 +110,37 @@ test("legacy dry-run skips the same fingerprint and reports conflicting existing
   const skipped = planLegacyTbRegistrationMigration({ environment: "production", now: input.now,
     rows: [input], existing: [record] });
   assert.equal(skipped.skip, 1);
+  assert.equal(skipped.canonicalSkip, 1);
+  assert.equal(skipped.manualReviewSkip, 0);
   assert.equal(skipped.create, 0);
   const conflict = planLegacyTbRegistrationMigration({ environment: "production", now: input.now,
     rows: [input], existing: [{ ...record, originalRowFingerprint: "different" }] });
   assert.equal(conflict.conflict, 1);
   assert.equal(conflict.create, 0);
+});
+
+test("legacy apply creates canonical and manual-review records without overwriting", async () => {
+  const fixture = databaseFixture();
+  const store = new TbRegistrationRequestStore({
+    database: fixture.database,
+    context: () => ({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }),
+  });
+  const now = new Date("2026-10-12T02:00:00.000Z");
+  const rows = [
+    { sourceRow: 2, matchStatus: "matched", staffId: "T095",
+      original: { timestamp: "2026-09-11", name: "legacy", department: "dept", selectedType: "단체검진 신청", note: "" } },
+    { sourceRow: 9, matchStatus: "manual_review", candidateStaffId: "T043",
+      original: { timestamp: "", name: "legacy-2", department: "", selectedType: "", note: "" } },
+  ];
+  const plan = planLegacyTbRegistrationMigration({ environment: "production", rows, now });
+  assert.deepEqual(await store.applyLegacyMigration(plan), { created: 2 });
+  const saved = await store.listRequests();
+  assert.equal(saved.length, 2);
+  assert.equal(saved.filter((item) => item.manualReview).length, 1);
+  const rerun = planLegacyTbRegistrationMigration({ environment: "production", rows, existing: saved, now });
+  assert.equal(rerun.canonicalSkip, 1);
+  assert.equal(rerun.manualReviewSkip, 1);
+  assert.equal(rerun.conflict, 0);
+  await assert.rejects(() => store.applyLegacyMigration({ ...plan, conflict: 1 }), /충돌 없는/);
+  await assert.rejects(() => store.applyLegacyMigration(plan), /already exists/);
 });

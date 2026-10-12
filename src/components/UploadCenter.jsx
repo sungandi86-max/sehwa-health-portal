@@ -20,7 +20,6 @@ const SUBMIT_TYPE_CONFIG = {
   },
   tb_registration: {
     modalType: "tb_registration",
-    sheetName: "응답_교직원결핵검진유형선택",
     aliases: ["tb_registration", "tb-registration", "tb_group", "tb_group_screening", "tb_reply", "tb_response", "결핵검진회신서", "결핵검진유형선택"],
     keywords: ["교직원 결핵검진 단체검진", "단체검진 신청", "교직원 결핵검진 유형", "결핵검진 유형 선택", "결핵검진 회신", "회신서"],
   },

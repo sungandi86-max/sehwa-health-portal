@@ -66,12 +66,17 @@ export function buildLegacyTbRegistrationAuditRecord({ environment, sourceRow, o
 export function planLegacyTbRegistrationMigration({ environment, rows, existing = [], now = new Date() }) {
   const existingById = new Map(existing.map((item) => [item.requestId, item]));
   const records = rows.map((row) => buildLegacyTbRegistrationAuditRecord({ environment, now, ...row }));
-  const result = { create: 0, skip: 0, conflict: 0, manualReview: 0, records: [], conflicts: [] };
+  const result = {
+    create: 0, manualReview: 0, skip: 0, canonicalSkip: 0, manualReviewSkip: 0,
+    conflict: 0, records: [], conflicts: [],
+  };
   for (const record of records) {
     const current = existingById.get(record.requestId);
     if (current) {
       if (current.originalRowFingerprint === record.originalRowFingerprint && current.environment === environment) {
         result.skip += 1;
+        if (record.manualReview) result.manualReviewSkip += 1;
+        else result.canonicalSkip += 1;
       } else {
         result.conflict += 1;
         result.conflicts.push({ sourceRow: record.migration.sourceRow, code: "existing_record_conflict" });
@@ -135,6 +140,24 @@ export class TbRegistrationRequestStore {
     const snapshot = await this.database().collection(this.collectionName).get();
     return snapshot.docs.map((doc) => this.readDocument(doc))
       .sort((left, right) => right.submittedAt.localeCompare(left.submittedAt));
+  }
+
+  async applyLegacyMigration(plan) {
+    if (!plan || plan.conflict !== 0 || !Array.isArray(plan.records)) {
+      throw new Error("충돌 없는 legacy migration plan이 필요합니다.");
+    }
+    const database = this.database();
+    const batch = database.batch();
+    for (const record of plan.records) {
+      if (record.environment !== this.environment || record.requestId !== legacyRequestId(
+        record.migration?.sourceRow, record.originalRowFingerprint,
+      )) {
+        throw new Error("legacy migration record의 환경 또는 ID가 올바르지 않습니다.");
+      }
+      batch.create(database.collection(this.collectionName).doc(record.requestId), record);
+    }
+    await batch.commit();
+    return { created: plan.records.length };
   }
 
   readDocument(snapshot) {

@@ -36,8 +36,7 @@ const STUDENT_FILE_RECORD_HEADERS = [
 ];
 const SUBMISSION_RESPONSE_HEADERS = {
   cpr: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"],
-  tb: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"],
-  tb_registration: ["제출일시", "성명", "소속/부서", "검진유형", "비고"]
+  tb: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"]
 };
 const STUDENT_CARE_PROJECTION_SYNC = {
   statusProperty: "STUDENT_CARE_PROJECTION_SYNC_STATUS",
@@ -60,8 +59,6 @@ const HEALTH_ROOM_BACKUP = {
     "응답_결핵검진확인증"
   ]
 };
-
-const TB_GROUP_REQUEST_RESPONSE_VALUE = "단체검진 신청";
 
 // ════════════════════════════════════════════════════════════════
 // onEdit
@@ -343,12 +340,10 @@ function legacySubmissionDuringTransition_(request) {
   const legacyTypes = {
     cpr: "응답_심폐소생술이수증",
     tb: "응답_결핵검진확인증",
-    tb_registration: "응답_교직원결핵검진유형선택",
     "student-file": "응답_결핵검진진료회신"
   };
-  const type = request.type || (request.sheetName === legacyTypes.tb_registration ? "tb_registration" : "");
+  const type = request.type || "";
   if (!legacyTypes[type] || request.sheetName !== legacyTypes[type]) throw new Error("지원하지 않는 이전 제출 형식입니다.");
-  if (type === "tb_registration") throw new Error("단체검진 신청은 서명된 서버 요청만 허용됩니다.");
   return { type: type, fields: request.fields, fileName: request.fileName, fileBase64: request.fileBase64, fileMimeType: request.fileMimeType };
 }
 
@@ -414,8 +409,7 @@ function reserveSubmissionProxy_(request, payload) {
 function preflightSubmission_(payload) {
   const destinations = {
     cpr: { sheetName: "응답_심폐소생술이수증", folderId: FOLDER_IDS.cpr },
-    tb: { sheetName: "응답_결핵검진확인증", folderId: FOLDER_IDS.tb },
-    tb_registration: { sheetName: "응답_교직원결핵검진유형선택", folderId: null }
+    tb: { sheetName: "응답_결핵검진확인증", folderId: FOLDER_IDS.tb }
   };
   if (!payload || (payload.type !== "student-file" && !destinations[payload.type])) {
     throw new Error("지원하지 않는 제출 유형입니다.");
@@ -456,8 +450,7 @@ function preflightSubmission_(payload) {
     throw new Error("파일 제출 구성이 올바르지 않습니다.");
   }
   const requiredFields = {
-    cpr: ["name", "completionDate"], tb: ["name", "checkupDate"],
-    tb_registration: ["name", "registrationType"]
+    cpr: ["name", "completionDate"], tb: ["name", "checkupDate"]
   };
   if (requiredFields[payload.type].some(function(key) { return !String(payload.fields[key] || "").trim(); })) {
     throw new Error("제출 필수 항목을 확인해 주세요.");
@@ -574,9 +567,6 @@ function appendSubmitRow_(sheet, sheetName, fields, now, fileName, fileLink) {
     sheet.appendRow([now, fields.name, fields.dept, fields.staffType,
       fields.note || "", fileName, fileLink]);
 
-  } else if (sheetName === "응답_교직원결핵검진유형선택") {
-    const responseRegistrationType = TB_GROUP_REQUEST_RESPONSE_VALUE;
-    sheet.appendRow([now, fields.name, fields.dept, responseRegistrationType, ""]);
   } else if (sheetName === "응답_결핵검진진료회신") {
     sheet.appendRow([
       now,

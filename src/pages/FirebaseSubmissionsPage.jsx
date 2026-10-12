@@ -59,7 +59,6 @@ const SHEET_SUBMISSION_TYPES = {
     keywords: ["심폐소생술", "cpr", "이수증"],
   },
   tb_registration: {
-    sheetName: "응답_교직원결핵검진유형선택",
     aliases: ["tb_registration", "tb-registration", "tb_reply", "tb_response", "결핵검진유형선택"],
     keywords: ["교직원 결핵검진 단체검진", "교직원 결핵검진 유형", "단체검진 신청", "결핵검진 유형 선택"],
   },

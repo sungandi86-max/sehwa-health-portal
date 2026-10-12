@@ -12,7 +12,7 @@ Read-only workbook audit: 23 tabs; 270 formula cells inspected across bounded A1
 
 ## 2026-10-08 TB Firestore-First Update
 
-`tb-screening-2026`의 운영 master는 `staff_submission_status`이다. `교직원명단`의 canonical `staffId`만 identity join에 사용하며 이름, 이메일, 직책 조합으로 상태를 생성하거나 합치지 않는다. 단체검진 신청과 개인 확인증 제출은 인증된 현재 assignment의 `staffId`로 상태를 기록하고, `응답_교직원결핵검진유형선택`은 raw audit 탭으로만 유지한다. Apps Script는 더 이상 `교직원 결핵검진현황`을 읽거나 갱신하지 않는다.
+`tb-screening-2026`의 운영 master는 `staff_submission_status`이다. `교직원명단`의 canonical `staffId`만 identity join에 사용하며 이름, 이메일, 직책 조합으로 상태를 생성하거나 합치지 않는다. 단체검진 신청은 환경별 `tb_registration_requests_*` 감사원장에 접수 이력을 기록하고, 개인 확인증 제출은 기존 경로를 유지한다. 두 제출 모두 인증된 현재 assignment의 `staffId`로 현재 상태를 갱신한다. `응답_교직원결핵검진유형선택`은 이관 원본으로만 보존되며 runtime read/write는 없다. Apps Script는 더 이상 결핵검진 현황 또는 유형선택 탭을 읽거나 갱신하지 않는다.
 
 기존 `교직원 결핵검진현황` 대조 결과는 다음과 같다.
 

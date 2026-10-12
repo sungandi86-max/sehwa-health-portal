@@ -121,7 +121,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         submittedAt: saved.submittedAt, staffId: saved.staffId });
     }
 
-    if (workflow.id === "tb_registration" && tbRegistrationStore.environment === "qa") {
+    if (workflow.id === "tb_registration") {
       const saved = await tbRegistrationStore.createRequest({
         staffId: tbGuard.staffId,
         selectedType: payload?.fields?.registrationType,
@@ -131,7 +131,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         await saveTbStatus({
           db: tbGuard.db || getFirebaseAdminDb(),
           payload: buildTbStatusPayload(payload, tbGuard.staffId),
-          collectionName: "staff_submission_status_qa",
+          collectionName: tbRegistrationStore.environment === "qa" ? "staff_submission_status_qa" : undefined,
         });
       } catch {
         console.error("[TB_STATUS_WRITE] Firestore status update failed.");

@@ -39,7 +39,8 @@ test("canonical registry only enables current operating submit routes", () => {
 
 test("legacy TB registration modal sends an explicit canonical type", () => {
   const modal = fs.readFileSync(new URL("../../src/components/SubmitModal.jsx", import.meta.url), "utf8");
-  assert.match(modal, /type: "tb_registration",\s*sheetName: "응답_교직원결핵검진유형선택"/);
+  assert.match(modal, /type: "tb_registration"/);
+  assert.doesNotMatch(modal, /응답_교직원결핵검진유형선택/);
 });
 
 test("server-owned payload strips destination and validates file contract", () => {
@@ -178,9 +179,14 @@ test("missing dedicated proxy secret fails before Apps Script upload", async () 
 
 test("TB registration checks Firestore window before signing or forwarding", async () => {
   let forwards = 0;
+  let ledgerWrites = 0;
   const payload = { type: "tb_registration", fields: { name: "QA", registrationType: "학교 단체검진" } };
   const options = { destinationUrl, proxySecret, verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
-    tbRegistrationStore: { environment: "production" },
+    tbRegistrationStore: { environment: "production", createRequest: async () => {
+      ledgerWrites += 1;
+      return { requestId: "production-ledger-1", submittedAt: "2026-09-12T03:00:00.000Z" };
+    } },
+    saveTbStatus: async () => {},
     postScript: async () => { forwards += 1; return { text: async () => JSON.stringify({ status: "error" }) }; } };
   const closed = response();
   await submitHandler(request(payload), closed, { ...options, loadSubmissionConfig: async () => ({ registration: {
@@ -195,7 +201,8 @@ test("TB registration checks Firestore window before signing or forwarding", asy
   await submitHandler(request(payload), open, { ...options, now: new Date("2026-09-12T03:00:00Z"), loadSubmissionConfig: async () => ({ registration: {
     enabled: true, startAt: "2026-09-11", endAt: "2026-09-14" } }) });
   assert.equal(open.statusCode, 200);
-  assert.equal(forwards, 1);
+  assert.equal(ledgerWrites, 1);
+  assert.equal(forwards, 0);
 });
 
 test("QA TB registration writes the Firestore audit ledger and status without Apps Script", async () => {
@@ -234,7 +241,7 @@ test("QA TB registration writes the Firestore audit ledger and status without Ap
   assert.equal(forwards, 0);
 });
 
-test("Production TB registration preserves the legacy Sheet append path", async () => {
+test("Production TB registration writes the Firestore audit ledger and status without Apps Script", async () => {
   let forwards = 0;
   let ledgerWrites = 0;
   let statusWrites = 0;
@@ -245,7 +252,10 @@ test("Production TB registration preserves the legacy Sheet append path", async 
     now: new Date("2026-09-12T03:00:00Z"),
     verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"], db: {} }),
     loadSubmissionConfig: async () => ({ registration: { enabled: true, startAt: "2026-09-11", endAt: "2026-09-14" } }),
-    tbRegistrationStore: { environment: "production", createRequest: async () => { ledgerWrites += 1; } },
+    tbRegistrationStore: { environment: "production", createRequest: async () => {
+      ledgerWrites += 1;
+      return { requestId: "production-ledger-1", submittedAt: "2026-09-12T03:00:00.000Z" };
+    } },
     saveTbStatus: async ({ collectionName }) => {
       statusWrites += 1;
       assert.equal(collectionName, undefined);
@@ -257,9 +267,9 @@ test("Production TB registration preserves the legacy Sheet append path", async 
   });
 
   assert.equal(result.statusCode, 200);
-  assert.equal(forwards, 1);
+  assert.equal(forwards, 0);
   assert.equal(statusWrites, 1);
-  assert.equal(ledgerWrites, 0);
+  assert.equal(ledgerWrites, 1);
 });
 
 test("anonymous student reply uses only fixed workflow and returns no storage destination", async () => {
@@ -310,7 +320,6 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   const responseHeaders = {
     [SUBMISSION_WORKFLOWS.cpr.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "이수일자", "이수기관", "파일명", "파일링크"],
     [SUBMISSION_WORKFLOWS.tb.auditSheet]: ["제출일시", "성명", "소속/부서", "교직원구분", "검진일자", "제출자료유형", "파일명", "파일링크"],
-    [SUBMISSION_WORKFLOWS.tb_registration.auditSheet]: ["제출일시", "성명", "소속/부서", "검진유형", "비고"],
   };
   let recordSheetPresent = true;
   let folderReady = true;
@@ -432,9 +441,8 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.cpr.auditSheet);
   assert.notEqual(folders.at(-1), "Injected");
   assert.equal(callEnvelope({ type: "tb_registration", fields: { ...inbodyFields, registrationType: "학교 단체검진" },
-    sheetName: SUBMISSION_WORKFLOWS.tb_registration.auditSheet }).status, "error");
-  assert.equal(callEnvelope(buildSubmissionProxyEnvelope({ type: "tb_registration", fields: { ...inbodyFields, registrationType: "학교 단체검진" } }, proxySecret)).status, "success");
-  assert.equal(sheets.at(-1), SUBMISSION_WORKFLOWS.tb_registration.auditSheet);
+    sheetName: "응답_교직원결핵검진유형선택" }).status, "error");
+  assert.equal(callEnvelope(buildSubmissionProxyEnvelope({ type: "tb_registration", fields: { ...inbodyFields, registrationType: "학교 단체검진" } }, proxySecret)).status, "error");
   assert.equal(callEnvelope({ ...legacyCpr, sheetName: "Injected" }).status, "error");
   assert.equal(callEnvelope({ ...legacyCpr, signature: "bad" }).status, "error");
   properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() - 1));
