@@ -242,6 +242,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       });
     }
     if (!isSuccessfulResponse(json)) {
+      if (qaStudentAudit && json.qaFailureStage) console.error("[STUDENT_REPLY_QA_SCRIPT]", json.qaFailureStage);
       return res.status(200).json({ status: "error", success: false, message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." });
     }
     if (qaStudentAudit) {

@@ -285,6 +285,8 @@ function doGet(e) {
 function doPost(e) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) return jsonOutput_({ status: "error", message: "잠시 후 다시 시도해 주세요." });
+  let qaStudentRequest = false;
+  let qaStage = "parse";
   try {
     const request = JSON.parse(e.postData.contents);
     if (request.action === "verifyAdminMaster") {
@@ -294,10 +296,21 @@ function doPost(e) {
       return jsonOutput_(getAdminReceiptSummary_(request));
     }
     const signed = request && request.version === 1;
+    if (signed) {
+      try {
+        const claimed = JSON.parse(request.payloadJson);
+        qaStudentRequest = claimed.type === "student-file" && claimed.runtimeEnvironment === "qa" &&
+          claimed.recordMode === "firestore";
+      } catch (ignored) {}
+    }
+    qaStage = "signature";
     const payload = signed ? verifySubmissionProxy_(request) : legacySubmissionDuringTransition_(request);
+    qaStage = "preflight";
     const prepared = preflightSubmission_(payload);
+    qaStage = "replay_guard";
     if (signed) reserveSubmissionProxy_(request, payload, prepared);
     if (payload.type === "student-file") {
+      qaStage = "drive_upload";
       const result = appendStudentFileSubmission_(payload, prepared, signed ? request.requestId : "");
       return ContentService.createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
@@ -320,7 +333,9 @@ function doPost(e) {
     }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." }))
+    return ContentService.createTextOutput(JSON.stringify({ status: "error",
+      qaFailureStage: qaStudentRequest ? qaStage : undefined,
+      message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." }))
       .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
