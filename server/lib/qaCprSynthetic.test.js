@@ -23,7 +23,7 @@ function request(payload) {
 }
 
 function database(data = assignment) {
-  return { collection(name) { assert.equal(name, "user_assignments"); return {
+  return { collection(name) { assert.equal(name, "user_assignments_qa"); return {
     doc() { return { get: async () => ({ exists: true, data: () => data }) }; },
   }; } };
 }

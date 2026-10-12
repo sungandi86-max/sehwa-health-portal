@@ -37,7 +37,8 @@ export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodyS
   }
   try {
     const db = database();
-    const snapshot = await db.collection("user_assignments").doc(getAssignmentId(decodedToken.uid)).get();
+    const assignmentCollection = isQaCprUid(decodedToken.uid) ? "user_assignments_qa" : "user_assignments";
+    const snapshot = await db.collection(assignmentCollection).doc(getAssignmentId(decodedToken.uid)).get();
     const assignment = snapshot.exists ? snapshot.data() : null;
     const staffId = String(assignment?.staffId || "").trim();
     const roles = Array.isArray(assignment?.roles) ? assignment.roles : [];

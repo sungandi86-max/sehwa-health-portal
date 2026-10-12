@@ -150,7 +150,7 @@ export async function handleQaCprLogin(req, res, { environment = trainingEnviron
   if (environment(context) !== "qa") return res.status(403).json({ ok: false, message: "QA 전용 경로입니다." });
   const access = await verifyAdmin(req);
   if (!access.ok) return res.status(access.status).json({ ok: false, message: access.message });
-  const snapshot = await access.db.collection("user_assignments").doc(getAssignmentId(QA_CPR_UID)).get();
+  const snapshot = await access.db.collection("user_assignments_qa").doc(getAssignmentId(QA_CPR_UID)).get();
   if (!snapshot.exists || !isQaCprAssignment(QA_CPR_UID, snapshot.data(), context)) {
     return res.status(403).json({ ok: false, message: "QA CPR 신청 권한이 준비되지 않았습니다." });
   }
