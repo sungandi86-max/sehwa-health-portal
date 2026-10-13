@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
-import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { TrainingAdminLayout } from "../components/TrainingAdminLayout.jsx";
 import { createTrainingQr, getTrainingAttendanceSummary, listManagedTrainings } from "../lib/trainingCenterPhase2.js";
 import { formatTrainingDateTime, recentTrainingAttendance, trainingAttendanceCounts } from "../lib/trainingAttendancePresentation.js";
 
@@ -40,34 +40,33 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
   }
   const counts = trainingAttendanceCounts(summary?.counts);
   const recent = recentTrainingAttendance(summary?.rows);
-  return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 QR 출석체크" description="QR 전자서명으로 교직원 교육 출석을 간편하게 확인합니다." displayName={displayName}>
-    <Link to="/firebase-admin/trainings" className={`${secondary} w-fit print:hidden`}>교육 관리로</Link>
+  return <TrainingAdminLayout displayName={displayName} eventId={eventId} active="qr" title="교직원 교육 QR 출석체크" description="교직원 연수의 출석을 QR코드와 전자서명으로 관리할 수 있습니다.">
     {!loaded && !message && <p className="text-sm text-[#627083]">교육 정보를 불러오는 중입니다.</p>}
     {loaded && !event && !message && <p role="status" className="text-sm text-[#627083]">교육을 찾을 수 없습니다.</p>}
-    {event && summary && <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(300px,0.9fr)]">
+    {event && summary && <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
       <div className="space-y-3">
-        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 sm:p-5">
-          <p className="text-xs font-semibold text-[#08754B]">현재 교육</p>
+        <section className="training-admin-panel p-4 sm:p-5">
+          <p className="text-xs font-semibold text-[#08754B]">선택한 교육</p>
           <h2 className="mt-2 break-keep text-xl font-bold leading-snug text-[#102047] sm:text-[22px]">{event["교육명"]}</h2>
           <dl className="mt-4 grid gap-3 border-y border-[#DDEAE7] py-4 text-sm sm:grid-cols-3">
             <div><dt className="text-xs font-semibold text-[#627083]">교육 일시</dt><dd className="mt-1 font-semibold text-[#102047]">{event["일자"]}<br />{event["시작시간"]} ~ {event["종료시간"]}</dd></div>
             <div><dt className="text-xs font-semibold text-[#627083]">장소</dt><dd className="mt-1 font-semibold text-[#102047]">{event["장소"] || "장소 미정"}</dd></div>
             <div><dt className="text-xs font-semibold text-[#627083]">출석 방식</dt><dd className="mt-1 font-semibold text-[#102047]">QR 전자서명</dd></div>
           </dl>
-          <dl className="mt-4 grid grid-cols-3 gap-2">
-            <div className="rounded-[10px] border border-[#D9E6F8] bg-[#EEF4FF] p-3"><dt className="text-xs font-semibold text-[#3154A3]">대상</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#102047]">{counts.target}<span className="ml-0.5 text-sm">명</span></dd></div>
-            <div className="rounded-[10px] border border-[#BFEBDC] bg-[#F0FBF7] p-3"><dt className="text-xs font-semibold text-[#08754B]">출석 완료</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#08754B]">{counts.signed}<span className="ml-0.5 text-sm">명</span></dd></div>
-            <div className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] p-3"><dt className="text-xs font-semibold text-[#9F2525]">미출석</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#B42318]">{counts.missing}<span className="ml-0.5 text-sm">명</span></dd></div>
+          <dl className="mt-4 grid grid-cols-3 border-y border-[#DDEAE7]">
+            <div className="training-admin-metric"><dt className="text-xs text-[#627083]">대상자</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#102047]">{counts.target}<span className="ml-0.5 text-sm">명</span></dd></div>
+            <div className="training-admin-metric"><dt className="text-xs text-[#627083]">출석 완료</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#08754B]">{counts.signed}<span className="ml-0.5 text-sm">명</span></dd></div>
+            <div className="training-admin-metric"><dt className="text-xs text-[#627083]">미출석</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#102047]">{counts.missing}<span className="ml-0.5 text-sm">명</span></dd></div>
           </dl>
           <div className="mt-4 flex flex-wrap gap-2 print:hidden"><Link className={secondary} to={`/firebase-admin/trainings/${encodeURIComponent(eventId)}/attendance`}>출석 현황 보기</Link><Link className={secondary} to={`/firebase-admin/trainings/${encodeURIComponent(eventId)}/final-sheet`}>연수등록부 미리보기</Link></div>
         </section>
-        <section className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DDEAE7] px-4 py-3"><div><h2 className="text-base font-bold text-[#102047]">최근 출석 현황</h2><p className="mt-1 text-xs text-[#627083]">전자서명 완료 순으로 표시합니다.</p></div><span className="rounded-[8px] bg-[#F0FBF7] px-2 py-1 text-xs font-semibold text-[#08754B]">실시간 집계</span></div>
-          {recent.length ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead className="bg-[#F8FAFA] text-xs text-[#627083]"><tr><th className="px-4 py-2 font-semibold">이름</th><th className="px-4 py-2 font-semibold">부서</th><th className="px-4 py-2 font-semibold">출석 시각</th><th className="px-4 py-2 font-semibold">상태</th></tr></thead><tbody className="divide-y divide-[#DDEAE7]">{recent.map((row) => <tr key={row.staffId}><td className="px-4 py-2.5 font-semibold text-[#102047]">{row.name}</td><td className="px-4 py-2.5 text-[#627083]">{row.department}</td><td className="px-4 py-2.5 tabular-nums text-[#627083]">{formatTrainingDateTime(row.signedAt, { timeOnly: true })}</td><td className="px-4 py-2.5"><span className="rounded-[8px] bg-[#F0FBF7] px-2 py-1 text-xs font-semibold text-[#08754B]">출석</span></td></tr>)}</tbody></table></div> : <p className="px-4 py-6 text-center text-sm text-[#627083]">아직 완료된 출석이 없습니다.</p>}
+        <section className="training-admin-panel overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DDEAE7] px-4 py-3"><div><h2 className="text-base font-bold text-[#102047]">최근 출석 현황</h2><p className="mt-1 text-xs text-[#627083]">전자서명 완료 순으로 표시합니다.</p></div><span className="text-xs text-[#627083]">조회 시점 기준</span></div>
+          {recent.length ? <><div className="hidden overflow-x-auto md:block"><table className="training-admin-table min-w-[620px]"><thead><tr><th>No.</th><th>교직원ID</th><th>이름</th><th>부서</th><th>출석시간</th><th>상태</th></tr></thead><tbody>{recent.map((row, index) => <tr key={row.staffId}><td className="tabular-nums">{index + 1}</td><td className="tabular-nums">{row.staffId}</td><td className="font-semibold text-[#102047]">{row.name}</td><td>{row.department}</td><td className="tabular-nums">{formatTrainingDateTime(row.signedAt, { timeOnly: true })}</td><td className="font-semibold text-[#08754B]">출석</td></tr>)}</tbody></table></div><ol className="divide-y divide-[#DDEAE7] md:hidden">{recent.map((row, index) => <li className="px-4 py-3 text-sm" key={row.staffId}><div className="flex justify-between gap-2"><span className="font-semibold text-[#102047]">{index + 1}. {row.name}</span><span className="font-semibold text-[#08754B]">출석</span></div><p className="mt-1 break-all text-xs text-[#627083]">{row.staffId} · {row.department} · {formatTrainingDateTime(row.signedAt, { timeOnly: true })}</p></li>)}</ol></> : <p className="px-4 py-6 text-center text-sm text-[#627083]">아직 완료된 출석이 없습니다.</p>}
           <div className="border-t border-[#DDEAE7] px-4 py-3 print:hidden"><Link className={secondary} to={`/firebase-admin/trainings/${encodeURIComponent(eventId)}/attendance`}>전체 출석 현황 보기</Link></div>
         </section>
       </div>
-      <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 lg:sticky lg:top-4" id="training-qr-print">
+      <section className="training-admin-panel p-4 xl:sticky xl:top-4" id="training-qr-print">
         <div className="text-center"><h2 className="text-base font-bold text-[#102047]">출석 QR</h2><p className="mt-1 break-keep text-xs leading-5 text-[#627083]">교직원이 QR을 스캔하면 본인 계정으로 전자서명 출석합니다.</p></div>
         {!qr && <div className="mt-4 rounded-[10px] border border-dashed border-[#B9CCCA] bg-[#F8FAFA] p-6 text-center"><p className="text-sm font-semibold text-[#102047]">QR을 생성해 출석을 시작하세요.</p><p className="mt-1 text-xs text-[#627083]">서명 가능 시간과 대상자 설정이 적용됩니다.</p></div>}
         {qr && <div className="mt-4 space-y-3"><div className="mx-auto aspect-square w-full max-w-[300px] rounded-[10px] border border-[#DDEAE7] bg-white p-3"><QRCodeSVG value={qr.url} title="교육 출석 QR" size={276} className="h-full w-full" /></div><p className="text-center text-xs tabular-nums text-[#627083]">유효기간: {new Date(qr.expiresAt).toLocaleString("ko-KR")}</p></div>}
@@ -77,7 +76,7 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
     </div>}
     {message && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
     <style>{`@media print { body * { visibility: hidden !important; } #training-qr-print, #training-qr-print * { visibility: visible !important; } #training-qr-print { position: absolute; inset: 0 auto auto 0; width: 100%; border: 0; } }`}</style>
-  </FirebaseV2PageShell>;
+  </TrainingAdminLayout>;
 }
 
 export default function FirebaseTrainingQrPage() {

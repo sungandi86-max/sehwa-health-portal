@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
-import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { TrainingAdminLayout } from "../components/TrainingAdminLayout.jsx";
 import { listTrainingDirectory, listTrainingTargets, saveTrainingTarget } from "../lib/trainingCenterPhase2.js";
 
 const control = "min-h-11 min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-2 text-sm text-[#102047] focus:border-[#0D4EA6] focus:outline-none";
@@ -53,8 +53,7 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
       .some((value) => value?.includes(query.trim())));
   }, [directory, targets, query]);
   const count = targets.filter((target) => ["대상", "교육 대상"].includes(target["대상상태"]) && target["제외여부"] !== "Y").length;
-  return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 대상 관리" description="재직 교직원의 교직원ID로 대상 여부를 지정합니다." displayName={displayName}>
-    <Link to="/firebase-admin/trainings" className="inline-flex min-h-11 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6]">교육 관리로</Link>
+  return <TrainingAdminLayout displayName={displayName} eventId={eventId} active="targets" title="교육 대상 관리" description="재직 교직원의 교직원ID로 대상 여부를 지정합니다.">
     {state === "loading" && <p className="text-sm text-[#627083]">대상 정보를 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
     {state === "ready" && <section className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
@@ -62,7 +61,7 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
       <ul>{shown.map((person) => <TargetRow key={person.staffId} person={person} current={targets.find((target) => target["교직원ID"] === person.staffId)} eventId={eventId} onSaved={reload} saveTarget={saveTarget} />)}</ul>
       {shown.length === 0 && <p className="border-t border-[#DDEAE7] p-3 text-sm text-[#627083]">검색 결과가 없습니다.</p>}
     </section>}
-  </FirebaseV2PageShell>;
+  </TrainingAdminLayout>;
 }
 
 export default function FirebaseTrainingTargetsPage() {
