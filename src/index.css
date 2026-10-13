@@ -300,6 +300,8 @@ body {
   line-height: 1.2;
 }
 
+.training-phase2-surface > div > header p { word-break: keep-all; }
+
 .training-phase2-surface > div > header > div > div:last-child {
   border: 0;
   background: transparent;
