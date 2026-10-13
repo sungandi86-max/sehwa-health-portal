@@ -342,7 +342,15 @@ Do not hide permission errors as empty states. Do not expose raw Firebase, token
 
 The training administrator area reuses the portal header and adds a compact local navigation rail. This is task navigation, not a second product identity. Only existing destinations become links; event-specific destinations appear only when an event is selected.
 
-- Layout: a 208px left rail beside a flexible work area at desktop widths; the same navigation becomes a horizontal row on smaller screens and can scroll within its own rail on mobile. The work area never causes page-level horizontal scrolling.
+The supplied school-administration reference (1448 × 1086) is the desktop visual contract for the QR attendance view. Preserve Sehwa's own logo, existing global navigation, route labels, permissions, and QR issuance rules rather than copying the reference school's identity or demo records. Below the global header, use a pale full-height 230px navigation rail and an unboxed content heading. The main content has a 28px gutter and a two-column first row: approximately 2:1 education/QR, with the recent-attendance table spanning both columns underneath. At desktop width the QR must sit beside, not below, the education summary. At tablet/mobile the order becomes education, QR, attendance.
+
+- Training page title: 34-36px, navy; selected event name: 28-30px. These are specific to the QR-focused reference view, not a new global heading scale.
+- Today card: pale mint surface `#F0FAF7`, one white three-column detail band, 8px radius. Counts sit in separate muted blue `#EEF6FF`, mint `#EAF9F4`, and rose `#FFF0F1` cells, with navy/mint/rose numeric emphasis. No hardcoded attendance values.
+- QR panel: white border with a square mint-tinted evidence frame. When no QR has been issued, show the existing empty/action state; never render a sample QR as if it were valid.
+- Recent attendance: a single full-width bordered table with quiet gray header, subtle row lines, mint status label, and the existing authorized data. Mobile converts rows to readable stacked items.
+- The reference's notification bell, unrelated school menus, and inactive materials/settings entries are not recreated because they do not map to current portal routes. The portal header stays the Sehwa identity.
+
+- Layout: a 230px left rail beside a flexible work area at desktop widths; the same navigation becomes a horizontal row on smaller screens and can scroll within its own rail on mobile. The work area never causes page-level horizontal scrolling.
 - Main dashboard: an operational current/upcoming training summary, restrained count strip, and a dense training list. The event QR page owns the large live QR panel and recent-attendance table.
 - Primitives: `.training-admin-layout` (two-column shell), `.training-admin-sidebar` (local navigation with active state), `.training-admin-panel` (bordered white work surface), `.training-admin-metric` (compact count cell), and `.training-admin-table` (desktop data table with a mobile list counterpart).
 - States: active navigation uses a quiet blue surface and a left accent; unavailable event links are absent rather than fake controls. Loading, empty, error, and disabled states retain their existing functional meaning.
