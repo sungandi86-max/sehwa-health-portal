@@ -359,3 +359,9 @@ The supplied school-administration reference (1448 × 1086) is the desktop visua
 ## 19. Administrator Workspaces
 
 The home page, training landing page, and Firebase administrator dashboard remain card-based entry portals without local navigation. Authenticated work destinations use the shared `WorkspaceShell` and `LocalSidebar` beneath the existing global header. The local rail is 230px at desktop sizes and opens with an explicit menu button on narrow screens. Only real routes are linked. Training event actions appear only after an event is selected. Sidebar visibility is presentation only; each page retains its existing authorization gate and server-side 403 behavior. Do not change the public student reply's header exception.
+
+## 20. Training Target Management
+
+The education target page keeps the existing training workspace shell and local sidebar. Its work area starts with the same preset, administrative-staff, hourly-instructor, and department controls used when creating an education event. The saved roster is the initial truth; opening the page never recalculates or saves it. The current count and proposed count appear together only after a deliberate change.
+
+The staff list is collapsed initially. Opening it reveals compact searchable rows with one inclusion checkbox per staff member. Required participation and exclusion reasons remain available in a per-person exception area, not as repeated full-width controls. One school-blue save action commits the reviewed target snapshot. On mobile, the controls and count precede the collapsed list and a single save action; the shared 44px touch target and restrained border-first surfaces still apply.

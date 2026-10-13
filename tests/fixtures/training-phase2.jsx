@@ -21,8 +21,8 @@ const runPreflight = async () => {
     signatureSheetReady: true, firebaseAdminReady: true,
   } };
 };
-const loadDirectory = async () => ({ items: [{ staffId: "QA001", name: "테스트 교직원", department: "보건실", position: "교사" }, { staffId: "QA002", name: "다른 교직원", department: "교무실", position: "교사" }] });
-const loadTargets = async () => ({ items: [{ eventId, "교직원ID": "QA001", "대상상태": "대상", "필수여부": "Y", "제외여부": "N" }] });
+const loadDirectory = async () => ({ items: [{ staffId: "QA001", name: "테스트 교직원", department: "보건실", position: "교사", employmentStatus: "재직" }, { staffId: "QA002", name: "다른 교직원", department: "교무실", position: "교사", employmentStatus: "재직" }] });
+const loadTargets = async () => ({ revision: "fixture-revision", items: [{ eventId, "교직원ID": "QA001", "대상상태": "대상", "필수여부": "Y", "제외여부": "N" }] });
 const createQr = async () => ({ path: `/training/attendance/${eventId}?challenge=fixture`, expiresAt: "2026-10-10T15:15:00+09:00", eventCount: 1 });
 const checkAttendance = async () => ({ ok: true, canSubmit: true, items: [{ eventId, title: item["교육명"], eligible: true, reason: "" }] });
 const model = { event: { eventId, title: item["교육명"], date: "2026-10-10", location: "본관 대강당" }, counts: { target: 1, signed: 1, excluded: 1 }, rows: [{ staffId: "QA001", name: "테스트 교직원", department: "보건실", position: "교사", status: "서명 완료", signedAt: "2026-10-10T15:02:00+09:00", hasSignatureImage: true }, { staffId: "QA002", name: "다른 교직원", department: "교무실", position: "교사", status: "제외", signedAt: "", hasSignatureImage: false }] };
@@ -31,7 +31,7 @@ const view = new URLSearchParams(window.location.search).get("view") || "admin";
 
 createRoot(document.getElementById("root")).render(<MemoryRouter>
   {view === "admin" && <TrainingAdminContent displayName="테스트 관리자" loadTrainings={loadTrainings} runPreflight={runPreflight} />}
-  {view === "targets" && <TrainingTargetsContent displayName="테스트 관리자" eventId={eventId} loadDirectory={loadDirectory} loadTargets={loadTargets} saveTarget={async () => ({ ok: true })} />}
+  {view === "targets" && <TrainingTargetsContent displayName="테스트 관리자" eventId={eventId} loadDirectory={loadDirectory} loadTargets={loadTargets} saveTargets={async () => ({ ok: true })} />}
   {view === "qr" && <TrainingQrContent displayName="테스트 관리자" eventId={eventId} loadTrainings={loadTrainings} createQr={createQr} />}
   {view === "attendance" && <TrainingAttendanceContent displayName="테스트 교직원" id={eventId} challenge="fixture" checkAttendance={checkAttendance} submitAttendance={async () => ({ ok: true })} />}
   {view === "summary" && <TrainingAttendanceAdminContent displayName="테스트 관리자" eventId={eventId} loadSummary={loadModel} />}

@@ -3,6 +3,12 @@ const PRESETS = new Set(["all", "teachers", "manual"]);
 
 const normalized = (value) => String(value ?? "").normalize("NFKC").trim();
 
+export function toggleTrainingTarget(selection, staffId, checked) {
+  return { ...selection,
+    includeStaffIds: checked ? [...new Set([...selection.includeStaffIds, staffId])] : selection.includeStaffIds.filter((id) => id !== staffId),
+    excludeStaffIds: checked ? selection.excludeStaffIds.filter((id) => id !== staffId) : [...new Set([...selection.excludeStaffIds, staffId])] };
+}
+
 export function selectTrainingTargets(directory, selection) {
   if (!selection || !PRESETS.has(selection.preset) || typeof selection.includeAdministrativeStaff !== "boolean" ||
     typeof selection.includeHourlyInstructors !== "boolean" || typeof selection.department !== "string" ||

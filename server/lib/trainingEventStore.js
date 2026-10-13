@@ -82,6 +82,21 @@ export class TrainingEventStore {
         targetStaffIds: members.filter((item) => item.targetStatus === "대상").map((item) => item.staffId), firestoreUpdatedAt: updatedAt });
     });
   }
+
+  async saveTargetSnapshot(eventId, snapshot, expectedSnapshot) {
+    const ref = this.database().collection(this.collectionName).doc(eventId);
+    await this.database().runTransaction(async (transaction) => {
+      const current = await transaction.get(ref);
+      const data = current.data();
+      if (!current.exists || data.eventId !== eventId || data.environment !== this.environment ||
+        JSON.stringify(data.targetSnapshot || null) !== JSON.stringify(expectedSnapshot || null)) {
+        throw new TrainingEventConflictError("교육 대상자 명단이 변경되었습니다. 다시 확인해 주세요.");
+      }
+      transaction.update(ref, { targetSnapshot: snapshot,
+        targetStaffIds: snapshot.members.filter((member) => member.targetStatus === "대상").map((member) => member.staffId),
+        firestoreUpdatedAt: new Date() });
+    });
+  }
 }
 
 export const trainingEventStore = new TrainingEventStore();

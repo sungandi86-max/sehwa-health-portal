@@ -95,9 +95,12 @@ export async function readTrainingSheets({ events = trainingEventStore, targets:
     const header = (targets[0] || []).map((value) => String(value ?? "").normalize("NFKC").trim());
     if (TARGET_HEADERS.some((name) => header.filter((value) => value === name).length !== 1)) throw new TrainingSourceNotReadyError();
     const snapshotIds = new Set(snapshotEvents.map((row) => row.eventId));
-    if (targets.slice(1).some((row) => snapshotIds.has(row[header.indexOf("eventId")]))) throw new TrainingSourceNotReadyError();
+    if (events.environment !== "qa" && targets.slice(1).some((row) => snapshotIds.has(row[header.indexOf("eventId")]))) {
+      throw new TrainingSourceNotReadyError();
+    }
     const extra = ["snapshotName", "snapshotDepartment", "snapshotPosition"];
-    const legacy = targets.slice(1).map((row) => [...TARGET_HEADERS.map((name) => row[header.indexOf(name)] || ""), "", "", ""]);
+    const legacy = targets.slice(1).filter((row) => !snapshotIds.has(row[header.indexOf("eventId")]))
+      .map((row) => [...TARGET_HEADERS.map((name) => row[header.indexOf(name)] || ""), "", "", ""]);
     const selected = snapshotEvents.flatMap((event) => event.targetSnapshot.members.map((person) => [event.eventId,
       person.staffId, person.targetStatus, person.required ? "Y" : "N", person.targetStatus === "제외" ? "Y" : "N",
       person.excludedReason || "", person.name, person.department, person.position]));

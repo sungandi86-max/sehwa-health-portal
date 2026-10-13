@@ -25,6 +25,7 @@ export const saveManagedTraining = (body) => request("training-admin-save", { me
 export const listTrainingDirectory = () => request("training-admin-directory");
 export const listTrainingTargets = (eventId) => request("training-targets", { params: { eventId } });
 export const saveTrainingTarget = (body) => request("training-target-save", { method: "POST", body });
+export const saveTrainingTargetsBatch = (body) => request("training-targets-batch-save", { method: "POST", body });
 export const createTrainingQr = (params) => request("training-qr", { params });
 export const checkTrainingAttendance = (params) => request("training-attendance-check", { params });
 export const submitTrainingAttendance = (body) => request("training-attendance-submit", { method: "POST", body });

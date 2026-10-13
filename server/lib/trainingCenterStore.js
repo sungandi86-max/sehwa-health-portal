@@ -93,6 +93,10 @@ export class TrainingCenterStore {
     return this.events.saveSnapshotTarget(eventId, values, person);
   }
 
+  async saveTargetSnapshot(eventId, snapshot, expectedSnapshot) {
+    return this.events.saveTargetSnapshot(eventId, snapshot, expectedSnapshot);
+  }
+
   async sheetId(name) {
     if (this.sheetIdCache.has(name)) return this.sheetIdCache.get(name);
     const auth = googleAuth(["https://www.googleapis.com/auth/spreadsheets.readonly"]);
