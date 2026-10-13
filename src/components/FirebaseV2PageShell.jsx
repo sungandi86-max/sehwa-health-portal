@@ -14,7 +14,7 @@ export function FirebaseV2PageShell({ label, title, description, displayName, cl
               </h1>
               <p className="mt-2 max-w-3xl text-[13px] font-medium leading-5 text-[#627083]">{description}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-[#DDEAE7] bg-[#F3F8F6] px-3 py-2 text-[13px] font-semibold text-[#102047] sm:justify-end">
+            <div className="firebase-v2-user-meta flex flex-wrap items-center gap-2 rounded-[10px] border border-[#DDEAE7] bg-[#F3F8F6] px-3 py-2 text-[13px] font-semibold text-[#102047] sm:justify-end">
               <span>{displayName} 선생님</span>
               <span className="text-[#DDEAE7]" aria-hidden="true">|</span>
               <span>
