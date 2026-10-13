@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { readJsonBody, readStaffDirectory, sendCors } from "./staffDirectory.js";
 import { getTrainingSpreadsheetId, TARGET_HEADERS, TRAINING_HEADERS, TRAINING_RUNTIME_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
@@ -66,6 +67,52 @@ function validateTarget(input, source, directory) {
   if (state === "제외" && !reason) throw new RangeError("제외 사유를 입력해 주세요.");
   return { eventId, "교직원ID": staffId, "대상상태": state, "필수여부": state === "대상" && input?.required === true ? "Y" : "N",
     "제외여부": state === "제외" ? "Y" : "N", "제외사유": reason.slice(0, 200) };
+}
+
+function targetRevision(rows) {
+  const stable = rows.map((row) => Object.fromEntries(TARGET_HEADERS.map((header) => [header, row[header] || ""])))
+    .sort((a, b) => a["교직원ID"].localeCompare(b["교직원ID"]));
+  return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
+}
+
+function managedTargetSnapshot(directory, currentRows, selection, details, timestamp) {
+  const selected = selectTrainingTargets(directory, selection);
+  if (!Array.isArray(details) || details.length > 500) throw new RangeError("개별 예외 설정을 확인해 주세요.");
+  const currentById = new Map(currentRows.map((row) => [row["교직원ID"], row]));
+  const activeById = new Map(directory.filter((person) => person.employmentStatus === "재직").map((person) => [person.staffId, person]));
+  const selectedIds = new Set(selected.members.map((person) => person.staffId));
+  const detailById = new Map();
+  for (const detail of details) {
+    const staffId = detail?.staffId;
+    if (!activeById.has(staffId) || detailById.has(staffId) || !["대상", "비대상", "제외"].includes(detail?.targetStatus) ||
+      (detail.targetStatus === "대상") !== selectedIds.has(staffId) || typeof detail.required !== "boolean" ||
+      typeof detail.excludedReason !== "string" || detail.excludedReason.length > 200 ||
+      (detail.targetStatus === "제외" && !detail.excludedReason.normalize("NFKC").trim())) {
+      throw new RangeError("개별 예외 설정을 확인해 주세요.");
+    }
+    detailById.set(staffId, detail);
+  }
+  const members = selected.members.map((person) => {
+    const previous = currentById.get(person.staffId);
+    const detail = detailById.get(person.staffId);
+    return { ...person, required: detail?.required ?? (previous && ["대상", "교육 대상"].includes(previous["대상상태"])
+      ? previous["필수여부"] === "Y" : true) };
+  });
+  for (const row of currentRows) {
+    const staffId = row["교직원ID"];
+    if (selectedIds.has(staffId) || detailById.has(staffId) ||
+      (row["대상상태"] !== "제외" && row["제외여부"] !== "Y")) continue;
+    const person = activeById.get(staffId);
+    members.push({ staffId, name: row.snapshotName || person?.name || "", department: row.snapshotDepartment || person?.department || "",
+      position: row.snapshotPosition || person?.position || "", targetStatus: "제외", required: false, excludedReason: row["제외사유"] || "" });
+  }
+  for (const detail of details) {
+    if (detail.targetStatus !== "제외") continue;
+    const person = activeById.get(detail.staffId);
+    members.push({ staffId: detail.staffId, name: person.name, department: person.department, position: person.position,
+      targetStatus: "제외", required: false, excludedReason: detail.excludedReason.normalize("NFKC").trim() });
+  }
+  return { schemaVersion: 1, confirmedAt: timestamp, updatedAt: timestamp, selection: selected.selection, members };
 }
 
 function qrScope(query) {
@@ -204,7 +251,28 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const items = sheetRows(base.targets, TARGET_HEADERS).filter((row) => row.eventId === eventId).map(({ rowNumber, ...row }) => ({ ...row,
           ...Object.fromEntries(["snapshotName", "snapshotDepartment", "snapshotPosition"].filter((name) => header.includes(name))
             .map((name) => [name, base.targets[rowNumber - 1]?.[header.indexOf(name)] || ""])) }));
-        return res.status(200).json({ ok: true, items });
+        return res.status(200).json({ ok: true, items, revision: targetRevision(items) });
+      }
+      if (resource === "training-targets-batch-save" && req.method === "POST") {
+        if (store.events?.environment !== "qa") return bad(res, 403, "QA 교육 대상 관리에서만 사용할 수 있습니다.");
+        const base = await store.readBase();
+        const training = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS).find((row) => row.eventId === eventId);
+        if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        const denied = denyUnownedTraining(res, access, training);
+        if (denied) return denied;
+        const currentRows = sheetRows(base.targets, TARGET_HEADERS).filter((row) => row.eventId === eventId);
+        if (body?.revision !== targetRevision(currentRows)) {
+          throw new TrainingEventConflictError("교육 대상자 명단이 변경되었습니다. 다시 확인해 주세요.");
+        }
+        const reviewed = selectTrainingTargets(access.directory, body?.targetSelection).members
+          .map(({ staffId, name, position, department }) => ({ staffId, name, position, department }));
+        if (JSON.stringify(body?.reviewedTargets) !== JSON.stringify(reviewed)) {
+          throw new TrainingEventConflictError("대상자 명단이 변경되었습니다. 다시 확인해 주세요.");
+        }
+        const existing = await store.events.getEvent(eventId);
+        const snapshot = managedTargetSnapshot(access.directory, currentRows, body.targetSelection, body.targetDetails || [], now().toISOString());
+        await store.saveTargetSnapshot(eventId, snapshot, existing?.targetSnapshot || null);
+        return res.status(200).json({ ok: true, targetCount: reviewed.length });
       }
       if (resource === "training-target-save" && req.method === "POST") {
         const base = await store.readBase();
@@ -213,6 +281,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const denied = denyUnownedTraining(res, access, training);
         if (denied) return denied;
+        if (store.events?.environment === "qa") return bad(res, 409, "QA 교육 대상은 일괄 설정에서 변경해 주세요.");
         const values = validateTarget(body, source, access.directory);
         const matches = source.targets.filter((row) => row.eventId === values.eventId && row["교직원ID"] === values["교직원ID"]);
         if (matches.length > 1) throw new TrainingSourceNotReadyError();

@@ -159,6 +159,17 @@ function fakeStore({ appendMode = "success", snapshotMode = false, snapshotEnvir
       values.targets = rows;
       calls.saved += 1;
     },
+    saveTargetSnapshot: async (eventId, snapshot, expectedSnapshot) => {
+      assert.deepEqual(snapshots.get(eventId)?.targetSnapshot || null, expectedSnapshot);
+      snapshots.set(eventId, { eventId, targetSnapshot: snapshot,
+        targetStaffIds: snapshot.members.filter((person) => person.targetStatus === "대상").map((person) => person.staffId) });
+      values.targets = [values.targets[0], ...values.targets.slice(1).filter((item) => item[0] !== eventId),
+        ...snapshot.members.map((person) => target(eventId, person.staffId, {
+          대상상태: person.targetStatus, 필수여부: person.required ? "Y" : "N",
+          제외여부: person.targetStatus === "제외" ? "Y" : "N", 제외사유: person.excludedReason || "",
+        }))];
+      calls.saved += 1;
+    },
     saveRow: async (name, headers, fields, rowNumber) => {
       const table = name === "앱_교직원교육" ? values.trainings : name === "교직원교육전자서명" ? values.signatures : values.targets;
       if (rowNumber) table[rowNumber - 1] = row(headers, fields); else table.push(row(headers, fields));
@@ -341,6 +352,55 @@ test("QA target snapshot rejects unknown and inactive staff before creating an e
   const invalid = await call("training-admin-save", { method: "POST", body: base });
   assert.equal(invalid.statusCode, 400);
   assert.equal(store.snapshots.size, 0);
+  assert.equal(store.calls.sheetWrites, 0);
+});
+
+test("QA target manager reads without writing and saves one reviewed snapshot", async () => {
+  const { call, store } = harness({ snapshotMode: true });
+  const opened = await call("training-targets", { token: "training-a", query: { eventId: "EVENT-1" } });
+  assert.equal(opened.statusCode, 200);
+  assert.equal(opened.body.items.length, 2);
+  assert.equal(store.calls.saved, 0);
+  assert.equal(store.calls.sheetWrites, 0);
+  const selection = { preset: "manual", includeAdministrativeStaff: true, includeHourlyInstructors: true,
+    department: "", includeStaffIds: ["QA001"], excludeStaffIds: ["QA002"] };
+  const reviewedTargets = selectTrainingTargets(directory, selection).members
+    .map(({ staffId, name, position, department }) => ({ staffId, name, position, department }));
+  const body = { eventId: "EVENT-1", revision: opened.body.revision, targetSelection: selection, reviewedTargets,
+    targetDetails: [{ staffId: "QA002", targetStatus: "제외", required: false, excludedReason: "연수 대상 제외" }] };
+  assert.equal((await call("training-targets-batch-save", { token: "training-b", method: "POST", body })).statusCode, 403);
+  assert.equal(store.calls.saved, 0);
+  assert.equal((await call("training-targets-batch-save", { token: "training-a", method: "POST", body })).statusCode, 200);
+  const snapshot = store.snapshots.get("EVENT-1");
+  assert.deepEqual(snapshot.targetStaffIds, ["QA001"]);
+  assert.equal(snapshot.targetSnapshot.members.find((person) => person.staffId === "QA002").excludedReason, "연수 대상 제외");
+  assert.equal(store.calls.sheetWrites, 0);
+  assert.equal((await call("training-targets-batch-save", { token: "training-a", method: "POST", body })).statusCode, 409);
+  assert.equal((await call("training-targets-batch-save", { token: "training-a", method: "POST", body: {
+    ...body, revision: (await call("training-targets", { token: "training-a", query: { eventId: "EVENT-1" } })).body.revision,
+    targetSelection: { ...selection, includeStaffIds: ["UNKNOWN"] },
+  } })).statusCode, 400);
+});
+
+test("QA target manager rejects a changed canonical roster after review", async () => {
+  const { call, store } = harness({ snapshotMode: true });
+  const opened = await call("training-targets", { token: "training-a", query: { eventId: "EVENT-1" } });
+  const selection = { preset: "manual", includeAdministrativeStaff: true, includeHourlyInstructors: true,
+    department: "", includeStaffIds: ["QA001"], excludeStaffIds: ["QA002"] };
+  const result = await call("training-targets-batch-save", { token: "training-a", method: "POST", body: {
+    eventId: "EVENT-1", revision: opened.body.revision, targetSelection: selection, reviewedTargets: [],
+  } });
+  assert.equal(result.statusCode, 409);
+  assert.equal(store.calls.saved, 0);
+});
+
+test("QA legacy row writer cannot race with the reviewed snapshot save", async () => {
+  const { call, store } = harness({ snapshotMode: true });
+  const result = await call("training-target-save", { token: "training-a", method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA001", targetStatus: "제외", required: false, excludedReason: "동시 수정",
+  } });
+  assert.equal(result.statusCode, 409);
+  assert.equal(store.calls.saved, 0);
   assert.equal(store.calls.sheetWrites, 0);
 });
 

@@ -460,6 +460,315 @@ body {
   font-size: 12px;
 }
 
+.training-target-manager {
+  display: grid;
+  gap: 16px;
+}
+
+.training-target-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.training-target-summary-card {
+  min-width: 0;
+  border: 1px solid var(--shh-border);
+  border-radius: 12px;
+  background: var(--shh-surface);
+  padding: 12px 14px;
+}
+
+.training-target-summary-card.is-primary {
+  border-color: #C9EDE3;
+  background: #EAF9F4;
+}
+
+.training-target-summary-card span,
+.training-target-section-title p,
+.training-target-savebar p,
+.training-target-roster-head p,
+.training-target-note,
+.training-target-row-person span,
+.training-target-row-meta {
+  color: var(--shh-muted);
+}
+
+.training-target-summary-card span {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.training-target-summary-card strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--shh-primary);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.training-target-summary-card small {
+  margin-left: 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.training-target-workflow,
+.training-target-picker--manager {
+  display: grid;
+  gap: 12px;
+}
+
+.training-target-section-title h2,
+.training-target-savebar h2,
+.training-target-roster-head h2 {
+  color: var(--shh-primary);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.training-target-section-title p,
+.training-target-savebar p,
+.training-target-roster-head p {
+  margin-top: 4px;
+  font-size: 13px;
+  word-break: keep-all;
+}
+
+.training-target-controls {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.training-target-fieldset {
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.training-target-fieldset legend,
+.training-target-field {
+  color: var(--shh-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.training-target-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.training-target-preset {
+  display: grid;
+  min-height: 72px;
+  cursor: pointer;
+  gap: 4px;
+  border: 1px solid var(--shh-border);
+  border-radius: 10px;
+  background: var(--shh-surface);
+  padding: 12px;
+  color: var(--shh-primary);
+}
+
+.training-target-preset input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.training-target-preset span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.training-target-preset small {
+  color: var(--shh-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.training-target-preset.is-selected {
+  border-color: #8FD9C7;
+  background: #EAF9F4;
+  box-shadow: inset 4px 0 var(--shh-accent-dark);
+}
+
+.training-target-preset:focus-within,
+.training-target-toggle:focus-within,
+.training-target-row-check:focus-within {
+  outline: 2px solid var(--shh-primary-soft);
+  outline-offset: 2px;
+}
+
+.training-target-options-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.55fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.training-target-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.training-target-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  gap: 8px;
+  border: 1px solid var(--shh-border);
+  border-radius: 10px;
+  background: var(--shh-surface);
+  padding: 8px 12px;
+  color: var(--shh-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.training-target-field {
+  display: grid;
+  gap: 8px;
+}
+
+.training-target-note {
+  font-size: 12px;
+}
+
+.training-target-roster {
+  overflow: hidden;
+}
+
+.training-target-roster-head,
+.training-target-savebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+}
+
+.training-target-roster-body {
+  border-top: 1px solid var(--shh-border);
+  padding: 14px;
+}
+
+.training-target-search {
+  display: grid;
+  max-width: 380px;
+  gap: 6px;
+  color: var(--shh-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.training-target-table-head,
+.training-target-row {
+  display: grid;
+  grid-template-columns: 48px minmax(130px, 1.1fr) minmax(120px, 0.9fr) minmax(110px, 0.8fr) minmax(96px, 0.7fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.training-target-table-head {
+  margin-top: 12px;
+  border-radius: 8px;
+  background: var(--shh-surface-muted);
+  padding: 9px 12px;
+  color: var(--shh-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.training-target-row-list {
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+.training-target-row {
+  border-bottom: 1px solid var(--shh-border);
+  padding: 10px 12px;
+}
+
+.training-target-row-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+}
+
+.training-target-row-person {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  color: var(--shh-primary);
+  font-size: 13px;
+}
+
+.training-target-row-person strong,
+.training-target-row-person span,
+.training-target-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.training-target-row-person span,
+.training-target-row-meta {
+  font-size: 12px;
+}
+
+.training-target-status {
+  justify-self: start;
+  border: 1px solid var(--shh-border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.training-target-status--target {
+  border-color: #C9EDE3;
+  background: #EAF9F4;
+  color: var(--shh-accent-dark);
+}
+
+.training-target-status--excluded {
+  border-color: #FFD6DC;
+  background: #FFF0F1;
+  color: #B42318;
+}
+
+.training-target-status--neutral {
+  background: var(--shh-surface-muted);
+  color: var(--shh-muted);
+}
+
+.training-target-row-detail {
+  grid-column: 1 / -1;
+}
+
+.training-target-savebar-detail {
+  color: var(--shh-muted);
+  font-size: 12px;
+}
+
+.training-target-empty {
+  border-top: 1px solid var(--shh-border);
+  padding: 14px 0 0;
+  color: var(--shh-muted);
+  font-size: 13px;
+}
+
 @media (max-width: 1023px) {
   .workspace-surface > div {
     grid-template-columns: minmax(0, 1fr);
@@ -477,6 +786,36 @@ body {
   .workspace-content { padding: 18px 16px 24px; }
   .training-qr-dashboard { grid-template-columns: minmax(0, 1fr); grid-template-areas: "overview" "qr" "recent"; }
   .training-qr-panel { min-height: 0; }
+  .training-target-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .training-target-picker--manager .training-target-preset-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .training-target-picker--manager .training-target-preset {
+    min-height: 48px;
+    align-items: center;
+    padding: 8px;
+  }
+  .training-target-picker--manager .training-target-preset span { font-size: 12px; }
+  .training-target-picker--manager .training-target-preset small { display: none; }
+  .training-target-picker--manager .training-target-controls { gap: 10px; }
+  .training-target-options-grid,
+  .training-target-preset-grid { grid-template-columns: minmax(0, 1fr); }
+  .training-target-table-head { display: none; }
+  .training-target-row {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .training-target-row-meta {
+    grid-column: 2 / 3;
+  }
+  .training-target-status {
+    grid-column: 3 / 4;
+    grid-row: 1 / 2;
+  }
+  .training-target-row button {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
 }
 
 @media (max-width: 640px) {
@@ -484,4 +823,32 @@ body {
   .workspace-sidebar { padding: 8px 16px; }
   .training-admin-metric { padding: 10px; }
   .training-qr-event > dl:first-of-type { padding: 12px; }
+  .training-target-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .training-target-summary-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+  }
+  .training-target-summary-card strong {
+    margin-top: 0;
+    font-size: 22px;
+  }
+  .training-target-controls,
+  .training-target-roster-head,
+  .training-target-savebar,
+  .training-target-roster-body { padding: 12px; }
+  .training-target-roster-head,
+  .training-target-savebar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .training-target-savebar { flex-direction: column-reverse; }
+  .training-target-roster-head button,
+  .training-target-savebar button {
+    width: 100%;
+    justify-content: center;
+  }
+  .training-target-search { max-width: none; }
+  .training-target-row-list { max-height: 520px; }
 }

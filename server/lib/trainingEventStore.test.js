@@ -184,6 +184,25 @@ test("QA event snapshot is atomic with creation and stays fixed when the staff s
   assert.equal(db.records.get(`training_events_production/${values.eventId}`), undefined);
 });
 
+test("explicit QA target edit replaces legacy Sheet roster without changing its rows", async () => {
+  const db = fakeDatabase();
+  const qa = new TrainingEventStore({ database: () => db, context: () => context });
+  await qa.saveEvent(values);
+  const sheetTargets = [TARGET_HEADERS, [values.eventId, "QA-OLD", "대상", "N", "N", ""]];
+  const before = await readTrainingSheets({ events: qa, workbook: () => "QA_WORKBOOK", targets: async () => sheetTargets });
+  assert.deepEqual(before.targets, sheetTargets);
+  assert.equal(db.calls.updates, 0);
+  const snapshot = { schemaVersion: 1, confirmedAt: "2026-10-14T00:00:00.000Z",
+    selection: { preset: "manual" }, members: [{ staffId: "QA-NEW", name: "새 대상", department: "교무부",
+      position: "교사", targetStatus: "대상", required: true }] };
+  await qa.saveTargetSnapshot(values.eventId, snapshot, null);
+  assert.deepEqual(db.records.get(`training_events_qa/${values.eventId}`).targetStaffIds, ["QA-NEW"]);
+  await assert.rejects(qa.saveTargetSnapshot(values.eventId, snapshot, null), TrainingEventConflictError);
+  const after = await readTrainingSheets({ events: qa, workbook: () => "QA_WORKBOOK", targets: async () => sheetTargets });
+  assert.deepEqual(after.targets.slice(1).map((row) => row[1]), ["QA-NEW"]);
+  assert.deepEqual(sheetTargets[1], [values.eventId, "QA-OLD", "대상", "N", "N", ""]);
+});
+
 test("synthetic QA event feeds public detail, QR eligibility, attendance and roster metadata", async () => {
   const active = { ...values, "사용여부": "사용", "교육명": "[QA] Firestore fixture" };
   const source = { trainings: [TRAINING_HEADERS, TRAINING_HEADERS.map((header) => active[header])],
