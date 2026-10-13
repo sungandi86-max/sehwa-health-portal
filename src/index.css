@@ -798,6 +798,9 @@ body {
   .training-target-picker--manager .training-target-preset span { font-size: 12px; }
   .training-target-picker--manager .training-target-preset small { display: none; }
   .training-target-picker--manager .training-target-controls { gap: 10px; }
+  .training-target-section-title p,
+  .training-target-picker--manager .training-target-note { display: none; }
+  .training-target-savebar > div:last-child button:last-child { order: -1; }
   .training-target-options-grid,
   .training-target-preset-grid { grid-template-columns: minmax(0, 1fr); }
   .training-target-table-head { display: none; }
