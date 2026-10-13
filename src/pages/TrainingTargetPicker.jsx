@@ -36,7 +36,8 @@ export function TrainingTargetPicker({ directory, selection, onChange, review = 
           <div className="training-target-preset-grid">
             {PRESET_OPTIONS.map(([value, label, description]) => <label key={value} className={`training-target-preset${selection.preset === value ? " is-selected" : ""}`}>
               <input type="radio" name="training-target-preset" value={value} checked={selection.preset === value}
-                onChange={() => onChange({ ...selection, preset: value, includeAdministrativeStaff: value === "all" })} />
+                onChange={() => onChange({ ...selection, preset: value, includeAdministrativeStaff: value === "all",
+                  includeStaffIds: value === "manual" ? members.map((person) => person.staffId) : [], excludeStaffIds: [] })} />
               <span>{label}</span>
               <small>{description}</small>
             </label>)}
