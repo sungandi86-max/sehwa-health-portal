@@ -394,8 +394,13 @@ body {
   gap: 16px;
 }
 
-.training-qr-overview { display: contents; }
-.training-qr-event { grid-area: overview; background: #F0FAF7; }
+.training-qr-overview {
+  grid-area: overview;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+.training-qr-event { background: #F0FAF7; }
 .training-qr-recent { grid-area: recent; }
 .training-qr-panel { grid-area: qr; }
 
@@ -406,20 +411,15 @@ body {
   padding: 18px;
 }
 
-.training-qr-event > dl:last-of-type {
-  gap: 10px;
-  border: 0;
-}
-
-.training-qr-event .training-admin-metric {
+.training-qr-counts .training-admin-metric {
   border: 0;
   border-radius: 8px;
   background: #EEF6FF;
 }
 
-.training-qr-event .training-admin-metric:nth-child(2) { background: #EAF9F4; }
-.training-qr-event .training-admin-metric:nth-child(3) { background: #FFF0F1; }
-.training-qr-event .training-admin-metric:nth-child(3) dd { color: #C72845; }
+.training-qr-counts .training-admin-metric:nth-child(2) { background: #EAF9F4; }
+.training-qr-counts .training-admin-metric:nth-child(3) { background: #FFF0F1; }
+.training-qr-counts .training-admin-metric:nth-child(3) dd { color: #C72845; }
 .training-qr-panel { min-height: 390px; }
 .training-qr-panel > div:nth-of-type(1) { margin-top: 18px; }
 .training-qr-panel > div:nth-of-type(2) { min-height: 260px; }
