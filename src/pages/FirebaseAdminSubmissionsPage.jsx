@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
-import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import {
   INFECTION_STATUS_LABELS,
   INFECTION_STATUS_OPTIONS,
@@ -342,7 +342,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
   const emptyMessage = activeTab === "staff" ? "해당 조건의 제출 내역이 없습니다." : "해당 조건의 감염병 보고가 없습니다.";
 
   return (
-    <FirebaseV2PageShell
+    <AdminWorkspaceLayout
       label="관리자"
       title="제출·보고 관리"
       description="교직원 제출과 감염병 보고를 탭으로 구분해 확인하고 처리 상태를 관리합니다."
@@ -434,7 +434,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
       >
         대시보드로 돌아가기
       </Link>
-    </FirebaseV2PageShell>
+    </AdminWorkspaceLayout>
   );
 }
 

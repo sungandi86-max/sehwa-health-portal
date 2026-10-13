@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import FirebaseUserDangerActions from "../components/FirebaseUserDangerActions.jsx";
-import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { getRoleLabel, getRoleLabels } from "../lib/firebaseRoles.js";
 import { checkUserDeletion, deactivateUserAccount, deleteUserAccount, updateUserDisplayNameOverride } from "../lib/adminUserAccounts.js";
@@ -967,7 +967,7 @@ function FirebaseUserAdminContent({ user, displayName }) {
   };
 
   return (
-    <FirebaseV2PageShell
+    <AdminWorkspaceLayout
       label="관리자"
       title="교직원 권한 관리"
       description="사용자 계정 정보와 학년도·학기별 역할, 담임 학급, 보직 권한을 분리해서 관리합니다."
@@ -1087,7 +1087,7 @@ function FirebaseUserAdminContent({ user, displayName }) {
           <StateMessage state={loadState} emptyMessage="등록된 교직원 계정이 없습니다." />
         )}
       </section>
-    </FirebaseV2PageShell>
+    </AdminWorkspaceLayout>
   );
 }
 

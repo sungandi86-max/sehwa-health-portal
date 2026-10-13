@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { FirebaseV2PageShell } from "./FirebaseV2PageShell.jsx";
+import { WorkspaceShell } from "./WorkspaceShell.jsx";
 
 const root = "/firebase-admin/trainings";
 
@@ -15,17 +14,6 @@ export function TrainingAdminLayout({ displayName, title, description, active, e
     ] : []),
   ];
 
-  return <FirebaseV2PageShell className="training-admin-surface" label="교직원 교육센터" title={title} description={description} displayName={displayName}>
-    <div className="training-admin-layout">
-      <aside className="training-admin-sidebar" aria-label="교육연수 메뉴">
-        <div className="training-admin-sidebar-heading">교육연수</div>
-        <nav aria-label="교육연수 관리">
-          {links.map((link) => <Link key={link.id} to={link.to} aria-current={active === link.id ? "page" : undefined}
-            className={`training-admin-nav-link${active === link.id ? " is-active" : ""}`}>{link.label}</Link>)}
-        </nav>
-        <Link className="training-admin-back" to="/training">교육센터로 돌아가기</Link>
-      </aside>
-      <div className="training-admin-workspace">{children}</div>
-    </div>
-  </FirebaseV2PageShell>;
+  return <WorkspaceShell className="training-admin-surface" label="교직원 교육센터" title={title} description={description} displayName={displayName}
+    sidebarLabel="교육연수" items={links} active={active} backTo="/training" backLabel="교육센터로 돌아가기">{children}</WorkspaceShell>;
 }

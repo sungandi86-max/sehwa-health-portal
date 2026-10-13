@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
-import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import {
   ACCESS_REQUEST_STATUSES,
@@ -244,7 +244,7 @@ function FirebaseAccessRequestsContent({ user, displayName }) {
   };
 
   return (
-    <FirebaseV2PageShell
+    <AdminWorkspaceLayout
       label="관리자"
       title="권한 신청 관리"
       description="기본 이용 권한과 담임 권한 신청을 확인하고 승인하거나 거절합니다."
@@ -307,7 +307,7 @@ function FirebaseAccessRequestsContent({ user, displayName }) {
             />
           ))}
       </section>
-    </FirebaseV2PageShell>
+    </AdminWorkspaceLayout>
   );
 }
 
