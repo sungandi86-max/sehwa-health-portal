@@ -15,7 +15,7 @@ export function TrainingAdminLayout({ displayName, title, description, active, e
     ] : []),
   ];
 
-  return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육센터" title={title} description={description} displayName={displayName}>
+  return <FirebaseV2PageShell className="training-admin-surface" label="교직원 교육센터" title={title} description={description} displayName={displayName}>
     <div className="training-admin-layout">
       <aside className="training-admin-sidebar" aria-label="교육연수 메뉴">
         <div className="training-admin-sidebar-heading">교육연수</div>

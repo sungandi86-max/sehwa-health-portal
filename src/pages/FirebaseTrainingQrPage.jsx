@@ -16,6 +16,8 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
   const [message, setMessage] = useState("");
   const [working, setWorking] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshedAt, setRefreshedAt] = useState(null);
   useEffect(() => {
     let active = true;
     setLoaded(false);
@@ -24,11 +26,12 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
         if (!active) return;
         setEvent(trainingResult.items.find((item) => item.eventId === eventId) || null);
         setSummary(summaryResult);
+        setRefreshedAt(new Date());
       })
       .catch((error) => { if (active) setMessage(error.message); })
       .finally(() => { if (active) setLoaded(true); });
     return () => { active = false; };
-  }, [eventId, loadSummary, loadTrainings]);
+  }, [eventId, loadSummary, loadTrainings, refreshKey]);
   async function generate(selectedMode) {
     setWorking(true); setMessage(""); setQr(null);
     try {
@@ -55,10 +58,11 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
             <div><dt className="text-xs font-semibold text-[#627083]">출석 방식</dt><dd className="mt-1 font-semibold text-[#102047]">QR 전자서명</dd></div>
           </dl>
         </section>
-        <dl className="training-qr-counts grid grid-cols-3 gap-2.5">
+        <dl className="training-qr-counts grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <div className="training-admin-metric"><dt className="text-xs text-[#627083]">대상자</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#102047]">{counts.target}<span className="ml-0.5 text-sm">명</span></dd></div>
             <div className="training-admin-metric"><dt className="text-xs text-[#627083]">출석 완료</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#08754B]">{counts.signed}<span className="ml-0.5 text-sm">명</span></dd></div>
             <div className="training-admin-metric"><dt className="text-xs text-[#627083]">미출석</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#102047]">{counts.missing}<span className="ml-0.5 text-sm">명</span></dd></div>
+            <div className="training-admin-metric"><dt className="text-xs text-[#627083]">현황 갱신</dt><dd className="mt-1 text-xs font-semibold tabular-nums text-[#102047]">{refreshedAt ? refreshedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" }) : "조회 전"}</dd><button type="button" disabled={!loaded} onClick={() => setRefreshKey((key) => key + 1)} className="mt-1 text-xs font-semibold text-[#087F72] underline disabled:opacity-50">새로고침</button></div>
         </dl>
         <div className="flex flex-wrap gap-2 print:hidden"><Link className={secondary} to={`/firebase-admin/trainings/${encodeURIComponent(eventId)}/attendance`}>출석 현황 보기</Link><Link className={secondary} to={`/firebase-admin/trainings/${encodeURIComponent(eventId)}/final-sheet`}>연수등록부 미리보기</Link></div>
       </div>
