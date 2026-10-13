@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { changeTrainingTargetPreset, selectTrainingTargets, toggleTrainingTarget } from "../../common/trainingTargetSelection.js";
 
-const control = "min-h-11 w-full rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm text-[#102047] focus:border-[#0D4EA6] focus:outline-none";
-const secondary = "min-h-11 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6]";
+const control = "min-h-11 w-full rounded-[9px] border border-[var(--shh-border)] bg-white px-3 text-sm text-[var(--shh-primary)] focus:border-[var(--shh-action)] focus:outline-none";
+const secondary = "min-h-11 rounded-[9px] border border-[var(--shh-border)] bg-white px-3 text-sm font-semibold text-[var(--shh-action)]";
 
 const PRESET_OPTIONS = [
   ["all", "전체 교직원", "재직 교직원을 기본 대상으로 설정"],
