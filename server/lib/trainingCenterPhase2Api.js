@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { readJsonBody, readStaffDirectory, sendCors } from "./staffDirectory.js";
-import { getTrainingSpreadsheetId, TARGET_HEADERS, TRAINING_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
+import { getTrainingSpreadsheetId, TARGET_HEADERS, TRAINING_HEADERS, TRAINING_RUNTIME_HEADERS, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { resolveTrainingAccess } from "./trainingCenterAccess.js";
 import { trainingCenterStore } from "./trainingCenterStore.js";
 import { AttendanceConflictError, assertCompletedAttendanceLock, attachAttendanceFile, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
@@ -42,6 +42,14 @@ function param(value) {
 
 function publicFinalModel(model) {
   return { event: model.event, counts: model.counts, rows: model.rows.map(({ fileId, ...row }) => ({ ...row, hasSignatureImage: Boolean(fileId) })) };
+}
+
+function canManageTraining(access, event) {
+  return access.isAdmin || (access.isTrainingAdmin && event?.ownerStaffId === access.assignment.staffId);
+}
+
+function denyUnownedTraining(res, access, event) {
+  return canManageTraining(access, event) ? null : bad(res, 403, "본인이 생성한 교육만 관리할 수 있습니다.");
 }
 
 function validateTarget(input, source, directory) {
@@ -92,7 +100,10 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       const access = await resolveTrainingAccess(req, { auth, db, directory });
       if (!access.ok) return bad(res, access.status, access.message);
       const adminOnly = !["training-attendance-check", "training-attendance-submit"].includes(resource);
-      if (adminOnly && !access.isAdmin) return bad(res, 403, "교육 관리자 권한이 없습니다.");
+      if (adminOnly && !access.isAdmin && !access.isTrainingAdmin) return bad(res, 403, "교육 관리자 권한이 없습니다.");
+      const topLevelOnly = resource === "training-runtime-preflight" || resource === "training-signature-storage-bootstrap" ||
+        resource.startsWith("training-attendance-recovery-");
+      if (topLevelOnly && !access.isAdmin) return bad(res, 403, "보건교사 또는 최상위 관리자 권한이 필요합니다.");
       if (req.method === "POST" || resource.startsWith("training-attendance-recovery-") ||
         (resource === "training-final-sheet" && req.query?.download === "pdf")) requireTrainingEnvironment();
       if (resource === "training-runtime-preflight") {
@@ -143,16 +154,24 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
 
       if (resource === "training-admin-list" && req.method === "GET") {
         const base = await store.readBase();
-        const items = sheetRows(base.trainings, TRAINING_HEADERS).filter((row) => row.eventId).map(({ rowNumber, ...row }) => row);
+        const items = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS).filter((row) => row.eventId && canManageTraining(access, row))
+          .map(({ rowNumber, ...row }) => row);
         return res.status(200).json({ ok: true, items });
       }
       if (resource === "training-admin-save" && req.method === "POST") {
         const base = await store.readBase();
-        const rows = sheetRows(base.trainings, TRAINING_HEADERS);
+        const rows = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS);
         const existing = rows.find((row) => row.eventId === body?.eventId);
         if (body?.eventId && !existing) return bad(res, 404, "수정할 교육을 찾을 수 없습니다.");
-        const input = !body?.eventId && store.events?.environment === "qa" ? { ...body, eventId: `QA-TR-${randomUUID()}` } : body;
+        if (existing) {
+          const denied = denyUnownedTraining(res, access, existing);
+          if (denied) return denied;
+        }
+        const ownerStaffId = existing ? existing.ownerStaffId : access.assignment.staffId;
+        const ownedInput = { ...body, ownerStaffId };
+        const input = !body?.eventId && store.events?.environment === "qa" ? { ...ownedInput, eventId: `QA-TR-${randomUUID()}` } : ownedInput;
         const values = validateTrainingInput(input, { existing });
+        values.ownerStaffId = ownerStaffId;
         if (!existing && rows.some((row) => row.eventId === values.eventId)) return bad(res, 409, "교육 ID가 이미 존재합니다.");
         await store.saveEvent(values, existing);
         return res.status(200).json({ ok: true, item: values });
@@ -164,14 +183,21 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (resource === "training-targets" && req.method === "GET") {
         if (!eventId) return bad(res, 400, "교육 ID가 필요합니다.");
         const base = await store.readBase();
-        const trainings = sheetRows(base.trainings, TRAINING_HEADERS);
-        if (!trainings.some((row) => row.eventId === eventId)) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        const trainings = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS);
+        const training = trainings.find((row) => row.eventId === eventId);
+        if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        const denied = denyUnownedTraining(res, access, training);
+        if (denied) return denied;
         const items = sheetRows(base.targets, TARGET_HEADERS).filter((row) => row.eventId === eventId).map(({ rowNumber, ...row }) => row);
         return res.status(200).json({ ok: true, items });
       }
       if (resource === "training-target-save" && req.method === "POST") {
         const base = await store.readBase();
-        const source = { trainings: sheetRows(base.trainings, TRAINING_HEADERS), targets: sheetRows(base.targets, TARGET_HEADERS) };
+        const source = { trainings: sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS), targets: sheetRows(base.targets, TARGET_HEADERS) };
+        const training = source.trainings.find((row) => row.eventId === eventId);
+        if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        const denied = denyUnownedTraining(res, access, training);
+        if (denied) return denied;
         const values = validateTarget(body, source, access.directory);
         const matches = source.targets.filter((row) => row.eventId === values.eventId && row["교직원ID"] === values["교직원ID"]);
         if (matches.length > 1) throw new TrainingSourceNotReadyError();
@@ -192,6 +218,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const source = parseTrainingSource(await store.readSource());
         const events = resolveEvents(source, scope);
         if (!events.length) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        if (events.some((item) => !canManageTraining(access, item))) return bad(res, 403, "본인이 생성한 교육만 관리할 수 있습니다.");
         const challenge = issueQrChallenge({ ...scope, secret: secret(), now: now().getTime() });
         const path = scope.eventGroupId ? `/training/attendance/group/${encodeURIComponent(scope.eventGroupId)}` : `/training/attendance/${encodeURIComponent(scope.eventId)}`;
         return res.status(200).json({ ok: true, path: `${path}?challenge=${encodeURIComponent(challenge)}`, expiresAt: new Date(now().getTime() + 15 * 60 * 1000).toISOString(), eventCount: events.length });
@@ -278,6 +305,9 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (["training-attendance-summary", "training-final-sheet"].includes(resource) && req.method === "GET") {
         if (!eventId) return bad(res, 400, "교육 ID가 필요합니다.");
         const source = parseTrainingSource(await store.readSource());
+        const event = source.trainings.find((row) => row.eventId === eventId);
+        const denied = denyUnownedTraining(res, access, event);
+        if (event && denied) return denied;
         const model = finalSheetModel(source, access.directory, eventId);
         if (!model) return bad(res, 404, "교육을 찾을 수 없습니다.");
         if (resource === "training-final-sheet" && ["pdf", "xlsx"].includes(req.query?.download)) {
@@ -321,6 +351,8 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const event = source.trainings.find((row) => row.eventId === eventId);
         const target = source.targets.find((row) => row.eventId === eventId && row["교직원ID"] === staffId);
         if (!event || !target || access.directory.filter((row) => row.staffId === staffId && row.employmentStatus === "재직").length !== 1) return bad(res, 404, "정정 대상을 찾을 수 없습니다.");
+        const denied = denyUnownedTraining(res, access, event);
+        if (denied) return denied;
         const active = source.signatures.find((row) => row.eventId === eventId && row["교직원ID"] === staffId && activeSignature(row));
         if (body.action === "cancel") {
           if (!active) {

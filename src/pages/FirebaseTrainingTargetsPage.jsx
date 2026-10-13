@@ -60,5 +60,5 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
 
 export default function FirebaseTrainingTargetsPage() {
   const { eventId } = useParams();
-  return <FirebaseAdminRoleAccessGate deniedTitle="교육 대상 관리 권한이 없습니다.">{({ displayName }) => <TrainingTargetsContent displayName={displayName} eventId={eventId} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 대상 관리 권한이 없습니다.">{({ displayName }) => <TrainingTargetsContent displayName={displayName} eventId={eventId} />}</FirebaseAdminRoleAccessGate>;
 }

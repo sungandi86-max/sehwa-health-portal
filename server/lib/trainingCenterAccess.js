@@ -2,7 +2,7 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER, getAssignmentId, getBearerToken, readStaffDirectory } from "./staffDirectory.js";
 import { trainingEnvironment } from "./trainingDeployment.js";
 
-const STAFF_ROLES = new Set(["staff", "homeroom", "health_teacher", "admin"]);
+const STAFF_ROLES = new Set(["staff", "homeroom", "training_admin", "health_teacher", "admin"]);
 const ADMIN_ROLES = new Set(["health_teacher", "admin"]);
 
 export async function resolveTrainingAccess(req, { auth = getFirebaseAdminAuth, db = getFirebaseAdminDb, directory = readStaffDirectory,
@@ -31,5 +31,6 @@ export async function resolveTrainingAccess(req, { auth = getFirebaseAdminAuth, 
     return { ok: false, status: 403, message: "현재 재직 교직원 정보를 확인할 수 없습니다." };
   }
   return { ok: true, assignment, staff: matches[0], directory: staff, decoded, db: database,
-    isAdmin: assignment.roles.some((role) => ADMIN_ROLES.has(role)) };
+    isAdmin: assignment.roles.some((role) => ADMIN_ROLES.has(role)),
+    isTrainingAdmin: assignment.roles.includes("training_admin") };
 }

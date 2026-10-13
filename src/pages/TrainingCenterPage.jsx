@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { getTrainingDetail, getTrainingList } from "../lib/trainingCenter.js";
+import { isAdmin, isHealthTeacher, isTrainingAdmin } from "../lib/userProfile.js";
 
 const STATUS_TONE = {
   예정: "border-[#C8D8FF] bg-[#EEF4FF] text-[#3154A3]",
@@ -39,7 +40,7 @@ function SourceState({ status, message }) {
   return <FirebaseContentState status={status} message={message} emptyMessage="등록된 교육이 없습니다." />;
 }
 
-function TrainingListContent({ displayName }) {
+function TrainingListContent({ displayName, canManageTrainings = false }) {
   const [state, setState] = useState({ status: "loading", items: [] });
 
   useEffect(() => {
@@ -52,14 +53,15 @@ function TrainingListContent({ displayName }) {
     return () => { active = false; };
   }, []);
 
-  return <TrainingListView displayName={displayName} state={state} />;
+  return <TrainingListView displayName={displayName} state={state} canManageTrainings={canManageTrainings} />;
 }
 
-export function TrainingListView({ displayName, state }) {
+export function TrainingListView({ displayName, state, canManageTrainings = false }) {
   const currentTrainings = state.items.filter((item) => item.status === "진행중" || item.status === "예정");
 
   return (
     <FirebaseV2PageShell label="교직원 교육" title="교직원 교육센터" description="교육 일정과 본인의 교육 대상 여부를 확인합니다." displayName={displayName}>
+      {canManageTrainings && <div className="flex justify-end"><Link to="/firebase-admin/trainings" className="inline-flex min-h-11 items-center rounded-[9px] border border-[#D7E8FF] bg-[#F1F7FF] px-4 text-[13px] font-semibold text-[#0D4EA6]">내 교육 관리</Link></div>}
       <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
         <h2 className="text-base font-bold text-[#102047]">이번 교육</h2>
         <p className="mt-1 text-[13px] text-[#627083]">현재 운영 중이거나 예정된 교육을 확인하세요.</p>
@@ -129,7 +131,7 @@ export function TrainingDetailView({ displayName, state }) {
 }
 
 export default function TrainingCenterPage() {
-  return <FirebaseStaffSubmissionAccessGate accessTitle="교직원 교육센터" readOnly>{({ displayName }) => <TrainingListContent displayName={displayName} />}</FirebaseStaffSubmissionAccessGate>;
+  return <FirebaseStaffSubmissionAccessGate accessTitle="교직원 교육센터" readOnly>{({ displayName, assignment }) => <TrainingListContent displayName={displayName} canManageTrainings={isTrainingAdmin(assignment) || isHealthTeacher(assignment) || isAdmin(assignment)} />}</FirebaseStaffSubmissionAccessGate>;
 }
 
 export function TrainingDetailPage() {

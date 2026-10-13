@@ -8,6 +8,7 @@ export const TRAINING_SHEETS = {
 };
 
 export { TRAINING_HEADERS };
+export const TRAINING_RUNTIME_HEADERS = [...TRAINING_HEADERS, "ownerStaffId"];
 export const TARGET_HEADERS = ["eventId", "교직원ID", "대상상태", "필수여부", "제외여부", "제외사유"];
 
 export function getTrainingSpreadsheetId() {
@@ -89,7 +90,7 @@ export async function readTrainingSheets({ events = trainingEventStore, targets:
       events.listEvents(),
       readTargets({ spreadsheetId, range: `'${TRAINING_SHEETS.targets}'!A1:Z10000` }),
     ]);
-    return { trainings: [TRAINING_HEADERS, ...eventRows.map((row) => TRAINING_HEADERS.map((header) => row[header] || ""))], targets };
+    return { trainings: [TRAINING_RUNTIME_HEADERS, ...eventRows.map((row) => TRAINING_RUNTIME_HEADERS.map((header) => row[header] || ""))], targets };
   } catch (error) {
     if (error?.response?.status === 400) throw new TrainingSourceNotReadyError();
     throw error;

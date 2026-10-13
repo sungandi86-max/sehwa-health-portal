@@ -82,5 +82,5 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
 
 export default function FirebaseTrainingQrPage() {
   const { eventId } = useParams();
-  return <FirebaseAdminRoleAccessGate deniedTitle="교육 QR 관리 권한이 없습니다.">{({ displayName }) => <TrainingQrContent displayName={displayName} eventId={eventId} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 QR 관리 권한이 없습니다.">{({ displayName }) => <TrainingQrContent displayName={displayName} eventId={eventId} />}</FirebaseAdminRoleAccessGate>;
 }

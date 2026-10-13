@@ -20,6 +20,15 @@ export function sheetRows(values, headers) {
   }));
 }
 
+function trainingRows(values) {
+  const rows = sheetRows(values, TRAINING_HEADERS);
+  const headers = (values?.[0] || []).map((cell) => String(cell ?? "").normalize("NFKC").trim());
+  const ownerIndex = headers.indexOf("ownerStaffId");
+  if (ownerIndex < 0) return rows.map((row) => ({ ...row, ownerStaffId: "" }));
+  return rows.map((row, index) => ({ ...row,
+    ownerStaffId: String(values[index + 1]?.[ownerIndex] ?? "").normalize("NFKC").trim() }));
+}
+
 export function truthy(value) {
   return TRUE_VALUES.has(String(value ?? "").normalize("NFKC").trim().toUpperCase());
 }
@@ -43,7 +52,7 @@ function uniqueRows(rows, key, label) {
 
 export function parseTrainingSource({ trainings, targets, signatures }) {
   const result = {
-    trainings: sheetRows(trainings, TRAINING_HEADERS).filter((row) => row.eventId),
+    trainings: trainingRows(trainings).filter((row) => row.eventId),
     targets: sheetRows(targets, TARGET_HEADERS).filter((row) => row.eventId && row["교직원ID"]),
     signatures: sheetRows(signatures, SIGNATURE_HEADERS).filter((row) => row.signatureId),
   };
