@@ -128,13 +128,13 @@ function fakeDb() {
   };
 }
 
-function fakeStore({ appendMode = "success", snapshotMode = false } = {}) {
+function fakeStore({ appendMode = "success", snapshotMode = false, snapshotEnvironment = "qa" } = {}) {
   const values = source();
   const calls = { uploads: 0, appended: 0, saved: 0, sheetWrites: 0, bootstraps: 0 };
   const snapshots = new Map();
   return {
     calls, values, snapshots,
-    ...(snapshotMode ? { events: { environment: "qa", getEvent: async (eventId) => snapshots.get(eventId) || null } } : {}),
+    ...(snapshotMode ? { events: { environment: snapshotEnvironment, getEvent: async (eventId) => snapshots.get(eventId) || null } } : {}),
     signatureStorageConfigured: true,
     assertSignatureStorageConfigured: () => {},
     inspectSignatureStorage: async () => ({ authReady: true, rootReady: true, rootPrivate: true,
@@ -265,9 +265,12 @@ test("training admins can manage only owned education while top-level admins ret
 test("server assigns and preserves education owner regardless of client input", async () => {
   const { call, store } = harness();
   const createBody = Object.fromEntries(TRAINING_HEADERS.map((header) => [header, ""]));
+  const targetSelection = { preset: "manual", includeAdministrativeStaff: true, includeHourlyInstructors: true,
+    department: "", includeStaffIds: ["QA001"], excludeStaffIds: [] };
   Object.assign(createBody, { ownerStaffId: "QA999", 교육연도: "2026", 사용여부: "미사용", 상태: "예정", 교육명: "새 교육",
     담당부서: "연구부", 일자: "2026-10-07", 시작시간: "10:00", 종료시간: "11:00", 장소: "회의실",
-    signatureOpenAt: "2026-10-07T09:00:00+09:00", signatureCloseAt: "2026-10-07T12:00:00+09:00", 정렬순서: "0" });
+    signatureOpenAt: "2026-10-07T09:00:00+09:00", signatureCloseAt: "2026-10-07T12:00:00+09:00", 정렬순서: "0",
+    targetSelection, reviewedTargets: [{ staffId: "QA001", name: "테스트 교직원", position: "교사", department: "보건실" }] });
   const created = await call("training-admin-save", { token: "training-b", method: "POST", body: createBody });
   assert.equal(created.statusCode, 200);
   assert.equal(created.body.item.ownerStaffId, "QA002");
@@ -280,7 +283,7 @@ test("server assigns and preserves education owner regardless of client input", 
   assert.equal(updated.body.item.ownerStaffId, "QA001");
 });
 
-test("QA education creation commits the reviewed target snapshot without Sheet target writes", async () => {
+test("QA and Production education creation commit the same reviewed target snapshot without Sheet target writes", async () => {
   const roster = [
     { staffId: "QA001", name: "교무 교원", department: "교무부", position: "교사", employmentStatus: "재직" },
     { staffId: "QA002", name: "연구 교원", department: "연구부", position: "교사", employmentStatus: "재직" },
@@ -296,8 +299,9 @@ test("QA education creation commits the reviewed target snapshot without Sheet t
     { name: "E 개별 제외·추가", preset: "teachers", admin: false, instructor: true, department: "", include: ["QA003"],
       exclude: ["QA001"], expected: ["QA002", "QA003", "QA004"] },
   ];
-  for (const scenario of cases) {
-    const { call, store } = harness({ snapshotMode: true, directory: async () => ({ directory: roster, stats: { duplicateStaffIds: 0 } }) });
+  for (const environment of ["qa", "production"]) for (const scenario of cases) {
+    const { call, store } = harness({ snapshotMode: true, snapshotEnvironment: environment,
+      directory: async () => ({ directory: roster, stats: { duplicateStaffIds: 0 } }) });
     const createBody = Object.fromEntries(TRAINING_HEADERS.map((header) => [header, ""]));
     const targetSelection = { preset: scenario.preset, includeAdministrativeStaff: scenario.admin,
       includeHourlyInstructors: scenario.instructor, department: scenario.department,
@@ -308,10 +312,11 @@ test("QA education creation commits the reviewed target snapshot without Sheet t
       targetSelection, reviewedTargets: selectTrainingTargets(roster, targetSelection).members.map(({ staffId, name, position, department }) =>
         ({ staffId, name, position, department })) });
     const created = await call("training-admin-save", { token: "training-a", method: "POST", body: createBody });
-    assert.equal(created.statusCode, 200, scenario.name);
+    assert.equal(created.statusCode, 200, `${environment}: ${scenario.name}`);
     const eventId = created.body.item.eventId;
     const snapshot = store.snapshots.get(eventId).targetSnapshot;
-    assert.deepEqual(snapshot.members.map((person) => person.staffId), scenario.expected, scenario.name);
+    assert.deepEqual(snapshot.members.map((person) => person.staffId), scenario.expected, `${environment}: ${scenario.name}`);
+    assert.deepEqual(snapshot.selection, targetSelection);
     assert.equal(created.body.item.targetCount, scenario.expected.length);
     assert.equal(store.calls.sheetWrites, 0);
     const targets = await call("training-targets", { token: "training-a", query: { eventId } });
@@ -339,24 +344,27 @@ test("QA target snapshot rejects unknown and inactive staff before creating an e
   assert.equal(store.calls.sheetWrites, 0);
 });
 
-test("QA education create rejects a staff source change after target review", async () => {
+test("QA and Production education create reject a staff source change after target review", async () => {
   const roster = [{ staffId: "QA001", name: "QA 교원", department: "교무부", position: "교사", employmentStatus: "재직" }];
   const selection = { preset: "all", includeAdministrativeStaff: true, includeHourlyInstructors: true,
     department: "", includeStaffIds: [], excludeStaffIds: [] };
   const reviewedTargets = selectTrainingTargets(roster, selection).members.map(({ staffId, name, position, department }) =>
     ({ staffId, name, position, department }));
   roster.push({ staffId: "QA002", name: "새 교원", department: "교무부", position: "교사", employmentStatus: "재직" });
-  const { call, store } = harness({ snapshotMode: true, directory: async () => ({ directory: roster, stats: { duplicateStaffIds: 0 } }) });
-  const created = await call("training-admin-save", { token: "training-a", method: "POST", body: {
+  for (const environment of ["qa", "production"]) {
+    const { call, store } = harness({ snapshotMode: true, snapshotEnvironment: environment,
+      directory: async () => ({ directory: roster, stats: { duplicateStaffIds: 0 } }) });
+    const created = await call("training-admin-save", { token: "training-a", method: "POST", body: {
     교육연도: "2026", 사용여부: "미사용", 상태: "예정", 교육명: "QA 변경 검증", 담당부서: "교무부",
     일자: "2026-10-07", 시작시간: "10:00", 종료시간: "11:00",
     signatureOpenAt: "2026-10-07T09:00:00+09:00", signatureCloseAt: "2026-10-07T12:00:00+09:00",
     targetSelection: selection, reviewedTargets,
-  } });
-  assert.equal(created.statusCode, 409);
-  assert.match(created.body.message, /대상자 명단이 변경/);
-  assert.equal(store.snapshots.size, 0);
-  assert.equal(store.calls.sheetWrites, 0);
+    } });
+    assert.equal(created.statusCode, 409);
+    assert.match(created.body.message, /대상자 명단이 변경/);
+    assert.equal(store.snapshots.size, 0);
+    assert.equal(store.calls.sheetWrites, 0);
+  }
 });
 
 test("attendance correction and cancellation enforce the same education ownership gate", async () => {

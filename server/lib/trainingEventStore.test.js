@@ -70,7 +70,9 @@ test("QA and Production admin create and update use isolated Firestore collectio
   assert.deepEqual(await production.listEvents(), []);
   await production.saveEvent({ ...values, targetSnapshot: { schemaVersion: 1, members: [{ staffId: "QA-ONE" }] } });
   assert.equal(db.records.has(`training_events_production/${values.eventId}`), true);
-  assert.equal(db.records.get(`training_events_production/${values.eventId}`).targetSnapshot, undefined);
+  assert.deepEqual(db.records.get(`training_events_production/${values.eventId}`).targetStaffIds, ["QA-ONE"]);
+  assert.deepEqual(db.records.get(`training_events_production/${values.eventId}`).targetSnapshot,
+    { schemaVersion: 1, members: [{ staffId: "QA-ONE" }] });
   assert.equal((await qa.listEvents()).length, 1);
 });
 
@@ -100,6 +102,31 @@ test("production administrator updates a migrated event transactionally without 
   assert.equal(db.calls.updates, 1);
   await assert.rejects(production.saveEvent({ ...original, "교육명": "stale edit" }, original), TrainingEventConflictError);
   assert.equal(db.calls.updates, 1);
+});
+
+test("Production new-event snapshot stays fixed on edit while legacy targets remain Sheet-backed", async () => {
+  const db = fakeDatabase();
+  const production = new TrainingEventStore({ database: () => db,
+    context: () => ({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }) });
+  const snapshot = { schemaVersion: 1, confirmedAt: "2026-10-13T00:00:00.000Z", selection: { preset: "all" },
+    members: [{ staffId: "STAFF-ONE", name: "테스트 교직원", department: "교무부", position: "교사", targetStatus: "대상", required: true }] };
+  await production.saveEvent({ ...values, targetSnapshot: snapshot, ownerStaffId: "STAFF-OWNER" });
+  const sheetTargets = [TARGET_HEADERS, ["LEGACY-EVENT", "LEGACY-STAFF", "대상", "Y", "N", ""]];
+  const before = await readTrainingSheets({ events: production, workbook: () => "PRODUCTION_WORKBOOK", targets: async () => sheetTargets });
+  assert.equal(before.targets.length, 3);
+  assert.deepEqual(before.targets[2].slice(0, 2), [values.eventId, "STAFF-ONE"]);
+  const parsed = parseTrainingSource({ ...before, signatures: [SIGNATURE_HEADERS] });
+  assert.equal(finalSheetModel(parsed, [], values.eventId).counts.target, 1);
+  assert.equal(finalSheetModel(parsed, [], values.eventId).rows[0].name, "테스트 교직원");
+  await production.saveEvent({ ...values, "교육명": "수정된 교육", ownerStaffId: "STAFF-OWNER" },
+    { ...values, ownerStaffId: "STAFF-OWNER" });
+  assert.deepEqual(db.records.get(`training_events_production/${values.eventId}`).targetSnapshot, snapshot);
+  assert.deepEqual(db.records.get(`training_events_production/${values.eventId}`).targetStaffIds, ["STAFF-ONE"]);
+  await production.saveSnapshotTarget(values.eventId, { "대상상태": "제외", "필수여부": "N", "제외사유": "대상 정정" },
+    { staffId: "STAFF-ONE", name: "변경된 이름", department: "행정실", position: "주무관" });
+  assert.deepEqual(db.records.get(`training_events_production/${values.eventId}`).targetStaffIds, []);
+  assert.equal(db.records.get(`training_events_production/${values.eventId}`).targetSnapshot.members[0].name, "테스트 교직원");
+  assert.deepEqual(sheetTargets, [TARGET_HEADERS, ["LEGACY-EVENT", "LEGACY-STAFF", "대상", "Y", "N", ""]]);
 });
 
 test("QA update rejects foreign markers and stale admin snapshots", async () => {

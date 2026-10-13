@@ -174,7 +174,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const input = !body?.eventId && store.events?.environment === "qa" ? { ...ownedInput, eventId: `QA-TR-${randomUUID()}` } : ownedInput;
         const values = validateTrainingInput(input, { existing });
         values.ownerStaffId = ownerStaffId;
-        if (!existing && store.events?.environment === "qa") {
+        if (!existing) {
           const targets = selectTrainingTargets(access.directory, body?.targetSelection);
           const reviewed = targets.members.map(({ staffId, name, position, department }) => ({ staffId, name, position, department }));
           if (JSON.stringify(body?.reviewedTargets) !== JSON.stringify(reviewed)) {

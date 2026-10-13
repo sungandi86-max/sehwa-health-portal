@@ -53,7 +53,7 @@ export class TrainingEventStore {
         throw new TrainingEventConflictError("교육 이벤트가 다른 요청에서 변경되었습니다.");
       }
       const now = new Date();
-      const snapshot = !current.exists && this.environment === "qa" && values.targetSnapshot?.schemaVersion === 1
+      const snapshot = !current.exists && values.targetSnapshot?.schemaVersion === 1
         ? { targetSnapshot: values.targetSnapshot, targetStaffIds: values.targetSnapshot.members.map((member) => member.staffId) } : {};
       const data = { ...incoming, ...snapshot, environment: this.environment, sourceType: "admin", sourceSheet: current.exists ? current.data().sourceSheet || null : null,
         sourceRow: current.exists ? current.data().sourceRow || null : null, sourceFingerprint: null,
@@ -65,12 +65,11 @@ export class TrainingEventStore {
   }
 
   async saveSnapshotTarget(eventId, values, person) {
-    if (this.environment !== "qa") throw new TrainingEventConflictError("QA 대상자 snapshot만 수정할 수 있습니다.");
     const ref = this.database().collection(this.collectionName).doc(eventId);
     await this.database().runTransaction(async (transaction) => {
       const current = await transaction.get(ref);
       const data = current.data();
-      if (!current.exists || data.eventId !== eventId || data.environment !== "qa" || data.targetSnapshot?.schemaVersion !== 1) {
+      if (!current.exists || data.eventId !== eventId || data.environment !== this.environment || data.targetSnapshot?.schemaVersion !== 1) {
         throw new TrainingEventConflictError("교육 대상자 snapshot을 확인해 주세요.");
       }
       const previous = data.targetSnapshot.members.find((item) => item.staffId === person.staffId);
