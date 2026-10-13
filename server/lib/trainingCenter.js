@@ -90,7 +90,19 @@ export async function readTrainingSheets({ events = trainingEventStore, targets:
       events.listEvents(),
       readTargets({ spreadsheetId, range: `'${TRAINING_SHEETS.targets}'!A1:Z10000` }),
     ]);
-    return { trainings: [TRAINING_RUNTIME_HEADERS, ...eventRows.map((row) => TRAINING_RUNTIME_HEADERS.map((header) => row[header] || ""))], targets };
+    const snapshotEvents = eventRows.filter((row) => row.targetSnapshot?.schemaVersion === 1);
+    if (!snapshotEvents.length) return { trainings: [TRAINING_RUNTIME_HEADERS, ...eventRows.map((row) => TRAINING_RUNTIME_HEADERS.map((header) => row[header] || ""))], targets };
+    const header = (targets[0] || []).map((value) => String(value ?? "").normalize("NFKC").trim());
+    if (TARGET_HEADERS.some((name) => header.filter((value) => value === name).length !== 1)) throw new TrainingSourceNotReadyError();
+    const snapshotIds = new Set(snapshotEvents.map((row) => row.eventId));
+    if (targets.slice(1).some((row) => snapshotIds.has(row[header.indexOf("eventId")]))) throw new TrainingSourceNotReadyError();
+    const extra = ["snapshotName", "snapshotDepartment", "snapshotPosition"];
+    const legacy = targets.slice(1).map((row) => [...TARGET_HEADERS.map((name) => row[header.indexOf(name)] || ""), "", "", ""]);
+    const selected = snapshotEvents.flatMap((event) => event.targetSnapshot.members.map((person) => [event.eventId,
+      person.staffId, person.targetStatus, person.required ? "Y" : "N", person.targetStatus === "제외" ? "Y" : "N",
+      person.excludedReason || "", person.name, person.department, person.position]));
+    return { trainings: [TRAINING_RUNTIME_HEADERS, ...eventRows.map((row) => TRAINING_RUNTIME_HEADERS.map((name) => row[name] || ""))],
+      targets: [[...TARGET_HEADERS, ...extra], ...legacy, ...selected] };
   } catch (error) {
     if (error?.response?.status === 400) throw new TrainingSourceNotReadyError();
     throw error;

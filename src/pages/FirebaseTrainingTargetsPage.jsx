@@ -20,12 +20,12 @@ function TargetRow({ person, current, eventId, onSaved, saveTarget }) {
     finally { setSaving(false); }
   }
   return <li className="min-w-0 border-t border-[#DDEAE7] px-3 py-3">
-    <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="text-sm font-semibold text-[#102047]">{person.name} <span className="font-normal text-[#627083]">· {person.position} · {person.department}</span></p><p className="text-xs text-[#627083]">교직원ID: {person.staffId}</p></div><span className="text-xs text-[#627083]">현재 {current?.["대상상태"] || "미지정"}</span></div>
+    <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="text-sm font-semibold text-[#102047]">{person.name} <span className="font-normal text-[#627083]">· {person.position} · {person.department}</span></p><p className="text-xs text-[#627083]">교직원ID: {person.staffId}{person.archived ? " · 생성 시점 대상자 기록" : ""}</p></div><span className="text-xs text-[#627083]">현재 {current?.["대상상태"] || "미지정"}</span></div>
     <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center">
       <label className="grid gap-1 text-xs text-[#627083]">대상 상태<select className={control} value={status} onChange={(event) => { setStatus(event.target.value); if (event.target.value !== "대상") setRequired(false); }}><option value="비대상">비대상</option><option value="대상">대상</option><option value="제외">제외</option></select></label>
       <label className="flex min-h-11 items-center gap-2 text-sm text-[#102047]"><input type="checkbox" checked={required} onChange={(event) => setRequired(event.target.checked)} disabled={status !== "대상"} />필수</label>
       <label className="grid gap-1 text-xs text-[#627083]">제외 사유<input className={control} value={reason} onChange={(event) => setReason(event.target.value)} disabled={status !== "제외"} maxLength={200} placeholder={status === "제외" ? "제외 사유 입력" : "제외 시 입력"} /></label>
-      <button className="min-h-11 rounded-[9px] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={saving} onClick={save} type="button">{saving ? "저장 중" : "저장"}</button>
+      <button className="min-h-11 rounded-[9px] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={saving || person.archived} onClick={save} type="button">{saving ? "저장 중" : "저장"}</button>
     </div>
     {message && <p role="alert" className="mt-1 text-xs text-[#B42318]">{message}</p>}
   </li>;
@@ -44,7 +44,14 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
     } catch (error) { setMessage(error.message); setState("error"); }
   }
   useEffect(() => { reload(); }, [eventId]);
-  const shown = useMemo(() => directory.filter((person) => [person.name, person.department, person.position, person.staffId].some((value) => value?.includes(query.trim()))), [directory, query]);
+  const shown = useMemo(() => {
+    const known = new Set(directory.map((person) => person.staffId));
+    const archived = targets.filter((target) => target.snapshotName && !known.has(target["교직원ID"]))
+      .map((target) => ({ staffId: target["교직원ID"], name: target.snapshotName, department: target.snapshotDepartment,
+        position: target.snapshotPosition, archived: true }));
+    return [...directory, ...archived].filter((person) => [person.name, person.department, person.position, person.staffId]
+      .some((value) => value?.includes(query.trim())));
+  }, [directory, targets, query]);
   const count = targets.filter((target) => ["대상", "교육 대상"].includes(target["대상상태"]) && target["제외여부"] !== "Y").length;
   return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 대상 관리" description="재직 교직원의 교직원ID로 대상 여부를 지정합니다." displayName={displayName}>
     <Link to="/firebase-admin/trainings" className="inline-flex min-h-11 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6]">교육 관리로</Link>

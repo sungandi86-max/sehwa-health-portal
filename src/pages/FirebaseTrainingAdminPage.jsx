@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
-import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
+import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
 import { getTrainingStorageBootstrapUiState, performTrainingStorageBootstrap, summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
+import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
+import { TrainingTargetPicker } from "./TrainingTargetPicker.jsx";
 
 const fieldClass = "mt-1 min-h-11 w-full min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm text-[#102047] outline-none focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/10";
 const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50";
@@ -14,29 +16,60 @@ function localInputValue(value) {
   return value ? value.slice(0, 16) : "";
 }
 
-function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTraining }) {
+function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTraining, loadDirectory = listTrainingDirectory }) {
   const [form, setForm] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  useEffect(() => setForm(initial), [initial]);
+  const [step, setStep] = useState("details");
+  const [directory, setDirectory] = useState([]);
+  const [directoryState, setDirectoryState] = useState("loading");
+  const [selection, setSelection] = useState({ preset: "all", includeAdministrativeStaff: true,
+    includeHourlyInstructors: true, department: "", includeStaffIds: [], excludeStaffIds: [] });
+  useEffect(() => { setForm(initial); setStep("details"); }, [initial]);
+  useEffect(() => {
+    if (initial.eventId) return;
+    let active = true;
+    loadDirectory().then((result) => { if (active) { setDirectory(result.items); setDirectoryState("ready"); } })
+      .catch(() => { if (active) setDirectoryState("error"); });
+    return () => { active = false; };
+  }, [initial.eventId, loadDirectory]);
   const set = (name) => (event) => setForm((current) => ({ ...current, [name]: event.target.value }));
 
   async function submit(event) {
     event.preventDefault();
-    setSaving(true);
     setMessage("");
     try {
+      let reviewedTargets;
+      if (!initial.eventId && step === "details") { setStep("targets"); return; }
+      if (!initial.eventId) {
+        if (directoryState !== "ready") throw new Error("교직원명단을 불러온 뒤 대상자를 선택해 주세요.");
+        reviewedTargets = selectTrainingTargets(directory, selection).members;
+        if (step === "targets") { setStep("confirm"); return; }
+      }
+      setSaving(true);
       const payload = { ...form,
+        ...(!initial.eventId ? { targetSelection: selection,
+          reviewedTargets: reviewedTargets.map(({ staffId, name, position, department }) => ({ staffId, name, position, department })) } : {}),
         signatureOpenAt: form.signatureOpenAt ? `${localInputValue(form.signatureOpenAt)}:00+09:00` : "",
         signatureCloseAt: form.signatureCloseAt ? `${localInputValue(form.signatureCloseAt)}:00+09:00` : "" };
       const result = await saveTraining(payload);
       onSaved(result.item);
-    } catch (error) { setMessage(error.message); }
+    } catch (error) {
+      if (error.message.includes("대상자 명단이 변경되었습니다")) {
+        setDirectoryState("loading");
+        setStep("targets");
+        try { const result = await loadDirectory(); setDirectory(result.items); setDirectoryState("ready"); }
+        catch { setDirectoryState("error"); }
+      }
+      setMessage(error.message);
+    }
     finally { setSaving(false); }
   }
 
   return <form className="space-y-3 rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4" onSubmit={submit}>
     <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-[#102047]">{initial.eventId ? "교육 수정" : "교육 등록"}</h2><button type="button" onClick={onCancel} className={secondaryClass}>닫기</button></div>
+    {!initial.eventId && <p className="text-xs font-semibold text-[#3154A3]">1. 기본 정보　2. 대상자 설정　3. 대상자 확인</p>}
+    {(initial.eventId || step === "details") && <>
     <p className="text-xs text-[#627083]">새 교육은 기본적으로 미사용으로 저장됩니다. 대상과 QR 준비를 확인한 뒤 사용으로 전환하세요.</p>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold text-[#102047]">교육명<input className={fieldClass} value={form["교육명"]} onChange={set("교육명")} maxLength={150} required /></label>
@@ -55,8 +88,19 @@ function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTr
       <label className="text-sm font-semibold text-[#102047]">이수기준<input className={fieldClass} value={form["이수기준"]} onChange={set("이수기준")} maxLength={200} /></label>
     </div>
     <label className="block text-sm font-semibold text-[#102047]">교육내용<textarea className={`${fieldClass} min-h-28`} value={form["교육내용"]} onChange={set("교육내용")} maxLength={2000} /></label>
+    </>}
+    {!initial.eventId && step !== "details" && <>
+      {directoryState === "loading" && <p role="status" className="text-sm text-[#627083]">교직원명단을 불러오는 중입니다.</p>}
+      {directoryState === "error" && <p role="alert" className="text-sm text-[#B42318]">교직원명단을 불러오지 못했습니다. 교육 등록을 다시 시작해 주세요.</p>}
+      {directoryState === "ready" && <TrainingTargetPicker directory={directory} selection={selection} onChange={setSelection} review={step === "confirm"} />}
+    </>}
     {message && <p role="alert" className="break-keep text-sm text-[#B42318]">{message}</p>}
-    <button className={buttonClass} type="submit" disabled={saving}>{saving ? "저장 중" : "교육 저장"}</button>
+    <div className="flex flex-wrap gap-2">
+      {!initial.eventId && step !== "details" && <button className={secondaryClass} type="button" onClick={() => { setMessage(""); setStep(step === "confirm" ? "targets" : "details"); }}>이전</button>}
+      <button className={buttonClass} type="submit" disabled={saving || (!initial.eventId && step !== "details" && directoryState !== "ready")}>
+        {saving ? "저장 중" : initial.eventId ? "교육 저장" : step === "details" ? "대상자 설정" : step === "targets" ? "대상자 확인" : "교육 생성"}
+      </button>
+    </div>
   </form>;
 }
 

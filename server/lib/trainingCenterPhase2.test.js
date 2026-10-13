@@ -9,6 +9,7 @@ import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAt
 import { listAttendanceRecoveryCandidates } from "./trainingAttendanceRecovery.js";
 import { managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
 import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
+import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
 import { trainingAbsenceLabel } from "./trainingAbsenceStatus.js";
 import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
 import { SignatureStorageError } from "./trainingSignatureStorage.js";
@@ -127,11 +128,13 @@ function fakeDb() {
   };
 }
 
-function fakeStore({ appendMode = "success" } = {}) {
+function fakeStore({ appendMode = "success", snapshotMode = false } = {}) {
   const values = source();
-  const calls = { uploads: 0, appended: 0, saved: 0, bootstraps: 0 };
+  const calls = { uploads: 0, appended: 0, saved: 0, sheetWrites: 0, bootstraps: 0 };
+  const snapshots = new Map();
   return {
-    calls, values,
+    calls, values, snapshots,
+    ...(snapshotMode ? { events: { environment: "qa", getEvent: async (eventId) => snapshots.get(eventId) || null } } : {}),
     signatureStorageConfigured: true,
     assertSignatureStorageConfigured: () => {},
     inspectSignatureStorage: async () => ({ authReady: true, rootReady: true, rootPrivate: true,
@@ -144,12 +147,23 @@ function fakeStore({ appendMode = "success" } = {}) {
     saveEvent: async (fields, existing) => {
       if (existing) values.trainings[existing.rowNumber - 1] = row(TRAINING_RUNTIME_HEADERS, fields);
       else values.trainings.push(row(TRAINING_RUNTIME_HEADERS, fields));
+      if (fields.targetSnapshot) {
+        snapshots.set(fields.eventId, { eventId: fields.eventId, targetSnapshot: fields.targetSnapshot });
+        fields.targetSnapshot.members.forEach((person) => values.targets.push(target(fields.eventId, person.staffId)));
+      }
+      calls.saved += 1;
+    },
+    saveSnapshotTarget: async (eventId, fields, person) => {
+      const rows = values.targets.filter((item) => item[0] !== eventId || item[1] !== person.staffId);
+      if (fields["대상상태"] !== "비대상") rows.push(row(TARGET_HEADERS, fields));
+      values.targets = rows;
       calls.saved += 1;
     },
     saveRow: async (name, headers, fields, rowNumber) => {
       const table = name === "앱_교직원교육" ? values.trainings : name === "교직원교육전자서명" ? values.signatures : values.targets;
       if (rowNumber) table[rowNumber - 1] = row(headers, fields); else table.push(row(headers, fields));
       calls.saved += 1;
+      calls.sheetWrites += 1;
     },
     cancelSignature: async (record, corrected) => {
       values.signatures[record.rowNumber - 1] = row(SIGNATURE_HEADERS, corrected);
@@ -264,6 +278,85 @@ test("server assigns and preserves education owner regardless of client input", 
   const updated = await call("training-admin-save", { token: "training-a", method: "POST", body: { ...existing, ownerStaffId: "QA002", 교육명: "수정 교육" } });
   assert.equal(updated.statusCode, 200);
   assert.equal(updated.body.item.ownerStaffId, "QA001");
+});
+
+test("QA education creation commits the reviewed target snapshot without Sheet target writes", async () => {
+  const roster = [
+    { staffId: "QA001", name: "교무 교원", department: "교무부", position: "교사", employmentStatus: "재직" },
+    { staffId: "QA002", name: "연구 교원", department: "연구부", position: "교사", employmentStatus: "재직" },
+    { staffId: "QA003", name: "행정 직원", department: "행정실", position: "주무관", employmentStatus: "재직" },
+    { staffId: "QA004", name: "시간강사", department: "교무부", position: "시간강사", employmentStatus: "재직" },
+    { staffId: "QA005", name: "휴직자", department: "교무부", position: "교사", employmentStatus: "휴직" },
+  ];
+  const cases = [
+    { name: "A 전체와 행정실", preset: "all", admin: true, instructor: true, department: "", expected: ["QA001", "QA002", "QA003", "QA004"] },
+    { name: "B 교원 중심", preset: "teachers", admin: false, instructor: true, department: "", expected: ["QA001", "QA002", "QA004"] },
+    { name: "C 시간강사 제외", preset: "all", admin: true, instructor: false, department: "", expected: ["QA001", "QA002", "QA003"] },
+    { name: "D 연구부", preset: "all", admin: true, instructor: true, department: "연구부", expected: ["QA002"] },
+    { name: "E 개별 제외·추가", preset: "teachers", admin: false, instructor: true, department: "", include: ["QA003"],
+      exclude: ["QA001"], expected: ["QA002", "QA003", "QA004"] },
+  ];
+  for (const scenario of cases) {
+    const { call, store } = harness({ snapshotMode: true, directory: async () => ({ directory: roster, stats: { duplicateStaffIds: 0 } }) });
+    const createBody = Object.fromEntries(TRAINING_HEADERS.map((header) => [header, ""]));
+    const targetSelection = { preset: scenario.preset, includeAdministrativeStaff: scenario.admin,
+      includeHourlyInstructors: scenario.instructor, department: scenario.department,
+      includeStaffIds: scenario.include || [], excludeStaffIds: scenario.exclude || [] };
+    Object.assign(createBody, { 교육연도: "2026", 사용여부: "미사용", 상태: "예정", 교육명: scenario.name,
+      담당부서: "교무부", 일자: "2026-10-07", 시작시간: "10:00", 종료시간: "11:00",
+      signatureOpenAt: "2026-10-07T09:00:00+09:00", signatureCloseAt: "2026-10-07T12:00:00+09:00", 정렬순서: "0",
+      targetSelection, reviewedTargets: selectTrainingTargets(roster, targetSelection).members.map(({ staffId, name, position, department }) =>
+        ({ staffId, name, position, department })) });
+    const created = await call("training-admin-save", { token: "training-a", method: "POST", body: createBody });
+    assert.equal(created.statusCode, 200, scenario.name);
+    const eventId = created.body.item.eventId;
+    const snapshot = store.snapshots.get(eventId).targetSnapshot;
+    assert.deepEqual(snapshot.members.map((person) => person.staffId), scenario.expected, scenario.name);
+    assert.equal(created.body.item.targetCount, scenario.expected.length);
+    assert.equal(store.calls.sheetWrites, 0);
+    const targets = await call("training-targets", { token: "training-a", query: { eventId } });
+    assert.deepEqual(targets.body.items.map((person) => person["교직원ID"]), scenario.expected);
+    assert.equal((await call("training-targets", { token: "training-b", query: { eventId } })).statusCode, 403);
+    assert.equal((await call("training-target-save", { token: "training-b", method: "POST", body: {
+      eventId, staffId: "QA003", targetStatus: "대상", required: true } })).statusCode, 403);
+    const parsed = parseTrainingSource({ ...store.values, signatures: [SIGNATURE_HEADERS] });
+    assert.equal(finalSheetModel(parsed, roster, eventId).counts.target, scenario.expected.length);
+    roster[0].employmentStatus = "휴직";
+    assert.deepEqual(store.snapshots.get(eventId).targetSnapshot.members.map((person) => person.staffId), scenario.expected);
+    roster[0].employmentStatus = "재직";
+  }
+});
+
+test("QA target snapshot rejects unknown and inactive staff before creating an event", async () => {
+  const { call, store } = harness({ snapshotMode: true });
+  const base = { 교육연도: "2026", 사용여부: "미사용", 상태: "예정", 교육명: "QA 교육", 담당부서: "보건실",
+    일자: "2026-10-07", 시작시간: "10:00", 종료시간: "11:00", signatureOpenAt: "2026-10-07T09:00:00+09:00",
+    signatureCloseAt: "2026-10-07T12:00:00+09:00", targetSelection: { preset: "manual", includeAdministrativeStaff: false,
+      includeHourlyInstructors: false, department: "", includeStaffIds: ["UNKNOWN"], excludeStaffIds: [] } };
+  const invalid = await call("training-admin-save", { method: "POST", body: base });
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(store.snapshots.size, 0);
+  assert.equal(store.calls.sheetWrites, 0);
+});
+
+test("QA education create rejects a staff source change after target review", async () => {
+  const roster = [{ staffId: "QA001", name: "QA 교원", department: "교무부", position: "교사", employmentStatus: "재직" }];
+  const selection = { preset: "all", includeAdministrativeStaff: true, includeHourlyInstructors: true,
+    department: "", includeStaffIds: [], excludeStaffIds: [] };
+  const reviewedTargets = selectTrainingTargets(roster, selection).members.map(({ staffId, name, position, department }) =>
+    ({ staffId, name, position, department }));
+  roster.push({ staffId: "QA002", name: "새 교원", department: "교무부", position: "교사", employmentStatus: "재직" });
+  const { call, store } = harness({ snapshotMode: true, directory: async () => ({ directory: roster, stats: { duplicateStaffIds: 0 } }) });
+  const created = await call("training-admin-save", { token: "training-a", method: "POST", body: {
+    교육연도: "2026", 사용여부: "미사용", 상태: "예정", 교육명: "QA 변경 검증", 담당부서: "교무부",
+    일자: "2026-10-07", 시작시간: "10:00", 종료시간: "11:00",
+    signatureOpenAt: "2026-10-07T09:00:00+09:00", signatureCloseAt: "2026-10-07T12:00:00+09:00",
+    targetSelection: selection, reviewedTargets,
+  } });
+  assert.equal(created.statusCode, 409);
+  assert.match(created.body.message, /대상자 명단이 변경/);
+  assert.equal(store.snapshots.size, 0);
+  assert.equal(store.calls.sheetWrites, 0);
 });
 
 test("attendance correction and cancellation enforce the same education ownership gate", async () => {
@@ -738,7 +831,7 @@ test("QR issuance requires authenticated private bootstrapped storage without wr
     assert.equal(result.statusCode, 503);
     assert.equal(result.body.needsBootstrap, state.needsBootstrap);
     assert.equal(result.body.path, undefined);
-    assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, bootstraps: 0 });
+    assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, sheetWrites: 0, bootstraps: 0 });
     assert.equal(db.records.size, 0);
   }
   const ready = await harness().call("training-qr", { query: { eventId: "EVENT-1" } });
@@ -760,7 +853,7 @@ test("Phase 2 admin GET rejects unapproved Preview before canonical directory or
       assert.equal(result.body.code, "training-environment-not-allowed");
     }
     assert.equal(directoryReads, 0);
-    assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, bootstraps: 0 });
+    assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, sheetWrites: 0, bootstraps: 0 });
     process.env.VERCEL_GIT_COMMIT_REF = "feature/training-center-phase2";
     process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
     assert.equal((await call("training-admin-list")).statusCode, 503);
@@ -929,7 +1022,7 @@ test("runtime preflight is admin-only, GET-only, redacted, and write-free", asyn
     assert.equal(JSON.stringify(res.body).includes(secret), false);
     assert.equal(JSON.stringify(res.body).includes("FIREBASE_SERVICE_ACCOUNT"), false);
   }
-  assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, bootstraps: 0 });
+  assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, sheetWrites: 0, bootstraps: 0 });
   assert.equal(db.records.size, 0);
 });
 

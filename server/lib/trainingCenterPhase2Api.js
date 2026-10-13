@@ -17,6 +17,7 @@ import { reconcileCprTrainingStatus, saveCompletedCprGroupTraining } from "./cpr
 import { TrainingEventConflictError } from "./trainingEventStore.js";
 import { TrainingSignatureConflictError } from "./trainingSignatureLedger.js";
 import { listTrainingAttendanceStatuses, saveTrainingAttendanceStatus, TRAINING_ABSENCE_REASONS } from "./trainingAbsenceStatus.js";
+import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
 
 function bad(res, status, message, code = "") {
   return res.status(status).json({ ok: false, ...(code ? { code } : {}), message });
@@ -173,13 +174,23 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const input = !body?.eventId && store.events?.environment === "qa" ? { ...ownedInput, eventId: `QA-TR-${randomUUID()}` } : ownedInput;
         const values = validateTrainingInput(input, { existing });
         values.ownerStaffId = ownerStaffId;
+        if (!existing && store.events?.environment === "qa") {
+          const targets = selectTrainingTargets(access.directory, body?.targetSelection);
+          const reviewed = targets.members.map(({ staffId, name, position, department }) => ({ staffId, name, position, department }));
+          if (JSON.stringify(body?.reviewedTargets) !== JSON.stringify(reviewed)) {
+            throw new TrainingEventConflictError("대상자 명단이 변경되었습니다. 목록을 다시 확인한 뒤 생성해 주세요.");
+          }
+          values.targetSnapshot = { schemaVersion: 1, confirmedAt: now().toISOString(), selection: targets.selection,
+            members: targets.members };
+        }
         if (!existing && rows.some((row) => row.eventId === values.eventId)) return bad(res, 409, "교육 ID가 이미 존재합니다.");
         await store.saveEvent(values, existing);
-        return res.status(200).json({ ok: true, item: values });
+        return res.status(200).json({ ok: true, item: { ...values, targetSnapshot: undefined,
+          ...(values.targetSnapshot ? { targetCount: values.targetSnapshot.members.length } : {}) } });
       }
       if (resource === "training-admin-directory" && req.method === "GET") {
         return res.status(200).json({ ok: true, items: access.directory.filter((row) => row.employmentStatus === "재직")
-          .map(({ staffId, name, position, department }) => ({ staffId, name, position, department })) });
+          .map(({ staffId, name, position, department, employmentStatus }) => ({ staffId, name, position, department, employmentStatus })) });
       }
       if (resource === "training-targets" && req.method === "GET") {
         if (!eventId) return bad(res, 400, "교육 ID가 필요합니다.");
@@ -189,7 +200,10 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const denied = denyUnownedTraining(res, access, training);
         if (denied) return denied;
-        const items = sheetRows(base.targets, TARGET_HEADERS).filter((row) => row.eventId === eventId).map(({ rowNumber, ...row }) => row);
+        const header = base.targets[0] || [];
+        const items = sheetRows(base.targets, TARGET_HEADERS).filter((row) => row.eventId === eventId).map(({ rowNumber, ...row }) => ({ ...row,
+          ...Object.fromEntries(["snapshotName", "snapshotDepartment", "snapshotPosition"].filter((name) => header.includes(name))
+            .map((name) => [name, base.targets[rowNumber - 1]?.[header.indexOf(name)] || ""])) }));
         return res.status(200).json({ ok: true, items });
       }
       if (resource === "training-target-save" && req.method === "POST") {
@@ -202,7 +216,10 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const values = validateTarget(body, source, access.directory);
         const matches = source.targets.filter((row) => row.eventId === values.eventId && row["교직원ID"] === values["교직원ID"]);
         if (matches.length > 1) throw new TrainingSourceNotReadyError();
-        await store.saveRow(TRAINING_SHEETS.targets, TARGET_HEADERS, values, matches[0]?.rowNumber);
+        const snapshotEvent = await store.events?.getEvent?.(eventId);
+        if (snapshotEvent?.targetSnapshot?.schemaVersion === 1) {
+          await store.saveSnapshotTarget(eventId, values, access.directory.find((person) => person.staffId === values["교직원ID"]));
+        } else await store.saveRow(TRAINING_SHEETS.targets, TARGET_HEADERS, values, matches[0]?.rowNumber);
         return res.status(200).json({ ok: true, item: values });
       }
       if (resource === "training-qr" && req.method === "GET") {

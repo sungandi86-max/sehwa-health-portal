@@ -15,5 +15,6 @@ test("training ownership synthetic identities are fixed QA-only roles", () => {
   assert.equal(isQaTrainingSyntheticAssignment(assignment.uid, { ...assignment, roles: ["admin"] }, context,
     Date.parse("2026-10-13T00:00:00Z")), false);
   assert.deepEqual(qaTrainingSyntheticDirectory().map(({ staffId }) => staffId),
-    ["QA-TRAINING-A", "QA-TRAINING-B", "QA-TRAINING-C", "QA-TRAINING-HEALTH"]);
+    ["QA-TRAINING-A", "QA-TRAINING-B", "QA-TRAINING-C", "QA-TRAINING-HEALTH",
+      "QA-TRAINING-TEACHER-1", "QA-TRAINING-TEACHER-2", "QA-TRAINING-OFFICE-1", "QA-TRAINING-HOURLY-1"]);
 });

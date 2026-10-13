@@ -9,12 +9,19 @@ const IDENTITIES = Object.freeze({
 
 export const QA_TRAINING_SYNTHETIC_IDENTITIES = IDENTITIES;
 
+const TARGET_FIXTURES = Object.freeze([
+  { staffId: "QA-TRAINING-TEACHER-1", name: "QA 교무부 교원", department: "교무교육과정부", position: "교사" },
+  { staffId: "QA-TRAINING-TEACHER-2", name: "QA 연구부 교원", department: "연구정보부", position: "교사" },
+  { staffId: "QA-TRAINING-OFFICE-1", name: "QA 행정실 직원", department: "행정실", position: "주무관" },
+  { staffId: "QA-TRAINING-HOURLY-1", name: "QA 시간강사", department: "교무교육과정부", position: "시간강사" },
+]);
+
 export function qaTrainingSyntheticIdentity(uid) {
   return IDENTITIES[uid] || null;
 }
 
 export function qaTrainingSyntheticDirectory() {
-  return Object.values(IDENTITIES).map((identity) => ({ ...identity, employmentStatus: "재직" }));
+  return [...Object.values(IDENTITIES), ...TARGET_FIXTURES].map((identity) => ({ ...identity, employmentStatus: "재직" }));
 }
 
 export function isQaTrainingSyntheticAssignment(uid, assignment, context = process.env, now = Date.now()) {
