@@ -52,9 +52,13 @@ function uniqueRows(rows, key, label) {
 }
 
 export function parseTrainingSource({ trainings, targets, signatures }) {
+  const targetHeaders = (targets?.[0] || []).map((value) => String(value ?? "").normalize("NFKC").trim());
   const result = {
     trainings: trainingRows(trainings).filter((row) => row.eventId),
-    targets: sheetRows(targets, TARGET_HEADERS).filter((row) => row.eventId && row["교직원ID"]),
+    targets: sheetRows(targets, TARGET_HEADERS).map((row, index) => ({ ...row,
+      ...Object.fromEntries(["snapshotName", "snapshotDepartment", "snapshotPosition"].filter((name) => targetHeaders.includes(name))
+        .map((name) => [name, String(targets[index + 1]?.[targetHeaders.indexOf(name)] ?? "").normalize("NFKC").trim()])) }))
+      .filter((row) => row.eventId && row["교직원ID"]),
     signatures: sheetRows(signatures, SIGNATURE_HEADERS).filter((row) => row.signatureId),
   };
   uniqueRows(result.trainings, "eventId", "교육 ID");
@@ -159,9 +163,11 @@ export function finalSheetModel(source, directory, eventId, attendanceStatuses =
   const event = source.trainings.find((row) => row.eventId === eventId);
   if (!event) return null;
   const people = new Map(directory.filter((row) => row.employmentStatus === "재직").map((row) => [row.staffId, row]));
-  const rows = source.targets.filter((row) => row.eventId === eventId && ["대상", "교육 대상", "제외"].includes(row["대상상태"]) && people.has(row["교직원ID"]))
+  const rows = source.targets.filter((row) => row.eventId === eventId && ["대상", "교육 대상", "제외"].includes(row["대상상태"]) &&
+    (people.has(row["교직원ID"]) || row.snapshotName))
     .map((target) => {
-      const staff = people.get(target["교직원ID"]);
+      const staff = target.snapshotName ? { staffId: target["교직원ID"], name: target.snapshotName,
+        department: target.snapshotDepartment, position: target.snapshotPosition } : people.get(target["교직원ID"]);
       const signature = source.signatures.find((row) => row.eventId === eventId && row["교직원ID"] === staff.staffId && activeSignature(row));
       const excluded = truthy(target["제외여부"]) || target["대상상태"] === "제외";
       const absence = attendanceStatuses.find((row) => row.eventId === eventId && row.staffId === staff.staffId && row.attendanceStatus === "absent");

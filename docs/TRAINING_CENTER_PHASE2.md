@@ -4,7 +4,7 @@
 
 ## Sheet schema
 
-교육 이벤트는 환경별 Firestore `training_events_qa`/`training_events_production`을 원본으로 사용한다. 이관 원본인 `앱_교직원교육`은 별도 승인 단계에서 제거했다. `교직원교육대상`은 기존 Sheet 원본으로 유지하며 eventId로 조인한다. 전자서명 원장은 Phase 2에서 환경별 Firestore `training_signature_ledger_qa`/`training_signature_ledger_production`으로 전환하며, 기존 `교직원교육전자서명` 탭은 별도 삭제 승인 전까지 보존하되 runtime에서 읽거나 쓰지 않는다. 데이터가 없던 `앱_교직원교육자료`의 runtime reader는 제거했으며 교육 상세 응답은 `materials: []`를 유지한다. 아래 전자서명 Sheet 헤더 설명은 과거 이관 원본 schema 기록이다.
+교육 이벤트는 환경별 Firestore `training_events_qa`/`training_events_production`을 원본으로 사용한다. 이관 원본인 `앱_교직원교육`은 별도 승인 단계에서 제거했다. 기존 교육 대상자는 `교직원교육대상` Sheet 원본을 유지하고 eventId로 조인한다. 대상자 선택 기능으로 새로 생성하는 교육은 canonical 교직원명단을 서버에서 재검증한 뒤 이벤트 Firestore 문서의 `targetSnapshot`과 `targetStaffIds`로 확정 저장하며, 대상 Sheet에 행을 추가하지 않는다. 기존 교육의 대상자는 자동 재계산하거나 이관하지 않는다. 전자서명 원장은 Phase 2에서 환경별 Firestore `training_signature_ledger_qa`/`training_signature_ledger_production`으로 전환하며, 기존 `교직원교육전자서명` 탭은 별도 삭제 승인 전까지 보존하되 runtime에서 읽거나 쓰지 않는다. 데이터가 없던 `앱_교직원교육자료`의 runtime reader는 제거했으며 교육 상세 응답은 `materials: []`를 유지한다. 아래 전자서명 Sheet 헤더 설명은 과거 이관 원본 schema 기록이다.
 
 2026-10-10 이벤트 원본 전환: Production 원본 17컬럼 1행을 직접 재조회했고, `training_events_production` 기존 문서 0건을 확인했다. 이관 dry-run은 create 1/update 0/skip 0/conflict 0이었으며, 고정 eventId·원본 지문 검증 후 Firestore 문서 1건만 생성했다. 즉시 read-back은 skip 1/conflict 0, 별도 재실행 dry-run은 create 0/update 0/skip 1/conflict 0이었다. 해당 이벤트의 `미사용` 상태를 보존했다. 원본 Sheet는 삭제하지 않았고 대상·전자서명 Sheet는 변경하지 않았다. Production runtime smoke 결과는 배포 후 별도 기록한다.
 
