@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
-import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
-import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
+import { TrainingAdminLayout } from "../components/TrainingAdminLayout.jsx";
+import { bootstrapTrainingSignatureStorage, getTrainingAttendanceSummary, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
 import { getTrainingStorageBootstrapUiState, performTrainingStorageBootstrap, summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
+import { trainingAttendanceCounts } from "../lib/trainingAttendancePresentation.js";
 import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
 import { TrainingTargetPicker } from "./TrainingTargetPicker.jsx";
 
@@ -66,9 +67,11 @@ function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTr
     finally { setSaving(false); }
   }
 
-  return <form className="space-y-3 rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4" onSubmit={submit}>
+  return <form className="training-admin-panel space-y-4 p-4 sm:p-5" onSubmit={submit}>
     <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-[#102047]">{initial.eventId ? "교육 수정" : "교육 등록"}</h2><button type="button" onClick={onCancel} className={secondaryClass}>닫기</button></div>
-    {!initial.eventId && <p className="text-xs font-semibold text-[#3154A3]">1. 기본 정보　2. 대상자 설정　3. 대상자 확인</p>}
+    {!initial.eventId && <ol className="grid grid-cols-3 border-y border-[#DDEAE7] py-2 text-center text-xs font-semibold text-[#627083]" aria-label="교육 등록 단계">
+      {[["details", "1. 기본 정보"], ["targets", "2. 대상자 설정"], ["confirm", "3. 대상자 확인"]].map(([key, label]) => <li key={key} className={step === key ? "text-[#0D4EA6]" : ""} aria-current={step === key ? "step" : undefined}>{label}</li>)}
+    </ol>}
     {(initial.eventId || step === "details") && <>
     <p className="text-xs text-[#627083]">새 교육은 기본적으로 미사용으로 저장됩니다. 대상과 QR 준비를 확인한 뒤 사용으로 전환하세요.</p>
     <div className="grid gap-3 sm:grid-cols-2">
@@ -163,8 +166,9 @@ export function TrainingRuntimePreflight({
   </section>;
 }
 
-export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
+export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, loadSummary = getTrainingAttendanceSummary, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
   const [items, setItems] = useState([]);
+  const [summaries, setSummaries] = useState({});
   const [state, setState] = useState("loading");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(null);
@@ -174,20 +178,43 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
     catch (error) { setMessage(error.message); setState("error"); }
   }
   useEffect(() => { reload(); }, []);
-  return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 관리" description="교육 등록과 대상·QR·출석 업무를 관리합니다." displayName={displayName}>
+  useEffect(() => {
+    if (state !== "ready" || !items.length) return;
+    let active = true;
+    Promise.all(items.map(async (item) => {
+      try { return [item.eventId, trainingAttendanceCounts((await loadSummary(item.eventId)).counts)]; }
+      catch { return [item.eventId, null]; }
+    })).then((entries) => { if (active) setSummaries(Object.fromEntries(entries)); });
+    return () => { active = false; };
+  }, [items, state, loadSummary]);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const upcoming = items.filter((item) => item["사용여부"] === "사용" && item["일자"] >= today)
+    .sort((left, right) => left["일자"].localeCompare(right["일자"]))[0];
+  const currentCounts = upcoming && summaries[upcoming.eventId];
+  return <TrainingAdminLayout displayName={displayName} active="manage" title="교직원 교육 운영관리" description="교육 등록과 대상·QR·출석 업무를 한곳에서 관리합니다.">
     <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button></div>
-    {hasTopLevelAdminAccess && <TrainingRuntimePreflight runPreflight={runPreflight} />}
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     {state === "loading" && <p className="text-sm text-[#627083]">교육 목록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
-    {state === "ready" && items.length === 0 && <p className="rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-4 text-sm text-[#627083]">등록된 교육이 없습니다.</p>}
-    {state === "ready" && items.length > 0 && <section aria-label="교육 목록" className="space-y-2">
-      {items.map((item) => <article className="rounded-[10px] border border-[#DDEAE7] bg-white p-3" key={item.eventId}>
-        <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><h2 className="break-keep text-sm font-bold text-[#102047]">{item["교육명"]}</h2><p className="mt-1 text-xs text-[#627083]">{item["일자"]} {item["시작시간"]} · {item["담당부서"]} · {item["상태"]} · {item["사용여부"]}</p></div><button className={secondaryClass} type="button" onClick={() => setEditing(item)}>수정</button></div>
-        <div className="mt-3 flex flex-wrap gap-2"><Link className={secondaryClass} to={`/firebase-admin/trainings/${encodeURIComponent(item.eventId)}/targets`}>대상 관리</Link><Link className={secondaryClass} to={`/firebase-admin/trainings/${encodeURIComponent(item.eventId)}/qr`}>QR</Link><Link className={secondaryClass} to={`/firebase-admin/trainings/${encodeURIComponent(item.eventId)}/attendance`}>출석 현황</Link><Link className={secondaryClass} to={`/firebase-admin/trainings/${encodeURIComponent(item.eventId)}/final-sheet`}>연수등록부 미리보기</Link></div>
-      </article>)}
+    {state === "ready" && <section className="training-admin-panel overflow-hidden" aria-label="오늘의 교육">
+      <div className="border-b border-[#DDEAE7] px-4 py-3"><h2 className="text-base font-bold text-[#102047]">오늘의 교육 · 다음 일정</h2></div>
+      {upcoming ? <><div className="flex flex-wrap items-start justify-between gap-3 px-4 py-4"><div><h3 className="break-keep text-lg font-bold text-[#102047]">{upcoming["교육명"]}</h3><p className="mt-1 text-sm text-[#627083]">{upcoming["일자"]} {upcoming["시작시간"]}~{upcoming["종료시간"]} · {upcoming["장소"] || "장소 미정"}</p><p className="mt-1 text-xs text-[#627083]">{upcoming["담당부서"]} · {upcoming["상태"]}</p></div><Link className={secondaryClass} to={`/firebase-admin/trainings/${encodeURIComponent(upcoming.eventId)}/qr`}>QR 출석 화면</Link></div>
+        <dl className="grid grid-cols-3 border-t border-[#DDEAE7]"><div className="training-admin-metric"><dt className="text-xs text-[#627083]">대상자</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{currentCounts ? currentCounts.target : "—"}</dd></div><div className="training-admin-metric"><dt className="text-xs text-[#627083]">출석 완료</dt><dd className="mt-1 text-xl font-semibold tabular-nums text-[#08754B]">{currentCounts ? currentCounts.signed : "—"}</dd></div><div className="training-admin-metric"><dt className="text-xs text-[#627083]">미출석</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{currentCounts ? currentCounts.missing : "—"}</dd></div></dl></>
+        : <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-5"><p className="text-sm text-[#627083]">예정된 교육이 없습니다.</p><button type="button" className={secondaryClass} onClick={() => setEditing({ ...blank })}>새 교육 만들기</button></div>}
     </section>}
-  </FirebaseV2PageShell>;
+    {state === "ready" && <section className="training-admin-panel overflow-hidden" aria-label="교육 목록">
+      <div className="border-b border-[#DDEAE7] px-4 py-3"><h2 className="text-base font-bold text-[#102047]">교육 목록</h2><p className="mt-1 text-xs text-[#627083]">관리 권한이 있는 교육 {items.length}건</p></div>
+      {items.length === 0 ? <p className="px-4 py-5 text-sm text-[#627083]">등록된 교육이 없습니다.</p> : <div className="divide-y divide-[#DDEAE7]">{items.map((item) => {
+        const counts = summaries[item.eventId];
+        const path = `/firebase-admin/trainings/${encodeURIComponent(item.eventId)}`;
+        return <article className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center" key={item.eventId}>
+          <div className="min-w-0"><h3 className="break-keep text-sm font-bold text-[#102047]">{item["교육명"]}</h3><p className="mt-1 text-xs text-[#627083]">{item["일자"]} {item["시작시간"]} · {item["장소"] || "장소 미정"} · {item["상태"]} · {item["사용여부"]}</p><p className="mt-1 text-xs tabular-nums text-[#627083]">대상 {counts ? counts.target : "—"} · 출석 {counts ? counts.signed : "—"} · 미출석 {counts ? counts.missing : "—"}</p></div>
+          <div className="flex flex-wrap gap-2"><button className={secondaryClass} type="button" onClick={() => setEditing(item)}>수정</button><Link className={secondaryClass} to={`${path}/targets`}>대상</Link><Link className={secondaryClass} to={`${path}/qr`}>QR</Link><Link className={secondaryClass} to={`${path}/attendance`}>출석</Link><Link className={secondaryClass} to={`${path}/final-sheet`}>등록부</Link></div>
+        </article>;
+      })}</div>}
+    </section>}
+    {hasTopLevelAdminAccess && <TrainingRuntimePreflight runPreflight={runPreflight} />}
+  </TrainingAdminLayout>;
 }
 
 export default function FirebaseTrainingAdminPage() {

@@ -268,3 +268,127 @@ body {
     -webkit-line-clamp: 2;
   }
 }
+
+.training-admin-layout {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.training-admin-sidebar,
+.training-admin-panel {
+  border: 1px solid #DDEAE7;
+  border-radius: 12px;
+  background: #FFFFFF;
+}
+
+.training-admin-sidebar {
+  position: sticky;
+  top: 16px;
+  padding: 12px;
+}
+
+.training-admin-sidebar-heading {
+  padding: 8px 10px 12px;
+  border-bottom: 1px solid #DDEAE7;
+  color: #627083;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.training-admin-sidebar nav {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.training-admin-nav-link,
+.training-admin-back {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #102047;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+}
+
+.training-admin-nav-link:hover,
+.training-admin-back:hover {
+  background: #F3F8F6;
+}
+
+.training-admin-nav-link:focus-visible,
+.training-admin-back:focus-visible {
+  outline: 2px solid #0D4EA6;
+  outline-offset: 2px;
+}
+
+.training-admin-nav-link.is-active {
+  background: #EEF4FF;
+  box-shadow: inset 3px 0 #0D4EA6;
+  color: #0D4EA6;
+}
+
+.training-admin-back {
+  margin-top: 12px;
+  border-top: 1px solid #DDEAE7;
+  border-radius: 0;
+  color: #627083;
+  font-size: 12px;
+}
+
+.training-admin-workspace {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+}
+
+.training-admin-metric {
+  border-right: 1px solid #DDEAE7;
+  padding: 12px 16px;
+}
+
+.training-admin-metric:last-child {
+  border-right: 0;
+}
+
+.training-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+}
+
+.training-admin-table th,
+.training-admin-table td {
+  border-bottom: 1px solid #DDEAE7;
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+
+.training-admin-table thead {
+  background: #F3F8F6;
+  color: #627083;
+  font-size: 12px;
+}
+
+@media (max-width: 1023px) {
+  .training-admin-layout { grid-template-columns: 1fr; }
+  .training-admin-sidebar { position: static; }
+  .training-admin-sidebar nav { display: flex; flex-wrap: wrap; }
+  .training-admin-sidebar-heading,
+  .training-admin-back { display: none; }
+}
+
+@media (max-width: 640px) {
+  .training-admin-layout { gap: 12px; }
+  .training-admin-sidebar { padding: 8px; }
+  .training-admin-sidebar nav { flex-wrap: nowrap; overflow-x: auto; }
+  .training-admin-nav-link { flex: none; white-space: nowrap; }
+  .training-admin-metric { padding: 10px; }
+}

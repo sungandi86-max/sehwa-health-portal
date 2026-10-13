@@ -337,3 +337,13 @@ Every data surface needs distinct states:
 - Success
 
 Do not hide permission errors as empty states. Do not expose raw Firebase, token, document ID, or server stack details to ordinary users.
+
+## 18. Training Administration
+
+The training administrator area reuses the portal header and adds a compact local navigation rail. This is task navigation, not a second product identity. Only existing destinations become links; event-specific destinations appear only when an event is selected.
+
+- Layout: a 208px left rail beside a flexible work area at desktop widths; the same navigation becomes a wrapped horizontal row on smaller screens. The work area never causes page-level horizontal scrolling.
+- Main dashboard: an operational current/upcoming training summary, restrained count strip, and a dense training list. The event QR page owns the large live QR panel and recent-attendance table.
+- Primitives: `.training-admin-layout` (two-column shell), `.training-admin-sidebar` (local navigation with active state), `.training-admin-panel` (bordered white work surface), `.training-admin-metric` (compact count cell), and `.training-admin-table` (desktop data table with a mobile list counterpart).
+- States: active navigation uses a quiet blue surface and a left accent; unavailable event links are absent rather than fake controls. Loading, empty, error, and disabled states retain their existing functional meaning.
+- The school blue, navy, mint, border, typography, radius, and spacing tokens above remain authoritative. QR is a functional focal point, not decorative artwork. No gradients or heavy card shadows.
