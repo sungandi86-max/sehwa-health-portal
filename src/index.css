@@ -302,7 +302,7 @@ body {
 
 .training-admin-surface > div > header p { word-break: keep-all; }
 
-.training-admin-surface > div > header > div > div:last-child {
+.training-admin-surface .firebase-v2-user-meta {
   border: 0;
   background: transparent;
   padding: 0;
@@ -424,8 +424,9 @@ body {
 .training-qr-counts .training-admin-metric:nth-child(3) dd { color: #C72845; }
 .training-qr-counts .training-admin-metric:nth-child(4) { background: #F1F6F8; }
 .training-qr-panel { min-height: 390px; }
-.training-qr-panel > div:nth-of-type(1) { margin-top: 18px; }
-.training-qr-panel > div:nth-of-type(2) { min-height: 260px; }
+.training-qr-intro { margin-top: 18px; }
+.training-qr-placeholder { min-height: 260px; background: #EAF9F4; }
+.training-qr-code-frame { background: #EAF9F4; }
 
 .training-admin-metric {
   border-right: 1px solid #DDEAE7;
