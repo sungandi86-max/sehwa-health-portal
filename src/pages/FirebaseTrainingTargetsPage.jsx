@@ -6,9 +6,9 @@ import { listTrainingDirectory, listTrainingTargets, saveTrainingTargetsBatch } 
 import { selectTrainingTargets, toggleTrainingTarget } from "../../common/trainingTargetSelection.js";
 import { TrainingTargetPicker } from "./TrainingTargetPicker.jsx";
 
-const control = "min-h-11 min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-2 text-sm text-[#102047] focus:border-[#0D4EA6] focus:outline-none";
-const primary = "min-h-11 rounded-[9px] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50";
-const secondary = "min-h-11 rounded-[9px] border border-[#DDEAE7] bg-white px-4 text-sm font-semibold text-[#0D4EA6]";
+const control = "min-h-11 min-w-0 rounded-[9px] border border-[var(--shh-border)] bg-white px-2 text-sm text-[var(--shh-primary)] focus:border-[var(--shh-action)] focus:outline-none";
+const primary = "min-h-11 rounded-[9px] bg-[var(--shh-action)] px-4 text-sm font-semibold text-white disabled:opacity-50";
+const secondary = "min-h-11 rounded-[9px] border border-[var(--shh-border)] bg-white px-4 text-sm font-semibold text-[var(--shh-action)]";
 
 function initialSelection(directory, targets) {
   const active = new Set(directory.filter((person) => person.employmentStatus === "재직").map((person) => person.staffId));
@@ -88,12 +88,12 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
       previous?.["대상상태"] === "제외" || previous?.["제외여부"] === "Y" ? "제외" : "비대상");
     const required = detail?.required ?? (previous && selected && ["대상", "교육 대상"].includes(previous["대상상태"])
       ? previous["필수여부"] === "Y" : true);
-    return <div className="mt-2 grid gap-2 rounded-[9px] bg-[#F3F8F6] p-3 sm:grid-cols-3">
-      <label className="grid gap-1 text-xs text-[#627083]">대상 상태<select className={control} value={status}
+    return <div className="mt-2 grid gap-2 rounded-[9px] bg-[var(--shh-surface-muted)] p-3 sm:grid-cols-3">
+      <label className="grid gap-1 text-xs text-[var(--shh-muted)]">대상 상태<select className={control} value={status}
         onChange={(event) => setStatus(person.staffId, event.target.value)}><option value="대상">대상</option><option value="비대상">비대상</option><option value="제외">제외</option></select></label>
-      <label className="flex min-h-11 items-center gap-2 text-sm text-[#102047]"><input type="checkbox" checked={status === "대상" && required}
+      <label className="flex min-h-11 items-center gap-2 text-sm text-[var(--shh-primary)]"><input type="checkbox" checked={status === "대상" && required}
         disabled={status !== "대상"} onChange={(event) => setDetail(person.staffId, { targetStatus: "대상", required: event.target.checked, excludedReason: "" })} />필수</label>
-      {status === "제외" && <label className="grid gap-1 text-xs text-[#627083]">제외 사유<input className={control}
+      {status === "제외" && <label className="grid gap-1 text-xs text-[var(--shh-muted)]">제외 사유<input className={control}
         value={detail?.excludedReason ?? previous?.["제외사유"] ?? ""} maxLength={200}
         onChange={(event) => setDetail(person.staffId, { targetStatus: "제외", required: false, excludedReason: event.target.value })} /></label>}
     </div>;
@@ -117,8 +117,8 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
     } finally { setSaving(false); }
   }
   return <TrainingAdminLayout displayName={displayName} eventId={eventId} active="targets" title="교육 대상 관리" description="그룹을 선택하고 예외만 조정한 뒤 한 번에 저장합니다.">
-    {state === "loading" && <p className="text-sm text-[#627083]">대상 정보를 불러오는 중입니다.</p>}
-    {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
+    {state === "loading" && <p className="text-sm text-[var(--shh-muted)]">대상 정보를 불러오는 중입니다.</p>}
+    {state === "error" && <p role="alert" className="text-sm text-[var(--shh-danger)]">{message}</p>}
     {state === "ready" && selection && <section className="training-target-manager">
       <div className="training-target-workflow">
         <div className="training-target-section-title">
@@ -137,7 +137,10 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
             <div><h2>변경 확인</h2>
               <p>{dirty ? `기존 대상 ${currentIds.size}명에서 ${members.length}명으로 변경됩니다.` : "아직 저장할 변경 사항이 없습니다."}</p>
               {dirty && <p className="training-target-savebar-detail">추가 {added}명 · 제외 {removed}명 · 개별 예외 {changedDetails}건</p>}</div>
-            <div className="flex flex-wrap gap-2"><button type="button" className={secondary} disabled={!dirty || saving}
+            <div className="training-target-actions"><button type="button" className={`${secondary} training-target-list-mobile`}
+              aria-expanded={listExpanded} onClick={() => setListExpanded(!listExpanded)}>
+              {listExpanded ? "대상자 명단 접기" : "대상자 명단 보기"}</button>
+              <button type="button" className={secondary} disabled={!dirty || saving}
               onClick={() => { setSelection(initialSelection(directory, targets)); setDetails({}); setDirty(false); setMessage(""); }}>변경 취소</button>
               <button type="button" className={primary} disabled={!dirty || saving || Boolean(selectionError) || archived.length > 0}
                 onClick={save}>{saving ? "저장 중" : "변경 저장"}</button></div>
@@ -151,9 +154,9 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
             toggle: (staffId) => setOpenDetailId((current) => current === staffId ? "" : staffId),
             render: renderDetail }} />
       </div>
-      {archived.length > 0 && <p role="alert" className="text-sm text-[#B42318]">현재 명단에 없는 기존 대상 {archived.length}명이 있어 일괄 저장할 수 없습니다. 기존 대상 기록은 변경되지 않았습니다.</p>}
-      {dirty && selectionError && <p role="alert" className="text-sm text-[#B42318]">{selectionError}</p>}
-      {message && <p role={message.includes("저장했습니다") ? "status" : "alert"} className="text-sm text-[#102047]">{message}</p>}
+      {archived.length > 0 && <p role="alert" className="text-sm text-[var(--shh-danger)]">현재 명단에 없는 기존 대상 {archived.length}명이 있어 일괄 저장할 수 없습니다. 기존 대상 기록은 변경되지 않았습니다.</p>}
+      {dirty && selectionError && <p role="alert" className="text-sm text-[var(--shh-danger)]">{selectionError}</p>}
+      {message && <p role={message.includes("저장했습니다") ? "status" : "alert"} className="text-sm text-[var(--shh-primary)]">{message}</p>}
     </section>}
   </TrainingAdminLayout>;
 }

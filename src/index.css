@@ -12,6 +12,13 @@
   --shh-surface-muted: #F3F8F6;
   --shh-border: #DDEAE7;
   --shh-muted: #627083;
+  --shh-action: #0D4EA6;
+  --shh-accent-border: #C9EDE3;
+  --shh-accent-selected-border: #8FD9C7;
+  --shh-accent-surface: #EAF9F4;
+  --shh-danger: #B42318;
+  --shh-danger-border: #FFD6DC;
+  --shh-danger-surface: #FFF0F1;
   --shh-soft-shadow: 0 1px 2px rgba(16, 32, 71, 0.04);
 }
 
@@ -480,8 +487,8 @@ body {
 }
 
 .training-target-summary-card.is-primary {
-  border-color: #C9EDE3;
-  background: #EAF9F4;
+  border-color: var(--shh-accent-border);
+  background: var(--shh-accent-surface);
 }
 
 .training-target-summary-card span,
@@ -594,8 +601,8 @@ body {
 }
 
 .training-target-preset.is-selected {
-  border-color: #8FD9C7;
-  background: #EAF9F4;
+  border-color: var(--shh-accent-selected-border);
+  background: var(--shh-accent-surface);
   box-shadow: inset 4px 0 var(--shh-accent-dark);
 }
 
@@ -737,15 +744,15 @@ body {
 }
 
 .training-target-status--target {
-  border-color: #C9EDE3;
-  background: #EAF9F4;
+  border-color: var(--shh-accent-border);
+  background: var(--shh-accent-surface);
   color: var(--shh-accent-dark);
 }
 
 .training-target-status--excluded {
-  border-color: #FFD6DC;
-  background: #FFF0F1;
-  color: #B42318;
+  border-color: var(--shh-danger-border);
+  background: var(--shh-danger-surface);
+  color: var(--shh-danger);
 }
 
 .training-target-status--neutral {
@@ -761,6 +768,14 @@ body {
   color: var(--shh-muted);
   font-size: 12px;
 }
+
+.training-target-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.training-target-list-mobile { display: none; }
 
 .training-target-empty {
   border-top: 1px solid var(--shh-border);
@@ -847,7 +862,11 @@ body {
     flex-direction: column;
   }
   .training-target-savebar { flex-direction: column-reverse; }
-  .training-target-roster-head button,
+  .training-target-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .training-target-list-mobile { display: inline-flex; }
+  .training-target-actions button:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .training-target-actions button:nth-child(3) { grid-column: 2; grid-row: 1; }
+  .training-target-roster-head > button { display: none; }
   .training-target-savebar button {
     width: 100%;
     justify-content: center;
