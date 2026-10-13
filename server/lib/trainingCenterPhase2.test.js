@@ -9,6 +9,7 @@ import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAt
 import { listAttendanceRecoveryCandidates } from "./trainingAttendanceRecovery.js";
 import { managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
 import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
+import { trainingAbsenceLabel } from "./trainingAbsenceStatus.js";
 import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
 import { SignatureStorageError } from "./trainingSignatureStorage.js";
 import { TrainingSignatureConflictError } from "./trainingSignatureLedger.js";
@@ -273,6 +274,56 @@ test("attendance correction and cancellation enforce the same education ownershi
   const cancellation = { method: "POST", body: { eventId: "EVENT-1", staffId: "QA002", action: "cancel", reason: "기록 정정" } };
   assert.equal((await call("training-attendance-correct", { token: "training-b", ...cancellation })).statusCode, 403);
   assert.equal((await call("training-attendance-correct", { token: "training-a", ...cancellation })).statusCode, 200);
+});
+
+test("unowned correction hides attendance and target existence before lookup", async () => {
+  const { call } = harness();
+  for (const action of ["mark-attended", "cancel", "set-absence-reason"]) {
+    const result = await call("training-attendance-correct", { token: "training-a", method: "POST", body: {
+      eventId: "EVENT-2", staffId: "NOT-A-REAL-STAFF", action, reason: "권한 순서 확인", absenceReason: "business_trip",
+    } });
+    assert.equal(result.statusCode, 403);
+  }
+});
+
+test("owned missing attendance target returns not found after ownership succeeds", async () => {
+  const { call } = harness();
+  const result = await call("training-attendance-correct", { token: "training-a", method: "POST", body: {
+    eventId: "EVENT-1", staffId: "NOT-A-REAL-STAFF", action: "cancel", reason: "없는 대상 확인",
+  } });
+  assert.equal(result.statusCode, 404);
+});
+
+test("absence reasons persist for absent targets and clear when attendance is restored", async () => {
+  const { call } = harness();
+  const saved = await call("training-attendance-correct", { token: "training-a", method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA002", action: "set-absence-reason", reason: "미참석 사유 등록",
+    absenceReason: "other", absenceNote: "공식 일정",
+  } });
+  assert.equal(saved.statusCode, 200);
+  let summary = await call("training-attendance-summary", { token: "training-a", query: { eventId: "EVENT-1" } });
+  let person = summary.body.rows.find((item) => item.staffId === "QA002");
+  assert.deepEqual([person.status, person.absenceReason, person.absenceNote, person.absenceLabel], ["미서명", "other", "공식 일정", "기타(공식 일정)"]);
+
+  assert.equal((await call("training-attendance-correct", { token: "training-a", method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA002", action: "mark-attended", reason: "현장 출석 확인",
+  } })).statusCode, 200);
+  summary = await call("training-attendance-summary", { token: "training-a", query: { eventId: "EVENT-1" } });
+  person = summary.body.rows.find((item) => item.staffId === "QA002");
+  assert.deepEqual([person.status, person.absenceReason, person.absenceNote], ["서명 완료", null, ""]);
+
+  assert.equal((await call("training-attendance-correct", { token: "training-a", method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA002", action: "cancel", reason: "출석 기록 취소",
+  } })).statusCode, 200);
+  summary = await call("training-attendance-summary", { token: "training-a", query: { eventId: "EVENT-1" } });
+  person = summary.body.rows.find((item) => item.staffId === "QA002");
+  assert.deepEqual([person.status, person.absenceReason, person.absenceNote], ["미서명", null, ""]);
+});
+
+test("absence labels preserve unknown legacy absence and format approved reasons", () => {
+  assert.equal(trainingAbsenceLabel(null, ""), "미참석");
+  assert.equal(trainingAbsenceLabel("business_trip", ""), "출장");
+  assert.equal(trainingAbsenceLabel("other", "학교 행사"), "기타(학교 행사)");
 });
 
 test("retired event mirror endpoint cannot write or expose source rows", async () => {
@@ -795,6 +846,19 @@ test("final roster model and template XLSX keep the correct active image and omi
   assert.equal(book.worksheets[0].getCell("E4").value, "10.6.(화)");
   assert.equal(book.worksheets[0].getCell("C5").value, null);
   assert.equal(book.worksheets[0].getImages().length, 1);
+});
+
+test("final roster and XLSX render an approved absence reason without changing attendance counts", async () => {
+  const parsed = parseTrainingSource(source());
+  const model = finalSheetModel(parsed, directory, "EVENT-1", [{ eventId: "EVENT-1", staffId: "QA002",
+    attendanceStatus: "absent", absenceReason: "annual_leave", absenceNote: "" }]);
+  assert.deepEqual(model.counts, { target: 2, signed: 0, excluded: 0 });
+  assert.equal(model.rows.find((item) => item.staffId === "QA002").absenceLabel, "연가");
+  const bytes = await makeTrainingRosterXlsx(model);
+  const book = new ExcelJS.Workbook();
+  await book.xlsx.load(bytes);
+  const rowNumber = model.rows.findIndex((item) => item.staffId === "QA002") + 4;
+  assert.equal(book.worksheets[0].getCell(`D${rowNumber}`).value, "연가");
 });
 
 test("administrator PDF download uses the final model and server-side renderer", async () => {
