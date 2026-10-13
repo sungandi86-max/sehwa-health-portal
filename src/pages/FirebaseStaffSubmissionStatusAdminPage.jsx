@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
-import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
+import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPanel.jsx";
 import ResearchTrainingExceptionsPanel from "../components/ResearchTrainingExceptionsPanel.jsx";
 import { getAdminStaffSubmissionStatusOverview, updateAdminTbScreeningStatus } from "../lib/staffSubmissionStatusAdmin.js";
@@ -280,7 +281,7 @@ function AdminStatusContent({ displayName }) {
   const filteredItems = useMemo(() => filterItems(selectedTask?.items || [], filters), [selectedTask, filters]);
 
   return (
-    <FirebaseV2PageShell
+    <AdminWorkspaceLayout
       label="관리자"
       title="교직원 제출·이수 현황"
       description="결핵검진, 심폐소생술 연수, 보건 관련 법정의무연수 상태를 Firestore projection 기준으로 확인합니다."
@@ -392,7 +393,7 @@ function AdminStatusContent({ displayName }) {
           emptyMessage="현재 확인 가능한 제출·이수 현황이 없습니다."
         />
       )}
-    </FirebaseV2PageShell>
+    </AdminWorkspaceLayout>
   );
 }
 

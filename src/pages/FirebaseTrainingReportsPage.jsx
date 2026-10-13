@@ -1,6 +1,6 @@
 import { useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
-import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import { downloadChildAbuseHwpxReport, downloadTrainingReport, previewTrainingReport } from "../lib/trainingReports.js";
 
 const REPORTS = [
@@ -136,7 +136,7 @@ function ReportsContent({ displayName }) {
   }
 
   return (
-    <FirebaseV2PageShell label="관리자" title="법정의무연수 보고서" description="재직 대상자와 연구부 원본을 대조합니다." displayName={displayName}>
+    <AdminWorkspaceLayout label="관리자" title="법정의무연수 보고서" description="재직 대상자와 연구부 원본을 대조합니다." displayName={displayName}>
       <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
         <h2 className="text-[16px] font-semibold text-[#102047]">보고서 선택</h2>
         <div className="mt-2 divide-y divide-[#DDEAE7] border-y border-[#DDEAE7]">
@@ -168,7 +168,7 @@ function ReportsContent({ displayName }) {
           <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[300px] text-left text-sm"><thead className="bg-[#F3F8F6] text-[#627083]"><tr><th className="px-3 py-2">연번</th><th className="px-3 py-2">직위</th><th className="px-3 py-2">성명</th>{selected.id === "childAbuse" && <th className="px-3 py-2">교육수료일</th>}</tr></thead><tbody>{preview.sampleRows.map((row) => <tr key={row.no} className="border-b border-[#DDEAE7]"><td className="px-3 py-2">{row.no}</td><td className="px-3 py-2">{row.position}</td><td className="px-3 py-2">{row.name}</td>{selected.id === "childAbuse" && <td className="px-3 py-2">{row.completionDate || "미입력"}</td>}</tr>)}</tbody></table></div>
         </div>
       </section>}
-    </FirebaseV2PageShell>
+    </AdminWorkspaceLayout>
   );
 }
 

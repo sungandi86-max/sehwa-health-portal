@@ -8,7 +8,8 @@ import {
 } from "../components/FirebaseAdminInfectionCases.jsx";
 import InfectionStatistics from "../components/InfectionStatistics.jsx";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
-import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
+import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import {
   getCaseStatusSummary,
@@ -99,7 +100,7 @@ function FirebaseAdminInfectionsContent({ user, displayName }) {
   };
 
   return (
-    <FirebaseV2PageShell
+    <AdminWorkspaceLayout
       label="보건교사"
       title="감염병 사례관리"
       description={`${CURRENT_SCHOOL_YEAR}학년도 ${CURRENT_SEMESTER}학기 감염병 보고를 사례 상태 중심으로 관리합니다.`}
@@ -163,7 +164,7 @@ function FirebaseAdminInfectionsContent({ user, displayName }) {
           대시보드로
         </Link>
       </div>
-    </FirebaseV2PageShell>
+    </AdminWorkspaceLayout>
   );
 }
 

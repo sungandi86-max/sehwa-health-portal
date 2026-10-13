@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
-import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
+import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
 import {
@@ -183,7 +183,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
   }, [overview, searchTerm, statusFilter]);
 
   return (
-    <FirebaseV2PageShell
+    <AdminWorkspaceLayout
       label="관리자"
       title="교직원 제출 현황"
       description="현재 학기 대상자 명단과 실제 제출 기록을 비교해 미제출자를 확인합니다."
@@ -266,7 +266,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
 
         {state.status !== "success" && <StateMessage state={state} />}
       </section>
-    </FirebaseV2PageShell>
+    </AdminWorkspaceLayout>
   );
 }
 

@@ -350,8 +350,12 @@ The supplied school-administration reference (1448 × 1086) is the desktop visua
 - Recent attendance: a single full-width bordered table with quiet gray header, subtle row lines, mint status label, and the existing authorized data. Mobile converts rows to readable stacked items.
 - The reference's notification bell, unrelated school menus, and inactive materials/settings entries are not recreated because they do not map to current portal routes. The portal header stays the Sehwa identity.
 
-- Layout: a 230px left rail beside a flexible work area at desktop widths; the same navigation becomes a horizontal row on smaller screens and can scroll within its own rail on mobile. The work area never causes page-level horizontal scrolling.
+- Layout: a 230px left rail beside a flexible work area at desktop widths. On mobile, a labelled menu button opens the local navigation; it is not permanently displayed. The work area never causes page-level horizontal scrolling.
 - Main dashboard: an operational current/upcoming training summary, restrained count strip, and a dense training list. The event QR page owns the large live QR panel and recent-attendance table.
-- Primitives: `.training-admin-layout` (two-column shell), `.training-admin-sidebar` (local navigation with active state), `.training-admin-panel` (bordered white work surface), `.training-admin-metric` (compact count cell), and `.training-admin-table` (desktop data table with a mobile list counterpart).
+- Primitives: shared `.workspace-layout` (two-column shell), `.workspace-sidebar` (local navigation with active state), `.training-admin-panel` (bordered white work surface), `.training-admin-metric` (compact count cell), and `.training-admin-table` (desktop data table with a mobile list counterpart).
 - States: active navigation uses a quiet blue surface and a left accent; unavailable event links are absent rather than fake controls. Loading, empty, error, and disabled states retain their existing functional meaning.
 - The school blue, navy, mint, border, typography, radius, and spacing tokens above remain authoritative. QR is a functional focal point, not decorative artwork. No gradients or heavy card shadows.
+
+## 19. Administrator Workspaces
+
+The home page, training landing page, and Firebase administrator dashboard remain card-based entry portals without local navigation. Authenticated work destinations use the shared `WorkspaceShell` and `LocalSidebar` beneath the existing global header. The local rail is 230px at desktop sizes and opens with an explicit menu button on narrow screens. Only real routes are linked. Training event actions appear only after an event is selected. Sidebar visibility is presentation only; each page retains its existing authorization gate and server-side 403 behavior. Do not change the public student reply's header exception.
