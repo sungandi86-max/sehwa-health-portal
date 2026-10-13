@@ -344,6 +344,7 @@ body {
 
 .training-admin-workspace {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   gap: 16px;
 }
@@ -378,7 +379,7 @@ body {
 }
 
 @media (max-width: 1023px) {
-  .training-admin-layout { grid-template-columns: 1fr; }
+  .training-admin-layout { grid-template-columns: minmax(0, 1fr); }
   .training-admin-sidebar { position: static; }
   .training-admin-sidebar nav { display: flex; flex-wrap: wrap; }
   .training-admin-sidebar-heading,
