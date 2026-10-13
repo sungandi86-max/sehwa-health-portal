@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import ExcelJS from "exceljs";
 import { PNG } from "pngjs";
 import { staffDirectoryHandler } from "../../api/firebase/staff-directory.js";
-import { TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
+import { TARGET_HEADERS, TRAINING_HEADERS, TRAINING_RUNTIME_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
 import { createTrainingPhase2Handler } from "./trainingCenterPhase2Api.js";
 import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { listAttendanceRecoveryCandidates } from "./trainingAttendanceRecovery.js";
@@ -20,14 +20,14 @@ process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
 const row = (headers, values) => headers.map((header) => values[header] ?? "");
 const open = "2026-10-06T08:00:00+09:00";
 const close = "2026-10-06T20:00:00+09:00";
-const event = (eventId, extra = {}) => row(TRAINING_HEADERS, {
-  eventId, eventGroupId: "GROUP-1", 교육연도: "2026", 사용여부: "사용", 상태: "진행중", 교육명: `교육 ${eventId}`,
+const event = (eventId, extra = {}) => row(TRAINING_RUNTIME_HEADERS, {
+  eventId, eventGroupId: "GROUP-1", ownerStaffId: eventId === "EVENT-1" ? "QA001" : "QA002", 교육연도: "2026", 사용여부: "사용", 상태: "진행중", 교육명: `교육 ${eventId}`,
   담당부서: "보건실", 일자: "2026-10-06", 시작시간: "10:00", 종료시간: "11:00", 장소: "강당",
   signatureOpenAt: open, signatureCloseAt: close, ...extra,
 });
 const target = (eventId, staffId, extra = {}) => row(TARGET_HEADERS, { eventId, 교직원ID: staffId, 대상상태: "대상", 필수여부: "Y", 제외여부: "N", ...extra });
 const source = () => ({
-  trainings: [TRAINING_HEADERS, event("EVENT-1"), event("EVENT-2")],
+  trainings: [TRAINING_RUNTIME_HEADERS, event("EVENT-1"), event("EVENT-2")],
   targets: [TARGET_HEADERS, target("EVENT-1", "QA001"), target("EVENT-2", "QA001"), target("EVENT-1", "QA002")],
   signatures: [SIGNATURE_HEADERS],
 });
@@ -90,6 +90,8 @@ function fakeDb() {
     "uid-admin2_2026_2": { active: true, uid: "uid-admin2", schoolYear: 2026, semester: 2, staffId: "QA001", roles: ["admin"] },
     "uid-staff_2026_2": { active: true, uid: "uid-staff", schoolYear: 2026, semester: 2, staffId: "QA001", roles: ["staff"] },
     "uid-homeroom_2026_2": { active: true, uid: "uid-homeroom", schoolYear: 2026, semester: 2, staffId: "QA001", roles: ["homeroom"] },
+    "uid-training-a_2026_2": { active: true, uid: "uid-training-a", schoolYear: 2026, semester: 2, staffId: "QA001", roles: ["staff", "training_admin"] },
+    "uid-training-b_2026_2": { active: true, uid: "uid-training-b", schoolYear: 2026, semester: 2, staffId: "QA002", roles: ["staff", "training_admin"] },
   };
   let chain = Promise.resolve();
   return {
@@ -139,8 +141,8 @@ function fakeStore({ appendMode = "success" } = {}) {
     readBase: async () => values,
     readSource: async () => values,
     saveEvent: async (fields, existing) => {
-      if (existing) values.trainings[existing.rowNumber - 1] = row(TRAINING_HEADERS, fields);
-      else values.trainings.push(row(TRAINING_HEADERS, fields));
+      if (existing) values.trainings[existing.rowNumber - 1] = row(TRAINING_RUNTIME_HEADERS, fields);
+      else values.trainings.push(row(TRAINING_RUNTIME_HEADERS, fields));
       calls.saved += 1;
     },
     saveRow: async (name, headers, fields, rowNumber) => {
@@ -175,6 +177,8 @@ function harness(options = {}) {
       if (token === "admin2") return { uid: "uid-admin2" };
       if (token === "staff") return { uid: "uid-staff" };
       if (token === "homeroom") return { uid: "uid-homeroom" };
+      if (token === "training-a") return { uid: "uid-training-a" };
+      if (token === "training-b") return { uid: "uid-training-b" };
       throw new Error("invalid token");
     } }),
     db: () => db,
@@ -222,6 +226,53 @@ test("staff cannot access administrator education resources", async () => {
   assert.equal((await call("training-admin-list", { token: "admin2" })).statusCode, 200);
   assert.equal((await call("training-targets", { token: "staff", query: { eventId: "EVENT-1" } })).statusCode, 403);
   assert.equal((await call("training-final-sheet", { token: "staff", query: { eventId: "EVENT-1" } })).statusCode, 403);
+});
+
+test("training admins can manage only owned education while top-level admins retain full access", async () => {
+  const { call } = harness();
+  const aList = await call("training-admin-list", { token: "training-a" });
+  const bList = await call("training-admin-list", { token: "training-b" });
+  assert.deepEqual(aList.body.items.map((item) => item.eventId), ["EVENT-1"]);
+  assert.deepEqual(bList.body.items.map((item) => item.eventId), ["EVENT-2"]);
+  assert.equal((await call("training-targets", { token: "training-a", query: { eventId: "EVENT-1" } })).statusCode, 200);
+  assert.equal((await call("training-targets", { token: "training-a", query: { eventId: "EVENT-2" } })).statusCode, 403);
+  assert.equal((await call("training-attendance-summary", { token: "training-b", query: { eventId: "EVENT-2" } })).statusCode, 200);
+  assert.equal((await call("training-attendance-summary", { token: "training-b", query: { eventId: "EVENT-1" } })).statusCode, 403);
+  assert.equal((await call("training-final-sheet", { token: "training-a", query: { eventId: "EVENT-1", download: "pdf" } })).statusCode, 200);
+  assert.equal((await call("training-final-sheet", { token: "training-a", query: { eventId: "EVENT-2", download: "pdf" } })).statusCode, 403);
+  assert.equal((await call("training-qr", { token: "training-a", query: { eventId: "EVENT-1" } })).statusCode, 200);
+  assert.equal((await call("training-qr", { token: "training-a", query: { eventId: "EVENT-2" } })).statusCode, 403);
+  assert.equal((await call("training-qr", { token: "training-a", query: { eventGroupId: "GROUP-1" } })).statusCode, 403);
+  assert.equal((await call("training-runtime-preflight", { token: "training-a" })).statusCode, 403);
+  assert.equal((await call("training-targets", { query: { eventId: "EVENT-2" } })).statusCode, 200);
+});
+
+test("server assigns and preserves education owner regardless of client input", async () => {
+  const { call, store } = harness();
+  const createBody = Object.fromEntries(TRAINING_HEADERS.map((header) => [header, ""]));
+  Object.assign(createBody, { ownerStaffId: "QA999", 교육연도: "2026", 사용여부: "미사용", 상태: "예정", 교육명: "새 교육",
+    담당부서: "연구부", 일자: "2026-10-07", 시작시간: "10:00", 종료시간: "11:00", 장소: "회의실",
+    signatureOpenAt: "2026-10-07T09:00:00+09:00", signatureCloseAt: "2026-10-07T12:00:00+09:00", 정렬순서: "0" });
+  const created = await call("training-admin-save", { token: "training-b", method: "POST", body: createBody });
+  assert.equal(created.statusCode, 200);
+  assert.equal(created.body.item.ownerStaffId, "QA002");
+
+  const existing = Object.fromEntries(TRAINING_RUNTIME_HEADERS.map((header, index) => [header, store.values.trainings[1][index]]));
+  const denied = await call("training-admin-save", { token: "training-b", method: "POST", body: { ...existing, ownerStaffId: "QA002" } });
+  assert.equal(denied.statusCode, 403);
+  const updated = await call("training-admin-save", { token: "training-a", method: "POST", body: { ...existing, ownerStaffId: "QA002", 교육명: "수정 교육" } });
+  assert.equal(updated.statusCode, 200);
+  assert.equal(updated.body.item.ownerStaffId, "QA001");
+});
+
+test("attendance correction and cancellation enforce the same education ownership gate", async () => {
+  const { call } = harness();
+  const correction = { method: "POST", body: { eventId: "EVENT-1", staffId: "QA002", action: "mark-attended", reason: "현장 확인" } };
+  assert.equal((await call("training-attendance-correct", { token: "training-b", ...correction })).statusCode, 403);
+  assert.equal((await call("training-attendance-correct", { token: "training-a", ...correction })).statusCode, 200);
+  const cancellation = { method: "POST", body: { eventId: "EVENT-1", staffId: "QA002", action: "cancel", reason: "기록 정정" } };
+  assert.equal((await call("training-attendance-correct", { token: "training-b", ...cancellation })).statusCode, 403);
+  assert.equal((await call("training-attendance-correct", { token: "training-a", ...cancellation })).statusCode, 200);
 });
 
 test("retired event mirror endpoint cannot write or expose source rows", async () => {

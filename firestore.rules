@@ -39,7 +39,7 @@ service cloud.firestore {
         && exists(currentAssignmentPath(request.auth.uid))
         && get(currentAssignmentPath(request.auth.uid)).data.active == true
         && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles"])
-        && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["staff", "homeroom", "health_teacher", "admin"]);
+        && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["staff", "homeroom", "training_admin", "health_teacher", "admin"]);
     }
 
     function hasCurrentHomeroomAssignment() {
@@ -99,7 +99,7 @@ service cloud.firestore {
         && data.semester is number
         && data.roles is list
         && data.roles.size() > 0
-        && data.roles.hasOnly(["staff", "homeroom", "health_teacher", "admin"])
+        && data.roles.hasOnly(["staff", "homeroom", "training_admin", "health_teacher", "admin"])
         && (
           (data.roles.hasAny(["homeroom"]) && data.grade is number && data.classNo is number)
           || (!data.roles.hasAny(["homeroom"]) && data.grade == null && data.classNo == null)

@@ -30,7 +30,7 @@ import { handleCprCertificateAuditResource } from "../../server/lib/cprCertifica
 import { handleTbCertificateAuditResource } from "../../server/lib/tbCertificateAuditApi.js";
 import { handleStudentSubmissionAuditResource } from "../../server/lib/studentSubmissionAuditApi.js";
 
-const STAFF_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
+const STAFF_ROLES = ["staff", "homeroom", "training_admin", "health_teacher", "admin"];
 
 function isPermissionError(error) {
   const status = error?.response?.status || error?.code || error?.status;

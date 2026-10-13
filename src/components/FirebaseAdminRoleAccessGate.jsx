@@ -10,7 +10,7 @@ import {
   signInWithMicrosoft,
   signOutFirebase,
 } from "../lib/firebaseAuth.js";
-import { getInternalDisplayName, getUserAssignmentResult, getUserProfile, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
+import { getInternalDisplayName, getUserAssignmentResult, getUserProfile, isAdmin, isHealthTeacher, isTrainingAdmin } from "../lib/userProfile.js";
 
 function AccessMessage({ title, description, action }) {
   return (
@@ -37,7 +37,7 @@ function SignOutButton({ disabled, onClick }) {
   );
 }
 
-export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "관리자 권한이 없습니다." }) {
+export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "관리자 권한이 없습니다.", allowTrainingAdmin = false }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [assignmentResult, setAssignmentResult] = useState(null);
@@ -46,7 +46,8 @@ export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "�
   const [message, setMessage] = useState("");
 
   const assignment = assignmentResult?.assignment || null;
-  const hasAdminAccess = assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
+  const hasTopLevelAdminAccess = assignment?.active === true && (isHealthTeacher(assignment) || isAdmin(assignment));
+  const hasAdminAccess = hasTopLevelAdminAccess || (allowTrainingAdmin && assignment?.active === true && isTrainingAdmin(assignment));
   const displayName = useMemo(() => getInternalDisplayName({ profile, user }) || "교직원", [profile, user]);
 
   useEffect(() => {
@@ -172,5 +173,5 @@ export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "�
     );
   }
 
-  return children({ user, assignment, displayName, handleSignOut, isWorking });
+  return children({ user, assignment, displayName, handleSignOut, isWorking, hasTopLevelAdminAccess });
 }

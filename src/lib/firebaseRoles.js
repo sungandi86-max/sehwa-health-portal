@@ -1,6 +1,7 @@
 export const ROLE_LABELS = {
   staff: "교직원",
   homeroom: "담임교사",
+  training_admin: "교육센터 관리자",
   admin: "관리자",
   health_teacher: "보건교사",
 };

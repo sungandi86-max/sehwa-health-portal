@@ -14,7 +14,7 @@ import {
 import { getAssignmentId } from "../config/school.js";
 import { db } from "./firebase.js";
 
-export const ASSIGNMENT_ROLES = ["staff", "homeroom", "health_teacher", "admin"];
+export const ASSIGNMENT_ROLES = ["staff", "homeroom", "training_admin", "health_teacher", "admin"];
 export const ASSIGNMENT_FILTERS = [
   "all",
   "unregistered",

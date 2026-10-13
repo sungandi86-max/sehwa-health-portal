@@ -64,5 +64,5 @@ export function TrainingAttendanceAdminContent({ displayName, eventId, finalShee
 
 export default function FirebaseTrainingAttendanceAdminPage({ finalSheet = false }) {
   const { eventId } = useParams();
-  return <FirebaseAdminRoleAccessGate deniedTitle="교육 출석 관리 권한이 없습니다.">{({ displayName }) => <TrainingAttendanceAdminContent displayName={displayName} eventId={eventId} finalSheet={finalSheet} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 출석 관리 권한이 없습니다.">{({ displayName }) => <TrainingAttendanceAdminContent displayName={displayName} eventId={eventId} finalSheet={finalSheet} />}</FirebaseAdminRoleAccessGate>;
 }

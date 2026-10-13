@@ -119,7 +119,7 @@ export function TrainingRuntimePreflight({
   </section>;
 }
 
-export function TrainingAdminContent({ displayName, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
+export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
   const [items, setItems] = useState([]);
   const [state, setState] = useState("loading");
   const [message, setMessage] = useState("");
@@ -131,8 +131,8 @@ export function TrainingAdminContent({ displayName, loadTrainings = listManagedT
   }
   useEffect(() => { reload(); }, []);
   return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 관리" description="교육 등록과 대상·QR·출석 업무를 관리합니다." displayName={displayName}>
-    <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to="/firebase-dashboard">관리자 화면으로</Link><button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button></div>
-    <TrainingRuntimePreflight runPreflight={runPreflight} />
+    <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button></div>
+    {hasTopLevelAdminAccess && <TrainingRuntimePreflight runPreflight={runPreflight} />}
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     {state === "loading" && <p className="text-sm text-[#627083]">교육 목록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
@@ -147,5 +147,5 @@ export function TrainingAdminContent({ displayName, loadTrainings = listManagedT
 }
 
 export default function FirebaseTrainingAdminPage() {
-  return <FirebaseAdminRoleAccessGate deniedTitle="교육 관리자 권한이 없습니다.">{({ displayName }) => <TrainingAdminContent displayName={displayName} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 관리자 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess }) => <TrainingAdminContent displayName={displayName} hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}</FirebaseAdminRoleAccessGate>;
 }

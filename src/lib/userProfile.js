@@ -140,6 +140,10 @@ export function isAdmin(assignment) {
   return hasRole(assignment, "admin");
 }
 
+export function isTrainingAdmin(assignment) {
+  return hasRole(assignment, "training_admin");
+}
+
 export function isHomeroom(assignment) {
   return hasRole(assignment, "homeroom");
 }

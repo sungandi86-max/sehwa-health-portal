@@ -24,27 +24,30 @@ export class TrainingEventStore {
       return data;
     });
     docs.sort((a, b) => (a.sourceRow || Infinity) - (b.sourceRow || Infinity) || a.eventId.localeCompare(b.eventId));
-    return docs.map(trainingEventToSheetRow);
+    return docs.map((data) => ({ ...trainingEventToSheetRow(data), ...(data.ownerStaffId ? { ownerStaffId: data.ownerStaffId } : {}) }));
   }
 
   async getEvent(eventId) {
     const doc = await this.database().collection(this.collectionName).doc(eventId).get();
     if (!doc.exists) return null;
     if (doc.data().eventId !== doc.id || doc.data().environment !== this.environment) throw new Error("교육 이벤트 원본을 확인해 주세요.");
-    return trainingEventToSheetRow(doc.data());
+    return { ...trainingEventToSheetRow(doc.data()), ...(doc.data().ownerStaffId ? { ownerStaffId: doc.data().ownerStaffId } : {}) };
   }
 
   async eventExists(eventId) { return Boolean(await this.getEvent(eventId)); }
 
   async saveEvent(values, existing = null) {
-    const incoming = trainingEventFromSheetRow(values);
+    const ownerStaffId = String(values?.ownerStaffId || "").normalize("NFKC").trim();
+    if (ownerStaffId && !/^[A-Za-z0-9_-]{2,120}$/.test(ownerStaffId)) throw new TrainingEventConflictError("교육 소유자 정보를 확인해 주세요.");
+    const incoming = { ...trainingEventFromSheetRow(values), ownerStaffId };
     if (existing && existing.eventId !== incoming.eventId) throw new TrainingEventConflictError("교육 ID를 변경할 수 없습니다.");
     const ref = this.database().collection(this.collectionName).doc(incoming.eventId);
     await this.database().runTransaction(async (transaction) => {
       const current = await transaction.get(ref);
       if (existing ? !current.exists : current.exists) throw new TrainingEventConflictError("교육 이벤트가 다른 요청에서 변경되었습니다.");
       if (current.exists && (current.data().eventId !== ref.id || current.data().environment !== this.environment ||
-        JSON.stringify(trainingEventToSheetRow(current.data())) !== JSON.stringify(trainingEventToSheetRow(trainingEventFromSheetRow(existing))))) {
+        (JSON.stringify(trainingEventToSheetRow(current.data())) !== JSON.stringify(trainingEventToSheetRow(trainingEventFromSheetRow(existing))) ||
+          (current.data().ownerStaffId || "") !== (existing.ownerStaffId || "")))) {
         throw new TrainingEventConflictError("교육 이벤트가 다른 요청에서 변경되었습니다.");
       }
       const now = new Date();
