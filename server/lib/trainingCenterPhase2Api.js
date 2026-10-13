@@ -385,8 +385,9 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           const nextSource = { ...source, signatures: source.signatures.map((row) => row.signatureId === active.signatureId ? corrected : row) };
           try { await reconcileCprStatus({ db: access.db, staffId, source: nextSource }); }
           catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
-          await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "absent", absenceReason: null,
-            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() });
+          try { await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "absent", absenceReason: null,
+            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() }); }
+          catch { console.error(JSON.stringify({ event: "training_attendance_status_reconciliation_failed", eventCount: 1 })); }
         } else {
           if (active || truthy(target["제외여부"]) || !["대상", "교육 대상"].includes(target["대상상태"])) return bad(res, 409, "이미 출석했거나 현재 교육 대상이 아닙니다.");
           const reservation = await reserveAttendance(access.db, [eventId], staffId, now().getTime());
@@ -407,8 +408,9 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           }
           try { await saveCprGroupStatus({ db: access.db, staffId, events: [event] }); }
           catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
-          await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "attended",
-            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() });
+          try { await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "attended",
+            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() }); }
+          catch { console.error(JSON.stringify({ event: "training_attendance_status_reconciliation_failed", eventCount: 1 })); }
         }
         return res.status(200).json({ ok: true });
       }

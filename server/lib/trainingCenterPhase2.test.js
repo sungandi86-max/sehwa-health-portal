@@ -891,6 +891,36 @@ test("admin correction preserves the cancelled row and records the reason and ac
   assert.equal(store.values.signatures[2][SIGNATURE_HEADERS.indexOf("출석방식")], "correction");
 });
 
+test("admin correction remains successful when attendance status reconciliation fails after ledger write", async () => {
+  const { call, db, store } = harness();
+  const challenge = issueQrChallenge({ eventId: "EVENT-1", secret, now: now().getTime() });
+  const signature = `data:image/png;base64,${inkPng().toString("base64")}`;
+  assert.equal((await call("training-attendance-submit", { token: "staff", method: "POST",
+    body: { eventId: "EVENT-1", challenge, signature } })).statusCode, 200);
+
+  const collection = db.collection.bind(db);
+  db.collection = (name) => {
+    const ref = collection(name);
+    if (!name.startsWith("training_attendance_status_")) return ref;
+    return { ...ref, doc: (id) => ({ ...ref.doc(id), set: async () => { throw new Error("status sidecar unavailable"); } }) };
+  };
+
+  const cancel = await call("training-attendance-correct", { method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA001", action: "cancel", reason: "기록 정정",
+  } });
+  assert.equal(store.values.signatures[1][SIGNATURE_HEADERS.indexOf("취소여부")], "Y");
+  assert.equal(cancel.statusCode, 200);
+  const afterCancel = await call("training-final-sheet", { query: { eventId: "EVENT-1" } });
+  assert.equal(afterCancel.body.rows.find((item) => item.staffId === "QA001").status, "미서명");
+
+  const mark = await call("training-attendance-correct", { method: "POST", body: {
+    eventId: "EVENT-1", staffId: "QA001", action: "mark-attended", reason: "현장 확인",
+  } });
+  assert.equal(mark.statusCode, 200);
+  const afterMark = await call("training-final-sheet", { query: { eventId: "EVENT-1" } });
+  assert.equal(afterMark.body.rows.find((item) => item.staffId === "QA001").status, "서명 완료");
+});
+
 test("QA cancellation ledger race returns conflict instead of generic failure", async () => {
   const { call, store } = harness();
   const challenge = issueQrChallenge({ eventId: "EVENT-1", secret, now: now().getTime() });
