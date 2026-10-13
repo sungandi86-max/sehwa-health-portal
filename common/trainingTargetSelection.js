@@ -9,6 +9,11 @@ export function toggleTrainingTarget(selection, staffId, checked) {
     excludeStaffIds: checked ? selection.excludeStaffIds.filter((id) => id !== staffId) : [...new Set([...selection.excludeStaffIds, staffId])] };
 }
 
+export function changeTrainingTargetPreset(selection, members, preset) {
+  return { ...selection, preset, includeAdministrativeStaff: preset === "all",
+    includeStaffIds: preset === "manual" ? members.map((person) => person.staffId) : [], excludeStaffIds: [] };
+}
+
 export function selectTrainingTargets(directory, selection) {
   if (!selection || !PRESETS.has(selection.preset) || typeof selection.includeAdministrativeStaff !== "boolean" ||
     typeof selection.includeHourlyInstructors !== "boolean" || typeof selection.department !== "string" ||
