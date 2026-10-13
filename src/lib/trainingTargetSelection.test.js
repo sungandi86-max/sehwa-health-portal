@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
+import { changeTrainingTargetPreset, selectTrainingTargets } from "../../common/trainingTargetSelection.js";
 
 const directory = [
   { staffId: "T1", name: "교원", position: "교사", department: "교무부", employmentStatus: "재직" },
@@ -27,4 +27,14 @@ test("selection rejects inactive, unknown and duplicate canonical roster identit
   assert.throws(() => ids({ ...options, department: "없는 부서" }), /부서/);
   assert.throws(() => selectTrainingTargets([...directory, directory[0]], options), /교직원명단/);
   assert.deepEqual(ids({ ...options, includeStaffIds: ["T1", "T1"] }), ["T1", "T2", "T3", "T4"]);
+});
+
+test("changing a saved manual roster to a group clears hidden inclusion overrides", () => {
+  const saved = { ...options, preset: "manual", includeStaffIds: ["T1", "T2", "T3", "T4"] };
+  const teachers = changeTrainingTargetPreset(saved, selectTrainingTargets(directory, saved).members, "teachers");
+  assert.deepEqual(teachers.includeStaffIds, []);
+  assert.deepEqual(ids({ ...teachers, includeAdministrativeStaff: false, includeHourlyInstructors: false }), ["T1", "T4"]);
+  assert.deepEqual(ids({ ...teachers, department: "교무부", includeAdministrativeStaff: false }), ["T1", "T3"]);
+  const manual = changeTrainingTargetPreset(teachers, selectTrainingTargets(directory, teachers).members, "manual");
+  assert.deepEqual(manual.includeStaffIds, ["T1", "T3", "T4"]);
 });

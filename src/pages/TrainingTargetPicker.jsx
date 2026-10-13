@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { selectTrainingTargets, toggleTrainingTarget } from "../../common/trainingTargetSelection.js";
+import { changeTrainingTargetPreset, selectTrainingTargets, toggleTrainingTarget } from "../../common/trainingTargetSelection.js";
 
 const control = "min-h-11 w-full rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm text-[#102047] focus:border-[#0D4EA6] focus:outline-none";
 const secondary = "min-h-11 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6]";
@@ -36,8 +36,7 @@ export function TrainingTargetPicker({ directory, selection, onChange, review = 
           <div className="training-target-preset-grid">
             {PRESET_OPTIONS.map(([value, label, description]) => <label key={value} className={`training-target-preset${selection.preset === value ? " is-selected" : ""}`}>
               <input type="radio" name="training-target-preset" value={value} checked={selection.preset === value}
-                onChange={() => onChange({ ...selection, preset: value, includeAdministrativeStaff: value === "all",
-                  includeStaffIds: value === "manual" ? members.map((person) => person.staffId) : [], excludeStaffIds: [] })} />
+                onChange={() => onChange(changeTrainingTargetPreset(selection, members, value))} />
               <span>{label}</span>
               <small>{description}</small>
             </label>)}
