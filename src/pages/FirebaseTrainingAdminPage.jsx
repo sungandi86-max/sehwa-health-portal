@@ -169,6 +169,7 @@ export function TrainingRuntimePreflight({
 export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, loadSummary = getTrainingAttendanceSummary, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
   const [items, setItems] = useState([]);
   const [summaries, setSummaries] = useState({});
+  const [summaryFailures, setSummaryFailures] = useState(0);
   const [state, setState] = useState("loading");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(null);
@@ -184,7 +185,11 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
     Promise.all(items.map(async (item) => {
       try { return [item.eventId, trainingAttendanceCounts((await loadSummary(item.eventId)).counts)]; }
       catch { return [item.eventId, null]; }
-    })).then((entries) => { if (active) setSummaries(Object.fromEntries(entries)); });
+    })).then((entries) => {
+      if (!active) return;
+      setSummaries(Object.fromEntries(entries));
+      setSummaryFailures(entries.filter(([, counts]) => counts === null).length);
+    });
     return () => { active = false; };
   }, [items, state, loadSummary]);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -196,6 +201,7 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     {state === "loading" && <p className="text-sm text-[#627083]">교육 목록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
+    {state === "ready" && summaryFailures > 0 && <p role="alert" className="text-sm text-[#B42318]">{summaryFailures}건의 출석 집계를 불러오지 못했습니다. 해당 교육의 출석 화면에서 다시 확인해 주세요.</p>}
     {state === "ready" && <section className="training-admin-panel overflow-hidden" aria-label="오늘의 교육">
       <div className="border-b border-[#DDEAE7] px-4 py-3"><h2 className="text-base font-bold text-[#102047]">오늘의 교육 · 다음 일정</h2></div>
       {upcoming ? <><div className="flex flex-wrap items-start justify-between gap-3 px-4 py-4"><div><h3 className="break-keep text-lg font-bold text-[#102047]">{upcoming["교육명"]}</h3><p className="mt-1 text-sm text-[#627083]">{upcoming["일자"]} {upcoming["시작시간"]}~{upcoming["종료시간"]} · {upcoming["장소"] || "장소 미정"}</p><p className="mt-1 text-xs text-[#627083]">{upcoming["담당부서"]} · {upcoming["상태"]}</p></div><Link className={secondaryClass} to={`/firebase-admin/trainings/${encodeURIComponent(upcoming.eventId)}/qr`}>QR 출석 화면</Link></div>
