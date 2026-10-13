@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { PNG } from "pngjs";
 import { TARGET_HEADERS, TRAINING_HEADERS, TrainingSourceNotReadyError } from "./trainingCenter.js";
+import { trainingAbsenceLabel } from "./trainingAbsenceStatus.js";
 
 export const SIGNATURE_HEADERS = [
   "signatureId", "eventId", "eventGroupId", "교직원ID", "서명일시", "출석방식", "서명파일ID",
@@ -154,7 +155,7 @@ export function validateTrainingInput(input, { existing = null, year = 2026 } = 
   return fields;
 }
 
-export function finalSheetModel(source, directory, eventId) {
+export function finalSheetModel(source, directory, eventId, attendanceStatuses = []) {
   const event = source.trainings.find((row) => row.eventId === eventId);
   if (!event) return null;
   const people = new Map(directory.filter((row) => row.employmentStatus === "재직").map((row) => [row.staffId, row]));
@@ -163,8 +164,12 @@ export function finalSheetModel(source, directory, eventId) {
       const staff = people.get(target["교직원ID"]);
       const signature = source.signatures.find((row) => row.eventId === eventId && row["교직원ID"] === staff.staffId && activeSignature(row));
       const excluded = truthy(target["제외여부"]) || target["대상상태"] === "제외";
+      const absence = attendanceStatuses.find((row) => row.eventId === eventId && row.staffId === staff.staffId && row.attendanceStatus === "absent");
       return { staffId: staff.staffId, name: staff.name, department: staff.department, position: staff.position,
-        status: excluded ? "제외" : signature ? "서명 완료" : "미서명", signedAt: signature?.["서명일시"] || "", method: signature?.["출석방식"] || "", fileId: signature?.["서명파일ID"] || "" };
+        status: excluded ? "제외" : signature ? "서명 완료" : "미서명", signedAt: signature?.["서명일시"] || "", method: signature?.["출석방식"] || "", fileId: signature?.["서명파일ID"] || "",
+        absenceReason: !excluded && !signature ? absence?.absenceReason || null : null,
+        absenceNote: !excluded && !signature ? absence?.absenceNote || "" : "",
+        absenceLabel: !excluded && !signature ? trainingAbsenceLabel(absence?.absenceReason, absence?.absenceNote) : "" };
     }).sort((a, b) => a.name.localeCompare(b.name, "ko") || a.staffId.localeCompare(b.staffId));
   return { event: { eventId, title: event["교육명"], date: event["일자"], location: event["장소"] }, rows,
     counts: { target: rows.filter((row) => row.status !== "제외").length, signed: rows.filter((row) => row.status === "서명 완료").length, excluded: rows.filter((row) => row.status === "제외").length } };

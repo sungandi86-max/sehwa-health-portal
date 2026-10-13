@@ -6,6 +6,10 @@ import { correctTrainingAttendance, downloadTrainingFinalSheet, getTrainingAtten
 import { trainingAttendanceCounts } from "../lib/trainingAttendancePresentation.js";
 
 const secondary = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6] disabled:opacity-50";
+const ABSENCE_REASONS = [
+  ["", "사유 미지정"], ["business_trip", "출장"], ["annual_leave", "연가"], ["sick_leave", "병가"],
+  ["official_leave", "공가"], ["special_leave", "특별휴가"], ["other", "기타"],
+];
 
 function signedTime(value) {
   const parsed = Date.parse(value);
@@ -27,6 +31,29 @@ function Correction({ row, eventId, onSaved, correctAttendance }) {
   }
   if (row.status === "제외") return null;
   return <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"><label className="grid gap-1 text-xs text-[#627083]">정정 사유<input className="min-h-11 min-w-0 rounded-[9px] border border-[#DDEAE7] px-3 text-sm text-[#102047]" value={reason} onChange={(event) => setReason(event.target.value)} maxLength={200} placeholder="필수 입력" /></label><button type="button" disabled={saving} onClick={() => apply(row.status === "서명 완료" ? "cancel" : "mark-attended")} className={secondary}>{row.status === "서명 완료" ? "출석 취소" : "출석 보정"}</button>{message && <p role="alert" className="text-xs text-[#B42318]">{message}</p>}</div>;
+}
+
+function AbsenceReasonEditor({ row, eventId, onSaved, correctAttendance }) {
+  const [absenceReason, setAbsenceReason] = useState(row.absenceReason || "");
+  const [absenceNote, setAbsenceNote] = useState(row.absenceNote || "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => { setAbsenceReason(row.absenceReason || ""); setAbsenceNote(row.absenceNote || ""); }, [row.absenceReason, row.absenceNote]);
+  async function save() {
+    setSaving(true); setMessage("");
+    try {
+      await correctAttendance({ eventId, staffId: row.staffId, action: "set-absence-reason", reason: "미참석 사유 등록",
+        absenceReason: absenceReason || null, absenceNote: absenceReason === "other" ? absenceNote : "" });
+      onSaved();
+    } catch (error) { setMessage(error.message); }
+    finally { setSaving(false); }
+  }
+  return <div className="mt-3 grid gap-2 border-t border-[#EEF3F2] pt-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+    <label className="grid gap-1 text-xs text-[#627083]">미참석 사유<select className="min-h-11 min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm text-[#102047]" value={absenceReason} onChange={(event) => setAbsenceReason(event.target.value)}>{ABSENCE_REASONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    {absenceReason === "other" ? <label className="grid gap-1 text-xs text-[#627083]">기타 비고<input className="min-h-11 min-w-0 rounded-[9px] border border-[#DDEAE7] px-3 text-sm text-[#102047]" value={absenceNote} onChange={(event) => setAbsenceNote(event.target.value)} maxLength={200} placeholder="선택 입력" /></label> : <span />}
+    <button type="button" className={`${secondary} self-end`} disabled={saving} onClick={save}>{saving ? "저장 중" : "사유 저장"}</button>
+    {message && <p role="alert" className="text-xs text-[#B42318] sm:col-span-3">{message}</p>}
+  </div>;
 }
 
 export function TrainingAttendanceAdminContent({ displayName, eventId, finalSheet = false, loadSummary = getTrainingAttendanceSummary, loadFinal = getTrainingFinalSheet, correctAttendance = correctTrainingAttendance, downloadSheet = downloadTrainingFinalSheet }) {
@@ -56,7 +83,7 @@ export function TrainingAttendanceAdminContent({ displayName, eventId, finalShee
       <div className="rounded-[12px] border border-[#DDEAE7] bg-white p-4"><h2 className="break-keep text-lg font-bold text-[#102047]">{model.event.title}</h2><p className="mt-1 text-xs text-[#627083]">{model.event.date} · {model.event.location}</p><dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-[9px] bg-[#EEF4FF] p-3"><dt className="text-xs font-semibold text-[#3154A3]">대상</dt><dd className="mt-1 text-xl font-bold tabular-nums text-[#102047]">{counts.target}</dd></div><div className="rounded-[9px] bg-[#F0FBF7] p-3"><dt className="text-xs font-semibold text-[#08754B]">{finalSheet ? "서명 완료" : "출석 완료"}</dt><dd className="mt-1 text-xl font-bold tabular-nums text-[#08754B]">{counts.signed}</dd></div><div className="rounded-[9px] bg-[#FFF7F7] p-3"><dt className="text-xs font-semibold text-[#9F2525]">{finalSheet ? "미서명" : "미출석"}</dt><dd className="mt-1 text-xl font-bold tabular-nums text-[#B42318]">{counts.missing}</dd></div><div className="rounded-[9px] bg-[#F8FAFA] p-3"><dt className="text-xs font-semibold text-[#627083]">제외</dt><dd className="mt-1 text-xl font-bold tabular-nums text-[#102047]">{counts.excluded}</dd></div></dl></div>
       <div className="flex flex-wrap items-center justify-between gap-2"><label className="grid gap-1 text-xs text-[#627083]">상태 필터<select className="min-h-11 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm text-[#102047]" value={filter} onChange={(event) => setFilter(event.target.value)}><option>전체</option><option>완료</option><option>미완료</option><option>제외</option></select></label>{finalSheet && <button type="button" className="min-h-11 rounded-[9px] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50" disabled={working} onClick={download}>{working ? "생성 중" : "PDF 다운로드"}</button>}</div>
       {shown.length === 0 && <p className="rounded-[10px] border border-[#DDEAE7] bg-white p-3 text-sm text-[#627083]">표시할 교직원이 없습니다.</p>}
-      <ol className="space-y-2">{shown.map((row, index) => <li key={row.staffId} className="min-w-0 rounded-[10px] border border-[#DDEAE7] bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="text-sm font-semibold text-[#102047]">{index + 1}. {row.name} · {row.position}</p><p className="mt-1 text-xs text-[#627083]">{row.department} · {signedTime(row.signedAt)}</p></div><span className="text-xs font-semibold text-[#3154A3]">{row.status}{row.hasSignatureImage ? " · 서명 이미지" : ""}</span></div>{!finalSheet && <Correction row={row} eventId={eventId} onSaved={reload} correctAttendance={correctAttendance} />}</li>)}</ol>
+      <ol className="space-y-2">{shown.map((row, index) => <li key={row.staffId} className="min-w-0 rounded-[10px] border border-[#DDEAE7] bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="text-sm font-semibold text-[#102047]">{index + 1}. {row.name} · {row.position}</p><p className="mt-1 text-xs text-[#627083]">{row.department} · {signedTime(row.signedAt)}</p></div><span className="text-xs font-semibold text-[#3154A3]">{row.status}{row.absenceLabel && row.absenceLabel !== "미참석" ? ` · ${row.absenceLabel}` : ""}{row.hasSignatureImage ? " · 서명 이미지" : ""}</span></div>{!finalSheet && row.status === "미서명" && <AbsenceReasonEditor row={row} eventId={eventId} onSaved={reload} correctAttendance={correctAttendance} />}{!finalSheet && <Correction row={row} eventId={eventId} onSaved={reload} correctAttendance={correctAttendance} />}</li>)}</ol>
       {message && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
     </section>}
   </FirebaseV2PageShell>;

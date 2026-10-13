@@ -97,6 +97,15 @@ test("pure JavaScript PDF renders A4 Korean roster pages and embedded signatures
   assert.equal(Buffer.from(bytes).includes(Buffer.from("Apps Script")), false);
 });
 
+test("PDF roster accepts absence labels without requesting signature evidence", async () => {
+  const requested = [];
+  const bytes = await makeTrainingRosterPdf(model([
+    { staffId: "ABSENT", position: "교사", name: "미참석자", status: "미서명", fileId: "", absenceLabel: "기타(공식 일정)" },
+  ]), { readSignature: async (key) => { requested.push(key); return png(); } });
+  assert.equal(bytes.subarray(0, 5).toString("ascii"), "%PDF-");
+  assert.deepEqual(requested, []);
+});
+
 test("PDF roster keeps cancelled or excluded signatures out and rejects malformed signature bytes", async () => {
   const requested = [];
   await makeTrainingRosterPdf(model([

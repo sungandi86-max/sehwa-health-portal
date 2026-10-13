@@ -16,6 +16,7 @@ import { requireTrainingEnvironment, TrainingDeploymentError } from "./trainingD
 import { reconcileCprTrainingStatus, saveCompletedCprGroupTraining } from "./cprTrainingStatus.js";
 import { TrainingEventConflictError } from "./trainingEventStore.js";
 import { TrainingSignatureConflictError } from "./trainingSignatureLedger.js";
+import { listTrainingAttendanceStatuses, saveTrainingAttendanceStatus, TRAINING_ABSENCE_REASONS } from "./trainingAbsenceStatus.js";
 
 function bad(res, status, message, code = "") {
   return res.status(status).json({ ok: false, ...(code ? { code } : {}), message });
@@ -300,6 +301,11 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         catch (error) { coordinationReconciled = false; logAttendanceFailure(error, "LOCK_FINALIZE", events.length); }
         try { await saveCprGroupStatus({ db: access.db, staffId: access.assignment.staffId, events }); }
         catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: events.length })); }
+        try {
+          await Promise.all(events.map((event) => saveTrainingAttendanceStatus(access.db, { eventId: event.eventId,
+            staffId: access.assignment.staffId, attendanceStatus: "attended", actorStaffId: access.assignment.staffId,
+            updatedAt: now().toISOString() })));
+        } catch { console.error(JSON.stringify({ event: "training_attendance_status_reconciliation_failed", eventCount: events.length })); }
         return res.status(200).json({ ok: true, eventIds: events.map((event) => event.eventId), signedAt: records[0]["서명일시"], coordinationReconciled });
       }
       if (["training-attendance-summary", "training-final-sheet"].includes(resource) && req.method === "GET") {
@@ -308,7 +314,8 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const event = source.trainings.find((row) => row.eventId === eventId);
         const denied = denyUnownedTraining(res, access, event);
         if (event && denied) return denied;
-        const model = finalSheetModel(source, access.directory, eventId);
+        const attendanceStatuses = await listTrainingAttendanceStatuses(access.db, eventId);
+        const model = finalSheetModel(source, access.directory, eventId, attendanceStatuses);
         if (!model) return bad(res, 404, "교육을 찾을 수 없습니다.");
         if (resource === "training-final-sheet" && ["pdf", "xlsx"].includes(req.query?.download)) {
           if (req.query.download === "xlsx") {
@@ -346,15 +353,24 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (resource === "training-attendance-correct" && req.method === "POST") {
         const staffId = param(body?.staffId);
         const reason = String(body?.reason || "").normalize("NFKC").trim();
-        if (!eventId || !staffId || !reason || reason.length > 200 || !["cancel", "mark-attended"].includes(body?.action)) throw new RangeError("정정 대상과 사유를 확인해 주세요.");
+        const action = body?.action;
+        if (!eventId || !staffId || !reason || reason.length > 200 || !["cancel", "mark-attended", "set-absence-reason"].includes(action)) throw new RangeError("정정 대상과 사유를 확인해 주세요.");
         const source = parseTrainingSource(await store.readSource());
         const event = source.trainings.find((row) => row.eventId === eventId);
-        const target = source.targets.find((row) => row.eventId === eventId && row["교직원ID"] === staffId);
-        if (!event || !target || access.directory.filter((row) => row.staffId === staffId && row.employmentStatus === "재직").length !== 1) return bad(res, 404, "정정 대상을 찾을 수 없습니다.");
+        if (!event) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const denied = denyUnownedTraining(res, access, event);
         if (denied) return denied;
+        const target = source.targets.find((row) => row.eventId === eventId && row["교직원ID"] === staffId);
+        if (!target || access.directory.filter((row) => row.staffId === staffId && row.employmentStatus === "재직").length !== 1) return bad(res, 404, "정정 대상을 찾을 수 없습니다.");
         const active = source.signatures.find((row) => row.eventId === eventId && row["교직원ID"] === staffId && activeSignature(row));
-        if (body.action === "cancel") {
+        if (action === "set-absence-reason") {
+          if (active || truthy(target["제외여부"]) || !["대상", "교육 대상"].includes(target["대상상태"])) return bad(res, 409, "미참석 대상만 사유를 등록할 수 있습니다.");
+          const absenceReason = body?.absenceReason === null || body?.absenceReason === "" ? null : param(body?.absenceReason);
+          const absenceNote = String(body?.absenceNote || "").normalize("NFKC").trim();
+          if ((absenceReason !== null && !TRAINING_ABSENCE_REASONS.includes(absenceReason)) || absenceNote.length > 200) throw new RangeError("미참석 사유를 확인해 주세요.");
+          await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "absent", absenceReason,
+            absenceNote, actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() });
+        } else if (action === "cancel") {
           if (!active) {
             if (source.signatures.some((row) => row.eventId === eventId && row["교직원ID"] === staffId && truthy(row["취소여부"]))) {
               await cancelAttendanceLock(access.db, eventId, staffId, access.assignment.staffId);
@@ -369,6 +385,8 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           const nextSource = { ...source, signatures: source.signatures.map((row) => row.signatureId === active.signatureId ? corrected : row) };
           try { await reconcileCprStatus({ db: access.db, staffId, source: nextSource }); }
           catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
+          await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "absent", absenceReason: null,
+            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() });
         } else {
           if (active || truthy(target["제외여부"]) || !["대상", "교육 대상"].includes(target["대상상태"])) return bad(res, 409, "이미 출석했거나 현재 교육 대상이 아닙니다.");
           const reservation = await reserveAttendance(access.db, [eventId], staffId, now().getTime());
@@ -389,6 +407,8 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           }
           try { await saveCprGroupStatus({ db: access.db, staffId, events: [event] }); }
           catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
+          await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "attended",
+            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() });
         }
         return res.status(200).json({ ok: true });
       }
