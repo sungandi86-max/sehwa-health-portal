@@ -1,6 +1,6 @@
 # 교직원 교육센터 Phase 2 운영 준비
 
-이 문서의 초기 준비 절차와 QA handoff는 작성 당시의 기록이다. 현재 QA 종료 상태와 main 병합 전 조건은 맨 아래의 `Phase 2 QA 종료 및 main 병합 검토`를 따른다. 운영 워크북에 QA 교육 샘플 행을 쓰지 않았다.
+이 문서의 초기 준비 절차와 2026-10-07 QA handoff는 작성 당시의 기록이다. **현재 학교 PC 재개 기준은 맨 아래의 `2026-10-14 학교 PC handoff`를 따른다.** 운영 워크북에 QA 교육 샘플 행을 쓰지 않았다.
 
 ## Sheet schema
 
@@ -106,3 +106,78 @@ Firebase ID token, 현재 학기 활성 assignment, canonical 교직원ID 및 �
 5. root 비공개·읽기 준비, 서명 Sheet A:M schema와 QR secret 유효성을 다시 확인한다. 모든 준비 항목이 통과한 뒤에만 운영 QR 발급·전자서명 사용을 시작한다.
 
 Production root bootstrap은 main 병합 **전** 조건이 아니라 운영 QR 사용 **전** 필수 조건이다. 해당 bootstrap, 운영 교육·서명 생성, Production Sheet/Firestore/Drive write는 별도 승인과 배포 후 점검 절차에서만 수행한다.
+
+## 2026-10-14 학교 PC handoff
+
+이 섹션은 위의 Phase 2 출시 전 기록보다 최신이다. 학교 PC에서 작업을 재개할 때 먼저 이 상태를 확인한다. 아래 SHA와 테스트 수치는 **이 문서 커밋 전 기준점**이며 문서 커밋 후 `qa` HEAD는 한 커밋 앞으로 이동한다.
+
+### 1. Git 기준점과 보호 대상
+
+- 집 저장소: `C:\Users\보건실\OneDrive\문서\GitHub\sehwa-health-portal`, branch `qa`.
+- 작성 전 `qa` HEAD와 `origin/qa`는 모두 `fa9adccc6d6457891774ff7b097810d469af350d`로 일치하며 divergence는 `0/0`, working tree는 clean이었다.
+- Production `origin/main`은 `1dbce0865eff683b39a2bc945af996b58bd6133b`이다. `qa`와 `main`은 서로 다른 상태이며 QA UI 변경을 Production 반영 완료로 해석하면 안 된다.
+- 보호 stash `pre-main-sync-home-hwpx-work` (`2a40e8f5cd46746aa064163874c4a9cbb6b54b8d`)는 그대로 유지한다. 학교 PC에서도 apply/pop/drop하지 않는다.
+
+### 2. Production에 완료된 교육센터 기능
+
+권한과 소유권:
+
+- `training_admin`은 `ownerStaffId`가 본인인, 본인이 생성한 교육만 관리한다. 타인 교육의 관리자 API와 직접 URL 접근은 `403`이다.
+- `health_teacher`/`admin`은 전체 교육을 관리한다. 일반 교직원은 관리자 기능에 접근하지 못한다.
+- `ownerStaffId`가 없는 기존 교육은 `health_teacher`/`admin`만 관리한다. 기존 교육에 소유자를 자동 부여하지 않는다.
+
+출석과 출력:
+
+- 미참석 사유 `출장`, `연가`, `병가`, `공가`, `특별휴가`, `기타`를 관리하며 연수등록부와 PDF/XLSX 출력에 반영한다.
+
+새 교육의 대상자 선택:
+
+- `전체 교직원`, `교원 중심`, `직접 선택` 프리셋과 행정실·시간강사 포함/제외, 부서 필터, 검색, 개별 추가/제외를 지원한다.
+- 생성 시 canonical `staffId`를 서버에서 재검증하고 `targetSnapshot`과 `targetStaffIds`를 확정 저장한다. 미리보기 후 명단이 달라지면 `409`로 저장을 중단한다.
+- 새 교육부터 snapshot을 적용한다. 기존 교육 대상자 자동 재계산·migration은 없고 기존 `교직원교육대상` Sheet도 자동 변경하지 않는다.
+- Production read-only smoke에서 실제 명단은 전체 94명, 교원 중심 82명, 행정실 제외 82명, 1학년부 13명, 시간강사 10명, 교원 중심에서 시간강사 제외 시 72명으로 확인됐다.
+
+### 3. QA에서만 완료된 UI
+
+공통 포털/workspace (`5142bd8` 계열 이후):
+
+- `/`, `/training`, `/firebase-dashboard`는 사이드바가 없는 카드형 portal/landing이다.
+- 실제 관리자 업무에 들어가면 기존 글로벌 Header 아래에 좌측 local sidebar와 우측 workspace content를 표시한다. 모바일 sidebar는 메뉴로 접힌다.
+- QA에서 Desktop 1440px과 Mobile 390px을 시각 검수했으며 한글 잘림과 가로 overflow를 발견하지 않았다. 이 공통 UI는 아직 Production에 반영하지 않았다.
+
+교육 대상 관리 리디자인 (`fa9adccc6d6457891774ff7b097810d469af350d`):
+
+- `그룹 선택 → 조건 조정 → 현재 대상 인원 확인 → 필요 시 명단 펼침 → 개별 예외 조정 → 한 번에 저장` 흐름이다.
+- 사람마다 반복되던 대상 상태 select·필수 checkbox·제외 사유 input·개별 저장 버튼을 기본 목록에서 제거했다. 명단은 기본 접힘이며 펼치면 compact list/table, 검색, 개별 추가/제외와 `예외 설정`을 제공한다.
+- 기존 대상/변경 후/추가 예정/제외 예정 수를 표시한다. 모바일 390px 첫 화면에 프리셋, 현재 인원, `대상자 명단 보기`, 단일 `변경 저장`이 함께 보인다.
+- `필수`는 공개 교육 화면의 필수 표시와 연결된다. `제외 사유`는 제외 대상 기록으로 유지한다. 둘 다 삭제하지 않고 개별 `예외 설정`에 보존했다.
+- 실제 QA canonical 명단 미리보기: 전체 12명, 교원 중심 9명, 행정실 제외 9명, 시간강사 제외 9명, 1학년부 1명. QA 명단에는 시간강사가 없어 그 옵션의 포함/제외 효과는 synthetic 필터 테스트로 검증했다.
+- 기존 9명 교육에서 1명 추가 시 10명, 이어 1명 제외 시 9명과 `추가 1/제외 1`이 표시됐다. `변경 취소` 시 원래 9명으로 돌아왔고 실제 저장은 하지 않았다.
+- 페이지 진입만으로 기존 대상이 바뀌거나 write되지 않는다. canonical 검증, snapshot 계약, 명단 변경 `409`, 소유권 `403`은 유지한다.
+- 검증: 대상 관련 74/74, 전체 `npm test` 346/346 PASS, `npm run build` 및 `git diff --check` PASS, API function 12개. 고정 QA Preview는 `https://sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app/firebase-admin/trainings`이며 최종 QA 배포의 READY와 실제 화면을 확인했다.
+
+### 4. 학교 PC에서 이어갈 순서
+
+1. 학교 저장소의 branch·HEAD·working tree·보호 stash를 먼저 확인한다. 미커밋 변경이 있으면 덮어쓰지 말고 중단한다.
+2. `git fetch origin` 후 `origin/qa` 최신 HEAD를 확인한다. 로컬 `qa`가 뒤에만 있고 clean일 때만 fast-forward한다. `main`은 이 단계에서 변경하지 않는다.
+3. 고정 QA Preview가 최신 `qa` SHA의 READY 배포를 가리키는지 확인하고 교육 관리·대상 관리 화면을 1440px/390px에서 읽기 전용으로 재확인한다.
+4. `fa9adcc` 기준 대상 관리 리디자인을 포함해 Production 반영 대상을 **선별**한다. 포털/workspace UI와 대상 관리 UI는 현재 QA에만 있다. `qa` 전체를 `main`에 merge하지 않는다.
+5. QA fixture, runtime synthetic 신원·데이터 생성 경로를 Production 반영에서 제외한다. 기존 교육 snapshot migration, `교직원교육대상` Sheet 자동 변경은 하지 않는다.
+6. 선별 반영 전후에 ownership `403`, canonical 검증, `409`, QR/출석/연수등록부/PDF/XLSX 회귀와 전체 `npm test`, `npm run build`, `git diff --check`, API function 12개를 확인한다.
+7. 별도 승인에 따른 Production 배포 후에는 실제 교육·출석을 생성하지 않는 read-only visual smoke로 portal/workspace, 대상 미리보기와 기존 교육 호환을 확인한다.
+
+### 5. UI 원칙
+
+- 첫 화면과 센터 landing은 카드형 portal, 실제 업무 화면은 좌측 local sidebar와 우측 workspace다. `/training`은 portal이고 `내 교육 관리` 이후 및 특정 교육의 targets/qr/attendance/final-sheet는 같은 교육 sidebar 안에서 이동한다.
+- 네이비·블루·민트의 밝고 단정한 학교 행정 포털 톤을 유지한다. 과한 gradient, glassmorphism, AI dashboard 같은 장식은 피한다.
+- 사이드바 노출 여부는 권한 검사 대체 수단이 아니다. 서버의 role·ownership 검증을 유지한다.
+
+### 6. 전 교직원 안내 계획 (아직 발송 전)
+
+기능과 디자인이 모두 Production에 반영되고 운영 화면 이미지를 준비한 뒤 안내한다. 지난 온라인 교무실 연수에서 시연한 교직원 연수 QR 출석·전자서명 기능을 온라인 보건실에 구현했다는 흐름으로 설명한다. 교장선생님께 사용을 건의했고 사용해보자는 승인을 받았음을 알린다. 부서별 교육 담당자가 메신저로 요청하면 `교육센터 관리자` 권한을 부여하며, 이 권한은 본인이 생성한 교육만 관리한다는 점을 명시한다. 실제 운영 화면 이미지를 첨부할 계획이다. 이 문서 작성 단계에서 권한 부여나 안내 발송은 하지 않는다.
+
+### 7. 다음 작업의 금지사항
+
+- `qa` 전체를 `main`에 무조건 merge하지 않는다. QA fixture/runtime synthetic data를 Production에 반영하지 않는다.
+- 기존 교육의 snapshot을 자동 이관·재계산하지 않는다. `교직원교육대상` Sheet를 자동 변경하지 않는다.
+- 보호 stash를 apply/pop/drop하지 않는다. API function 수를 12개보다 늘리지 않는다.
