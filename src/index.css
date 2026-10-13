@@ -250,10 +250,10 @@ body {
 }
 
 @media (max-width: 640px) {
-  .firebase-v2-surface.training-phase2-surface button,
-  .firebase-v2-surface.training-phase2-surface a,
-  .firebase-v2-surface.training-phase2-surface input:not([type="checkbox"]),
-  .firebase-v2-surface.training-phase2-surface select {
+  .firebase-v2-surface.training-admin-surface button,
+  .firebase-v2-surface.training-admin-surface a,
+  .firebase-v2-surface.training-admin-surface input:not([type="checkbox"]),
+  .firebase-v2-surface.training-admin-surface select {
     min-height: 44px;
   }
 
@@ -273,12 +273,12 @@ body {
   display: contents;
 }
 
-.training-phase2-surface {
+.training-admin-surface {
   padding: 0;
   background: #FFFFFF;
 }
 
-.training-phase2-surface > div {
+.training-admin-surface > div {
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr);
   grid-template-areas: "rail heading" "rail work";
@@ -287,7 +287,7 @@ body {
   gap: 0;
 }
 
-.training-phase2-surface > div > header {
+.training-admin-surface > div > header {
   grid-area: heading;
   border: 0;
   border-radius: 0;
@@ -295,14 +295,14 @@ body {
   box-shadow: none;
 }
 
-.training-phase2-surface > div > header h1 {
+.training-admin-surface > div > header h1 {
   font-size: 34px;
   line-height: 1.2;
 }
 
-.training-phase2-surface > div > header p { word-break: keep-all; }
+.training-admin-surface > div > header p { word-break: keep-all; }
 
-.training-phase2-surface > div > header > div > div:last-child {
+.training-admin-surface > div > header > div > div:last-child {
   border: 0;
   background: transparent;
   padding: 0;
@@ -422,6 +422,7 @@ body {
 .training-qr-counts .training-admin-metric:nth-child(2) { background: #EAF9F4; }
 .training-qr-counts .training-admin-metric:nth-child(3) { background: #FFF0F1; }
 .training-qr-counts .training-admin-metric:nth-child(3) dd { color: #C72845; }
+.training-qr-counts .training-admin-metric:nth-child(4) { background: #F1F6F8; }
 .training-qr-panel { min-height: 390px; }
 .training-qr-panel > div:nth-of-type(1) { margin-top: 18px; }
 .training-qr-panel > div:nth-of-type(2) { min-height: 260px; }
@@ -456,12 +457,12 @@ body {
 }
 
 @media (max-width: 1023px) {
-  .training-phase2-surface > div {
+  .training-admin-surface > div {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "heading" "rail" "work";
   }
-  .training-phase2-surface > div > header { padding: 20px 16px; }
-  .training-phase2-surface > div > header h1 { font-size: 26px; }
+  .training-admin-surface > div > header { padding: 20px 16px; }
+  .training-admin-surface > div > header h1 { font-size: 26px; }
   .training-admin-sidebar { border-right: 0; border-bottom: 1px solid #DDEAE7; padding: 6px 12px; }
   .training-admin-sidebar nav { display: flex; flex-wrap: wrap; }
   .training-admin-sidebar-heading,
@@ -472,7 +473,7 @@ body {
 }
 
 @media (max-width: 640px) {
-  .training-phase2-surface > div > header h1 { font-size: 24px; }
+  .training-admin-surface > div > header h1 { font-size: 24px; }
   .training-admin-sidebar { padding: 8px; }
   .training-admin-sidebar nav { flex-wrap: nowrap; overflow-x: auto; }
   .training-admin-nav-link { flex: none; white-space: nowrap; }
