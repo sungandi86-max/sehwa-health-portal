@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { checkTrainingAttendance, submitTrainingAttendance } from "../lib/trainingCenterPhase2.js";
+import { formatTrainingDateTime } from "../lib/trainingAttendancePresentation.js";
 
 function SignaturePad({ onChange }) {
   const canvasRef = useRef(null);
@@ -65,8 +66,8 @@ export function TrainingAttendanceContent({ displayName, group = false, id, chal
     if (!canvas || !hasInk) { setMessage("서명을 입력해 주세요."); return; }
     setWorking(true); setMessage("");
     try {
-      await submitAttendance({ ...scope, signature: canvas.toDataURL("image/png") });
-      setState((current) => ({ ...current, status: "done" }));
+      const result = await submitAttendance({ ...scope, signature: canvas.toDataURL("image/png") });
+      setState((current) => ({ ...current, status: "done", signedAt: result.signedAt || "" }));
     } catch (error) { setMessage(error.message); }
     finally { setWorking(false); }
   }
@@ -75,7 +76,7 @@ export function TrainingAttendanceContent({ displayName, group = false, id, chal
     <Link to="/training" className="inline-flex min-h-11 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6]">교육 목록으로</Link>
     {state.status === "loading" && <p className="text-sm text-[#627083]">출석 가능 여부를 확인하는 중입니다.</p>}
     {state.status === "error" && <p role="alert" className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] p-3 text-sm text-[#B42318]">{state.message}</p>}
-    {state.status === "done" && <div role="status" className="rounded-[10px] border border-[#BFEBDC] bg-[#F0FBF7] p-3 text-sm font-semibold text-[#08754B]">전자서명 출석이 완료되었습니다.</div>}
+    {state.status === "done" && <section role="status" className="rounded-[12px] border border-[#BFEBDC] bg-white p-5 text-center sm:p-6"><div aria-hidden="true" className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#F0FBF7] text-2xl font-bold text-[#08754B]">✓</div><h2 className="mt-3 text-lg font-bold text-[#102047]">전자서명 출석이 완료되었습니다.</h2><p className="mt-2 break-keep text-sm font-semibold text-[#102047]">{state.items.map((item) => item.title).join(", ")}</p>{state.signedAt && <div className="mx-auto mt-4 max-w-sm rounded-[10px] bg-[#F8FAFA] px-4 py-3"><p className="text-xs font-semibold text-[#627083]">출석 시각</p><p className="mt-1 text-sm font-semibold tabular-nums text-[#102047]">{formatTrainingDateTime(state.signedAt)}</p></div>}<Link to="/training" className="mt-4 inline-flex min-h-11 items-center rounded-[9px] bg-[#0D4EA6] px-4 text-sm font-semibold text-white">교육 목록으로</Link></section>}
     {state.status === "ready" && <section className="space-y-3 rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
       <h2 className="text-base font-bold text-[#102047]">{group ? "묶음 교육 출석" : "교육 출석"}</h2>
       <ul className="divide-y divide-[#DDEAE7]">{state.items.map((item) => <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm" key={item.eventId}><span className="break-keep font-semibold text-[#102047]">{item.title}</span><span className={item.eligible ? "text-[#08754B]" : "text-[#B42318]"}>{item.eligible ? "서명 가능" : item.reason}</span></li>)}</ul>

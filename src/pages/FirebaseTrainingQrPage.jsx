@@ -3,16 +3,32 @@ import { Link, useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
-import { createTrainingQr, listManagedTrainings } from "../lib/trainingCenterPhase2.js";
+import { createTrainingQr, getTrainingAttendanceSummary, listManagedTrainings } from "../lib/trainingCenterPhase2.js";
+import { formatTrainingDateTime, recentTrainingAttendance, trainingAttendanceCounts } from "../lib/trainingAttendancePresentation.js";
 
-export function TrainingQrContent({ displayName, eventId, loadTrainings = listManagedTrainings, createQr = createTrainingQr }) {
+const secondary = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10";
+
+export function TrainingQrContent({ displayName, eventId, loadTrainings = listManagedTrainings, loadSummary = getTrainingAttendanceSummary, createQr = createTrainingQr }) {
   const [event, setEvent] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [qr, setQr] = useState(null);
   const [mode, setMode] = useState("single");
   const [message, setMessage] = useState("");
   const [working, setWorking] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  useEffect(() => { setLoaded(false); loadTrainings().then((result) => setEvent(result.items.find((item) => item.eventId === eventId) || null)).catch((error) => setMessage(error.message)).finally(() => setLoaded(true)); }, [eventId, loadTrainings]);
+  useEffect(() => {
+    let active = true;
+    setLoaded(false);
+    Promise.all([loadTrainings(), loadSummary(eventId)])
+      .then(([trainingResult, summaryResult]) => {
+        if (!active) return;
+        setEvent(trainingResult.items.find((item) => item.eventId === eventId) || null);
+        setSummary(summaryResult);
+      })
+      .catch((error) => { if (active) setMessage(error.message); })
+      .finally(() => { if (active) setLoaded(true); });
+    return () => { active = false; };
+  }, [eventId, loadSummary, loadTrainings]);
   async function generate(selectedMode) {
     setWorking(true); setMessage(""); setQr(null);
     try {
@@ -22,15 +38,43 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
     } catch (error) { setMessage(error.message); }
     finally { setWorking(false); }
   }
-  return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 QR" description="서명 시간에 맞춰 단일 또는 묶음 QR을 생성합니다." displayName={displayName}>
-    <Link to="/firebase-admin/trainings" className="inline-flex min-h-11 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6] print:hidden">교육 관리로</Link>
+  const counts = trainingAttendanceCounts(summary?.counts);
+  const recent = recentTrainingAttendance(summary?.rows);
+  return <FirebaseV2PageShell className="training-phase2-surface" label="교직원 교육" title="교육 QR 출석체크" description="QR 전자서명으로 교직원 교육 출석을 간편하게 확인합니다." displayName={displayName}>
+    <Link to="/firebase-admin/trainings" className={`${secondary} w-fit print:hidden`}>교육 관리로</Link>
     {!loaded && !message && <p className="text-sm text-[#627083]">교육 정보를 불러오는 중입니다.</p>}
     {loaded && !event && !message && <p role="status" className="text-sm text-[#627083]">교육을 찾을 수 없습니다.</p>}
-    {event && <section className="space-y-3 rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4" id="training-qr-print">
-      <div><h2 className="break-keep text-base font-bold text-[#102047]">{event["교육명"]}</h2><p className="mt-1 text-sm text-[#627083]">{event["일자"]} {event["시작시간"]} · {event["장소"]}</p></div>
-      <div className="flex flex-wrap gap-2 print:hidden"><button type="button" disabled={working} onClick={() => generate("single")} className="min-h-11 rounded-[9px] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50">단일 QR 생성</button>{event.eventGroupId && <button type="button" disabled={working} onClick={() => generate("group")} className="min-h-11 rounded-[9px] border border-[#0D4EA6] bg-white px-4 text-sm font-semibold text-[#0D4EA6] disabled:opacity-50">묶음 QR 생성</button>}</div>
-      {qr && <div className="space-y-3 border-t border-[#DDEAE7] pt-3"><p className="text-sm font-semibold text-[#102047]">{mode === "group" ? `묶음 교육 ${qr.eventCount}건` : "단일 교육"} 출석 QR</p><div className="mx-auto aspect-square w-full max-w-[320px] rounded-[10px] border border-[#DDEAE7] bg-white p-4"><QRCodeSVG value={qr.url} title="교육 출석 QR" size={288} className="h-full w-full" /></div><p className="text-center text-xs text-[#627083]">유효기간: {new Date(qr.expiresAt).toLocaleString("ko-KR")}</p><p className="break-keep text-xs text-[#627083]">현장에 있는 교직원이 본인 계정으로 로그인해 서명해야 합니다. QR 주소를 외부에 공유하지 마세요.</p><button type="button" onClick={() => window.print()} className="min-h-11 rounded-[9px] border border-[#DDEAE7] bg-white px-4 text-sm font-semibold text-[#0D4EA6] print:hidden">QR 인쇄</button></div>}
-    </section>}
+    {event && summary && <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(300px,0.9fr)]">
+      <div className="space-y-3">
+        <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 sm:p-5">
+          <p className="text-xs font-semibold text-[#08754B]">현재 교육</p>
+          <h2 className="mt-2 break-keep text-xl font-bold leading-snug text-[#102047] sm:text-[22px]">{event["교육명"]}</h2>
+          <dl className="mt-4 grid gap-3 border-y border-[#DDEAE7] py-4 text-sm sm:grid-cols-3">
+            <div><dt className="text-xs font-semibold text-[#627083]">교육 일시</dt><dd className="mt-1 font-semibold text-[#102047]">{event["일자"]}<br />{event["시작시간"]} ~ {event["종료시간"]}</dd></div>
+            <div><dt className="text-xs font-semibold text-[#627083]">장소</dt><dd className="mt-1 font-semibold text-[#102047]">{event["장소"] || "장소 미정"}</dd></div>
+            <div><dt className="text-xs font-semibold text-[#627083]">출석 방식</dt><dd className="mt-1 font-semibold text-[#102047]">QR 전자서명</dd></div>
+          </dl>
+          <dl className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-[10px] border border-[#D9E6F8] bg-[#EEF4FF] p-3"><dt className="text-xs font-semibold text-[#3154A3]">대상</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#102047]">{counts.target}<span className="ml-0.5 text-sm">명</span></dd></div>
+            <div className="rounded-[10px] border border-[#BFEBDC] bg-[#F0FBF7] p-3"><dt className="text-xs font-semibold text-[#08754B]">출석 완료</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#08754B]">{counts.signed}<span className="ml-0.5 text-sm">명</span></dd></div>
+            <div className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] p-3"><dt className="text-xs font-semibold text-[#9F2525]">미출석</dt><dd className="mt-1 text-2xl font-bold tabular-nums text-[#B42318]">{counts.missing}<span className="ml-0.5 text-sm">명</span></dd></div>
+          </dl>
+          <div className="mt-4 flex flex-wrap gap-2 print:hidden"><Link className={secondary} to={`/firebase-admin/trainings/${encodeURIComponent(eventId)}/attendance`}>출석 현황 보기</Link><Link className={secondary} to={`/firebase-admin/trainings/${encodeURIComponent(eventId)}/final-sheet`}>연수등록부 미리보기</Link></div>
+        </section>
+        <section className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DDEAE7] px-4 py-3"><div><h2 className="text-base font-bold text-[#102047]">최근 출석 현황</h2><p className="mt-1 text-xs text-[#627083]">전자서명 완료 순으로 표시합니다.</p></div><span className="rounded-[8px] bg-[#F0FBF7] px-2 py-1 text-xs font-semibold text-[#08754B]">실시간 집계</span></div>
+          {recent.length ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead className="bg-[#F8FAFA] text-xs text-[#627083]"><tr><th className="px-4 py-2 font-semibold">이름</th><th className="px-4 py-2 font-semibold">부서</th><th className="px-4 py-2 font-semibold">출석 시각</th><th className="px-4 py-2 font-semibold">상태</th></tr></thead><tbody className="divide-y divide-[#DDEAE7]">{recent.map((row) => <tr key={row.staffId}><td className="px-4 py-2.5 font-semibold text-[#102047]">{row.name}</td><td className="px-4 py-2.5 text-[#627083]">{row.department}</td><td className="px-4 py-2.5 tabular-nums text-[#627083]">{formatTrainingDateTime(row.signedAt, { timeOnly: true })}</td><td className="px-4 py-2.5"><span className="rounded-[8px] bg-[#F0FBF7] px-2 py-1 text-xs font-semibold text-[#08754B]">출석</span></td></tr>)}</tbody></table></div> : <p className="px-4 py-6 text-center text-sm text-[#627083]">아직 완료된 출석이 없습니다.</p>}
+          <div className="border-t border-[#DDEAE7] px-4 py-3 print:hidden"><Link className={secondary} to={`/firebase-admin/trainings/${encodeURIComponent(eventId)}/attendance`}>전체 출석 현황 보기</Link></div>
+        </section>
+      </div>
+      <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-4 lg:sticky lg:top-4" id="training-qr-print">
+        <div className="text-center"><h2 className="text-base font-bold text-[#102047]">출석 QR</h2><p className="mt-1 break-keep text-xs leading-5 text-[#627083]">교직원이 QR을 스캔하면 본인 계정으로 전자서명 출석합니다.</p></div>
+        {!qr && <div className="mt-4 rounded-[10px] border border-dashed border-[#B9CCCA] bg-[#F8FAFA] p-6 text-center"><p className="text-sm font-semibold text-[#102047]">QR을 생성해 출석을 시작하세요.</p><p className="mt-1 text-xs text-[#627083]">서명 가능 시간과 대상자 설정이 적용됩니다.</p></div>}
+        {qr && <div className="mt-4 space-y-3"><div className="mx-auto aspect-square w-full max-w-[300px] rounded-[10px] border border-[#DDEAE7] bg-white p-3"><QRCodeSVG value={qr.url} title="교육 출석 QR" size={276} className="h-full w-full" /></div><p className="text-center text-xs tabular-nums text-[#627083]">유효기간: {new Date(qr.expiresAt).toLocaleString("ko-KR")}</p></div>}
+        <div className="mt-4 flex flex-wrap justify-center gap-2 print:hidden"><button type="button" disabled={working} onClick={() => generate("single")} className="min-h-11 rounded-[9px] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50">{working ? "생성 중" : qr ? "단일 QR 다시 생성" : "단일 QR 생성"}</button>{event.eventGroupId && <button type="button" disabled={working} onClick={() => generate("group")} className={secondary}>묶음 QR 생성</button>}{qr && <button type="button" onClick={() => window.print()} className={secondary}>QR 인쇄</button>}</div>
+        <p className="mt-4 break-keep border-t border-[#DDEAE7] pt-3 text-xs leading-5 text-[#627083]">현장에 있는 교직원이 본인 계정으로 로그인해 서명해야 합니다. QR 주소를 외부에 공유하지 마세요.</p>
+      </section>
+    </div>}
     {message && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
     <style>{`@media print { body * { visibility: hidden !important; } #training-qr-print, #training-qr-print * { visibility: visible !important; } #training-qr-print { position: absolute; inset: 0 auto auto 0; width: 100%; border: 0; } }`}</style>
   </FirebaseV2PageShell>;
