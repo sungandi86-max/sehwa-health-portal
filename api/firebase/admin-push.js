@@ -2,6 +2,9 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
 import { getAdminPushTokenId, verifyAdminRequestUser } from "../../server/lib/adminPushNotifications.js";
 
+export const ADMIN_NOTIFICATION_LIST_LIMIT = 20;
+const ADMIN_NOTIFICATION_DISPLAY_LIMIT = 5;
+
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
   if (typeof req.body === "string") return JSON.parse(req.body);
@@ -30,10 +33,9 @@ function serializeNotification(docSnapshot) {
   };
 }
 
-async function getAcknowledgedNotificationIds(uid, notificationIds) {
+async function getAcknowledgedNotificationIds(db, uid, notificationIds) {
   if (!notificationIds.length) return new Set();
 
-  const db = getFirebaseAdminDb();
   const acknowledgementRefs = notificationIds.map((notificationId) =>
     db
       .collection("admin_notification_inboxes")
@@ -67,33 +69,37 @@ function isValidNoticeId(value) {
   return /^[a-z0-9:_-]{1,120}$/.test(value);
 }
 
-async function getUnreadCount(uid) {
-  const inboxRef = getFirebaseAdminDb().collection("admin_notification_inboxes").doc(uid).collection("items");
-  const unreadSnapshot = await inboxRef.where("read", "==", false).limit(100).get();
-  const acknowledgedIds = await getAcknowledgedNotificationIds(uid, unreadSnapshot.docs.map((doc) => doc.id));
-  return unreadSnapshot.docs.filter((doc) => !acknowledgedIds.has(doc.id)).length;
+export async function getUnreadCount(db, uid) {
+  const inboxRef = db.collection("admin_notification_inboxes").doc(uid).collection("items");
+  const unreadSnapshot = await inboxRef.where("read", "==", false).count().get();
+  return Number(unreadSnapshot.data().count || 0);
 }
 
-async function listNotifications(req, res, uid) {
-  const includeAcknowledged = String(req.query?.includeAcknowledged || "") === "true";
-  const inboxRef = getFirebaseAdminDb().collection("admin_notification_inboxes").doc(uid).collection("items");
+export async function readNotificationList(db, uid, includeAcknowledged = false) {
+  const inboxRef = db.collection("admin_notification_inboxes").doc(uid).collection("items");
   const [recentSnapshot, unreadCount] = await Promise.all([
-    inboxRef.orderBy("createdAt", "desc").limit(100).get(),
-    getUnreadCount(uid),
+    inboxRef.orderBy("createdAt", "desc").limit(ADMIN_NOTIFICATION_LIST_LIMIT).get(),
+    getUnreadCount(db, uid),
   ]);
-  const acknowledgedIds = await getAcknowledgedNotificationIds(uid, recentSnapshot.docs.map((doc) => doc.id));
+  const acknowledgedIds = await getAcknowledgedNotificationIds(db, uid, recentSnapshot.docs.map((doc) => doc.id));
   const notifications = recentSnapshot.docs
     .map((doc) => ({
       ...serializeNotification(doc),
       acknowledged: acknowledgedIds.has(doc.id),
     }))
     .filter((notification) => includeAcknowledged || !notification.acknowledged)
-    .slice(0, 5);
+    .slice(0, ADMIN_NOTIFICATION_DISPLAY_LIMIT);
+
+  return { notifications, unreadCount };
+}
+
+async function listNotifications(req, res, uid) {
+  const includeAcknowledged = String(req.query?.includeAcknowledged || "") === "true";
+  const result = await readNotificationList(getFirebaseAdminDb(), uid, includeAcknowledged);
 
   return res.status(200).json({
     ok: true,
-    unreadCount,
-    notifications,
+    ...result,
   });
 }
 
@@ -230,7 +236,7 @@ async function removeToken(res, uid, body) {
 async function handleGet(req, res, uid) {
   const action = String(req.query?.action || "listNotifications");
   if (action === "getUnreadCount") {
-    return res.status(200).json({ ok: true, unreadCount: await getUnreadCount(uid) });
+    return res.status(200).json({ ok: true, unreadCount: await getUnreadCount(getFirebaseAdminDb(), uid) });
   }
   if (action === "listNotifications") return listNotifications(req, res, uid);
 

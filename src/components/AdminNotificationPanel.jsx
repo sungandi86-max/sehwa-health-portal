@@ -70,7 +70,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
     }
 
     if (hasUnreadNotification) {
-      await notifications.refresh();
+      await notifications.refresh({ force: true });
       return;
     }
 

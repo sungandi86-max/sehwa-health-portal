@@ -4,6 +4,7 @@ import {
   ensureAdminPushTokenRegistered,
   getBrowserNotificationPermission,
   getPushCapability,
+  invalidateAdminNotificationCache,
   markAdminNotificationRead,
   registerAdminPushToken,
   subscribeToForegroundAdminNotifications,
@@ -26,7 +27,7 @@ export function useAdminNotifications({ user, enabled, includeAcknowledged = fal
   const [foregroundNotice, setForegroundNotice] = useState(null);
   const capability = useMemo(() => getPushCapability(), []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ force = false } = {}) => {
     if (!enabled || !user) {
       setNotifications([]);
       setUnreadCount(0);
@@ -37,7 +38,7 @@ export function useAdminNotifications({ user, enabled, includeAcknowledged = fal
 
     setState({ status: "loading", message: "" });
     try {
-      const result = await fetchAdminNotifications(user, { includeAcknowledged });
+      const result = await fetchAdminNotifications(user, { includeAcknowledged, force });
       setNotifications(result.notifications);
       setUnreadCount(result.unreadCount);
       const nextPermission = getBrowserNotificationPermission();
@@ -97,7 +98,8 @@ export function useAdminNotifications({ user, enabled, includeAcknowledged = fal
     subscribeToForegroundAdminNotifications((notification) => {
       if (!active) return;
       setForegroundNotice(notification);
-      void refresh();
+      invalidateAdminNotificationCache(user);
+      void refresh({ force: true });
     }).then((nextUnsubscribe) => {
       if (!active) {
         nextUnsubscribe?.();
@@ -122,7 +124,8 @@ export function useAdminNotifications({ user, enabled, includeAcknowledged = fal
       await registerAdminPushToken(user);
       setPermission(getBrowserNotificationPermission());
       setRegistrationStatus("registered");
-      await refresh();
+      invalidateAdminNotificationCache(user);
+      await refresh({ force: true });
       setRegistrationStatus("registered");
       setState({ status: "success", message: "이 브라우저에서 관리자 알림을 받습니다." });
       notifyAdminNotificationsChanged();
@@ -139,7 +142,8 @@ export function useAdminNotifications({ user, enabled, includeAcknowledged = fal
     if (!enabled || !user || !notificationId) return;
 
     await markAdminNotificationRead(user, notificationId);
-    await refresh();
+    invalidateAdminNotificationCache(user);
+    await refresh({ force: true });
     notifyAdminNotificationsChanged();
   };
 

@@ -1,7 +1,11 @@
 import { app, auth } from "./firebase.js";
+import { createAdminNotificationRequestCache } from "./adminNotificationRequestCache.js";
 
 const ADMIN_PUSH_API_PATH = "/api/firebase/admin-push";
 const registrationPromises = new Map();
+const notificationRequests = createAdminNotificationRequestCache();
+const registrationCache = new Map();
+const REGISTRATION_CACHE_TTL_MS = 60_000;
 
 export function getBrowserNotificationPermission() {
   if (typeof Notification === "undefined") return "unsupported";
@@ -75,14 +79,24 @@ async function getCurrentAdminPushToken() {
 }
 
 export async function fetchAdminNotifications(firebaseUser, options = {}) {
-  const query = options.includeAcknowledged === true
-    ? "?action=listNotifications&includeAcknowledged=true"
-    : "?action=listNotifications";
-  const result = await requestAdminJson(`${ADMIN_PUSH_API_PATH}${query}`, firebaseUser);
-  return {
-    unreadCount: Number(result.unreadCount || 0),
-    notifications: Array.isArray(result.notifications) ? result.notifications : [],
-  };
+  const includeAcknowledged = options.includeAcknowledged === true;
+  const cacheKey = `${firebaseUser?.uid || ""}:${includeAcknowledged ? "all" : "active"}`;
+  return notificationRequests.run(cacheKey, async () => {
+    const query = includeAcknowledged
+      ? "?action=listNotifications&includeAcknowledged=true"
+      : "?action=listNotifications";
+    const result = await requestAdminJson(`${ADMIN_PUSH_API_PATH}${query}`, firebaseUser);
+    return {
+      unreadCount: Number(result.unreadCount || 0),
+      notifications: Array.isArray(result.notifications) ? result.notifications : [],
+    };
+  }, { force: options.force === true });
+}
+
+export function invalidateAdminNotificationCache(firebaseUser) {
+  const uid = firebaseUser?.uid || "";
+  notificationRequests.invalidate(`${uid}:active`);
+  notificationRequests.invalidate(`${uid}:all`);
 }
 
 export async function fetchAdminPushRegistrationStatus(firebaseUser) {
@@ -143,6 +157,10 @@ export async function ensureAdminPushTokenRegistered(firebaseUser, options = {})
   if (permission !== "granted") throw new Error("브라우저 알림 권한이 필요합니다.");
 
   const registrationKey = firebaseUser?.uid || "current-user";
+  const cachedRegistration = registrationCache.get(registrationKey);
+  if (cachedRegistration && Date.now() - cachedRegistration.checkedAt < REGISTRATION_CACHE_TTL_MS) {
+    return cachedRegistration.value;
+  }
   const pendingRegistration = registrationPromises.get(registrationKey);
   if (pendingRegistration) return pendingRegistration;
 
@@ -169,7 +187,9 @@ export async function ensureAdminPushTokenRegistered(firebaseUser, options = {})
 
   registrationPromises.set(registrationKey, registrationPromise);
   try {
-    return await registrationPromise;
+    const result = await registrationPromise;
+    registrationCache.set(registrationKey, { value: result, checkedAt: Date.now() });
+    return result;
   } finally {
     if (registrationPromises.get(registrationKey) === registrationPromise) {
       registrationPromises.delete(registrationKey);
