@@ -1,5 +1,32 @@
 # Staff Submission And Training Status Model
 
+## 2026-10-15 Legacy screening-type dependency audit and minimal UI cleanup
+
+Production annual confirmation remains active from main `dddd62fbf1d9f1809a14438d19998c8839abfb0b`, using `staff_health_screening_types`. Only the approved UI/documentation/tests from QA `db5c011` are selectively integrated. Production host activation and environment isolation remain unchanged; no QA-only display guard or runtime fixture is introduced. The existing Production activation description below remains authoritative.
+
+| Path / consumer | Classification | Action / reason |
+| --- | --- | --- |
+| `HealthScreeningTypePanel` → `healthScreeningTypes` → staff-directory resource router → annual store | A: annual Firestore only | Keep; own staffId/year lookup, missing record means confirmation required. No Sheet type fallback. |
+| `HealthScreeningTypeAdminPanel` → annual admin API | A | Keep; one year query joined with canonical roster, not N+1 lookups. |
+| `tbRegistrationRequestStore.sourceSheetName`, TB migration documentation | B: original/audit metadata | Preserve original row fingerprints and historical references. These strings are not runtime Sheet reads. |
+| `staffDirectory` → `교직원명단` | C: canonical identity | Preserve staffId/name/department/position/active-status source. It does not map an annual nhis/employment column. |
+| `trainingCenter.readTrainingSheets` → `교직원교육대상` | C: education targets | Preserve existing education targets and snapshot compatibility; unrelated to health-screening type. |
+| Research legal-training source readers and dry-run/exception panels | C: annual bulk source | Preserve read-only research source and completion/exception workflows. |
+| Generic unused Apps Script receipt summarizer | D: unrelated dead helper | Not removed: outside annual-type cleanup scope. Other shared `getRows_` callers remain active. |
+
+`응답_교직원결핵검진유형선택` runtime read/write was already removed by TB Phase 2. **Additional overlapping annual Sheet reads removed in this cleanup: 0.** `/checkup` reads guide content; `/upload` Sheet-name aliases identify workflows, not annual Sheet readers. Manual migration scripts are not runtime fallback. No historical fallback was removed or newly invented.
+
+Source-of-truth separation:
+
+- Annual health-screening type: annual Firestore `nhis/employment/none/other`; self confirmation derives only from actual `selfChoice`. A missing year remains unconfirmed, never copied or inferred from a Sheet.
+- Existing TB application path: `staff_submission_status.screening.screeningType` (`group/individual/national/...`). This is not the annual type ledger.
+- Completion: existing projection `status`/completion fields, unchanged by annual confirmation.
+- Guidance: existing `screening.note`, independent of both type and completion.
+
+The administrator page now has native section anchors for annual type, research-source check, legal-training exceptions and completion status, retaining panel order, workspace and API calls. Its old TB filter and national summary explicitly say **신청 경로**, preventing confusion with annual 공단검진 confirmation. No new state, query, role, writer or fallback was introduced.
+
+This is a code/caller audit, not a fresh live workbook or historical-row audit. The release changes UI only: no Sheet/Firestore/Drive data, schema or Rules changes. Past annual records remain readable; past-year writes remain denied. Existing registration, completion, certificate and proxy contracts remain separate.
+
 ## Annual health-screening type Production activation
 
 The annual health-screening type is independent of the legacy TB application path and completion projection. The canonical read-only `교직원명단` supplies staffId, name, department, position and employment status. Existing `staff_submission_status.screening.screeningType` remains the TB application path, `status` remains completion, and `screening.note` remains guidance. No historical Sheet value is inferred, copied, migrated, modified or deleted by this feature.

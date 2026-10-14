@@ -106,8 +106,8 @@ function FilterBar({ filters, options, selectedTask, onChange }) {
         </select>
         {isTbTask && (
           <select value={filters.screeningType} onChange={(event) => onChange({ ...filters, screeningType: event.target.value })}
-            className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]" aria-label="검진유형 필터">
-            <option value="all">검진유형 전체</option>
+            className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]" aria-label="결핵검진 신청 경로 필터">
+            <option value="all">신청 경로 전체</option>
             {Object.entries(TB_SCREENING_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         )}
@@ -289,13 +289,19 @@ function AdminStatusContent({ displayName }) {
       description="결핵검진, 심폐소생술 연수, 보건 관련 법정의무연수 상태를 Firestore projection 기준으로 확인합니다."
       displayName={displayName}
     >
-      {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <HealthScreeningTypeAdminPanel />}
-      <ResearchTrainingDryRunPanel onApplied={loadOverview} />
-      <ResearchTrainingExceptionsPanel />
+      <nav aria-label="제출·이수 현황 섹션 이동" className="flex flex-wrap gap-2 text-sm text-[#3154A3]">
+        {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <a href="#annual-screening-type" className="rounded-lg border border-[#DDEAE7] px-3 py-3">건강검진 유형</a>}
+        <a href="#training-source-check" className="rounded-lg border border-[#DDEAE7] px-3 py-3">연수 원본 점검</a>
+        <a href="#legal-training-exceptions" className="rounded-lg border border-[#DDEAE7] px-3 py-3">법정의무연수 예외</a>
+        {state.status === "success" && selectedTask && <a href="#completion-status" className="rounded-lg border border-[#DDEAE7] px-3 py-3">검진·연수 완료 현황</a>}
+      </nav>
+      {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <section id="annual-screening-type" className="scroll-mt-4"><HealthScreeningTypeAdminPanel /></section>}
+      <section id="training-source-check" className="scroll-mt-4"><ResearchTrainingDryRunPanel onApplied={loadOverview} /></section>
+      <section id="legal-training-exceptions" className="scroll-mt-4"><ResearchTrainingExceptionsPanel /></section>
 
       {state.status === "success" && selectedTask && (
         <>
-          <section className="grid gap-2 lg:grid-cols-3">
+          <section id="completion-status" aria-label="검진·연수 완료 현황" className="grid scroll-mt-4 gap-2 lg:grid-cols-3">
             {overview.tasks.map((task) => (
               <TaskSummary
                 key={task.taskId}
@@ -316,7 +322,7 @@ function AdminStatusContent({ displayName }) {
               <SummaryCell label="미검진" value={selectedTask.summary.incomplete} tone="text-[#9A5B00]" />
               <SummaryCell label="학교 단체검진" value={selectedTask.summary.group} />
               <SummaryCell label="개별검진" value={selectedTask.summary.individual} />
-              <SummaryCell label="공단검진" value={selectedTask.summary.national} />
+              <SummaryCell label="공단검진 신청 경로" value={selectedTask.summary.national} />
               <SummaryCell label="미신청" value={selectedTask.summary.unregistered} tone="text-[#9A5B00]" />
               <SummaryCell label="제외·휴직" value={selectedTask.summary.excluded} />
             </section>
