@@ -16,6 +16,8 @@ import { cprCertificateSubmissionStore } from "../server/lib/cprCertificateSubmi
 import { tbCertificateSubmissionStore } from "../server/lib/tbCertificateSubmissionStore.js";
 import { studentSubmissionAuditStore } from "../server/lib/studentSubmissionAuditStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
+import { readStaffDirectory, verifyDirectoryAdmin } from "../server/lib/staffDirectory.js";
+import { buildProxySubmissionRecord, createProxySubmission, findProxyDuplicates, resolveProxySubject } from "../server/lib/adminProxySubmission.js";
 
 function scriptUrl() {
   return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
@@ -64,6 +66,8 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
   tbCertificateStore = tbCertificateSubmissionStore,
   studentAuditStore = studentSubmissionAuditStore,
   saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
+  verifyProxyAdmin = verifyDirectoryAdmin, readDirectory = readStaffDirectory,
+  findDuplicates = findProxyDuplicates, saveProxySubmission = createProxySubmission,
   environment = trainingEnvironment, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
@@ -81,6 +85,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
     const rawBody = Buffer.concat(chunks).toString("utf-8");
     const payload = parseJsonBody(rawBody);
+    const isAdminProxyTb = payload?.action === "admin_proxy" && payload?.type === "tb";
 
     if (isLegacyInfectionSubmit(payload)) {
       return res.status(410).json({
@@ -95,9 +100,34 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     const validation = validateSubmissionPayload(workflow, payload);
     if (!validation.ok) return res.status(validation.status).json({ status: "error", success: false, message: validation.message });
 
+    let proxyAccess = null;
+    let proxySubject = null;
+    let proxyAdministrator = null;
+    if (isAdminProxyTb) {
+      proxyAccess = await verifyProxyAdmin(req);
+      if (!proxyAccess.ok) {
+        return res.status(proxyAccess.status).json({ status: "error", success: false, message: proxyAccess.message });
+      }
+      const { directory } = await readDirectory({ allowInvalidEmploymentStatus: true });
+      try {
+        proxySubject = resolveProxySubject(directory, payload?.subjectStaffId);
+        proxyAdministrator = resolveProxySubject(directory, proxyAccess.assignment?.staffId);
+      } catch (error) {
+        return res.status(409).json({ status: "error", success: false, message: error.message });
+      }
+      const duplicates = await findDuplicates(proxyAccess.db, proxySubject.staffId);
+      if (duplicates.length && payload?.allowDuplicate !== true) {
+        const latest = duplicates[0];
+        return res.status(409).json({ status: "duplicate", success: false,
+          message: "이미 제출 기록이 있습니다.", duplicate: {
+            checkupDate: latest.checkupDate || "", status: latest.status || "submitted",
+          } });
+      }
+    }
+
     let tbGuard = null;
     let cprIdentity = null;
-    if (workflow.authPolicy === "current_staff_tb_guard") {
+    if (workflow.authPolicy === "current_staff_tb_guard" && !isAdminProxyTb) {
       tbGuard = await verifyTb(req, { allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa" });
       if (!tbGuard.ok) {
         return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
@@ -114,7 +144,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     const qaInbodyOnly = workflow.id === "inbody" && inbodyStore.backend === "firestore" && identity?.qaSynthetic === true;
     const qaCprOnly = workflow.id === "cpr" && environment() === "qa" && identity?.qaCprSynthetic === true;
     const qaTbCertificateOnly = workflow.id === "tb" && environment() === "qa" && identity?.qaTbCertificateSynthetic === true;
-    if (workflow.requiresCanonicalStaffId && (!identity?.staffId ||
+    if (!isAdminProxyTb && workflow.requiresCanonicalStaffId && (!identity?.staffId ||
       (!qaInbodyOnly && !qaCprOnly && !qaTbCertificateOnly
         && !identity.roles?.some((role) => workflow.allowedRoles.includes(role))))) {
       return res.status(403).json({ status: "error", success: false, message: "이 제출 유형을 이용할 권한이 없습니다." });
@@ -217,7 +247,10 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       return res.status(503).json({ status: "error", success: false,
         message: "QA 결핵검진 확인증 증빙 저장소가 설정되지 않았습니다." });
     }
-    const scriptPayload = (qaCprOnly || qaTbCertificateOnly)
+    const scriptPayload = isAdminProxyTb
+      ? { ...payload, fields: { ...payload.fields, name: proxySubject.name, dept: proxySubject.department,
+        staffType: proxySubject.position || "교직원" } }
+      : (qaCprOnly || qaTbCertificateOnly)
       ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
       : payload;
     const scriptSubmission = buildScriptSubmission(workflow, scriptPayload, {
@@ -273,6 +306,30 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       }
       return res.status(200).json({ status: "success", success: true, submittedAt: json.submittedAt,
         submissionId: qaIdentity.submissionId });
+    }
+    if (isAdminProxyTb) {
+      const evidenceFile = { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType };
+      try {
+        await tbCertificateStore.createRequest({ staffId: proxySubject.staffId, submittedAt: now,
+          checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType, evidenceFile,
+          submissionMode: "admin_proxy", subject: proxySubject, submittedBy: proxyAdministrator,
+          proxyNote: payload?.proxyNote });
+        const file = { driveFileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType,
+          driveUrl: json.fileUrl || json.fileLink || json.driveUrl || null };
+        const record = buildProxySubmissionRecord({ subject: proxySubject, administrator: proxyAdministrator,
+          checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
+          proxyNote: payload?.proxyNote, file, now });
+        const saved = await saveProxySubmission(proxyAccess.db, record);
+        await saveTbStatus({ db: proxyAccess.db,
+          payload: buildTbStatusPayload(payload, proxySubject.staffId),
+          collectionName: environment() === "qa" ? "staff_submission_status_qa" : undefined });
+        return res.status(200).json({ status: "success", success: true, submissionId: saved.id,
+          staffId: proxySubject.staffId });
+      } catch {
+        console.error("[ADMIN_PROXY_TB_WRITE] Partial failure");
+        return res.status(503).json({ status: "error", success: false,
+          message: "파일은 저장되었지만 대리등록 기록을 완료하지 못했습니다. 보건실 관리자에게 문의해 주세요." });
+      }
     }
     if (tbGuard) {
       if (tbCertificateAudit) {

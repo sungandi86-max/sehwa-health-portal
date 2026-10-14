@@ -65,20 +65,20 @@ function normalizeSubmission(documentSnapshot) {
   };
 }
 
-function getLatestSubmissionByUid(submissions) {
-  const latestByUid = new Map();
+function getLatestSubmissionByIdentity(submissions) {
+  const latestByIdentity = new Map();
 
   submissions.forEach((submission) => {
-    const uid = submission.submitter?.uid || "";
-    if (!uid) return;
+    const identityKey = submission.subjectStaffId || submission.staffId || submission.submitter?.uid || "";
+    if (!identityKey) return;
 
-    const current = latestByUid.get(uid);
+    const current = latestByIdentity.get(identityKey);
     if (!current || submission.submittedAtMillis > current.submittedAtMillis) {
-      latestByUid.set(uid, submission);
+      latestByIdentity.set(identityKey, submission);
     }
   });
 
-  return latestByUid;
+  return latestByIdentity;
 }
 
 function getRosterStatus(submission) {
@@ -96,12 +96,12 @@ function sortRoster(left, right) {
 }
 
 export function buildSubmissionRoster(users, submissions) {
-  const latestByUid = getLatestSubmissionByUid(submissions);
+  const latestByIdentity = getLatestSubmissionByIdentity(submissions);
 
   return users
     .filter(isActiveStaff)
     .map((user) => {
-      const latestSubmission = latestByUid.get(user.uid) || null;
+      const latestSubmission = latestByIdentity.get(user.assignment?.staffId) || latestByIdentity.get(user.uid) || null;
       const status = getRosterStatus(latestSubmission);
       return {
         uid: user.uid,

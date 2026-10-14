@@ -479,6 +479,8 @@ service cloud.firestore {
       allow read: if signedIn()
         && (
           resource.data.submitter.uid == request.auth.uid
+          || (resource.data.submissionMode == "admin_proxy"
+            && resource.data.subjectStaffId == get(currentAssignmentPath(request.auth.uid)).data.staffId)
           || hasCurrentHealthTeacherOrAdminAssignment()
         );
       allow create: if signedIn()

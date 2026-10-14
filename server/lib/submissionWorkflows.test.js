@@ -113,6 +113,50 @@ test("API rejects unknown and unauthenticated staff types before script call", a
   assert.equal(calls, 0);
 });
 
+test("admin proxy TB submission enforces admin role, canonical subject and create-only duplicate handling", async () => {
+  const payload = { ...file, type: "tb", action: "admin_proxy", subjectStaffId: "T049",
+    proxyNote: "종이 제출본", fields: { name: "client-forged", checkupDate: "2026-10-14", docType: "결핵검진 확인증" } };
+  const directory = [{ staffId: "T049", name: "대상자", department: "교무부", position: "교사" },
+    { staffId: "T001", name: "등록자", department: "보건실", position: "보건교사" }];
+  let forwarded;
+  let savedRecord;
+  let auditInput;
+  let statusInput;
+  const options = {
+    destinationUrl, proxySecret, environment: () => "qa", qaTbCertificateFolderId: "qa-proxy-folder",
+    verifyProxyAdmin: async () => ({ ok: true, assignment: { staffId: "T001", roles: ["health_teacher"] }, db: {} }),
+    readDirectory: async () => ({ directory }), findDuplicates: async () => [],
+    postScript: async (_url, init) => { forwarded = JSON.parse(JSON.parse(init.body).payloadJson);
+      return { text: async () => JSON.stringify({ status: "success", fileId: "drive-file" }) }; },
+    tbCertificateStore: { createRequest: async (value) => { auditInput = value; } },
+    saveProxySubmission: async (_db, value) => { savedRecord = value; return { id: "proxy-id" }; },
+    saveTbStatus: async (value) => { statusInput = value; },
+  };
+  const result = response();
+  await submitHandler(request(payload), result, options);
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.submissionId, "proxy-id");
+  assert.equal(forwarded.fields.name, "대상자");
+  assert.equal(savedRecord.subjectStaffId, "T049");
+  assert.equal(savedRecord.submittedByStaffId, "T001");
+  assert.equal(savedRecord.submissionMode, "admin_proxy");
+  assert.equal(auditInput.submissionMode, "admin_proxy");
+  assert.equal(statusInput.payload.staffId, "T049");
+
+  const duplicate = response();
+  await submitHandler(request(payload), duplicate, { ...options,
+    findDuplicates: async () => [{ itemId: "tb", checkupDate: "2026-03-01", status: "completed" }],
+    postScript: async () => { throw new Error("duplicate must stop before upload"); } });
+  assert.equal(duplicate.statusCode, 409);
+  assert.equal(duplicate.body.status, "duplicate");
+
+  const denied = response();
+  await submitHandler(request(payload), denied, { ...options,
+    verifyProxyAdmin: async () => ({ ok: false, status: 403, message: "관리자 권한이 없습니다." }),
+    postScript: async () => { throw new Error("denied request must not upload"); } });
+  assert.equal(denied.statusCode, 403);
+});
+
 test("submission API refuses cross-site simple form content types", async () => {
   const req = request({ type: "student-file", fields: {} });
   req.headers["content-type"] = "text/plain";

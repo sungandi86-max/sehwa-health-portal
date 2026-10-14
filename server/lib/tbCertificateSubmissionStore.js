@@ -73,7 +73,8 @@ export class TbCertificateSubmissionStore {
   }
   get environment() { return submissionEnvironment(this.context()); }
   get collectionName() { return COLLECTIONS[this.environment]; }
-  async createRequest({ staffId, submittedAt = new Date(), checkupDate, documentType, evidenceFile }) {
+  async createRequest({ staffId, submittedAt = new Date(), checkupDate, documentType, evidenceFile,
+    submissionMode = "self", subject = null, submittedBy = null, proxyNote = "" }) {
     const canonicalStaffId = text(staffId);
     const file = normalizeEvidenceFile({ ...evidenceFile, exists: true });
     if (!canonicalStaffId || !text(checkupDate) || !file.fileId || !file.fileName || !file.mimeType) {
@@ -86,6 +87,9 @@ export class TbCertificateSubmissionStore {
       originalRowNumber: null, originalRowFingerprint: fingerprint([canonicalStaffId, timestamp, checkupDate, file.fileId]),
       evidenceFiles: [file], evidenceMissing: false, manualReview: false, matchStatus: "matched", status: "received",
       evidenceStatus: "verified", manualReviewReasons: [], identityConfirmed: true,
+      submissionMode, subjectStaffId: subject?.staffId || canonicalStaffId, subjectName: text(subject?.name),
+      submittedByStaffId: text(submittedBy?.staffId), submittedByName: text(submittedBy?.name),
+      proxyNote: text(proxyNote).slice(0, 500), proxyRegisteredAt: submissionMode === "admin_proxy" ? timestamp : "",
       migration: { imported: false }, schemaVersion: 1, createdAt: timestamp, updatedAt: timestamp };
     await this.database().collection(this.collectionName).doc(id).create(request);
     return request;

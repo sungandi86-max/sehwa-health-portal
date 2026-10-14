@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
+import AdminProxySubmissionDialog from "../components/AdminProxySubmissionDialog.jsx";
 import {
   INFECTION_STATUS_LABELS,
   INFECTION_STATUS_OPTIONS,
@@ -97,7 +98,8 @@ function DetailRow({ label, value }) {
 }
 
 function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
-  const submitterName = item.submitter?.displayName || "제출자";
+  const isProxy = item.submissionMode === "admin_proxy";
+  const submitterName = item.subjectName || item.submitter?.displayName || "제출자";
   const submitterEmail = item.submitter?.email || "";
   const isUpdating = pendingId === item.id;
 
@@ -114,6 +116,8 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
           <h2 className="mt-4 text-lg font-semibold text-[#102047]">{submitterName}</h2>
           {submitterEmail && <p className="mt-1 break-all text-sm font-bold text-[#627083]">{submitterEmail}</p>}
           <p className="mt-2 text-xs font-bold text-[#8A96A8]">제출일시 {item.submittedAtLabel}</p>
+          <p className="mt-1 text-xs font-semibold text-[#627083]">제출 방식: {isProxy ? "관리자 대리등록" : "본인 제출"}</p>
+          {isProxy && <p className="mt-1 text-xs font-semibold text-[#627083]">등록자: {item.submittedByName || "관리자"}</p>}
         </div>
         {item.file?.driveUrl ? (
           <a
@@ -243,6 +247,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
   const [loadState, setLoadState] = useState({ status: "idle", message: "" });
   const [actionState, setActionState] = useState({ status: "idle", message: "" });
   const [pendingId, setPendingId] = useState("");
+  const [proxyOpen, setProxyOpen] = useState(false);
 
   const visibleStatusOptions = useMemo(() => {
     return activeTab === "staff" ? STAFF_STATUS_OPTIONS : INFECTION_STATUS_OPTIONS;
@@ -371,7 +376,11 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {activeTab === "staff" && <button type="button" onClick={() => setProxyOpen(true)}
+              className="min-h-10 rounded-[8px] bg-[#0D4EA6] px-4 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/20">
+              대리등록
+            </button>}
             <FilterButton active={!statusFilter} onClick={() => setStatusFilter("")}>
               전체
             </FilterButton>
@@ -397,6 +406,8 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
           </p>
         )}
       </section>
+
+      <AdminProxySubmissionDialog open={proxyOpen} onClose={() => setProxyOpen(false)} onSaved={loadItems} />
 
       <section className="space-y-4">
         {loadState.status === "success" && activeTab === "staff" && (

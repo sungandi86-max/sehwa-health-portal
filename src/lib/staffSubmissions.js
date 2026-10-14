@@ -52,7 +52,10 @@ async function postWithTimeout(payload) {
     });
     const json = await response.json();
     if (!response.ok || !(json?.status === "success" || json?.success === true || json?.ok === true)) {
-      throw new Error(json?.message || "Drive 업로드에 실패했습니다.");
+      const error = new Error(json?.message || "Drive 업로드에 실패했습니다.");
+      error.status = response.status;
+      error.result = json;
+      throw error;
     }
     return json;
   } catch (error) {
@@ -104,6 +107,29 @@ async function uploadDriveSubmission({ type, fields, fileName, file }) {
     fileName,
     fileBase64,
     fileMimeType: file.type,
+  });
+}
+
+export async function createAdminProxyTbSubmission({ subjectStaffId, subjectName, checkupDate,
+  documentType, proxyNote, file, allowDuplicate = false }) {
+  const selectionError = validateSelectableSubmissionFile(file);
+  if (selectionError) throw new Error(selectionError);
+  const preparedFile = await prepareSubmissionFile(file);
+  const fileError = validateSubmissionFile(preparedFile);
+  if (fileError) throw new Error(fileError);
+  const originalName = sanitizeFilename(preparedFile.name || "tb-certificate.pdf");
+  const fileName = sanitizeFilename(`${subjectName}_관리자대리등록_${todayString()}_${originalName}`);
+  const fileBase64 = await fileToBase64(preparedFile);
+  return postWithTimeout({
+    action: "admin_proxy",
+    type: "tb",
+    subjectStaffId,
+    proxyNote,
+    allowDuplicate,
+    fields: { name: subjectName, checkupDate, docType: documentType },
+    fileName,
+    fileBase64,
+    fileMimeType: preparedFile.type,
   });
 }
 
