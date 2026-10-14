@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { TrainingAdminLayout } from "../components/TrainingAdminLayout.jsx";
-import { bootstrapTrainingSignatureStorage, getTrainingAttendanceSummary, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
+import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
 import { getTrainingStorageBootstrapUiState, performTrainingStorageBootstrap, summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
 import { trainingAttendanceCounts } from "../lib/trainingAttendancePresentation.js";
 import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
@@ -166,7 +166,7 @@ export function TrainingRuntimePreflight({
   </section>;
 }
 
-export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, loadSummary = getTrainingAttendanceSummary, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
+export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
   const [items, setItems] = useState([]);
   const [summaries, setSummaries] = useState({});
   const [summaryFailures, setSummaryFailures] = useState(0);
@@ -175,23 +175,17 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
   const [editing, setEditing] = useState(null);
   async function reload() {
     setState("loading");
-    try { const result = await loadTrainings(); setItems(result.items); setState("ready"); }
+    try {
+      const result = await loadTrainings();
+      setItems(result.items);
+      setSummaries(Object.fromEntries(result.items.map((item) => [item.eventId,
+        result.summaries?.[item.eventId] ? trainingAttendanceCounts(result.summaries[item.eventId].counts) : null])));
+      setSummaryFailures(result.items.filter((item) => !result.summaries?.[item.eventId]).length);
+      setState("ready");
+    }
     catch (error) { setMessage(error.message); setState("error"); }
   }
   useEffect(() => { reload(); }, []);
-  useEffect(() => {
-    if (state !== "ready" || !items.length) return;
-    let active = true;
-    Promise.all(items.map(async (item) => {
-      try { return [item.eventId, trainingAttendanceCounts((await loadSummary(item.eventId)).counts)]; }
-      catch { return [item.eventId, null]; }
-    })).then((entries) => {
-      if (!active) return;
-      setSummaries(Object.fromEntries(entries));
-      setSummaryFailures(entries.filter(([, counts]) => counts === null).length);
-    });
-    return () => { active = false; };
-  }, [items, state, loadSummary]);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const upcoming = items.filter((item) => item["사용여부"] === "사용" && item["일자"] >= today)
     .sort((left, right) => left["일자"].localeCompare(right["일자"]))[0];

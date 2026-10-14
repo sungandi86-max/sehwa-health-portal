@@ -131,9 +131,10 @@ function fakeDb() {
 function fakeStore({ appendMode = "success", snapshotMode = false, snapshotEnvironment = "qa" } = {}) {
   const values = source();
   const calls = { uploads: 0, appended: 0, saved: 0, sheetWrites: 0, bootstraps: 0 };
+  const readCalls = { base: 0, source: [], scoped: [] };
   const snapshots = new Map();
   return {
-    calls, values, snapshots,
+    calls, readCalls, values, snapshots,
     ...(snapshotMode ? { events: { environment: snapshotEnvironment, getEvent: async (eventId) => snapshots.get(eventId) || null } } : {}),
     signatureStorageConfigured: true,
     assertSignatureStorageConfigured: () => {},
@@ -142,8 +143,9 @@ function fakeStore({ appendMode = "success", snapshotMode = false, snapshotEnvir
     bootstrapSignatureStorage: async () => { calls.bootstraps += 1; return { created: true }; },
     isSignatureSheetReady: async () => true,
     listSignatureFilesByRequest: async () => [],
-    readBase: async () => values,
-    readSource: async () => values,
+    readBase: async () => { readCalls.base += 1; return values; },
+    readSource: async (eventId = "") => { readCalls.source.push(eventId); return values; },
+    readSourceForEvents: async (eventIds) => { readCalls.scoped.push([...eventIds]); return values; },
     saveEvent: async (fields, existing) => {
       if (existing) values.trainings[existing.rowNumber - 1] = row(TRAINING_RUNTIME_HEADERS, fields);
       else values.trainings.push(row(TRAINING_RUNTIME_HEADERS, fields));
@@ -271,6 +273,20 @@ test("training admins can manage only owned education while top-level admins ret
   assert.equal((await call("training-qr", { token: "training-a", query: { eventGroupId: "GROUP-1" } })).statusCode, 403);
   assert.equal((await call("training-runtime-preflight", { token: "training-a" })).statusCode, 403);
   assert.equal((await call("training-targets", { query: { eventId: "EVENT-2" } })).statusCode, 200);
+});
+
+test("education list returns all attendance summaries from one scoped source read", async () => {
+  const { call, store } = harness();
+  const result = await call("training-admin-list");
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(Object.keys(result.body.summaries).sort(), ["EVENT-1", "EVENT-2"]);
+  assert.deepEqual(result.body.summaries["EVENT-1"].counts, { target: 2, signed: 0, excluded: 0 });
+  assert.deepEqual(result.body.summaries["EVENT-2"].counts, { target: 1, signed: 0, excluded: 0 });
+  assert.deepEqual(store.readCalls, { base: 1, source: [], scoped: [["EVENT-1", "EVENT-2"]] });
+  assert.equal((await call("training-attendance-summary", { query: { eventId: "EVENT-1" } })).statusCode, 200);
+  assert.deepEqual(store.readCalls.source, ["EVENT-1"]);
+  assert.equal((await call("training-qr", { query: { eventId: "EVENT-1" } })).statusCode, 200);
+  assert.deepEqual(store.readCalls.source, ["EVENT-1"], "QR issuance does not need signature history");
 });
 
 test("server assigns and preserves education owner regardless of client input", async () => {
