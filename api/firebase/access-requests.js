@@ -99,6 +99,11 @@ async function hasReviewerAccess(db, uid) {
   return hasReviewerRole(assignmentSnapshot.data());
 }
 
+export async function countAccessRequests(queryRef) {
+  const snapshot = await queryRef.count().get();
+  return Number(snapshot.data().count || 0);
+}
+
 function normalizeHomeroomInput(input) {
   const grade = Number(input?.grade);
   const classNo = Number(input?.classNo);
@@ -182,6 +187,10 @@ async function listRequests(req, res, decodedToken) {
   const baseQuery = status === "all" ? collectionRef : collectionRef.where("status", "==", status);
   if (url.searchParams.has("requestType") && !requestType) {
     return res.status(400).json({ ok: false, message: "권한 신청 유형이 올바르지 않습니다." });
+  }
+
+  if (mode === "count" && !requestType) {
+    return res.status(200).json({ ok: true, count: await countAccessRequests(baseQuery) });
   }
 
   const snapshot = await baseQuery.limit(ACCESS_REQUEST_LIMIT).get();
