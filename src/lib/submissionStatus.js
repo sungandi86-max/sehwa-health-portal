@@ -1,7 +1,5 @@
-import { collection, getDocs, limit, query, where } from "firebase/firestore";
-import { STAFF_STATUS_LABELS, formatSubmissionDateTime } from "./adminSubmissions.js";
+import { STAFF_STATUS_LABELS, formatSubmissionDateTime, getAdminProxySubmissions } from "./adminSubmissions.js";
 import { applyIndividualHealthCheckupDisplay } from "../data/individualHealthCheckupSubmission.js";
-import { db } from "./firebase.js";
 import { getActiveSubmissionItems } from "./submissionItems.js";
 import { getUsersWithAssignments } from "./userAssignmentsAdmin.js";
 
@@ -17,7 +15,6 @@ export const STATUS_FILTER_LABELS = {
   rejected: "보완 필요",
 };
 
-const SUBMISSION_LIMIT = 300;
 const STATUS_RANK = {
   missing: 0,
   rejected: 1,
@@ -31,6 +28,7 @@ function getTimestampMillis(value) {
   if (typeof value.toMillis === "function") return value.toMillis();
   if (typeof value.seconds === "number") return value.seconds * 1000;
   if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") return Date.parse(value) || 0;
   return 0;
 }
 
@@ -55,10 +53,8 @@ function normalizeItem(itemId, items) {
   return itemId === "tb" ? applyIndividualHealthCheckupDisplay(normalizedItem) : normalizedItem;
 }
 
-function normalizeSubmission(documentSnapshot) {
-  const data = documentSnapshot.data();
+function normalizeSubmission(data) {
   return {
-    id: documentSnapshot.id,
     ...data,
     submittedAtMillis: getTimestampMillis(data.submittedAt),
     submittedAtLabel: formatSubmissionDateTime(data.submittedAt),
@@ -143,13 +139,13 @@ export function filterSubmissionRoster(roster, statusFilter, searchTerm) {
 }
 
 export async function getSubmissionStatusOverview(itemId, schoolYear, semester) {
-  const [items, users, submissionSnapshot] = await Promise.all([
+  const [items, users, submissionItems] = await Promise.all([
     getActiveSubmissionItems(),
     getUsersWithAssignments(schoolYear, semester),
-    getDocs(query(collection(db, "staff_submissions"), where("itemId", "==", itemId), limit(SUBMISSION_LIMIT))),
+    getAdminProxySubmissions({ itemId }),
   ]);
 
-  const submissions = submissionSnapshot.docs.map(normalizeSubmission);
+  const submissions = submissionItems.map(normalizeSubmission);
   const roster = buildSubmissionRoster(users, submissions);
 
   return {

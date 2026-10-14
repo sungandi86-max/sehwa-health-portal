@@ -19,20 +19,96 @@ test("proxy admin read rejects non-admins", async () => {
   assert.equal(res.statusCode, 403);
 });
 
-test("proxy admin read uses QA-only collection", async () => {
-  let collectionName = "";
+function database(records = []) {
+  const calls = [];
+  const db = { collection(name) {
+    calls.push(["collection", name]);
+    let selected = records;
+    const query = {
+      where(field, operator, value) {
+        calls.push(["where", field, operator, value]);
+        selected = selected.filter((item) => item[field] === value);
+        return query;
+      },
+      orderBy(...args) { calls.push(["orderBy", ...args]); return query; },
+      limit(value) { calls.push(["limit", value]); return query; },
+      async get() { return { docs: selected.map((item, index) => ({
+        id: `qa-${index}`, data: () => item,
+      })) }; },
+    };
+    return query;
+  } };
+  return { db, calls };
+}
+
+async function read({ environment = "qa", query = {}, records = [] } = {}) {
+  const { db, calls } = database(records);
+  const res = response();
+  await handleAdminProxySubmissionsResource({ method: "GET", query }, res, {
+    environment: () => environment,
+    verifyAdmin: async () => ({ ok: true, db }),
+  });
+  return { res, calls };
+}
+
+test("administrator submission read retains unauthenticated 401", async () => {
   const res = response();
   await handleAdminProxySubmissionsResource({ method: "GET" }, res, {
-    environment: () => "qa",
-    verifyAdmin: async () => ({ ok: true, db: { collection(name) {
-      collectionName = name;
-      return { where: () => ({ limit: () => ({ get: async () => ({ docs: [{ id: "proxy-1", data: () => ({
-        itemId: "tb", staffId: "T049", submissionMode: "admin_proxy",
-        submittedAt: new Date("2026-10-14T01:02:03Z"),
-      }) }] }) }) }) };
-    } } }),
+    verifyAdmin: async () => ({ ok: false, status: 401, message: "로그인이 필요합니다." }),
   });
+  assert.equal(res.statusCode, 401);
+});
+
+test("QA list reads only QA collection and includes self and proxy submissions", async () => {
+  const { res, calls } = await read({ records: [
+    { itemId: "tb", submissionMode: "admin_proxy", submittedAt: new Date("2026-10-14T01:02:03Z") },
+    { itemId: "cpr", submittedAt: new Date("2026-10-14T02:02:03Z") },
+  ] });
   assert.equal(res.statusCode, 200);
-  assert.equal(collectionName, "staff_submissions_qa");
-  assert.equal(res.body.items[0].submittedAt, "2026-10-14T01:02:03.000Z");
+  assert.equal(res.body.items.length, 2);
+  assert.deepEqual(calls, [["collection", "staff_submissions_qa"],
+    ["orderBy", "submittedAt", "desc"], ["limit", 50]]);
+  assert.equal(res.body.items[0].submittedAt, "2026-10-14T02:02:03.000Z");
+  assert.equal(res.body.items[0].sourceEnvironment, "qa");
+});
+
+test("Production configuration selects original collection without QA merge", async () => {
+  const { res, calls } = await read({ environment: "production" });
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls[0][1], "staff_submissions");
+});
+
+test("unknown deployment fails closed before collection access", async () => {
+  const { res, calls } = await read({ environment: null });
+  assert.equal(res.statusCode, 503);
+  assert.deepEqual(calls, []);
+});
+
+test("item-specific overview query stays in QA with bounded records and no new composite index", async () => {
+  const { res, calls } = await read({ query: { itemId: "tb" }, records: [
+    { itemId: "tb" }, { itemId: "cpr" },
+  ] });
+  assert.equal(res.body.items.length, 1);
+  assert.deepEqual(calls, [["collection", "staff_submissions_qa"],
+    ["where", "itemId", "==", "tb"], ["limit", 300]]);
+});
+
+test("client-supplied environment or collection cannot redirect QA read", async () => {
+  const { res, calls } = await read({ query: { environment: "production", collection: "staff_submissions" } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls[0][1], "staff_submissions_qa");
+});
+
+test("invalid or repeated item filter cannot access collection", async () => {
+  for (const itemId of ["unexpected", ["tb", "cpr"]]) {
+    const { res, calls } = await read({ query: { itemId } });
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("read-only resource rejects mutation methods", async () => {
+  const res = response();
+  await handleAdminProxySubmissionsResource({ method: "POST" }, res);
+  assert.equal(res.statusCode, 405);
 });

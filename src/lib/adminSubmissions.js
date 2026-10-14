@@ -1,4 +1,4 @@
-import { collection, getDoc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
+import { collection, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { auth, db } from "./firebase.js";
 import {
@@ -75,11 +75,6 @@ export function formatSubmissionDateTime(value) {
     .replace(".", "");
 }
 
-function normalizeStaffSubmission(documentSnapshot) {
-  const data = documentSnapshot.data();
-  return normalizeStaffSubmissionData({ id: documentSnapshot.id, ...data });
-}
-
 function normalizeInfectionReport(documentSnapshot) {
   const data = documentSnapshot.data();
   const submittedAtMillis = getTimestampMillis(data.submittedAt);
@@ -107,32 +102,26 @@ function filterByStatus(items, status) {
 }
 
 export async function getStaffSubmissions({ status = "" } = {}) {
-  const [snapshot, proxyItems] = await Promise.all([
-    getDocs(query(collection(db, STAFF_COLLECTION), orderBy("submittedAt", "desc"), limit(LIST_LIMIT))),
-    getAdminProxySubmissions(),
-  ]);
-  const items = new Map(snapshot.docs.map((item) => {
-    const normalized = normalizeStaffSubmission(item);
-    return [normalized.id, normalized];
-  }));
-  for (const item of proxyItems) items.set(item.id, normalizeStaffSubmissionData(item));
-  return filterByStatus([...items.values()], status)
+  const items = await getAdminProxySubmissions();
+  return filterByStatus(items.map(normalizeStaffSubmissionData), status)
     .sort((left, right) => right.submittedAtMillis - left.submittedAtMillis)
     .slice(0, LIST_LIMIT);
 }
 
-async function getAdminProxySubmissions() {
+export async function getAdminProxySubmissions({ itemId = "" } = {}) {
   const user = auth.currentUser;
-  if (!user) return [];
+  if (!user) throw Object.assign(new Error("로그인이 필요합니다."), { status: 401 });
   const token = await user.getIdToken();
-  const response = await fetch("/api/firebase/staff-directory?resource=admin-proxy-submissions", {
+  const suffix = itemId ? `&itemId=${encodeURIComponent(itemId)}` : "";
+  const response = await fetch(`/api/firebase/staff-directory?resource=admin-proxy-submissions${suffix}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(payload.message || "대리등록 내역을 불러오지 못했습니다."), {
+  if (!response.ok) throw Object.assign(new Error(payload.message || "제출 내역을 불러오지 못했습니다."), {
     status: response.status,
   });
-  return Array.isArray(payload.items) ? payload.items : [];
+  if (payload.ok !== true || !Array.isArray(payload.items)) throw new Error("제출 조회 응답을 확인할 수 없습니다.");
+  return payload.items;
 }
 
 export async function getInfectionReports({ status = "" } = {}) {
@@ -161,6 +150,9 @@ export async function getInfectionReports({ status = "" } = {}) {
 
 export async function updateStaffSubmissionStatus(submission, status) {
   if (!STAFF_STATUS_OPTIONS.includes(status)) throw new Error("지원하지 않는 제출 상태입니다.");
+  if (submission?.sourceEnvironment === "qa") {
+    throw new Error("QA 제출 상태 변경은 운영 원장에 적용할 수 없습니다.");
+  }
 
   const submissionId = typeof submission === "string" ? submission : submission?.id;
   if (!submissionId) throw new Error("제출 기록을 확인할 수 없습니다.");

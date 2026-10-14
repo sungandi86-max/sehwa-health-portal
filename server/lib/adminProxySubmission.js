@@ -42,7 +42,9 @@ export function buildProxySubmissionRecord({ subject, administrator, checkupDate
 }
 
 export function proxySubmissionCollection(environment) {
-  return environment === "qa" ? "staff_submissions_qa" : "staff_submissions";
+  if (environment === "qa") return "staff_submissions_qa";
+  if (environment === "production") return "staff_submissions";
+  throw new Error("제출 조회는 승인된 배포 환경에서만 가능합니다.");
 }
 
 export async function findProxyDuplicates(db, staffId, { collectionName = "staff_submissions" } = {}) {

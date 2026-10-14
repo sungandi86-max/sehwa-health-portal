@@ -9,7 +9,7 @@ function iso(value) {
   return value;
 }
 
-function publicItem(doc) {
+function publicItem(doc, environment) {
   const data = doc.data();
   return {
     id: doc.id,
@@ -17,6 +17,7 @@ function publicItem(doc) {
     submittedAt: iso(data.submittedAt),
     updatedAt: iso(data.updatedAt),
     proxyRegisteredAt: iso(data.proxyRegisteredAt),
+    sourceEnvironment: environment,
   };
 }
 
@@ -31,12 +32,19 @@ export async function handleAdminProxySubmissionsResource(req, res, {
   const access = await verifyAdmin(req);
   if (!access.ok) return res.status(access.status).json({ ok: false, message: access.message });
 
-  const collectionName = proxySubmissionCollection(environment(context));
-  const snapshot = await access.db.collection(collectionName)
-    .where("submissionMode", "==", "admin_proxy")
-    .limit(50)
-    .get();
-  const items = snapshot.docs.map(publicItem)
+  const deployment = environment(context);
+  if (deployment !== "qa" && deployment !== "production") {
+    return res.status(503).json({ ok: false, message: "제출 조회는 승인된 배포 환경에서만 가능합니다." });
+  }
+  const itemId = req.query?.itemId;
+  if (itemId !== undefined && !["tb", "cpr", "recruit"].includes(itemId)) {
+    return res.status(400).json({ ok: false, message: "지원하지 않는 제출 유형입니다." });
+  }
+  const collectionName = proxySubmissionCollection(deployment);
+  let query = access.db.collection(collectionName);
+  query = itemId ? query.where("itemId", "==", itemId) : query.orderBy("submittedAt", "desc");
+  const snapshot = await query.limit(itemId ? 300 : 50).get();
+  const items = snapshot.docs.map((doc) => publicItem(doc, deployment))
     .sort((left, right) => String(right.submittedAt || "").localeCompare(String(left.submittedAt || "")));
   return res.status(200).json({ ok: true, items });
 }

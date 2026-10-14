@@ -41,6 +41,12 @@ test("proxy collection is isolated by deployment environment", () => {
   assert.equal(proxySubmissionCollection("production"), "staff_submissions");
 });
 
+test("unknown proxy environment cannot fall back to Production", () => {
+  for (const environment of [null, undefined, "", "preview", "QA"]) {
+    assert.throws(() => proxySubmissionCollection(environment), /배포 환경/);
+  }
+});
+
 test("proxy subject mapping fails closed for missing or duplicate staff ids", () => {
   assert.throws(() => resolveProxySubject([], "T049"), /확인할 수 없습니다/);
   assert.throws(() => resolveProxySubject([{ staffId: "T049" }, { staffId: "T049" }], "T049"), /확인할 수 없습니다/);
