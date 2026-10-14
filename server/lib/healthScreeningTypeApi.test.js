@@ -41,6 +41,21 @@ function fixture() {
   return { records, operations, request, admin, reads: () => ({ directoryReads, authReads }) };
 }
 
+test("past annual records remain readable and unchanged by current-year confirmation", async () => {
+  const f = fixture();
+  const path = "staff_health_screening_types_qa/self_2025";
+  const historical = { staffId: "self", schoolYear: 2025, screeningType: "employment", screeningTypeConfirmed: true, environment: "qa", schemaVersion: 1, revision: 1, source: "self" };
+  f.records.set(path, historical);
+  assert.equal((await f.request("GET", { schoolYear: 2025 })).payload.item.screeningType, "employment");
+  assert.equal((await f.request("GET", { schoolYear: 2026 })).payload.item.screeningTypeConfirmed, false);
+  assert.equal((await f.request("POST", { schoolYear: 2026, screeningType: "nhis", expectedRevision: 0 })).code, 200);
+  assert.deepEqual(f.records.get(path), historical);
+  assert.equal((await f.request("GET", { schoolYear: 2025 })).payload.item.screeningType, "employment");
+  assert.equal((await f.request("GET", { schoolYear: 2027 })).payload.item.screeningTypeConfirmed, false);
+  assert.equal((await f.request("POST", { schoolYear: 2025, screeningType: "none", expectedRevision: 1 })).code, 400);
+  assert.deepEqual(f.records.get(path), historical);
+});
+
 test("A: staff self identity and administrator role restrictions", async () => {
   const f = fixture();
   assert.equal((await f.request("POST", { staffId: "other", screeningType: "nhis" })).code, 403);
