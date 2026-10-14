@@ -1,5 +1,19 @@
 # Staff Submission And Training Status Model
 
+## Annual health-screening type Production activation
+
+The annual health-screening type is independent of the legacy TB application path and completion projection. The canonical read-only `교직원명단` supplies staffId, name, department, position and employment status. Existing `staff_submission_status.screening.screeningType` remains the TB application path, `status` remains completion, and `screening.note` remains guidance. No historical Sheet value is inferred, copied, migrated, modified or deleted by this feature.
+
+Approved QA code from `2723eba` and `6605728` is selectively integrated. The QA-only administrator proxy read implementation and runtime synthetic fixture are not included. The existing staff-directory resource router exposes `resource=health-screening-types`, retaining 12 API functions. No Rules change, environment change, data migration or bulk document creation is needed.
+
+Collection selection uses the strict deployment environment contract: preview/qa selects `staff_health_screening_types_qa`; production/main selects `staff_health_screening_types`; unknown environments fail with 503 before database access. Requests cannot select an environment or collection. QA synthetic identities are rejected and excluded from Production administration.
+
+Current documents are `{staffId}_{schoolYear}` with staffId, schoolYear, screeningType (`nhis`, `employment`, `none`, `other`), screeningTypeConfirmed, confirmedAt, confirmedBy (verified actor staffId), source (`self` or `admin`), selfChoice, revision, environment, schemaVersion=1 and createdAt/updatedAt. Each save atomically updates the current record and creates immutable `history/{revision}`. Administrator changes preserve the most recent selfChoice. An administrator-only entry does not claim that the staff member personally confirmed it. Self reconfirmation remains allowed. Stale expectedRevision returns 409.
+
+Missing documents mean “확인 필요”; no staff records are pre-created. The next school year does not copy the previous selection. Writes are restricted to the configured current school year. Self GET reads one document; administrator GET queries the requested school year once and joins the canonical roster in memory. Filters/search are local; missing records do not cause N+1 reads. Opening screens and changing filters never writes.
+
+Self access is bound to the verified current assignment. Foreign staffId requests return 403. Only health_teacher/admin may list and edit all staff; training_admin management requests return 403 and unauthenticated requests return 401. The self panel on `/my-submission-status` shows annual type, personal confirmation/date and existing completion separately. The administrator panel is in `/firebase-admin/staff-submission-status`. Legacy TB editing keeps its existing behavior and is labelled “기존 결핵검진 신청 경로”. Registration, certificate, proxy submission and completion updates do not overwrite the annual ledger. The new feature does not read a Sheet screening-type value.
+
 ## 2026-10-08 Legal-training exception Sheet reduction
 
 The health-office `법정의무연수_예외` tab has one header row and four 2026 `확인완료/퇴직` data rows. All four match exactly one row in the research department's `법정의무연수 묶음과정` source by exact name and position, but none matches a current `교직원명단` row. They are **source-only former-staff exceptions**, not canonical-staffId exceptions. No staffId is inferred from a name.

@@ -29,6 +29,7 @@ import { handleTbRegistrationAuditResource } from "../../server/lib/tbRegistrati
 import { handleCprCertificateAuditResource } from "../../server/lib/cprCertificateAuditApi.js";
 import { handleTbCertificateAuditResource } from "../../server/lib/tbCertificateAuditApi.js";
 import { handleStudentSubmissionAuditResource } from "../../server/lib/studentSubmissionAuditApi.js";
+import { handleHealthScreeningTypeRequest } from "../../server/lib/healthScreeningTypeApi.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "training_admin", "health_teacher", "admin"];
 
@@ -238,6 +239,9 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
     }
     if (req.query?.resource === "student-submission-audit") {
       return await handleStudentSubmissionAuditResource(req, res);
+    }
+    if (req.query?.resource === "health-screening-types") {
+      return await handleHealthScreeningTypeRequest(req, res);
     }
 
     if (["training-list", "training-detail"].includes(req.query?.resource)) {
