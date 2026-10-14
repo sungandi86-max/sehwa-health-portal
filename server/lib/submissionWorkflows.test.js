@@ -120,16 +120,25 @@ test("admin proxy TB submission enforces admin role, canonical subject and creat
     { staffId: "T001", name: "등록자", department: "보건실", position: "보건교사" }];
   let forwarded;
   let savedRecord;
+  let duplicateCollection;
+  let savedCollection;
   let auditInput;
   let statusInput;
   const options = {
     destinationUrl, proxySecret, environment: () => "qa", qaTbCertificateFolderId: "qa-proxy-folder",
     verifyProxyAdmin: async () => ({ ok: true, assignment: { staffId: "T001", roles: ["health_teacher"] }, db: {} }),
-    readDirectory: async () => ({ directory }), findDuplicates: async () => [],
+    readDirectory: async () => ({ directory }), findDuplicates: async (_db, _staffId, options) => {
+      duplicateCollection = options.collectionName;
+      return [];
+    },
     postScript: async (_url, init) => { forwarded = JSON.parse(JSON.parse(init.body).payloadJson);
       return { text: async () => JSON.stringify({ status: "success", fileId: "drive-file" }) }; },
     tbCertificateStore: { createRequest: async (value) => { auditInput = value; } },
-    saveProxySubmission: async (_db, value) => { savedRecord = value; return { id: "proxy-id" }; },
+    saveProxySubmission: async (_db, value, options) => {
+      savedRecord = value;
+      savedCollection = options.collectionName;
+      return { id: "proxy-id" };
+    },
     saveTbStatus: async (value) => { statusInput = value; },
   };
   const result = response();
@@ -142,6 +151,8 @@ test("admin proxy TB submission enforces admin role, canonical subject and creat
   assert.equal(savedRecord.submissionMode, "admin_proxy");
   assert.equal(auditInput.submissionMode, "admin_proxy");
   assert.equal(statusInput.payload.staffId, "T049");
+  assert.equal(duplicateCollection, "staff_submissions_qa");
+  assert.equal(savedCollection, "staff_submissions_qa");
 
   const duplicate = response();
   await submitHandler(request(payload), duplicate, { ...options,

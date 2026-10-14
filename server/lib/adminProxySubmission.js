@@ -41,16 +41,23 @@ export function buildProxySubmissionRecord({ subject, administrator, checkupDate
   };
 }
 
-export async function findProxyDuplicates(db, staffId) {
-  const snapshot = await db.collection("staff_submissions").where("staffId", "==", staffId).get();
+export function proxySubmissionCollection(environment) {
+  return environment === "qa" ? "staff_submissions_qa" : "staff_submissions";
+}
+
+export async function findProxyDuplicates(db, staffId, { collectionName = "staff_submissions" } = {}) {
+  const snapshot = await db.collection(collectionName).where("staffId", "==", staffId).get();
   return snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }))
     .filter((item) => item.itemId === "tb")
     .sort((a, b) => String(b.checkupDate || "").localeCompare(String(a.checkupDate || "")));
 }
 
-export async function createProxySubmission(db, record, { submissionId = randomUUID } = {}) {
+export async function createProxySubmission(db, record, {
+  submissionId = randomUUID,
+  collectionName = "staff_submissions",
+} = {}) {
   const id = submissionId();
-  await db.collection("staff_submissions").doc(id).create(record);
+  await db.collection(collectionName).doc(id).create(record);
   return { id, ...record };
 }

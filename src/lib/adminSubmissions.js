@@ -1,6 +1,6 @@
 import { collection, getDoc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
-import { db } from "./firebase.js";
+import { auth, db } from "./firebase.js";
 import {
   INFECTION_LEGACY_STATUS_OPTIONS,
   INFECTION_CASE_STATUS,
@@ -39,7 +39,22 @@ function getTimestampMillis(value) {
   if (typeof value.toMillis === "function") return value.toMillis();
   if (typeof value.seconds === "number") return value.seconds * 1000;
   if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") return Date.parse(value) || 0;
   return 0;
+}
+
+function normalizeStaffSubmissionData(data) {
+  const submittedAtMillis = getTimestampMillis(data.submittedAt);
+  const itemId = data.itemId || "unknown";
+  return {
+    ...data,
+    itemId,
+    typeLabel: STAFF_TYPE_LABELS[itemId] || "교직원 제출",
+    status: data.status || "submitted",
+    statusLabel: STAFF_STATUS_LABELS[data.status] || data.status || STAFF_STATUS_LABELS.submitted,
+    submittedAtMillis,
+    submittedAtLabel: formatSubmissionDateTime(data.submittedAt),
+  };
 }
 
 export function formatSubmissionDateTime(value) {
@@ -62,19 +77,7 @@ export function formatSubmissionDateTime(value) {
 
 function normalizeStaffSubmission(documentSnapshot) {
   const data = documentSnapshot.data();
-  const submittedAtMillis = getTimestampMillis(data.submittedAt);
-  const itemId = data.itemId || "unknown";
-
-  return {
-    id: documentSnapshot.id,
-    ...data,
-    itemId,
-    typeLabel: STAFF_TYPE_LABELS[itemId] || "교직원 제출",
-    status: data.status || "submitted",
-    statusLabel: STAFF_STATUS_LABELS[data.status] || data.status || STAFF_STATUS_LABELS.submitted,
-    submittedAtMillis,
-    submittedAtLabel: formatSubmissionDateTime(data.submittedAt),
-  };
+  return normalizeStaffSubmissionData({ id: documentSnapshot.id, ...data });
 }
 
 function normalizeInfectionReport(documentSnapshot) {
@@ -104,11 +107,32 @@ function filterByStatus(items, status) {
 }
 
 export async function getStaffSubmissions({ status = "" } = {}) {
-  const snapshot = await getDocs(
-    query(collection(db, STAFF_COLLECTION), orderBy("submittedAt", "desc"), limit(LIST_LIMIT))
-  );
+  const [snapshot, proxyItems] = await Promise.all([
+    getDocs(query(collection(db, STAFF_COLLECTION), orderBy("submittedAt", "desc"), limit(LIST_LIMIT))),
+    getAdminProxySubmissions(),
+  ]);
+  const items = new Map(snapshot.docs.map((item) => {
+    const normalized = normalizeStaffSubmission(item);
+    return [normalized.id, normalized];
+  }));
+  for (const item of proxyItems) items.set(item.id, normalizeStaffSubmissionData(item));
+  return filterByStatus([...items.values()], status)
+    .sort((left, right) => right.submittedAtMillis - left.submittedAtMillis)
+    .slice(0, LIST_LIMIT);
+}
 
-  return filterByStatus(snapshot.docs.map(normalizeStaffSubmission), status);
+async function getAdminProxySubmissions() {
+  const user = auth.currentUser;
+  if (!user) return [];
+  const token = await user.getIdToken();
+  const response = await fetch("/api/firebase/staff-directory?resource=admin-proxy-submissions", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(payload.message || "대리등록 내역을 불러오지 못했습니다."), {
+    status: response.status,
+  });
+  return Array.isArray(payload.items) ? payload.items : [];
 }
 
 export async function getInfectionReports({ status = "" } = {}) {

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildProxySubmissionRecord, createProxySubmission, findProxyDuplicates, resolveProxySubject } from "./adminProxySubmission.js";
+import { buildProxySubmissionRecord, createProxySubmission, findProxyDuplicates,
+  proxySubmissionCollection, resolveProxySubject } from "./adminProxySubmission.js";
 
 test("proxy submission separates subject and administrator identities", () => {
   const subject = resolveProxySubject([{ staffId: "T049", name: "대상자", department: "교무부", position: "교사" }], "T049");
@@ -16,16 +17,28 @@ test("proxy submission separates subject and administrator identities", () => {
 
 test("proxy duplicate lookup never overwrites and create uses a new document", async () => {
   const created = [];
-  const db = { collection: () => ({
+  const collections = [];
+  const db = { collection: (name) => {
+    collections.push(name);
+    return ({
     where: () => ({ get: async () => ({ docs: [
       { id: "old-tb", data: () => ({ itemId: "tb", staffId: "T049", checkupDate: "2026-03-01" }) },
       { id: "other", data: () => ({ itemId: "cpr", staffId: "T049" }) },
     ] }) }),
     doc: (id) => ({ create: async (value) => created.push({ id, value }) }),
-  }) };
-  assert.equal((await findProxyDuplicates(db, "T049")).length, 1);
-  await createProxySubmission(db, { itemId: "tb" }, { submissionId: () => "new-id" });
+  }); } };
+  assert.equal((await findProxyDuplicates(db, "T049", { collectionName: "staff_submissions_qa" })).length, 1);
+  await createProxySubmission(db, { itemId: "tb" }, {
+    submissionId: () => "new-id",
+    collectionName: "staff_submissions_qa",
+  });
+  assert.deepEqual(collections, ["staff_submissions_qa", "staff_submissions_qa"]);
   assert.deepEqual(created, [{ id: "new-id", value: { itemId: "tb" } }]);
+});
+
+test("proxy collection is isolated by deployment environment", () => {
+  assert.equal(proxySubmissionCollection("qa"), "staff_submissions_qa");
+  assert.equal(proxySubmissionCollection("production"), "staff_submissions");
 });
 
 test("proxy subject mapping fails closed for missing or duplicate staff ids", () => {

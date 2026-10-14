@@ -17,7 +17,8 @@ import { tbCertificateSubmissionStore } from "../server/lib/tbCertificateSubmiss
 import { studentSubmissionAuditStore } from "../server/lib/studentSubmissionAuditStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
 import { readStaffDirectory, verifyDirectoryAdmin } from "../server/lib/staffDirectory.js";
-import { buildProxySubmissionRecord, createProxySubmission, findProxyDuplicates, resolveProxySubject } from "../server/lib/adminProxySubmission.js";
+import { buildProxySubmissionRecord, createProxySubmission, findProxyDuplicates,
+  proxySubmissionCollection, resolveProxySubject } from "../server/lib/adminProxySubmission.js";
 
 function scriptUrl() {
   return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
@@ -103,6 +104,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     let proxyAccess = null;
     let proxySubject = null;
     let proxyAdministrator = null;
+    let proxyCollectionName = "staff_submissions";
     if (isAdminProxyTb) {
       proxyAccess = await verifyProxyAdmin(req);
       if (!proxyAccess.ok) {
@@ -115,7 +117,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       } catch (error) {
         return res.status(409).json({ status: "error", success: false, message: error.message });
       }
-      const duplicates = await findDuplicates(proxyAccess.db, proxySubject.staffId);
+      proxyCollectionName = proxySubmissionCollection(environment());
+      const duplicates = await findDuplicates(proxyAccess.db, proxySubject.staffId,
+        { collectionName: proxyCollectionName });
       if (duplicates.length && payload?.allowDuplicate !== true) {
         const latest = duplicates[0];
         return res.status(409).json({ status: "duplicate", success: false,
@@ -319,7 +323,8 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         const record = buildProxySubmissionRecord({ subject: proxySubject, administrator: proxyAdministrator,
           checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
           proxyNote: payload?.proxyNote, file, now });
-        const saved = await saveProxySubmission(proxyAccess.db, record);
+        const saved = await saveProxySubmission(proxyAccess.db, record,
+          { collectionName: proxyCollectionName });
         await saveTbStatus({ db: proxyAccess.db,
           payload: buildTbStatusPayload(payload, proxySubject.staffId),
           collectionName: environment() === "qa" ? "staff_submission_status_qa" : undefined });
