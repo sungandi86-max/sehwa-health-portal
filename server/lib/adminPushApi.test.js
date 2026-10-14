@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ADMIN_NOTIFICATION_LIST_LIMIT, getUnreadCount, readNotificationList } from "./admin-push.js";
+import { ADMIN_NOTIFICATION_LIST_LIMIT, getUnreadCount, readNotificationList } from "../../api/firebase/admin-push.js";
 
 function notificationDoc(id, overrides = {}) {
   return {
