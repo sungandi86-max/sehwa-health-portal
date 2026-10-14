@@ -74,10 +74,17 @@ export class TrainingCenterStore {
     try { return await this.ledger.isReady(); } catch { return false; }
   }
 
-  async readSource() {
+  async readSource(eventId = "") {
     const source = await readTrainingSheets({ events: this.events });
     if (!await this.ledger.isReady()) throw new TrainingSourceNotReadyError();
-    const records = await this.ledger.listSignatures();
+    const records = await this.ledger.listSignatures(eventId);
+    return { ...source, signatures: [SIGNATURE_HEADERS, ...records.map((record) => SIGNATURE_HEADERS.map((header) => record[header] || ""))] };
+  }
+
+  async readSourceForEvents(eventIds, base = null) {
+    const source = base || await readTrainingSheets({ events: this.events });
+    if (!await this.ledger.isReady()) throw new TrainingSourceNotReadyError();
+    const records = await this.ledger.listSignaturesForEvents(eventIds);
     return { ...source, signatures: [SIGNATURE_HEADERS, ...records.map((record) => SIGNATURE_HEADERS.map((header) => record[header] || ""))] };
   }
 

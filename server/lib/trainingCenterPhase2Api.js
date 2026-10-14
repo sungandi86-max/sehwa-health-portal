@@ -7,7 +7,7 @@ import { resolveTrainingAccess } from "./trainingCenterAccess.js";
 import { trainingCenterStore } from "./trainingCenterStore.js";
 import { AttendanceConflictError, assertCompletedAttendanceLock, attachAttendanceFile, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { applyAttendanceRecovery, inspectAttendanceRecovery, listAttendanceRecoveryCandidates, RecoveryConflictError } from "./trainingAttendanceRecovery.js";
-import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
+import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, SIGNATURE_HEADERS, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx, trainingRosterPdfFilename, trainingRosterXlsxFilename } from "./trainingFinalSheet.js";
 import { trainingRosterPdfRenderer } from "./trainingRosterPdf.js";
 import { signatureStorageYear, SignatureStorageError } from "./trainingSignatureStorage.js";
@@ -205,7 +205,13 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const base = await store.readBase();
         const items = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS).filter((row) => row.eventId && canManageTraining(access, row))
           .map(({ rowNumber, ...row }) => row);
-        return res.status(200).json({ ok: true, items });
+        const eventIds = items.map((item) => item.eventId);
+        const source = eventIds.length ? parseTrainingSource(await store.readSourceForEvents(eventIds, base)) : null;
+        const summaries = Object.fromEntries(eventIds.map((id) => {
+          const model = finalSheetModel(source, access.directory, id);
+          return [id, { counts: model?.counts || { target: 0, signed: 0, excluded: 0 } }];
+        }));
+        return res.status(200).json({ ok: true, items, summaries });
       }
       if (resource === "training-admin-save" && req.method === "POST") {
         const base = await store.readBase();
@@ -302,7 +308,8 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
             message: storage.needsBootstrap ? "서명 저장소 초기화가 필요합니다." : "서명 저장소 준비 상태를 확인해 주세요." });
         }
         const scope = qrScope(req.query);
-        const source = parseTrainingSource(await store.readSource());
+        const base = await store.readBase();
+        const source = parseTrainingSource({ ...base, signatures: [SIGNATURE_HEADERS] });
         const events = resolveEvents(source, scope);
         if (!events.length) return bad(res, 404, "교육을 찾을 수 없습니다.");
         if (events.some((item) => !canManageTraining(access, item))) return bad(res, 403, "본인이 생성한 교육만 관리할 수 있습니다.");
@@ -314,7 +321,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
         const scope = qrScope(req.query);
         if (!verifyQrChallenge(req.query?.challenge, { ...scope, secret: secret(), now: now().getTime() })) return bad(res, 403, "QR 유효시간이 지났거나 링크가 올바르지 않습니다.");
-        const source = parseTrainingSource(await store.readSource());
+        const source = parseTrainingSource(await store.readSource(eventId));
         const events = resolveEvents(source, scope);
         if (!events.length) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const eligibility = attendanceEligibility(source, events, access.assignment.staffId, now());
@@ -326,7 +333,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const scope = qrScope(body);
         if (!verifyQrChallenge(body?.challenge, { ...scope, secret: secret(), now: now().getTime() })) return bad(res, 403, "QR 유효시간이 지났거나 링크가 올바르지 않습니다.");
         const bytes = decodeInkSignature(body?.signature);
-        const source = parseTrainingSource(await store.readSource());
+        const source = parseTrainingSource(await store.readSource(eventId));
         const events = resolveEvents(source, scope);
         if (!events.length) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const eligibility = attendanceEligibility(source, events, access.assignment.staffId, now());
@@ -396,7 +403,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       }
       if (["training-attendance-summary", "training-final-sheet"].includes(resource) && req.method === "GET") {
         if (!eventId) return bad(res, 400, "교육 ID가 필요합니다.");
-        const source = parseTrainingSource(await store.readSource());
+        const source = parseTrainingSource(await store.readSource(eventId));
         const event = source.trainings.find((row) => row.eventId === eventId);
         const denied = denyUnownedTraining(res, access, event);
         if (event && denied) return denied;
@@ -441,7 +448,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const reason = String(body?.reason || "").normalize("NFKC").trim();
         const action = body?.action;
         if (!eventId || !staffId || !reason || reason.length > 200 || !["cancel", "mark-attended", "set-absence-reason"].includes(action)) throw new RangeError("정정 대상과 사유를 확인해 주세요.");
-        const source = parseTrainingSource(await store.readSource());
+        const source = parseTrainingSource(await store.readSource(eventId));
         const event = source.trainings.find((row) => row.eventId === eventId);
         if (!event) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const denied = denyUnownedTraining(res, access, event);
@@ -481,7 +488,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           try { await markAttendanceAppendStarted(reservation, now().getTime()); appendStarted = true; await store.appendSignatures([record]); await finishAttendance(reservation, "completed", { signatureIds: [record.signatureId] }); }
           catch {
             let committed = false;
-            try { committed = parseTrainingSource(await store.readSource()).signatures.some((row) => row.signatureId === record.signatureId); }
+            try { committed = parseTrainingSource(await store.readSource(eventId)).signatures.some((row) => row.signatureId === record.signatureId); }
             catch { return bad(res, 503, "출석 정정 결과를 확인 중입니다. 관리자에게 문의해 주세요."); }
             if (!committed && (!appendStarted || store.usesFirestoreSignatureLedger)) {
               await finishAttendance(reservation, "failed");

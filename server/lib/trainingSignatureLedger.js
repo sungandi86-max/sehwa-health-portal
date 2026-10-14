@@ -68,14 +68,12 @@ export class TrainingSignatureLedger {
 
   pairRef(eventId, staffId) { return this.collection.doc(signatureKey(eventId, staffId)); }
 
-  async listSignatures(eventId = "") {
-    const pairs = await this.collection.get();
+  async signatureEntries(pairs) {
     const entries = [];
     for (const pair of pairs.docs) {
       if (pair.id === MIGRATION_ID) continue;
       const data = pair.data();
       if (data.environment !== this.environment || pair.id !== signatureKey(data.eventId, data.staffId)) throw new TrainingSignatureConflictError();
-      if (eventId && data.eventId !== eventId) continue;
       const history = await pair.ref.collection("signatures").get();
       for (const doc of history.docs) {
         const entry = doc.data();
@@ -86,15 +84,31 @@ export class TrainingSignatureLedger {
     return entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.signatureId.localeCompare(b.signatureId));
   }
 
+  async listSignatures(eventId = "") {
+    const pairs = eventId
+      ? await this.collection.where("eventId", "==", eventId).get()
+      : await this.collection.get();
+    return this.signatureEntries(pairs);
+  }
+
+  async listSignaturesForEvents(eventIds = []) {
+    const ids = [...new Set(eventIds)];
+    if (!ids.length) return [];
+    const entries = [];
+    for (let index = 0; index < ids.length; index += 30) {
+      const pairs = await this.collection.where("eventId", "in", ids.slice(index, index + 30)).get();
+      entries.push(...await this.signatureEntries(pairs));
+    }
+    return entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.signatureId.localeCompare(b.signatureId));
+  }
+
   async isReady() {
     const marker = await this.collection.doc(MIGRATION_ID).get();
     if (!marker.exists || marker.data().environment !== this.environment || marker.data().status !== "ready" ||
       !Number.isInteger(marker.data().sourceCount) || marker.data().sourceCount < (this.environment === "qa" ? 1 : 0) ||
       this.environment === "production" && marker.data().schemaVersion !== 1 || !Array.isArray(marker.data().sourceSignatures) ||
       marker.data().sourceSignatures.length !== marker.data().sourceCount) return false;
-    const imported = new Map((await this.listSignatures()).filter((entry) => entry.sourceType === "sheet-migration")
-      .map((entry) => [entry.signatureId, entry.sourceFingerprint]));
-    return marker.data().sourceSignatures.every(({ signatureId, fingerprint }) => imported.get(signatureId) === fingerprint);
+    return true;
   }
 
   async getSignature(eventId, staffId) {

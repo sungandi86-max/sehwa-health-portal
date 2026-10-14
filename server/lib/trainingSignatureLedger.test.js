@@ -6,6 +6,7 @@ import { TrainingCenterStore } from "./trainingCenterStore.js";
 
 function fakeFirestore() {
   const values = new Map();
+  const reads = { collection: 0, queries: [] };
   function document(path) {
     return {
       id: path.split("/").at(-1), path,
@@ -16,7 +17,20 @@ function fakeFirestore() {
   function collection(path) {
     return {
       doc(id) { return document(`${path}/${id}`); },
+      where(field, operator, expected) {
+        reads.queries.push({ path, field, operator, expected });
+        return { async get() {
+          const accepted = operator === "in" ? new Set(expected) : null;
+          const docs = [...values.keys()].filter((key) => key.startsWith(`${path}/`) && key.slice(path.length + 1).split("/").length === 1)
+            .map((key) => document(key)).filter((ref) => {
+              const actual = values.get(ref.path)?.[field];
+              return operator === "==" ? actual === expected : operator === "in" && accepted.has(actual);
+            });
+          return { docs: await Promise.all(docs.map((ref) => ref.get())) };
+        } };
+      },
       async get() {
+        reads.collection += 1;
         const docs = [...values.keys()].filter((key) => key.startsWith(`${path}/`) && key.slice(path.length + 1).split("/").length === 1)
           .map((key) => document(key));
         return { docs: await Promise.all(docs.map((ref) => ref.get())) };
@@ -24,7 +38,7 @@ function fakeFirestore() {
     };
   }
   let chain = Promise.resolve();
-  return { values, collection, async runTransaction(callback) {
+  return { values, reads, collection, async runTransaction(callback) {
     const previous = chain;
     let release;
     chain = new Promise((resolve) => { release = resolve; });
@@ -96,6 +110,26 @@ test("QA ledger atomically shares a group file, blocks duplicates, records cance
   assert.equal((await ledger.getSignature("QA-A", "QA-SYNTHETIC")).signatureId, "SIG-D");
   assert.equal((await ledger.listSignatures("QA-A")).length, 2);
   assert.equal([...db.values.keys()].filter((key) => key.includes("/history/")).length, 4);
+});
+
+test("event-scoped signature reads query only requested events and readiness reads only its marker", async () => {
+  const db = fakeFirestore();
+  const ledger = new TrainingSignatureLedger({ database: () => db, context: () => qa });
+  await ledger.appendSignatures([
+    record("SIG-A", "QA-A", "QA-ONE"),
+    record("SIG-B", "QA-B", "QA-TWO"),
+  ]);
+  const migrated = record("SIG-M", "QA-M", "QA-MIGRATION");
+  await ledger.importSheetRows(table(migrated));
+  await ledger.markMigrationReady(table(migrated));
+  const beforeReady = { collection: db.reads.collection, queries: db.reads.queries.length };
+  assert.equal(await ledger.isReady(), true);
+  assert.equal(db.reads.collection, beforeReady.collection);
+  assert.equal(db.reads.queries.length, beforeReady.queries);
+  const rows = await ledger.listSignaturesForEvents(["QA-A"]);
+  assert.deepEqual(rows.map((item) => item.eventId), ["QA-A"]);
+  assert.equal(db.reads.queries.at(-1).operator, "in");
+  assert.deepEqual(db.reads.queries.at(-1).expected, ["QA-A"]);
 });
 
 test("migration rejects duplicate active identity and different existing rows", () => {
