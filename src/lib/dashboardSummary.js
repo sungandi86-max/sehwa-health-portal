@@ -5,7 +5,6 @@ import {
   limit,
   orderBy,
   query,
-  startAfter,
   Timestamp,
   where,
 } from "firebase/firestore";
@@ -18,12 +17,12 @@ import {
   getInfectionSubmissionStatus,
 } from "./infectionStatus.js";
 import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
+import { RECENT_SCAN_LIMIT, selectActionableRecentItems } from "./dashboardRecent.js";
 
 const STAFF_SUBMISSIONS = "staff_submissions";
 const STUDENT_HEALTH_SUBMISSIONS = "student_health_submissions";
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const RECENT_LIMIT = 5;
 
 const STAFF_SUBMISSION_LABELS = {
   cpr: "심폐소생술 이수증",
@@ -132,29 +131,19 @@ function normalizeInfectionSubmission(documentSnapshot) {
 }
 
 async function getActionableRecentItems(collectionName, normalize, acceptsDocument = () => true) {
-  const items = [];
-  let cursor = null;
+  const snapshot = await getDocs(
+    query(
+      collection(db, collectionName),
+      orderBy("submittedAt", "desc"),
+      limit(RECENT_SCAN_LIMIT)
+    )
+  );
 
-  while (items.length < RECENT_LIMIT) {
-    const constraints = [orderBy("submittedAt", "desc")];
-    if (cursor) constraints.push(startAfter(cursor));
-    constraints.push(limit(RECENT_LIMIT));
-
-    const snapshot = await getDocs(query(collection(db, collectionName), ...constraints));
-    if (snapshot.empty) break;
-
-    snapshot.docs.forEach((documentSnapshot) => {
-      if (items.length >= RECENT_LIMIT || !acceptsDocument(documentSnapshot.data())) return;
-
-      const item = normalize(documentSnapshot);
-      if (item.status !== "completed") items.push(item);
-    });
-
-    if (snapshot.docs.length < RECENT_LIMIT) break;
-    cursor = snapshot.docs[snapshot.docs.length - 1];
-  }
-
-  return items;
+  return selectActionableRecentItems(
+    snapshot.docs
+      .filter((documentSnapshot) => acceptsDocument(documentSnapshot.data()))
+      .map(normalize)
+  );
 }
 
 export function getInfectionDashboardCounts(documents = []) {
@@ -202,9 +191,7 @@ export async function getRecentSubmissions() {
     ),
   ]);
 
-  return [...staffItems, ...infectionItems]
-    .sort((left, right) => right.submittedAtMillis - left.submittedAtMillis)
-    .slice(0, RECENT_LIMIT);
+  return selectActionableRecentItems([...staffItems, ...infectionItems]);
 }
 
 export async function getDashboardSummary(now = new Date()) {
@@ -213,11 +200,6 @@ export async function getDashboardSummary(now = new Date()) {
 
   const staffTodayQuery = query(
     collection(db, STAFF_SUBMISSIONS),
-    where("submittedAt", ">=", startAt),
-    where("submittedAt", "<", endAt)
-  );
-  const infectionTodayQuery = query(
-    collection(db, STUDENT_HEALTH_SUBMISSIONS),
     where("submittedAt", ">=", startAt),
     where("submittedAt", "<", endAt)
   );
@@ -232,38 +214,47 @@ export async function getDashboardSummary(now = new Date()) {
     collection(db, STAFF_SUBMISSIONS),
     where("submittedAt", ">=", sevenDaysAgo)
   );
-  const recentInfectionQuery = query(
-    collection(db, STUDENT_HEALTH_SUBMISSIONS),
-    where("submittedAt", ">=", sevenDaysAgo)
+  const recentStaffItemsQuery = query(
+    collection(db, STAFF_SUBMISSIONS),
+    orderBy("submittedAt", "desc"),
+    limit(RECENT_SCAN_LIMIT)
   );
 
   const [
     staffTodayCount,
-    infectionTodaySnapshot,
     pendingStaffCount,
     currentTermInfectionSnapshot,
     recentStaffCount,
-    recentInfectionSnapshot,
-    recentSubmissions,
+    recentStaffItemsSnapshot,
   ] = await Promise.all([
     countServerQuery(staffTodayQuery),
-    getDocs(infectionTodayQuery),
     countServerQuery(pendingStaffQuery),
     getDocs(currentTermInfectionQuery),
     countServerQuery(recentStaffQuery),
-    getDocs(recentInfectionQuery),
-    getRecentSubmissions(),
+    getDocs(recentStaffItemsQuery),
   ]);
 
-  const infectionTodayCount = countMatchingDocs(infectionTodaySnapshot, isCurrentTermInfection);
+  const currentTermInfectionDocuments = currentTermInfectionSnapshot.docs;
+  const currentTermInfectionData = currentTermInfectionDocuments.map((documentSnapshot) => documentSnapshot.data());
+  const infectionTodayCount = countMatchingDocs(currentTermInfectionSnapshot, (data) => {
+    const submittedAt = getTimestampMillis(data.submittedAt);
+    return submittedAt >= startAt.toMillis() && submittedAt < endAt.toMillis();
+  });
   const infectionWorkflowCounts = getInfectionDashboardCounts(
-    currentTermInfectionSnapshot.docs.map((documentSnapshot) => documentSnapshot.data())
+    currentTermInfectionData
   );
   const pendingInfectionCount =
     infectionWorkflowCounts.newReports +
     infectionWorkflowCounts.activeCases +
     infectionWorkflowCounts.returnCheckNeeded;
-  const recentInfectionCount = countMatchingDocs(recentInfectionSnapshot, isCurrentTermInfection);
+  const recentInfectionCount = countMatchingDocs(
+    currentTermInfectionSnapshot,
+    (data) => getTimestampMillis(data.submittedAt) >= sevenDaysAgo.toMillis()
+  );
+  const recentSubmissions = selectActionableRecentItems([
+    ...recentStaffItemsSnapshot.docs.map(normalizeStaffSubmission),
+    ...currentTermInfectionDocuments.map(normalizeInfectionSubmission),
+  ]);
   const todayCount = staffTodayCount + infectionTodayCount;
   const recentSevenDayCount = recentStaffCount + recentInfectionCount;
 
