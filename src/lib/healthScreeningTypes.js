@@ -16,7 +16,7 @@ export function isHealthScreeningTypeQaHost(hostname) {
 }
 
 export function screeningTypeLabel(value) {
-  return SCREENING_TYPE_OPTIONS.find((option) => option.value === value)?.label || "미선택";
+  return SCREENING_TYPE_OPTIONS.find((option) => option.value === value)?.label || "확인 필요";
 }
 
 export function hasSelfScreeningConfirmation(item) {

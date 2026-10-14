@@ -21,8 +21,8 @@ test("health screening type UI is allowed only on the exact fixed QA hostname", 
 test("annual type options use the four server values", () => {
   assert.deepEqual(SCREENING_TYPE_OPTIONS.map(({ value }) => value), ["nhis", "employment", "none", "other"]);
   assert.equal(screeningTypeLabel("none"), "해당 없음");
-  assert.equal(screeningTypeLabel(null), "미선택");
-  assert.equal(screeningTypeLabel("unknown"), "미선택");
+  assert.equal(screeningTypeLabel(null), "확인 필요");
+  assert.equal(screeningTypeLabel("unknown"), "확인 필요");
 });
 
 test("admin input never implies self confirmation", () => {
