@@ -21,8 +21,8 @@ export function LocalSidebar({ label, items, active, backTo, backLabel }) {
   </aside>;
 }
 
-export function WorkspaceShell({ label, title, description, displayName, sidebarLabel, items, active, backTo, backLabel, children, className = "" }) {
-  return <FirebaseV2PageShell className={`workspace-surface ${className}`} label={label} title={title} description={description} displayName={displayName}>
+export function WorkspaceShell({ label, title, description, displayName, sidebarLabel, items, active, backTo, backLabel, showDashboardLink, children, className = "" }) {
+  return <FirebaseV2PageShell className={`workspace-surface ${className}`} label={label} title={title} description={description} displayName={displayName} showDashboardLink={showDashboardLink}>
     <div className="workspace-layout">
       <LocalSidebar label={sidebarLabel} items={items} active={active} backTo={backTo} backLabel={backLabel} />
       <div className="workspace-content">{children}</div>

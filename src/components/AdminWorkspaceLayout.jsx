@@ -15,6 +15,9 @@ const adminItems = [
 export function AdminWorkspaceLayout(props) {
   const { pathname } = useLocation();
   const active = adminItems.find((item) => item.to === pathname)?.id;
+  const isDashboard = pathname === "/firebase-dashboard";
   return <WorkspaceShell {...props} sidebarLabel="관리자 업무" items={adminItems} active={active}
-    backTo="/firebase-dashboard" backLabel="관리자 화면으로" />;
+    backTo={isDashboard ? "/" : "/firebase-dashboard"}
+    backLabel={isDashboard ? "포털로 돌아가기" : "관리자 화면으로"}
+    showDashboardLink={!isDashboard} />;
 }

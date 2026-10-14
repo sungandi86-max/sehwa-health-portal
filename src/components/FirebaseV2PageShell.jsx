@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 
-export function FirebaseV2PageShell({ label, title, description, displayName, className = "", children }) {
+export function FirebaseV2PageShell({ label, title, description, displayName, className = "", showDashboardLink = true, children }) {
   return (
     <section className={`firebase-v2-surface min-h-full bg-[#F8FAFA] px-3 py-4 text-[#102047] sm:px-4 sm:py-5 ${className}`}>
       <div className="mx-auto w-full max-w-[1280px] space-y-3">
@@ -20,12 +20,14 @@ export function FirebaseV2PageShell({ label, title, description, displayName, cl
               <span>
                 {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
               </span>
-              <Link
-                to="/firebase-dashboard"
-                className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10"
-              >
-                대시보드로
-              </Link>
+              {showDashboardLink ? (
+                <Link
+                  to="/firebase-dashboard"
+                  className="inline-flex min-h-10 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10"
+                >
+                  대시보드로
+                </Link>
+              ) : null}
             </div>
           </div>
         </header>

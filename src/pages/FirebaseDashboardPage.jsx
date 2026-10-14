@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Link } from "react-router-dom";
 import AdminNotificationPanel from "../components/AdminNotificationPanel.jsx";
+import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import FirebaseAccessRequestAction from "../components/FirebaseAccessRequestAction.jsx";
 import FirebaseSignInActions from "../components/FirebaseSignInActions.jsx";
@@ -350,40 +351,13 @@ export default function FirebaseDashboardPage() {
   }
 
   return (
-    <section className="firebase-v2-surface min-h-full bg-[#F8FAFA] px-3 py-4 text-[#102047] sm:px-5 sm:py-5">
-      <div className="mx-auto w-full max-w-6xl space-y-3">
-        <header className="border-b border-[#DDEAE7] bg-transparent pb-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-[#102047] sm:text-[1.625rem]">
-                보건교사 대시보드
-              </h1>
-              <p className="mt-1 text-sm font-medium leading-5 text-[#627083]">
-                오늘 확인할 보건업무와 관리 항목을 확인합니다.
-              </p>
-            </div>
-
-            <div className="rounded-[10px] border border-[#DDEAE7] bg-white px-3 py-2 sm:min-w-64">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#102047]">{displayName}</p>
-                  <p className="mt-0.5 text-xs font-medium text-[#627083]">
-                    {CURRENT_SCHOOL_YEAR}학년도 {CURRENT_SEMESTER}학기
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  disabled={isWorking}
-                  className="min-h-9 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-1.5 text-xs font-semibold text-[#102047] transition hover:border-[#0D4EA6] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  로그아웃
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-
+    <AdminWorkspaceLayout
+      label="관리자"
+      title="관리자 대시보드"
+      description="오늘 확인할 보건업무와 관리 항목을 한곳에서 확인합니다."
+      displayName={displayName}
+    >
+      <div className="space-y-3">
         <AdminNotificationPanel user={user} enabled={hasAdminAccess} />
 
         <section aria-label="오늘의 요약">
@@ -608,6 +582,6 @@ export default function FirebaseDashboardPage() {
           </div>
         </section>
       </div>
-    </section>
+    </AdminWorkspaceLayout>
   );
 }
