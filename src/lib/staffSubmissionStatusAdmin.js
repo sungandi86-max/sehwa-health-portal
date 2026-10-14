@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { auth, db } from "./firebase.js";
+import { isHealthScreeningTypeQaHost } from "./healthScreeningTypes.js";
 import {
   HEALTH_MANDATORY_TRAINING_TASK_ID,
   STAFF_STATUS_LABELS,
@@ -312,6 +313,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
 }
 
 export async function updateAdminTbScreeningStatus(staffId, value) {
+  if (isHealthScreeningTypeQaHost(globalThis.location?.hostname)) throw new Error("QA에서는 기존 운영 결핵검진 상태를 변경할 수 없습니다.");
   const normalizedStaffId = normalizeText(staffId);
   if (!normalizedStaffId) throw new Error("교직원ID를 확인할 수 없습니다.");
   const update = getTbAdminUpdate(value);

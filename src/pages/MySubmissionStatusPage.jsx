@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
+import HealthScreeningTypePanel from "../components/HealthScreeningTypePanel.jsx";
+import { isHealthScreeningTypeQaHost } from "../lib/healthScreeningTypes.js";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import {
   getMyStaffSubmissionStatus,
@@ -80,7 +82,7 @@ function StatusRow({ item }) {
             <dl className="mt-3 grid gap-2 rounded-[8px] border border-[#DDEAE7] bg-[#F7FBF9] p-3 text-[12px] sm:grid-cols-2 lg:grid-cols-3">
               <div><dt className="font-semibold text-[#627083]">올해 검진 대상</dt><dd className="mt-0.5 font-semibold text-[#102047]">{TB_TARGET_STATUS_LABELS[item.screening.targetStatus]}</dd></div>
               <div><dt className="font-semibold text-[#627083]">잠복결핵검진</dt><dd className="mt-0.5 font-semibold text-[#102047]">{TB_LATENT_STATUS_LABELS[item.screening.latentStatus]}</dd></div>
-              <div><dt className="font-semibold text-[#627083]">검진 유형</dt><dd className="mt-0.5 font-semibold text-[#102047]">{TB_SCREENING_TYPE_LABELS[item.screening.screeningType]}</dd></div>
+              <div><dt className="font-semibold text-[#627083]">기존 결핵검진 신청 경로</dt><dd className="mt-0.5 font-semibold text-[#102047]">{TB_SCREENING_TYPE_LABELS[item.screening.screeningType]}</dd></div>
               <div><dt className="font-semibold text-[#627083]">검진 완료</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.status === "completed" ? "완료" : "미완료"}</dd></div>
               <div><dt className="font-semibold text-[#627083]">검진일</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.screening.screeningDate || "확인 필요"}</dd></div>
               <div><dt className="font-semibold text-[#627083]">안내·비고</dt><dd className="mt-0.5 font-semibold text-[#102047]">{item.screening.note || "별도 안내 없음"}</dd></div>
@@ -183,6 +185,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
         displayName={displayName}
       >
         <NoticePanel title="현재 표시할 항목이 없습니다." description="현재 직책 기준으로 표시할 제출·이수 관리 항목이 없습니다." />
+        {isHealthScreeningTypeQaHost(globalThis.location?.hostname) && <HealthScreeningTypePanel completionLabel="확인 필요" />}
       </FirebaseV2PageShell>
     );
   }
@@ -195,6 +198,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
       displayName={displayName}
     >
       <SummaryRow overview={overview} />
+      {isHealthScreeningTypeQaHost(globalThis.location?.hostname) && <HealthScreeningTypePanel completionLabel={overview?.items.find((item) => item.taskId === TB_SCREENING_TASK_ID)?.status === "completed" ? "완료" : ["incomplete", "pending"].includes(overview?.items.find((item) => item.taskId === TB_SCREENING_TASK_ID)?.status) ? "미완료" : "확인 필요"} />}
 
       {state.status === "success" && (
         <section className="space-y-3">

@@ -1,6 +1,19 @@
 import { proxySubmissionCollection } from "./adminProxySubmission.js";
 import { verifyDirectoryAdmin } from "./staffDirectory.js";
 import { trainingEnvironment } from "./trainingDeployment.js";
+import { CURRENT_SCHOOL_YEAR } from "./staffDirectory.js";
+import { healthScreeningTypeDocumentId, HEALTH_SCREENING_TYPE_COLLECTION, validHealthScreeningTypeRecord, unconfirmedScreeningType } from "./healthScreeningTypeStore.js";
+
+export async function attachAnnualScreeningTypes(db, items, schoolYear = CURRENT_SCHOOL_YEAR) {
+  const staffIds = [...new Set(items.map((item) => item.staffId).filter((id) => typeof id === "string" && id && !id.includes("/")))];
+  if (!staffIds.length) return items;
+  const snapshots = await db.getAll(...staffIds.map((staffId) => db.collection(HEALTH_SCREENING_TYPE_COLLECTION).doc(healthScreeningTypeDocumentId(staffId, schoolYear))));
+  const byId = new Map(staffIds.map((staffId, index) => {
+    const item = snapshots[index]?.exists ? snapshots[index].data() : null;
+    return [staffId, validHealthScreeningTypeRecord(item, staffId, schoolYear) ? item : unconfirmedScreeningType(staffId, schoolYear)];
+  }));
+  return items.map((item) => ({ ...item, ...(byId.has(item.staffId) ? { annualHealthScreeningType: byId.get(item.staffId) } : {}) }));
+}
 
 function iso(value) {
   if (!value) return null;
@@ -25,6 +38,7 @@ export async function handleAdminProxySubmissionsResource(req, res, {
   verifyAdmin = verifyDirectoryAdmin,
   environment = trainingEnvironment,
   context = process.env,
+  annualTypes = attachAnnualScreeningTypes,
 } = {}) {
   if (req.method !== "GET") {
     return res.status(405).json({ ok: false, message: "지원하지 않는 요청입니다." });
@@ -44,7 +58,9 @@ export async function handleAdminProxySubmissionsResource(req, res, {
   let query = access.db.collection(collectionName);
   query = itemId ? query.where("itemId", "==", itemId) : query.orderBy("submittedAt", "desc");
   const snapshot = await query.limit(itemId ? 300 : 50).get();
-  const items = snapshot.docs.map((doc) => publicItem(doc, deployment))
+  let items = snapshot.docs.map((doc) => publicItem(doc, deployment))
     .sort((left, right) => String(right.submittedAt || "").localeCompare(String(left.submittedAt || "")));
+  // Annual types are QA-only; Production keeps its existing read contract.
+  if (deployment === "qa") items = await annualTypes(access.db, items);
   return res.status(200).json({ ok: true, items });
 }

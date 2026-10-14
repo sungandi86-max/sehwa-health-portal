@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import AdminProxySubmissionDialog from "../components/AdminProxySubmissionDialog.jsx";
+import { screeningTypeLabel } from "../lib/healthScreeningTypes.js";
 import {
   INFECTION_STATUS_LABELS,
   INFECTION_STATUS_OPTIONS,
@@ -118,6 +119,7 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
           <p className="mt-2 text-xs font-bold text-[#8A96A8]">제출일시 {item.submittedAtLabel}</p>
           <p className="mt-1 text-xs font-semibold text-[#627083]">제출 방식: {isProxy ? "관리자 대리등록" : "본인 제출"}</p>
           {isProxy && <p className="mt-1 text-xs font-semibold text-[#627083]">등록자: {item.submittedByName || "관리자"}</p>}
+          {item.annualHealthScreeningType && <p className="mt-1 text-xs text-[#627083]">{item.annualHealthScreeningType.schoolYear}학년도 검진 유형: {screeningTypeLabel(item.annualHealthScreeningType.screeningType)} · 본인 확인: {item.annualHealthScreeningType.selfChoice ? "완료" : "미확인"}</p>}
         </div>
         {item.file?.driveUrl ? (
           <a

@@ -4,6 +4,8 @@ import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPanel.jsx";
 import ResearchTrainingExceptionsPanel from "../components/ResearchTrainingExceptionsPanel.jsx";
+import HealthScreeningTypeAdminPanel from "../components/HealthScreeningTypeAdminPanel.jsx";
+import { isHealthScreeningTypeQaHost } from "../lib/healthScreeningTypes.js";
 import { getAdminStaffSubmissionStatusOverview, updateAdminTbScreeningStatus } from "../lib/staffSubmissionStatusAdmin.js";
 import { CPR_TRAINING_TASK_ID, isHealthMandatoryTrainingTask, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
 import { CPR_METHOD_LABELS } from "../lib/cprTrainingStatusModel.js";
@@ -15,6 +17,8 @@ const STATUS_FILTERS = [
   { value: "completed", label: "완료" },
   { value: "needs_check", label: "확인 필요" },
 ];
+
+const ANNUAL_QA = isHealthScreeningTypeQaHost(globalThis.location?.hostname);
 
 const RESEARCH_STATUS_FILTERS = [
   { value: "all", label: "전체" },
@@ -170,7 +174,7 @@ function StaffRow({ item, isTbTask, pending, onTbSave }) {
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <label className="grid gap-1 font-semibold text-[#627083]">대상 상태<select value={form.targetStatus} onChange={(event) => setForm({ ...form, targetStatus: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]">{Object.entries(TB_TARGET_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="grid gap-1 font-semibold text-[#627083]">잠복결핵검진<select value={form.latentStatus} onChange={(event) => setForm({ ...form, latentStatus: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]">{Object.entries(TB_LATENT_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-            <label className="grid gap-1 font-semibold text-[#627083]">검진 유형<select value={form.screeningType} onChange={(event) => setForm({ ...form, screeningType: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]">{Object.entries(TB_SCREENING_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="grid gap-1 font-semibold text-[#627083]">기존 결핵검진 신청 경로<select value={form.screeningType} onChange={(event) => setForm({ ...form, screeningType: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]">{Object.entries(TB_SCREENING_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="grid gap-1 font-semibold text-[#627083]">완료 상태<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]"><option value="unknown">확인 필요</option><option value="incomplete">미검진</option><option value="pending">확인 중</option><option value="completed">검진 완료</option><option value="not_applicable">해당 없음</option></select></label>
             <label className="grid gap-1 font-semibold text-[#627083]">검진일<input type="date" value={form.screeningDate} onChange={(event) => setForm({ ...form, screeningDate: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]" /></label>
             <label className="grid gap-1 font-semibold text-[#627083] sm:col-span-2">안내·비고<input value={form.note} maxLength={200} onChange={(event) => setForm({ ...form, note: event.target.value })} className="min-h-10 rounded-[8px] border border-[#DDEAE7] bg-white px-2 text-[#102047]" /></label>
@@ -253,6 +257,7 @@ function AdminStatusContent({ displayName }) {
   }, []);
 
   const handleTbSave = async (staffId, value) => {
+    if (ANNUAL_QA) { setActionMessage("QA에서는 기존 운영 결핵검진 상태를 변경할 수 없습니다."); return; }
     setPendingStaffId(staffId);
     setActionMessage("");
     try {
@@ -287,6 +292,8 @@ function AdminStatusContent({ displayName }) {
       description="결핵검진, 심폐소생술 연수, 보건 관련 법정의무연수 상태를 Firestore projection 기준으로 확인합니다."
       displayName={displayName}
     >
+      {ANNUAL_QA && <HealthScreeningTypeAdminPanel />}
+      {ANNUAL_QA && <p className="text-xs text-[#627083]">아래 기존 검진 완료 현황은 읽기 전용입니다. QA에서는 운영 결핵검진 상태를 수정하지 않습니다.</p>}
       <ResearchTrainingDryRunPanel onApplied={loadOverview} />
       <ResearchTrainingExceptionsPanel />
 
@@ -376,7 +383,7 @@ function AdminStatusContent({ displayName }) {
               <p className="text-[12px] font-semibold text-[#627083]">표시 {filteredItems.length}명 / 조회 기준 {selectedTask.summary.total}명</p>
             </div>
             {filteredItems.length > 0 ? (
-              <div>{filteredItems.map((item) => <StaffRow key={item.id || item.staffId} item={item} isTbTask={selectedTask.taskId === TB_SCREENING_TASK_ID} pending={pendingStaffId === item.staffId} onTbSave={handleTbSave} />)}</div>
+              <div>{filteredItems.map((item) => <StaffRow key={item.id || item.staffId} item={item} isTbTask={!ANNUAL_QA && selectedTask.taskId === TB_SCREENING_TASK_ID} pending={pendingStaffId === item.staffId} onTbSave={handleTbSave} />)}</div>
             ) : (
               <div className="px-4 py-8 text-center text-[13px] font-semibold text-[#627083]">
                 현재 선택한 조건에 해당하는 교직원이 없습니다.

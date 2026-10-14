@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { handleAdminProxySubmissionsResource } from "./adminProxySubmissionApi.js";
+import { handleAdminProxySubmissionsResource, attachAnnualScreeningTypes } from "./adminProxySubmissionApi.js";
 
 function response() {
   return {
@@ -111,4 +111,28 @@ test("read-only resource rejects mutation methods", async () => {
   const res = response();
   await handleAdminProxySubmissionsResource({ method: "POST" }, res);
   assert.equal(res.statusCode, 405);
+});
+
+test("QA annual enrichment batches only distinct listed identities without changing completion", async () => {
+  const refs = []; let reads = 0;
+  const db = {
+    collection(name) { assert.equal(name, "staff_health_screening_types_qa"); return { doc(id) { refs.push(id); return id; } }; },
+    async getAll(...ids) { reads++; assert.deepEqual(ids, ["QA-A_2026", "QA-B_2026"]); return [
+      { exists: true, data: () => ({ staffId: "QA-A", schoolYear: 2026, environment: "qa", schemaVersion: 1, revision: 1, screeningTypeConfirmed: true, screeningType: "nhis" }) },
+      { exists: false },
+    ]; },
+  };
+  const result = await attachAnnualScreeningTypes(db, [{ staffId: "QA-A", status: "pending" }, { staffId: "QA-A" }, { staffId: "QA-B" }], 2026);
+  assert.equal(reads, 1); assert.equal(refs.length, 2);
+  assert.equal(result[0].status, "pending"); assert.equal(result[0].annualHealthScreeningType.screeningType, "nhis");
+  assert.equal(result[2].annualHealthScreeningType.screeningTypeConfirmed, false);
+});
+
+test("Production does not access annual QA types", async () => {
+  const { db } = database([{ staffId: "QA-A" }]); const res = response();
+  await handleAdminProxySubmissionsResource({ method: "GET", query: {} }, res, {
+    environment: () => "production", verifyAdmin: async () => ({ ok: true, db }),
+    annualTypes: async () => { throw new Error("must not read QA annual collection"); },
+  });
+  assert.equal(res.statusCode, 200); assert.equal(res.body.items[0].annualHealthScreeningType, undefined);
 });
