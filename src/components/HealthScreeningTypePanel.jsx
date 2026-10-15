@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useState } from "react";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
-import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, screeningConfirmationLabel, screeningSelfConfirmationDateLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
+import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, screeningConfirmationLabel, screeningSourceLabel, screeningSelfConfirmationDateLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
 import { tbEvidenceLabel } from "../lib/tbScreeningWorkflowClient.js";
 
 export default function HealthScreeningTypePanel({ schoolYear = CURRENT_SCHOOL_YEAR, completionLabel, onChange }) {
@@ -37,7 +37,7 @@ export default function HealthScreeningTypePanel({ schoolYear = CURRENT_SCHOOL_Y
     <h3 id={`${id}-title`} className="text-base font-semibold">올해 건강검진 유형을 확인해주세요</h3>
     <p className="mt-1 text-xs text-[#627083]">{schoolYear}년 · 검진 유형 확인이며 검진 완료 여부와는 별도입니다.</p>
     {loading ? <p className="mt-3" role="status">건강검진 유형을 불러오는 중입니다.</p> : <>
-      {item && <p className="mt-3">검진 유형: <strong>{screeningTypeLabel(item.screeningType)}</strong><span className="ml-3">본인확인: {screeningConfirmationLabel(item)}</span>{item.source === "admin" && <span className="ml-3 text-xs text-[#627083]">관리자 {hasSelfScreeningConfirmation(item) ? "수정" : "입력"}</span>}</p>}
+      {item && <p className="mt-3">검진 유형: <strong>{screeningTypeLabel(item.screeningType)}</strong><span className="ml-3">본인확인: {screeningConfirmationLabel(item)}</span>{["admin", "legacy_firestore_backfill"].includes(item.source) && <span className="ml-3 text-xs text-[#627083]">{screeningSourceLabel(item)}</span>}</p>}
       {item && <p className="mt-1 text-xs text-[#627083]">본인확인일: {screeningSelfConfirmationDateLabel(item)}</p>}
       {item?.workflow && <div className="mt-3 rounded-lg border border-[#DDEAE7] bg-[#F7FBF9] p-3">
         <p>확인자료: <strong>{tbEvidenceLabel(item.workflow)}</strong></p>

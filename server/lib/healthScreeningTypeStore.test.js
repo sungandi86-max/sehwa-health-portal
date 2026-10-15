@@ -13,7 +13,7 @@ test("collection and deterministic document helpers reject unsafe input", () => 
 
 test("read ignores wrong identity, year, environment and schema metadata", async () => {
   const base = { staffId: "fixture", schoolYear: 2026, environment: "qa", schemaVersion: 1,
-    revision: 1, screeningType: "none", screeningTypeConfirmed: true };
+    revision: 1, screeningType: "none", screeningTypeConfirmed: true, source: "self" };
   assert.equal(validHealthScreeningTypeRecord(base, "fixture", 2026), true);
   for (const override of [{ staffId: "other" }, { schoolYear: 2025 }, { environment: "production" }, { schemaVersion: 2 }, { revision: 0 }, { screeningType: "invalid" }]) {
     const db = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ ...base, ...override }) }) }) }) };
@@ -33,4 +33,17 @@ test("production store fails closed for synthetic staff and unknown deployment b
   const db = { collection() { assert.fail("denied request must not access database"); } };
   await assert.rejects(readHealthScreeningType(db, "QA-CPR-TEST-001", 2026, { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }), { status: 403 });
   await assert.rejects(readHealthScreeningType(db, "fixture", 2026, {}), { status: 503 });
+});
+
+test("production provenance permits only audited migration reads and normal self/admin writes", async () => {
+  const item = { staffId: "fixture", schoolYear: 2026, environment: "production", schemaVersion: 1, revision: 1,
+    screeningType: "nhis", screeningTypeConfirmed: true, source: "legacy_firestore_backfill", selfChoice: null,
+    confirmedBy: null, confirmedAt: null, migration: { id: "migration", sourceCollection: "staff_submission_status",
+      sourceDocumentId: "fixture_tb-screening-2026", importedAt: "2026-10-15T00:00:00.000Z", manifestHash: "hash" } };
+  assert.equal(validHealthScreeningTypeRecord(item, "fixture", 2026, "production"), true);
+  for (const override of [{ source: "untrusted" }, { selfChoice: { screeningType: "nhis" } }, { confirmedBy: "someone" }, { confirmedAt: "today" }, { migration: null }]) {
+    assert.equal(validHealthScreeningTypeRecord({ ...item, ...override }, "fixture", 2026, "production"), false);
+  }
+  const db = { collection() { assert.fail("forged provenance must not access database"); } };
+  await assert.rejects(saveHealthScreeningType(db, { staffId: "fixture", schoolYear: 2026, screeningType: "nhis", source: "legacy_firestore_backfill", expectedRevision: 0 }, { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }), { status: 400 });
 });

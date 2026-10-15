@@ -1,6 +1,8 @@
 import { trainingEnvironment } from "./trainingDeployment.js";
 
 export const HEALTH_SCREENING_TYPES = new Set(["nhis", "employment", "individual", "none", "other"]);
+export const HEALTH_SCREENING_TYPE_SOURCES = new Set(["self", "admin", "legacy_firestore_backfill"]);
+export const HEALTH_SCREENING_TYPE_WRITE_SOURCES = new Set(["self", "admin"]);
 export const HEALTH_SCREENING_TYPE_COLLECTION = "staff_health_screening_types_qa";
 export const HEALTH_SCREENING_TYPE_PRODUCTION_COLLECTION = "staff_health_screening_types";
 
@@ -42,7 +44,12 @@ export function validHealthScreeningTypeRecord(item, staffId, schoolYear, enviro
   return ["qa", "production"].includes(environment) && item?.staffId === staffId && item.schoolYear === schoolYear && item.environment === environment
     && (environment !== "production" || !/^QA[-_]/i.test(String(staffId || "")))
     && item.schemaVersion === 1 && Number.isInteger(item.revision) && item.revision > 0
-    && item.screeningTypeConfirmed === true && HEALTH_SCREENING_TYPES.has(item.screeningType);
+    && item.screeningTypeConfirmed === true && HEALTH_SCREENING_TYPES.has(item.screeningType)
+    && HEALTH_SCREENING_TYPE_SOURCES.has(item.source)
+    && (item.source !== "legacy_firestore_backfill" || Boolean(item.selfChoice === null && item.confirmedBy === null
+      && item.confirmedAt === null && item.migration?.id && item.migration?.importedAt
+      && item.migration?.sourceCollection === "staff_submission_status"
+      && item.migration?.sourceDocumentId === `${staffId}_tb-screening-${schoolYear}` && item.migration?.manifestHash));
 }
 
 export function unconfirmedScreeningType(staffId, schoolYear) {
@@ -70,7 +77,7 @@ export async function saveHealthScreeningType(db, {
   staffId, schoolYear, screeningType, source, confirmedBy, expectedRevision, confirmedAt,
 }, context = process.env) {
   if (!HEALTH_SCREENING_TYPES.has(screeningType)) throw new HealthScreeningTypeError("검진 유형을 선택해 주세요.");
-  if (!["self", "admin"].includes(source)) throw new HealthScreeningTypeError("요청 유형을 확인해 주세요.");
+  if (!HEALTH_SCREENING_TYPE_WRITE_SOURCES.has(source)) throw new HealthScreeningTypeError("요청 유형을 확인해 주세요.");
   if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw new HealthScreeningTypeError("현재 변경 번호를 확인해 주세요.");
   validateScreeningYear(schoolYear);
   if (trainingEnvironment(context) === "production" && /^QA[-_]/i.test(String(confirmedBy || ""))) throw new HealthScreeningTypeError("교직원 권한이 필요합니다.", 403);
@@ -90,6 +97,7 @@ export async function saveHealthScreeningType(db, {
     const item = {
       staffId, schoolYear, screeningType, screeningTypeConfirmed: true, confirmedAt, confirmedBy,
       source, selfChoice: source === "self" ? choice : previous?.selfChoice || null,
+      ...(previous?.migration ? { migration: previous.migration } : {}),
       createdAt: previous?.createdAt || confirmedAt, updatedAt: confirmedAt,
       environment, schemaVersion: 1, revision: revision + 1,
     };

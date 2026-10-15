@@ -19,6 +19,7 @@
     "migrate:submission-items": "node scripts/migrateSubmissionItemsToFirestore.mjs",
     "migrate:submission-config": "node scripts/migrateSubmissionConfig.mjs",
     "migrate:cpr-training-status": "node scripts/migrateCprTrainingStatus.mjs",
+    "migrate:tb-screening-types": "node scripts/migrateLegacyTbScreeningTypes.mjs",
     "seed:staff-submission-tasks": "node scripts/seedStaffSubmissionTasks.mjs",
     "map:staff-ids": "node scripts/mapStaffIdsToUsers.mjs",
     "seed:firebase-content": "node scripts/seedFirebaseContent.mjs",

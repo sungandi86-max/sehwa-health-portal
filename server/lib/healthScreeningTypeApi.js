@@ -7,6 +7,11 @@ import { HealthScreeningTypeError, listHealthScreeningTypes, readHealthScreening
   readHealthScreeningTypeHistory, saveHealthScreeningType, unconfirmedScreeningType,
   validateScreeningYear } from "./healthScreeningTypeStore.js";
 
+function publicScreeningType(item) {
+  const { migration, ...visible } = item;
+  return visible;
+}
+
 export async function handleHealthScreeningTypeRequest(req, res, {
   context = process.env, authAccess = verifyCurrentStaffSubmissionIdentity,
   directory = readStaffDirectory, database, time = () => new Date().toISOString(),
@@ -44,9 +49,9 @@ export async function handleHealthScreeningTypeRequest(req, res, {
     if (req.method === "GET") {
       if (!admin) {
         if (!includeWorkflow) {
-          return res.status(200).json({ ok: true, item: await readHealthScreeningType(access.db, access.staffId, schoolYear, context) });
+          return res.status(200).json({ ok: true, item: publicScreeningType(await readHealthScreeningType(access.db, access.staffId, schoolYear, context)) });
         }
-        const [item, data] = await Promise.all([
+        const [storedItem, data] = await Promise.all([
           readHealthScreeningType(access.db, access.staffId, schoolYear, context),
           listProductionTbWorkflowData(access.db, {
             staffId: access.staffId,
@@ -55,6 +60,7 @@ export async function handleHealthScreeningTypeRequest(req, res, {
             statusCursor: input.statusCursor || "",
           }),
         ]);
+        const item = publicScreeningType(storedItem);
         return res.status(200).json({
           ok: true,
           item: { ...item, workflow: joinTbScreeningWorkflow({
@@ -70,9 +76,9 @@ export async function handleHealthScreeningTypeRequest(req, res, {
       }
       if (input.history === "true" || input.history === true) {
         if (!input.staffId) return bad(400, "교직원을 선택해 주세요.");
-        return res.status(200).json({ ok: true, history: await readHealthScreeningTypeHistory(access.db, input.staffId, schoolYear, context) });
+        return res.status(200).json({ ok: true, history: (await readHealthScreeningTypeHistory(access.db, input.staffId, schoolYear, context)).map(publicScreeningType) });
       }
-      const items = await listHealthScreeningTypes(access.db, schoolYear, context);
+      const items = (await listHealthScreeningTypes(access.db, schoolYear, context)).map(publicScreeningType);
       const byId = new Map(items.map((item) => [item.staffId, item]));
       if (!includeWorkflow) {
         return res.status(200).json({ ok: true, items: staff.map((person) => ({
@@ -111,7 +117,7 @@ export async function handleHealthScreeningTypeRequest(req, res, {
       source: admin ? "admin" : "self", confirmedBy: access.staffId,
       expectedRevision: input.expectedRevision, confirmedAt: time(),
     }, context);
-    return res.status(200).json({ ok: true, item });
+    return res.status(200).json({ ok: true, item: publicScreeningType(item) });
   } catch (error) {
     if (error instanceof HealthScreeningTypeError || error instanceof TbWorkflowError) return bad(error.status, error.message);
     if (error instanceof SyntaxError || error?.code === "body-too-large") return bad(400, "요청 내용을 확인해 주세요.");

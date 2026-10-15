@@ -33,6 +33,13 @@ export function screeningConfirmationLabel(item) {
   return hasSelfScreeningConfirmation(item) ? "확인 완료" : "미확인";
 }
 
+export function screeningSourceLabel(item) {
+  if (item?.source === "legacy_firestore_backfill") return "기존 자료 이관";
+  if (item?.source === "self") return "본인 선택";
+  if (item?.source === "admin") return hasSelfScreeningConfirmation(item) ? "관리자 수정" : "관리자 입력";
+  return "기록 없음";
+}
+
 export function screeningSelfConfirmationDateLabel(item) {
   const value = item?.selfChoice?.confirmedAt;
   if (!value) return "—";

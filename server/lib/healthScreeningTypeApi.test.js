@@ -10,10 +10,13 @@ function fixture() {
   const snapshot = (path) => ({ exists: records.has(path), data: () => records.get(path) });
   const collection = (path) => ({
     doc: (id) => ({ path: `${path}/${id}`, get: async () => snapshot(`${path}/${id}`), collection: (name) => collection(`${path}/${id}/${name}`) }),
-    where: (field, operator, value) => ({ get: async () => {
-      operations.push([path, field, operator, value]);
-      return { docs: [...records.entries()].filter(([key, item]) => key.startsWith(`${path}/`) && key.split("/").length === 2 && item[field] === value).map(([, item]) => ({ data: () => item })) };
-    } }),
+    where: (field, operator, value) => {
+      const query = { orderBy: () => query, limit: () => query, startAfter: () => query, get: async () => {
+        operations.push([path, field, operator, value]);
+        return { docs: [...records.entries()].filter(([key, item]) => key.startsWith(`${path}/`) && key.split("/").length === 2 && item[field] === value).map(([key, item]) => ({ id: key.split("/").at(-1), data: () => item })) };
+      } };
+      return query;
+    },
     orderBy: () => ({ get: async () => ({ docs: [...records.entries()].filter(([key]) => key.startsWith(`${path}/`)).map(([, item]) => ({ data: () => item })) }) }),
   });
   const db = { collection: (name) => { operations.push(name); return collection(name); }, runTransaction: (callback) => {
@@ -40,6 +43,40 @@ function fixture() {
   const admin = { authAccess: async () => ({ ok: true, db, staffId: "manager", roles: ["health_teacher"] }) };
   return { records, operations, request, admin, reads: () => ({ directoryReads, authReads }) };
 }
+
+test("normal self/admin API ignores forged migration source and metadata", async () => {
+  for (const admin of [false, true]) {
+    const f = fixture();
+    const input = { screeningType: "nhis", expectedRevision: 0, source: "legacy_firestore_backfill", migration: { manifestHash: "forged" }, ...(admin ? { scope: "admin", staffId: "self" } : {}) };
+    const result = await f.request("POST", input, admin ? f.admin : {});
+    assert.equal(result.code, 200);
+    assert.equal(result.payload.item.source, admin ? "admin" : "self");
+    assert.equal("migration" in result.payload.item, false);
+  }
+});
+
+test("migration metadata is private while legitimate updates retain stored provenance audit", async () => {
+  const f = fixture();
+  const context = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
+  const path = "staff_health_screening_types/self_2026";
+  const migration = { id: "private-migration", sourceCollection: "staff_submission_status", sourceDocumentId: "self_tb-screening-2026", importedAt: "2026-10-15T00:00:00.000Z", manifestHash: "private-hash" };
+  f.records.set(path, { staffId: "self", schoolYear: 2026, screeningType: "nhis", screeningTypeConfirmed: true, environment: "production", schemaVersion: 1, revision: 1, source: "legacy_firestore_backfill", selfChoice: null, confirmedBy: null, confirmedAt: null, migration });
+  for (const [input, override] of [[{}, {}], [{ includeWorkflow: "true" }, {}], [{ scope: "admin" }, f.admin], [{ scope: "admin", includeWorkflow: "true" }, f.admin]]) {
+    const result = await f.request("GET", input, { ...override, context });
+    assert.equal(result.code, 200);
+    assert.equal(JSON.stringify(result.payload).includes("private-migration"), false);
+    assert.equal(JSON.stringify(result.payload).includes("private-hash"), false);
+  }
+  const saved = await f.request("POST", { screeningType: "individual", expectedRevision: 1 }, { context });
+  assert.equal(saved.code, 200);
+  assert.equal(saved.payload.item.source, "self");
+  assert.equal("migration" in saved.payload.item, false);
+  assert.deepEqual(f.records.get(path).migration, migration);
+  assert.deepEqual(f.records.get(`${path}/history/2`).migration, migration);
+  const history = await f.request("GET", { scope: "admin", staffId: "self", history: "true" }, { ...f.admin, context });
+  assert.equal(history.code, 200);
+  assert.equal(JSON.stringify(history.payload).includes("private-migration"), false);
+});
 
 test("past annual records remain readable and unchanged by current-year confirmation", async () => {
   const f = fixture();
@@ -100,7 +137,7 @@ test("E: completion status collection never accessed or changed", async () => {
 
 test("F: store has no Sheet dependency; administrator list queries year and directory once", async () => {
   const source = readFileSync(new URL("./healthScreeningTypeStore.js", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /staffDirectory|google|Sheet|submission_status/);
+  assert.doesNotMatch(source, /staffDirectory|google|Sheet|\.collection\(["']staff_submission_status["']\)/);
   const f = fixture();
   const result = await f.request("GET", { scope: "admin", schoolYear: 2027 }, f.admin);
   assert.equal(result.payload.items.length, 2);
