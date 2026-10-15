@@ -137,13 +137,13 @@ Production root bootstrap은 main 병합 **전** 조건이 아니라 운영 QR �
 - 새 교육부터 snapshot을 적용한다. 기존 교육 대상자 자동 재계산·migration은 없고 기존 `교직원교육대상` Sheet도 자동 변경하지 않는다.
 - Production read-only smoke에서 실제 명단은 전체 94명, 교원 중심 82명, 행정실 제외 82명, 1학년부 13명, 시간강사 10명, 교원 중심에서 시간강사 제외 시 72명으로 확인됐다.
 
-### 3. QA에서만 완료된 UI
+### 3. 공통 포털/workspace UI
 
 공통 포털/workspace (`5142bd8` 계열 이후):
 
 - `/`, `/training`, `/firebase-dashboard`는 사이드바가 없는 카드형 portal/landing이다.
 - 실제 관리자 업무에 들어가면 기존 글로벌 Header 아래에 좌측 local sidebar와 우측 workspace content를 표시한다. 모바일 sidebar는 메뉴로 접힌다.
-- QA에서 Desktop 1440px과 Mobile 390px을 시각 검수했으며 한글 잘림과 가로 overflow를 발견하지 않았다. 이 공통 UI는 아직 Production에 반영하지 않았다.
+- QA에서 Desktop 1440px과 Mobile 390px 시각 검수를 마친 뒤 Production에 반영했다. 이 절은 당시 검수 근거와 현재 공통 UI 계약을 함께 기록한다.
 
 교육 대상 관리 리디자인 (`fa9adccc6d6457891774ff7b097810d469af350d`):
 

@@ -110,7 +110,7 @@ export default function FirebaseUserDangerActions({
               <div>
                 <p className="text-[12px] font-bold text-[#102047]">완전 삭제</p>
                 <p className="mt-1 text-[12px] font-medium leading-5 text-[#627083]">
-                  업무 기록 참조가 없는 테스트 계정만 삭제할 수 있습니다.
+                  업무 기록에 연결되지 않은 계정만 완전히 삭제할 수 있습니다.
                 </p>
               </div>
               <button

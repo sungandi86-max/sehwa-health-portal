@@ -1,5 +1,7 @@
 # Submission workflow boundary, Phase 1
 
+> 이 문서는 Phase 1 당시의 설계·검증 이력이다. 현재 Production 계약은 구현 코드와 후속 migration 문서를 기준으로 하며, 아래 release blocker와 "not deployed" 표기는 당시 상태를 설명한다.
+
 This checkpoint fixes the code contract before any Sheet-to-Firestore configuration migration. No source Sheet, Firestore document, environment variable, or deployed Apps Script version is changed by this branch.
 
 ## Public and server-only configuration
