@@ -116,6 +116,15 @@ test("G: caller cannot spoof deployment environment", async () => {
   assert.equal(f.records.size, 0);
 });
 
+test("caller cannot forge migration provenance through the normal API", async () => {
+  const f = fixture();
+  const result = await f.request("POST", { screeningType: "nhis", expectedRevision: 0,
+    source: "legacy_firestore_backfill", migration: { manifestHash: "forged" } });
+  assert.equal(result.code, 200);
+  assert.equal(result.payload.item.source, "self");
+  assert.equal("migration" in result.payload.item, false);
+});
+
 test("H: production and unknown deployments fail closed before authentication or data access", async () => {
   const f = fixture();
   for (const context of [{ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }, {}, { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "main" }]) {

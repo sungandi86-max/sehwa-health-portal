@@ -149,7 +149,7 @@ test("QA annual enrichment batches only distinct listed identities without chang
   const db = {
     collection(name) { assert.equal(name, "staff_health_screening_types_qa"); return { doc(id) { refs.push(id); return id; } }; },
     async getAll(...ids) { reads++; assert.deepEqual(ids, ["QA-A_2026", "QA-B_2026"]); return [
-      { exists: true, data: () => ({ staffId: "QA-A", schoolYear: 2026, environment: "qa", schemaVersion: 1, revision: 1, screeningTypeConfirmed: true, screeningType: "nhis" }) },
+      { exists: true, data: () => ({ staffId: "QA-A", schoolYear: 2026, environment: "qa", schemaVersion: 1, revision: 1, screeningTypeConfirmed: true, screeningType: "nhis", source: "self" }) },
       { exists: false },
     ]; },
   };

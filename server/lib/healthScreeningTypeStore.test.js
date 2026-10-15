@@ -1,14 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { healthScreeningTypeCollection, healthScreeningTypeDocumentId,
-  HEALTH_SCREENING_TYPES, readHealthScreeningType, saveHealthScreeningType, validHealthScreeningTypeRecord } from "./healthScreeningTypeStore.js";
+  HEALTH_SCREENING_TYPES, HEALTH_SCREENING_TYPE_SOURCES, readHealthScreeningType,
+  saveHealthScreeningType, validHealthScreeningTypeRecord } from "./healthScreeningTypeStore.js";
 
 test("stored route enum retains all historical values and appends individual", () => {
   assert.deepEqual([...HEALTH_SCREENING_TYPES], ["nhis", "employment", "none", "other", "individual"]);
   for (const screeningType of HEALTH_SCREENING_TYPES) {
     assert.equal(validHealthScreeningTypeRecord({ staffId: "fixture", schoolYear: 2026, environment: "qa",
-      schemaVersion: 1, revision: 1, screeningTypeConfirmed: true, screeningType }, "fixture", 2026), true);
+      schemaVersion: 1, revision: 1, screeningTypeConfirmed: true, screeningType, source: "self" }, "fixture", 2026), true);
   }
+});
+
+test("legacy backfill provenance is readable but cannot use the normal write path", async () => {
+  assert.deepEqual([...HEALTH_SCREENING_TYPE_SOURCES], ["self", "admin", "legacy_firestore_backfill"]);
+  const migrated = { staffId: "fixture", schoolYear: 2026, environment: "qa", schemaVersion: 1, revision: 1,
+    screeningType: "nhis", screeningTypeConfirmed: true, source: "legacy_firestore_backfill",
+    selfChoice: null, confirmedBy: null, confirmedAt: null,
+    migration: { sourceCollection: "staff_submission_status", sourceDocumentId: "fixture_tb-screening-2026", manifestHash: "hash" } };
+  assert.equal(validHealthScreeningTypeRecord(migrated, "fixture", 2026), true);
+  assert.equal(validHealthScreeningTypeRecord({ ...migrated, selfChoice: { screeningType: "nhis" } }, "fixture", 2026), false);
+  const db = { collection() { assert.fail("forged migration source must not access database"); } };
+  await assert.rejects(saveHealthScreeningType(db, { staffId: "fixture", schoolYear: 2026,
+    screeningType: "nhis", source: "legacy_firestore_backfill", confirmedBy: null, expectedRevision: 0 }), { status: 400 });
 });
 
 test("collection and deterministic document helpers reject unsafe input", () => {
@@ -20,7 +34,7 @@ test("collection and deterministic document helpers reject unsafe input", () => 
 
 test("read ignores wrong identity, year, environment and schema metadata", async () => {
   const base = { staffId: "fixture", schoolYear: 2026, environment: "qa", schemaVersion: 1,
-    revision: 1, screeningType: "none", screeningTypeConfirmed: true };
+    revision: 1, screeningType: "none", screeningTypeConfirmed: true, source: "self" };
   assert.equal(validHealthScreeningTypeRecord(base, "fixture", 2026), true);
   for (const override of [{ staffId: "other" }, { schoolYear: 2025 }, { environment: "production" }, { schemaVersion: 2 }, { revision: 0 }, { screeningType: "invalid" }]) {
     const db = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ ...base, ...override }) }) }) }) };

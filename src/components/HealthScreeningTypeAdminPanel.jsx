@@ -2,7 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
 import { reviewTbScreeningEvidence, tbEvidenceLabel } from "../lib/tbScreeningWorkflowClient.js";
 import { joinTbScreeningWorkflow } from "../lib/tbScreeningWorkflowModel.js";
-import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, screeningConfirmationLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
+import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, screeningConfirmationLabel, screeningSourceLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
 
 function auditLabel(value) {
   if (!value) return "—";
@@ -25,7 +25,7 @@ function RecordDetails({ item }) {
     {item.workflow?.status?.confirmedAt && <p>완료 확인: {auditLabel(item.workflow.status.confirmedBy)} · {dateLabel(item.workflow.status.confirmedAt)} · 접수번호 {item.workflow.status.evidenceSubmissionId}</p>}
     {item.workflow?.routeMismatch && <p className="text-[#3154A3]">검진 경로와 자료 유형이 다릅니다. 자료를 확인한 뒤 승인해주세요.</p>}
     {item.workflow?.status?.discrepancy && <p className="text-[#B42318]">확인자료 보완 필요 · 기존 완료 확인 이력 유지</p>}
-    <p>최근 변경: {item.source === "admin" ? hasSelfScreeningConfirmation(item) ? "관리자 수정" : "관리자 입력" : item.source === "self" ? "본인" : "기록 없음"} · {auditLabel(item.confirmedBy)} · {dateLabel(item.confirmedAt)}</p>
+    <p>최근 변경: {screeningSourceLabel(item)}{item.source !== "legacy_firestore_backfill" && <> · {auditLabel(item.confirmedBy)} · {dateLabel(item.confirmedAt)}</>}</p>
     <p>최근 본인 선택: {screeningTypeLabel(original)}{item.selfChoice?.confirmedAt && ` · ${dateLabel(item.selfChoice.confirmedAt)}`}</p>
   </div>;
 }
