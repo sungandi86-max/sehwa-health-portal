@@ -194,7 +194,7 @@ async function deleteUser(req, res, access) {
 
   return res.status(200).json({
     ok: true,
-    message: "테스트 계정을 완전히 삭제했습니다.",
+    message: "계정을 완전히 삭제했습니다.",
     deleted: {
       assignments: scan.identityDocs.assignments.length,
       accessRequests: scan.identityDocs.accessRequests.length,
