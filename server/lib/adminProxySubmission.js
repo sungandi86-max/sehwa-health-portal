@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { validatedSchoolYear } from "../../src/lib/tbScreeningWorkflowModel.js";
 
 const text = (value, max = 200) => String(value ?? "").normalize("NFKC").trim().slice(0, max);
 
@@ -47,11 +48,15 @@ export function proxySubmissionCollection(environment) {
   throw new Error("제출 조회는 승인된 배포 환경에서만 가능합니다.");
 }
 
-export async function findProxyDuplicates(db, staffId, { collectionName = "staff_submissions" } = {}) {
-  const snapshot = await db.collection(collectionName).where("staffId", "==", staffId).get();
+export async function findProxyDuplicates(db, staffId, { collectionName = "staff_submissions", schoolYear } = {}) {
+  const qaYear = collectionName === "staff_submissions_qa" ? validatedSchoolYear(schoolYear) : null;
+  let query = db.collection(collectionName).where("staffId", "==", staffId);
+  if (qaYear !== null) query = query.where("schoolYear", "==", qaYear).limit(100);
+  const snapshot = await query.get();
+  if (qaYear !== null && snapshot.docs.length === 100) throw new Error("QA 제출 중복 조회 범위를 초과했습니다. 관리자에게 문의해 주세요.");
   return snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }))
-    .filter((item) => item.itemId === "tb")
+    .filter((item) => item.itemId === "tb" && (qaYear === null || item.schoolYear === qaYear))
     .sort((a, b) => String(b.checkupDate || "").localeCompare(String(a.checkupDate || "")));
 }
 

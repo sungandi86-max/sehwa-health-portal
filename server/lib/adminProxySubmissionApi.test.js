@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { handleAdminProxySubmissionsResource, attachAnnualScreeningTypes } from "./adminProxySubmissionApi.js";
+import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 
 function response() {
   return {
@@ -14,7 +15,8 @@ function response() {
 test("proxy admin read rejects non-admins", async () => {
   const res = response();
   await handleAdminProxySubmissionsResource({ method: "GET" }, res, {
-    verifyAdmin: async () => ({ ok: false, status: 403, message: "관리자 권한이 없습니다." }),
+    qaIdentity: async () => ({ ok: false, status: 403, message: "관리자 권한이 없습니다." }),
+    environment: () => "qa",
   });
   assert.equal(res.statusCode, 403);
 });
@@ -47,6 +49,7 @@ async function read({ environment = "qa", query = {}, records = [] } = {}) {
   await handleAdminProxySubmissionsResource({ method: "GET", query }, res, {
     environment: () => environment,
     verifyAdmin: async () => ({ ok: true, db }),
+    qaIdentity: async () => ({ ok: true, db, roles: ["health_teacher"] }),
   });
   return { res, calls };
 }
@@ -54,7 +57,8 @@ async function read({ environment = "qa", query = {}, records = [] } = {}) {
 test("administrator submission read retains unauthenticated 401", async () => {
   const res = response();
   await handleAdminProxySubmissionsResource({ method: "GET" }, res, {
-    verifyAdmin: async () => ({ ok: false, status: 401, message: "로그인이 필요합니다." }),
+    qaIdentity: async () => ({ ok: false, status: 401, message: "로그인이 필요합니다." }),
+    environment: () => "qa",
   });
   assert.equal(res.statusCode, 401);
 });
@@ -84,13 +88,40 @@ test("unknown deployment fails closed before collection access", async () => {
   assert.deepEqual(calls, []);
 });
 
-test("item-specific overview query stays in QA with bounded records and no new composite index", async () => {
-  const { res, calls } = await read({ query: { itemId: "tb" }, records: [
-    { itemId: "tb" }, { itemId: "cpr" },
-  ] });
+test("unknown deployment denies before authentication and assignment database access", async () => {
+  const res = response();
+  let authReads = 0;
+  await handleAdminProxySubmissionsResource({ method: "GET", query: { itemId: "tb", schoolYear: 2026 } }, res, {
+    environment: () => null,
+    verifyAdmin: async () => { authReads++; return { ok: true, db: { collection() { throw new Error("must not access database"); } } }; },
+    qaIdentity: async () => { authReads++; throw new Error("must not authenticate"); },
+  });
+  assert.equal(res.statusCode, 503);
+  assert.equal(authReads, 0);
+});
+
+test("new QA TB overview requires explicit year before any read", async () => {
+  const { res, calls } = await read({ query: { itemId: "tb" } });
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(calls, []);
+});
+
+test("QA TB overview is year bounded and uses joined workflow without another evidence scan", async () => {
+  const { db, calls } = database([{ itemId: "tb", environment: "qa", schoolYear: 2026, staffId: "QA-A" },
+    { itemId: "tb", environment: "qa", schoolYear: 2025 }]);
+  const res = response();
+  await handleAdminProxySubmissionsResource({ method: "GET", query: { itemId: "tb", schoolYear: 2026 } }, res, {
+    environment: () => "qa", qaIdentity: async () => ({ ok: true, roles: ["health_teacher"], db }),
+    workflows: async (database, items, year, complete) => {
+      assert.equal(database, db); assert.equal(year, 2026); assert.equal(complete, true);
+      return items.map((item) => ({ ...item, workflow: { completed: false, status: { revision: 0 } } }));
+    },
+  });
+  assert.equal(res.statusCode, 200);
   assert.equal(res.body.items.length, 1);
-  assert.deepEqual(calls, [["collection", "staff_submissions_qa"],
-    ["where", "itemId", "==", "tb"], ["limit", 300]]);
+  assert.equal(res.body.items[0].workflow.status.revision, 0);
+  assert.deepEqual(calls.filter((item) => item[0] === "where"), [["where", "schoolYear", "==", 2026]]);
+  assert.deepEqual(calls.filter((item) => item[0] === "limit"), [["limit", 100]]);
 });
 
 test("client-supplied environment or collection cannot redirect QA read", async () => {
@@ -135,4 +166,46 @@ test("Production does not access annual QA types", async () => {
     annualTypes: async () => { throw new Error("must not read QA annual collection"); },
   });
   assert.equal(res.statusCode, 200); assert.equal(res.body.items[0].annualHealthScreeningType, undefined);
+});
+
+for (const query of [{ itemId: "tb", schoolYear: 2026 }, {}]) {
+  test(`QA-only administrator reads ${query.itemId ? "year-scoped TB" : "legacy overview"} using only QA assignments`, async () => {
+    const { db: submissionDb } = database([{ itemId: "tb", type: "tb", environment: "qa", schoolYear: 2026 },
+      { itemId: "cpr", submittedAt: "2025-10-01" }]);
+    const assignmentReads = [];
+    const db = { collection(name) {
+      if (name.startsWith("user_assignments")) {
+        assignmentReads.push(name);
+        return { doc: () => ({ get: async () => ({ exists: name === "user_assignments_qa",
+          data: () => ({ uid: "qa-manager", active: true, staffId: "QA-MANAGER", roles: ["health_teacher"] }) }) }) };
+      }
+      return submissionDb.collection(name);
+    } };
+    const res = response();
+    await handleAdminProxySubmissionsResource({ method: "GET", query, headers: { authorization: "Bearer synthetic-token" } }, res, {
+      context: { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" },
+      qaIdentity: (req, options) => verifyCurrentStaffSubmissionIdentity(req, { ...options,
+        auth: () => ({ verifyIdToken: async () => ({ uid: "qa-manager" }) }), database: () => db }),
+      verifyAdmin: async () => {
+        await db.collection("user_assignments").doc("qa-manager").get();
+        return { ok: false, status: 403, message: "No Production assignment" };
+      },
+      workflows: async (database, items) => items,
+    });
+    assert.equal(res.statusCode, 200, "QA-only administrator must be accepted without a Production assignment");
+    assert.deepEqual(assignmentReads, ["user_assignments_qa"]);
+    if (!query.itemId) assert.equal(res.body.items.some((item) => item.itemId === "cpr" && item.schoolYear === undefined), true);
+  });
+}
+
+test("legacy QA overview retains administrator role gate before submission reads", async () => {
+  for (const role of ["staff", "training_admin"]) {
+    const res = response();
+    await handleAdminProxySubmissionsResource({ method: "GET", query: {} }, res, {
+      environment: () => "qa", qaIdentity: async () => ({ ok: true, roles: [role], db: {
+        collection() { throw new Error("must not read submissions for non-administrators"); },
+      } }), verifyAdmin: async () => { throw new Error("must not use Production administrator auth"); },
+    });
+    assert.equal(res.statusCode, 403);
+  }
 });

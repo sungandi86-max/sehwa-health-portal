@@ -3,7 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import AdminProxySubmissionDialog from "../components/AdminProxySubmissionDialog.jsx";
-import { screeningTypeLabel } from "../lib/healthScreeningTypes.js";
+import { screeningTypeLabel, isHealthScreeningTypeQaHost } from "../lib/healthScreeningTypes.js";
+import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
+import { tbEvidenceLabel } from "../lib/tbScreeningWorkflowClient.js";
 import {
   INFECTION_STATUS_LABELS,
   INFECTION_STATUS_OPTIONS,
@@ -13,6 +15,7 @@ import {
   getStaffSubmissions,
   updateInfectionReportStatus,
   updateStaffSubmissionStatus,
+  formatSubmissionDateTime,
 } from "../lib/adminSubmissions.js";
 
 const VALID_TABS = new Set(["staff", "infection"]);
@@ -99,6 +102,7 @@ function DetailRow({ label, value }) {
 }
 
 function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
+  const isQaTb = item.sourceEnvironment === "qa" && item.itemId === "tb";
   const isProxy = item.submissionMode === "admin_proxy";
   const submitterName = item.subjectName || item.submitter?.displayName || "제출자";
   const submitterEmail = item.submitter?.email || "";
@@ -119,7 +123,12 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
           <p className="mt-2 text-xs font-bold text-[#8A96A8]">제출일시 {item.submittedAtLabel}</p>
           <p className="mt-1 text-xs font-semibold text-[#627083]">제출 방식: {isProxy ? "관리자 대리등록" : "본인 제출"}</p>
           {isProxy && <p className="mt-1 text-xs font-semibold text-[#627083]">등록자: {item.submittedByName || "관리자"}</p>}
-          {item.annualHealthScreeningType && <p className="mt-1 text-xs text-[#627083]">{item.annualHealthScreeningType.schoolYear}학년도 검진 유형: {screeningTypeLabel(item.annualHealthScreeningType.screeningType)} · 본인 확인: {item.annualHealthScreeningType.selfChoice ? "완료" : "미확인"}</p>}
+          {item.annualHealthScreeningType && <p className="mt-1 text-xs text-[#627083]">{item.annualHealthScreeningType.schoolYear}학년도 검진 경로: {screeningTypeLabel(item.annualHealthScreeningType.screeningType)} · 본인 확인: {item.annualHealthScreeningType.selfChoice ? "완료" : "미확인"}</p>}
+          {isQaTb && <p className="mt-1 text-xs text-[#627083]">{item.schoolYear ? `${item.schoolYear}학년도` : "과거 자료 · 연도 미연결"} · 검진 경로: {screeningTypeLabel(item.workflow?.route?.screeningType)} · 본인확인: {item.workflow?.route?.selfChoice ? "확인 완료" : "미확인"}</p>}
+          {isQaTb && <p className="mt-1 text-xs text-[#627083]">확인자료: {tbEvidenceLabel(item.workflow)} · 완료: {item.workflow?.completed ? "완료" : "확인 필요"}</p>}
+          {isQaTb && item.workflow?.routeMismatch && <p role="status" className="mt-2 text-xs text-[#B42318]">검진 경로와 확인자료 유형이 다릅니다. 자료를 확인한 뒤 처리해 주세요.</p>}
+          {isQaTb && item.workflow?.status?.confirmedAt && <p className="mt-1 break-all text-xs text-[#627083]">확인자: {typeof item.workflow.status.confirmedBy === "string" ? item.workflow.status.confirmedBy : item.workflow.status.confirmedBy?.displayName || item.workflow.status.confirmedBy?.email || "관리자"} · 확인일시: {formatSubmissionDateTime(item.workflow.status.confirmedAt)} · 확인자료: {item.workflow.status.evidenceSubmissionId}</p>}
+          {isQaTb && item.workflow?.status?.discrepancy && <p role="status" className="mt-2 text-xs text-[#B42318]">확인자료가 무효 처리되었습니다. 기존 검진 완료와 관리자 확인 이력은 유지되므로 보건실 확인이 필요합니다.</p>}
         </div>
         {item.file?.driveUrl ? (
           <a
@@ -165,9 +174,9 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
         </p>
         <StatusButtons
           currentStatus={item.status}
-          labels={STAFF_STATUS_LABELS}
-          options={STAFF_STATUS_OPTIONS}
-          pending={isUpdating}
+          labels={isQaTb ? { completed: "확인 완료", rejected: "자료 무효 처리" } : STAFF_STATUS_LABELS}
+          options={isQaTb ? ["completed", "rejected"] : STAFF_STATUS_OPTIONS}
+          pending={isUpdating || (isQaTb && (!item.schoolYear || item.schoolYear !== CURRENT_SCHOOL_YEAR || !item.workflow))}
           onChange={(status) => onStatusChange(item.id, status)}
         />
       </div>
@@ -275,7 +284,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
 
     try {
       if (activeTab === "staff") {
-        const nextStaffItems = await getStaffSubmissions({ status: statusFilter });
+        const nextStaffItems = await getStaffSubmissions({ status: statusFilter, ...(isHealthScreeningTypeQaHost(globalThis.location?.hostname) ? { schoolYear: CURRENT_SCHOOL_YEAR } : {}) });
         setStaffItems(nextStaffItems);
         setInfectionReports([]);
         setLoadState({ status: nextStaffItems.length ? "success" : "empty", message: "" });
@@ -355,6 +364,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
       description="교직원 제출과 감염병 보고를 탭으로 구분해 확인하고 처리 상태를 관리합니다."
       displayName={displayName}
     >
+      {activeTab === "staff" && staffItems.evidenceComplete === false && <p role="status" className="rounded-[12px] border border-[#DDEAE7] bg-[#EEF4FF] p-3 text-sm text-[#3154A3]">확인자료 조회가 일부입니다. 자료 없음으로 판단하지 마세요. 연도별 검진 경로 관리에서 다음 자료를 조회할 수 있습니다.</p>}
       <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex rounded-[22px] bg-[#F7FBF9] p-1">

@@ -1,6 +1,6 @@
 import { trainingEnvironment } from "./trainingDeployment.js";
 
-export const HEALTH_SCREENING_TYPES = new Set(["nhis", "employment", "none", "other"]);
+export const HEALTH_SCREENING_TYPES = new Set(["nhis", "employment", "none", "other", "individual"]);
 export const HEALTH_SCREENING_TYPE_COLLECTION = "staff_health_screening_types_qa";
 
 export class HealthScreeningTypeError extends Error {

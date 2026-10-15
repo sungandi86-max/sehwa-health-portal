@@ -12,6 +12,7 @@ import {
   TB_SCREENING_TASK_ID,
 } from "../lib/staffSubmissionStatus.js";
 import { CPR_METHOD_LABELS } from "../lib/cprTrainingStatusModel.js";
+import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
 import {
   TB_LATENT_STATUS_LABELS,
   TB_SCREENING_TYPE_LABELS,
@@ -119,7 +120,7 @@ function NoticePanel({ title, description }) {
   );
 }
 
-function MySubmissionStatusContent({ assignment, displayName }) {
+function MySubmissionStatusContent({ assignment, displayName, qaSyntheticAccess }) {
   const [overview, setOverview] = useState(null);
   const [state, setState] = useState({ status: "idle", message: "" });
   const eligibility = useMemo(() => getStaffSubmissionStatusEligibility(assignment), [assignment]);
@@ -136,7 +137,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
     async function loadStatus() {
       setState({ status: "loading", message: "" });
       try {
-        const nextOverview = await getMyStaffSubmissionStatus(assignment.staffId);
+        const nextOverview = await getMyStaffSubmissionStatus(assignment.staffId, { schoolYear: CURRENT_SCHOOL_YEAR, qaSyntheticAccess });
         if (shouldIgnore) return;
         setOverview(nextOverview);
         setState({ status: nextOverview.items.length ? "success" : "empty", message: "" });
@@ -158,7 +159,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
     return () => {
       shouldIgnore = true;
     };
-  }, [assignment, eligibility.status]);
+  }, [assignment, eligibility.status, qaSyntheticAccess]);
 
   if (eligibility.status === "needs-staff-id") {
     return (
@@ -196,9 +197,10 @@ function MySubmissionStatusContent({ assignment, displayName }) {
       title="나의 제출·이수 현황"
       description="현재 연결된 교직원 정보를 기준으로 제출·이수·검진 상태를 확인합니다."
       displayName={displayName}
+      showDashboardLink={!qaSyntheticAccess}
     >
       <SummaryRow overview={overview} />
-      {isHealthScreeningTypeQaHost(globalThis.location?.hostname) && <HealthScreeningTypePanel completionLabel={overview?.items.find((item) => item.taskId === TB_SCREENING_TASK_ID)?.status === "completed" ? "완료" : ["incomplete", "pending"].includes(overview?.items.find((item) => item.taskId === TB_SCREENING_TASK_ID)?.status) ? "미완료" : "확인 필요"} />}
+      {isHealthScreeningTypeQaHost(globalThis.location?.hostname) && overview && <HealthScreeningTypePanel initialItem={overview.tbWorkflow?.route} workflow={overview.tbWorkflow} />}
 
       {state.status === "success" && (
         <section className="space-y-3">
@@ -221,9 +223,9 @@ function MySubmissionStatusContent({ assignment, displayName }) {
 
 export default function MySubmissionStatusPage() {
   return (
-    <FirebaseStaffSubmissionAccessGate>
-      {({ assignment, displayName }) => (
-        <MySubmissionStatusContent assignment={assignment} displayName={displayName} />
+    <FirebaseStaffSubmissionAccessGate allowQaTbSynthetic>
+      {({ assignment, displayName, qaSyntheticAccess }) => (
+        <MySubmissionStatusContent assignment={assignment} displayName={displayName} qaSyntheticAccess={qaSyntheticAccess} />
       )}
     </FirebaseStaffSubmissionAccessGate>
   );

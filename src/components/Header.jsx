@@ -7,6 +7,7 @@ import { firebaseV2MenuItems } from "../data/firebaseV2Navigation.js";
 import { auth } from "../lib/firebase.js";
 import { getUserAssignmentResult, isAdmin, isHealthTeacher } from "../lib/userProfile.js";
 import { SchoolEmblem } from "./ui.jsx";
+import { isQaTbSyntheticOptIn, isQaTbSyntheticUser, loadQaTbPageAccess } from "../lib/qaTbSyntheticAccess.js";
 
 const ROUTE_MAP = {
   today: "/today",
@@ -25,6 +26,7 @@ export default function Header() {
   const [currentUser, setCurrentUser] = useState(null);
   const [assignment, setAssignment] = useState(null);
   const params = new URLSearchParams(location.search);
+  const qaOptIn = isQaTbSyntheticOptIn({ ...location, hostname: globalThis.location?.hostname });
   const isFirebaseV2 = location.pathname.startsWith("/firebase");
   const isOperationalEntry =
     isFirebaseV2 || location.pathname === "/" || location.pathname === "/my-submission-status";
@@ -52,6 +54,15 @@ export default function Header() {
 
       if (!firebaseUser) return;
 
+      if (isQaTbSyntheticUser(firebaseUser) || qaOptIn) {
+        if (!qaOptIn) return;
+        try {
+          const access = await loadQaTbPageAccess({ user: firebaseUser, schoolYear: CURRENT_SCHOOL_YEAR });
+          if (isMounted && currentRequestId === authRequestId) setAssignment(access.assignment);
+        } catch { if (isMounted && currentRequestId === authRequestId) setAssignment(null); }
+        return;
+      }
+
       const result = await getUserAssignmentResult(firebaseUser.uid, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
       if (!isMounted || currentRequestId !== authRequestId) return;
 
@@ -62,7 +73,7 @@ export default function Header() {
       isMounted = false;
       unsubscribe();
     };
-  }, [isPublicUpload]);
+  }, [isPublicUpload, qaOptIn]);
 
   if (isPublicUpload) return null;
 
@@ -74,6 +85,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-[#DDEAE7] bg-white/92 shadow-[var(--shh-soft-shadow)] backdrop-blur">
       <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-2.5">
         <button
+          disabled={isQaTbSyntheticUser(currentUser)}
           onClick={() => navigate("/")}
           className={`flex min-w-0 items-center gap-2 text-left sm:gap-2.5 ${
             isOperationalEntry ? "min-h-10" : ""
@@ -94,6 +106,7 @@ export default function Header() {
             const target = item.href || ROUTE_MAP[item.id] || "/";
             return (
             <button
+              disabled={isQaTbSyntheticUser(currentUser)}
               key={item.id}
               onClick={() => navigate(target)}
               className={`rounded-[9px] px-2.5 py-1.5 text-xs font-semibold transition ${
@@ -111,6 +124,7 @@ export default function Header() {
         </nav>
         <div className="flex shrink-0 items-center gap-1.5">
           <button
+            disabled={isQaTbSyntheticUser(currentUser)}
             onClick={() => navigate("/firebase-submissions")}
             className="min-h-10 rounded-[10px] bg-[#0D4EA6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#183B8F] sm:px-3.5"
           >

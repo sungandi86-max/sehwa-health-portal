@@ -12,6 +12,8 @@ import {
   getInfectionSubmissionStatus,
 } from "./infectionStatus.js";
 import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
+import { isHealthScreeningTypeQaHost } from "./healthScreeningTypes.js";
+import { reviewTbScreeningEvidence } from "./tbScreeningWorkflowClient.js";
 export { INFECTION_STATUS_LABELS } from "./infectionStatus.js";
 
 const STAFF_COLLECTION = "staff_submissions";
@@ -101,18 +103,31 @@ function filterByStatus(items, status) {
   return status ? items.filter((item) => item.status === status) : items;
 }
 
-export async function getStaffSubmissions({ status = "" } = {}) {
+export async function getStaffSubmissions({ status = "", schoolYear } = {}) {
+  if (schoolYear !== undefined && isHealthScreeningTypeQaHost(globalThis.location?.hostname)) {
+    const [tbItems, legacyItems] = await Promise.all([
+      getAdminProxySubmissions({ itemId: "tb", schoolYear }),
+      getAdminProxySubmissions(),
+    ]);
+    const items = filterByStatus([
+      ...tbItems,
+      ...legacyItems.filter((item) => item.itemId !== "tb" || !item.schoolYear),
+    ].map(normalizeStaffSubmissionData), status)
+      .sort((left, right) => right.submittedAtMillis - left.submittedAtMillis);
+    items.evidenceComplete = tbItems.evidenceComplete;
+    return items;
+  }
   const items = await getAdminProxySubmissions();
   return filterByStatus(items.map(normalizeStaffSubmissionData), status)
     .sort((left, right) => right.submittedAtMillis - left.submittedAtMillis)
     .slice(0, LIST_LIMIT);
 }
 
-export async function getAdminProxySubmissions({ itemId = "" } = {}) {
+export async function getAdminProxySubmissions({ itemId = "", schoolYear } = {}) {
   const user = auth.currentUser;
   if (!user) throw Object.assign(new Error("로그인이 필요합니다."), { status: 401 });
   const token = await user.getIdToken();
-  const suffix = itemId ? `&itemId=${encodeURIComponent(itemId)}` : "";
+  const suffix = (itemId ? `&itemId=${encodeURIComponent(itemId)}` : "") + (schoolYear !== undefined ? `&schoolYear=${encodeURIComponent(schoolYear)}` : "");
   const response = await fetch(`/api/firebase/staff-directory?resource=admin-proxy-submissions${suffix}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -121,6 +136,7 @@ export async function getAdminProxySubmissions({ itemId = "" } = {}) {
     status: response.status,
   });
   if (payload.ok !== true || !Array.isArray(payload.items)) throw new Error("제출 조회 응답을 확인할 수 없습니다.");
+  if (schoolYear !== undefined) payload.items.evidenceComplete = payload.datasets?.completeness?.evidence === true;
   return payload.items;
 }
 
@@ -151,6 +167,16 @@ export async function getInfectionReports({ status = "" } = {}) {
 export async function updateStaffSubmissionStatus(submission, status) {
   if (!STAFF_STATUS_OPTIONS.includes(status)) throw new Error("지원하지 않는 제출 상태입니다.");
   if (submission?.sourceEnvironment === "qa") {
+    if (submission.itemId === "tb" && isHealthScreeningTypeQaHost(globalThis.location?.hostname)) {
+      if (!["completed", "rejected"].includes(status)) throw new Error("확인 완료 또는 자료 무효 처리를 선택해 주세요.");
+      return reviewTbScreeningEvidence({
+        staffId: submission.staffId,
+        schoolYear: submission.schoolYear,
+        submissionId: submission.id,
+        expectedRevision: submission.workflow?.status?.revision || 0,
+        action: status === "completed" ? "confirm" : "invalidate",
+      });
+    }
     throw new Error("QA 제출 상태 변경은 운영 원장에 적용할 수 없습니다.");
   }
 

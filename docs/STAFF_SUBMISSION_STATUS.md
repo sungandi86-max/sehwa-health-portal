@@ -741,6 +741,36 @@ different privacy boundary.
 
 ## Implementation Safety Lines
 
+### QA 연도별 결핵검진 확인 흐름
+
+QA 고정 주소에서는 `staffId + schoolYear`로 검진 경로, 본인확인,
+확인자료 접수, 관리자 완료를 각각 조회한다. 새 확인자료는 현재 설정 학년도에
+접수되며 관리자 확인 전에는 완료로 표시하지 않는다. 연도가 없는 기존 자료는
+과거 자료로 보존하고 현재 학년도에 연결하지 않는다.
+
+연도별 `health-screening-types` 응답의 `workflow`는 QA 경로 원장,
+`staff_submissions_qa` 확인자료, `staff_submission_status_qa` 완료 원장을
+연결한다. 자료 조회가 일부이면 자료 없음으로 단정하지 않는다.
+관리자는 `tb-screening-workflow`에 확인자료 ID와 현재 revision을 보내
+확인 완료 또는 자료 무효 처리를 수행한다. 보건교사·관리자만 완료를 확인하며
+확인자, 확인일시, 확인자료 참조가 남는다. 자료 무효는 기존 완료와 승인 이력을
+자동 취소하지 않고 불일치 경고를 표시한다.
+
+나의 현황과 관리자 현황은 기존 연도별 응답을 재사용한다. QA 확인서 제출의
+완료 확인은 서버 조회로 처리하며 운영 결핵검진 조회·쓰기 경로로 대체하지 않는다.
+운영 주소의 기존 제출자료 선택과 완료 처리 방식은 그대로 유지한다.
+
+Preview의 `qa` 브랜치에서 본인·대리 결핵검진, CPR·학생 자료 제출과 관리자
+승인용 증빙 메타데이터 조회는 서버 전용 `QA_SUBMISSION_GAS_URL`을 필수로 사용한다.
+설정이 없으면 제출을 503으로 차단하고 승인용 파일 확인도 실패하며,
+`GAS_URL`로 대체하지 않는다. Production은 QA 변수를 무시하고 기존
+`GAS_URL` → `VITE_GAS_BASE_URL` 우선순위를 유지한다. 포털·보건실의 공용 주소는 변경하지 않는다.
+
+독립 QA 제출 Script 웹앱의 계약은 배포자 권한 실행이며, 외부 HTTP 호출을 받더라도
+제출·증빙 확인에는 유효한 QA HMAC 서명이 필요하다. 폴더는 서명된 서버 요청으로 전달하며
+비공개·휴지통 제외 상태와 증빙의 정확한 QA 폴더 소속을 확인한다.
+실제 QA 접수부터 관리자 승인·완료 조회까지의 라이브 E2E는 검증이 끝날 때까지 미완료로 남긴다.
+
 - Do not change the health-office Sheet workflow.
 - Do not write to the research department Sheet.
 - Do not copy full external rows into Firestore.

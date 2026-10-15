@@ -21,13 +21,15 @@ test("proxy duplicate lookup never overwrites and create uses a new document", a
   const db = { collection: (name) => {
     collections.push(name);
     return ({
-    where: () => ({ get: async () => ({ docs: [
-      { id: "old-tb", data: () => ({ itemId: "tb", staffId: "T049", checkupDate: "2026-03-01" }) },
+    where: () => ({ where() { return this; }, limit(value) { assert.equal(value, 100); return this; }, get: async () => ({ docs: [
+      { id: "old-tb", data: () => ({ itemId: "tb", staffId: "T049", schoolYear: 2026, checkupDate: "2026-03-01" }) },
+      { id: "historical-tb", data: () => ({ itemId: "tb", staffId: "T049", checkupDate: "2026-03-01" }) },
       { id: "other", data: () => ({ itemId: "cpr", staffId: "T049" }) },
     ] }) }),
     doc: (id) => ({ create: async (value) => created.push({ id, value }) }),
   }); } };
-  assert.equal((await findProxyDuplicates(db, "T049", { collectionName: "staff_submissions_qa" })).length, 1);
+  await assert.rejects(findProxyDuplicates(db, "T049", { collectionName: "staff_submissions_qa" }), /학년도/);
+  assert.equal((await findProxyDuplicates(db, "T049", { collectionName: "staff_submissions_qa", schoolYear: 2026 })).length, 1);
   await createProxySubmission(db, { itemId: "tb" }, {
     submissionId: () => "new-id",
     collectionName: "staff_submissions_qa",

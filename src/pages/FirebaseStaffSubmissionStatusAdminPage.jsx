@@ -6,6 +6,7 @@ import ResearchTrainingDryRunPanel from "../components/ResearchTrainingDryRunPan
 import ResearchTrainingExceptionsPanel from "../components/ResearchTrainingExceptionsPanel.jsx";
 import HealthScreeningTypeAdminPanel from "../components/HealthScreeningTypeAdminPanel.jsx";
 import { isHealthScreeningTypeQaHost } from "../lib/healthScreeningTypes.js";
+import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
 import { getAdminStaffSubmissionStatusOverview, updateAdminTbScreeningStatus } from "../lib/staffSubmissionStatusAdmin.js";
 import { CPR_TRAINING_TASK_ID, isHealthMandatoryTrainingTask, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
 import { CPR_METHOD_LABELS } from "../lib/cprTrainingStatusModel.js";
@@ -238,7 +239,7 @@ function AdminStatusContent({ displayName }) {
     const shouldApply = options.shouldApply || (() => true);
     setState({ status: "loading", message: "" });
     try {
-      const nextOverview = await getAdminStaffSubmissionStatusOverview();
+      const nextOverview = await getAdminStaffSubmissionStatusOverview({ schoolYear: CURRENT_SCHOOL_YEAR });
       if (!shouldApply()) return;
       setOverview(nextOverview);
       setSelectedTaskId((currentTaskId) => {
@@ -293,13 +294,13 @@ function AdminStatusContent({ displayName }) {
       displayName={displayName}
     >
       <nav aria-label="제출·이수 현황 섹션 이동" className="flex flex-wrap gap-2 text-sm text-[#3154A3]">
-        {ANNUAL_QA && <a href="#annual-screening-type" className="rounded-lg border border-[#DDEAE7] px-3 py-3">건강검진 유형</a>}
+        {ANNUAL_QA && <a href="#annual-screening-type" className="rounded-lg border border-[#DDEAE7] px-3 py-3">결핵검진 경로</a>}
         <a href="#training-source-check" className="rounded-lg border border-[#DDEAE7] px-3 py-3">연수 원본 점검</a>
         <a href="#legal-training-exceptions" className="rounded-lg border border-[#DDEAE7] px-3 py-3">법정의무연수 예외</a>
         {state.status === "success" && selectedTask && <a href="#completion-status" className="rounded-lg border border-[#DDEAE7] px-3 py-3">검진·연수 완료 현황</a>}
       </nav>
-      {ANNUAL_QA && <section id="annual-screening-type" className="scroll-mt-4"><HealthScreeningTypeAdminPanel /></section>}
-      {ANNUAL_QA && <p className="text-xs text-[#627083]">아래 기존 검진 완료 현황은 읽기 전용입니다. QA에서는 운영 결핵검진 상태를 수정하지 않습니다.</p>}
+      {ANNUAL_QA && overview?.annualData && <section id="annual-screening-type" className="scroll-mt-4"><HealthScreeningTypeAdminPanel initialData={overview.annualData} /></section>}
+      {ANNUAL_QA && <p className="text-xs text-[#627083]">결핵검진 완료는 위 연도별 검진 경로 관리에서 확인자료를 검토한 뒤 확인 완료로 처리합니다.</p>}
       <section id="training-source-check" className="scroll-mt-4"><ResearchTrainingDryRunPanel onApplied={loadOverview} /></section>
       <section id="legal-training-exceptions" className="scroll-mt-4"><ResearchTrainingExceptionsPanel /></section>
 

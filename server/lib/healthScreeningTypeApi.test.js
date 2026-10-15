@@ -8,13 +8,15 @@ function fixture() {
   const operations = [];
   let queue = Promise.resolve();
   const snapshot = (path) => ({ exists: records.has(path), data: () => records.get(path) });
-  const collection = (path) => ({
+  const collection = (path, filters = [], cursor = "", cap = 100) => ({
     doc: (id) => ({ path: `${path}/${id}`, get: async () => snapshot(`${path}/${id}`), collection: (name) => collection(`${path}/${id}/${name}`) }),
-    where: (field, operator, value) => ({ get: async () => {
-      operations.push([path, field, operator, value]);
-      return { docs: [...records.entries()].filter(([key, item]) => key.startsWith(`${path}/`) && key.split("/").length === 2 && item[field] === value).map(([, item]) => ({ data: () => item })) };
-    } }),
-    orderBy: () => ({ get: async () => ({ docs: [...records.entries()].filter(([key]) => key.startsWith(`${path}/`)).map(([, item]) => ({ data: () => item })) }) }),
+    where: (field, operator, value) => { operations.push([path, field, operator, value]); return collection(path, [...filters, [field, value]], cursor, cap); },
+    limit: (value) => collection(path, filters, cursor, value),
+    startAfter: (value) => collection(path, filters, value, cap),
+    get: async () => ({ docs: [...records.entries()].filter(([key, item]) => key.startsWith(`${path}/`) && key.split("/").length === 2
+      && key.split("/").at(-1) > cursor && filters.every(([field, value]) => item[field] === value)).slice(0, cap)
+      .map(([key, item]) => ({ id: key.split("/").at(-1), data: () => item })) }),
+    orderBy: () => filters.length ? collection(path, filters, cursor, cap) : ({ get: async () => ({ docs: [...records.entries()].filter(([key]) => key.startsWith(`${path}/`)).map(([, item]) => ({ data: () => item })) }) }),
   });
   const db = { collection: (name) => { operations.push(name); return collection(name); }, runTransaction: (callback) => {
     const result = queue.then(async () => {
@@ -133,4 +135,21 @@ test("self writes require revision and cannot overwrite an administrator change 
   assert.equal((await f.request("POST", { screeningType: "none", expectedRevision: 1 })).code, 409);
   assert.equal((await f.request("GET")).payload.item.screeningType, "employment");
   assert.equal(f.records.size, 3);
+});
+
+test("explicit annual GET joins pending evidence and exact-year approved completion", async () => {
+  const f = fixture();
+  f.records.set("staff_submissions_qa/receipt", { submissionId: "receipt", staffId: "self", subjectStaffId: "self",
+    schoolYear: 2026, environment: "qa", type: "tb", fileId: "file", evidenceRoute: "individual", reviewState: "pending" });
+  f.records.set("staff_submission_status_qa/self_tb-screening-2026", { staffId: "self", schoolYear: 2026,
+    environment: "qa", taskId: "tb-screening-2026", status: "pending", screening: { completed: false } });
+  const pending = await f.request("GET", { schoolYear: 2026 });
+  assert.equal(pending.payload.item.workflow.completed, false);
+  assert.equal(pending.payload.item.workflow.evidence.length, 1);
+  const future = await f.request("GET", { schoolYear: 2027 });
+  assert.equal(future.payload.item.workflow.evidence.length, 0);
+  assert.equal(future.payload.item.workflow.status, null);
+  const admin = await f.request("GET", { scope: "admin", schoolYear: 2026 }, f.admin);
+  assert.equal(admin.payload.items.find((item) => item.staffId === "self").workflow.evidence.length, 1);
+  assert.equal(admin.payload.datasets.completeness.evidence, true);
 });

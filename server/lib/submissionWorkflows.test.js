@@ -5,6 +5,8 @@ import vm from "node:vm";
 import { createHash, createHmac } from "node:crypto";
 import submitHandler from "../../api/submit.js";
 import { buildSubmissionProxyEnvelope } from "./submissionProxyEnvelope.js";
+import { TbCertificateSubmissionStore } from "./tbCertificateSubmissionStore.js";
+import { recordQaTbReceipt } from "./tbScreeningWorkflowStore.js";
 import { buildScriptSubmission, publicSubmissionCard, resolveSubmissionWorkflow, SUBMISSION_WORKFLOWS, validateSubmissionPayload } from "./submissionWorkflows.js";
 
 const png = Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64");
@@ -26,6 +28,173 @@ function response() {
 function request(payload) {
   return { method: "POST", headers: { "content-type": "application/json" }, async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(payload)); } };
 }
+
+function qaTbFixture() {
+  const documents = new Map(); const files = new Map(); let uploads = 0; let chain = Promise.resolve();
+  const context = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+  const ref = (path) => ({ path, get: async () => ({ exists: documents.has(path), id: path.split("/").at(-1), data: () => documents.get(path) }),
+    create: async (value) => { if (documents.has(path)) { const error = new Error("exists"); error.code = 6; throw error; } documents.set(path, value); } });
+  const db = { collection(name) { assert.match(name, /_qa$/); return { doc: (id) => ref(`${name}/${id}`) }; },
+    runTransaction(fn) { const run = chain.then(() => fn({ get: (r) => r.get(), create: (r, value) => documents.set(r.path, value),
+      set: (r, value) => documents.set(r.path, value) })); chain = run.catch(() => {}); return run; } };
+  const subject = { staffId: "QA-TB-001", name: "QA fixture", department: "QA", position: "교사" };
+  const administrator = { staffId: "QA-ADMIN", name: "QA admin", department: "QA", position: "보건교사" };
+  const options = { destinationUrl, proxySecret, environment: () => "qa", qaTbCertificateFolderId: "QA-PRIVATE-FOLDER-001",
+    verifyTb: async () => ({ ok: true, db, staffId: subject.staffId, roles: ["staff"], identity: subject }),
+    verifyProxyAdmin: async () => ({ ok: true, db, assignment: { staffId: administrator.staffId, roles: ["admin"] } }),
+    readDirectory: async () => ({ directory: [subject, administrator] }), findDuplicates: async () => [],
+    tbCertificateStore: new TbCertificateSubmissionStore({ database: () => db, context: () => context }),
+    recordTbReceipt: (database, submission) => recordQaTbReceipt(database, submission, { context }),
+    postScript: async (_url, init) => {
+      const payload = JSON.parse(JSON.parse(init.body).payloadJson);
+      if (payload.type === "qa-tb-upload-capability") return { text: async () => JSON.stringify({ contract: "qa-tb-idempotency-v1", folderId: "QA-PRIVATE-FOLDER-001", private: true }) };
+      if (!files.has(payload.qaSubmissionId)) { uploads++; files.set(payload.qaSubmissionId, "qa-file"); }
+      return { text: async () => JSON.stringify({ status: "success", fileId: files.get(payload.qaSubmissionId),
+        submissionId: payload.qaSubmissionId, requestFingerprint: payload.qaRequestFingerprint, folderId: "QA-PRIVATE-FOLDER-001", private: true }) };
+    } };
+  return { documents, options, uploads: () => uploads };
+}
+
+test("QA self and proxy persist the same stable server receipt, audit and pending projection only in QA", async () => {
+  for (const action of [undefined, "admin_proxy"]) {
+    const f = qaTbFixture(); const payload = { ...file, type: "tb", schoolYear: 2026, action, subjectStaffId: "QA-TB-001",
+      fields: { ...file.fields, docType: "결핵검진 확인증" } };
+    const first = response(); await submitHandler(request(payload), first, f.options);
+    assert.equal(first.statusCode, 200); assert.equal(first.body.environment, "qa"); assert.equal(first.body.schoolYear, 2026);
+    const id = first.body.submissionId;
+    const audit = f.documents.get(`tb_certificate_submissions_qa/${id}`);
+    const receipt = f.documents.get(`staff_submissions_qa/${id}`);
+    assert.equal(audit.submissionId, id); assert.equal(audit.schoolYear, 2026); assert.equal(receipt.submissionId, id);
+    assert.equal(receipt.submissionMode, action || "self"); assert.equal(receipt.evidenceRoute, "individual");
+    const status = f.documents.get("staff_submission_status_qa/QA-TB-001_tb-screening-2026");
+    assert.equal(status.status, "pending"); assert.equal(status.screening.completed, false); assert.equal(status.latestSubmissionId, id);
+    const repeated = response(); await submitHandler(request({ ...payload, fileName: "tomorrow.png" }), repeated, f.options);
+    assert.equal(repeated.body.submissionId, id); assert.equal(f.uploads(), 1);
+    assert.equal([...f.documents.keys()].filter((key) => key.startsWith("staff_submissions_qa/")).length, 1);
+  }
+});
+
+test("QA proxy retry fingerprints canonical staff type against persisted duplicate receipt", async () => {
+  const f = qaTbFixture(); let persistedDuplicateSeen = false;
+  const payload = { ...file, type: "tb", action: "admin_proxy", subjectStaffId: "QA-TB-001", schoolYear: 2026,
+    allowDuplicate: false, fields: { name: "client supplied", checkupDate: "2026-10-14", docType: "결핵검진 확인증" } };
+  assert.equal(payload.fields.staffType, undefined);
+  const options = { ...f.options, findDuplicates: async (_db, staffId, { schoolYear, collectionName }) => {
+    assert.equal(collectionName, "staff_submissions_qa");
+    const duplicates = [...f.documents.entries()].filter(([path, value]) => path.startsWith(`${collectionName}/`) &&
+      value.staffId === staffId && value.schoolYear === schoolYear).map(([, value]) => value);
+    if (duplicates.length) { persistedDuplicateSeen = true; assert.match(duplicates[0].requestFingerprint, /^[a-f0-9]{64}$/); }
+    return duplicates;
+  } };
+  const first = response(); await submitHandler(request(payload), first, options);
+  assert.equal(first.statusCode, 200);
+  const repeated = response(); await submitHandler(request({ ...payload, fileName: "next-day-generated.png" }), repeated, options);
+  assert.equal(persistedDuplicateSeen, true); assert.equal(repeated.statusCode, 200);
+  assert.equal(repeated.body.submissionId, first.body.submissionId); assert.equal(f.uploads(), 1);
+  for (const collection of ["tb_certificate_submissions_qa/", "staff_submissions_qa/"]) {
+    assert.equal([...f.documents.keys()].filter((path) => path.startsWith(collection)).length, 1);
+  }
+});
+test("QA self and proxy use dedicated configured endpoint for capability and upload", async () => {
+  for (const action of [undefined, "admin_proxy"]) {
+    const f = qaTbFixture(); const urls = [];
+    const options = { ...f.options, context: { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa",
+      GAS_URL: "https://script.google.com/macros/s/common/exec", QA_SUBMISSION_GAS_URL: "https://script.google.com/macros/s/qa-only/exec" },
+      postScript: async (url, init) => { urls.push(url); return f.options.postScript(url, init); } };
+    delete options.destinationUrl;
+    const result = response(); await submitHandler(request({ ...file, type: "tb", action, schoolYear: 2026, subjectStaffId: "QA-TB-001" }), result, options);
+    assert.equal(result.statusCode, 200); assert.deepEqual(urls, [options.context.QA_SUBMISSION_GAS_URL, options.context.QA_SUBMISSION_GAS_URL]);
+  }
+});
+test("QA upload types reject absent dedicated endpoint without common fallback", async () => {
+  for (const type of ["tb", "cpr", "student-file"]) {
+    const f = qaTbFixture(); const options = { ...f.options,
+      context: { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa", GAS_URL: destinationUrl },
+      verifyStaff: async () => ({ ok: true, staffId: "QA-TB-001", roles: ["staff"] }),
+      postScript: async () => { throw new Error("common endpoint must not be called"); } };
+    delete options.destinationUrl;
+    const fields = type === "student-file" ? { grade: "QA", classNumber: "QA", studentNumber: "QA", studentName: "[QA] synthetic" } : file.fields;
+    const result = response(); await submitHandler(request({ ...file, type, fields, schoolYear: 2026 }), result, options);
+    assert.equal(result.statusCode, 503); assert.equal(f.documents.size, 0);
+  }
+});
+test("QA CPR and student Script requests select dedicated URL through server context", async () => {
+  for (const type of ["cpr", "student-file"]) {
+    const context = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa", GAS_URL: destinationUrl,
+      QA_SUBMISSION_GAS_URL: "https://script.google.com/macros/s/qa-only/exec" };
+    let calls = 0;
+    const payload = { ...file, type, fileName: "QA-file.png", fields: type === "student-file"
+      ? { grade: "QA", classNumber: "QA", studentNumber: "QA", studentName: "[QA] synthetic" } : file.fields };
+    const req = request(payload); req.headers["x-vercel-forwarded-for"] = "127.0.0.1";
+    const result = response(); await submitHandler(req, result, { context, proxySecret,
+      qaCprFolderId: "QA-CPR-FOLDER", qaStudentReplyFolderId: "QA-STUDENT-FOLDER",
+      verifyStaff: async () => ({ ok: true, staffId: "QA-TB-001", roles: ["staff"] }),
+      studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null },
+      postScript: async (url, init) => { calls++; assert.equal(url, context.QA_SUBMISSION_GAS_URL);
+        const payload = JSON.parse(JSON.parse(init.body).payloadJson); assert.equal(payload.runtimeEnvironment, "qa");
+        return { text: async () => JSON.stringify({ status: "error" }) }; } });
+    assert.equal(result.statusCode, 200); assert.equal(calls, 1);
+  }
+});
+test("Production ignores dedicated QA URL while unapproved context cannot trust client environment", async () => {
+  for (const production of [true, false]) {
+    let calls = 0; const result = response();
+    const context = { VERCEL_ENV: production ? "production" : "preview", VERCEL_GIT_COMMIT_REF: production ? "main" : "feature",
+      GAS_URL: destinationUrl, QA_SUBMISSION_GAS_URL: "https://script.google.com/macros/s/qa-only/exec" };
+    await submitHandler(request({ ...file, type: "cpr", environment: "qa", runtimeEnvironment: "qa" }), result, { context, proxySecret,
+      verifyStaff: async () => ({ ok: true, staffId: "T001", roles: ["staff"] }),
+      postScript: async (url) => { calls++; assert.equal(url, destinationUrl); return { text: async () => JSON.stringify({ status: "error" }) }; } });
+    assert.equal(result.statusCode, production ? 200 : 503); assert.equal(calls, production ? 1 : 0);
+  }
+});
+
+test("QA missing/future year and unknown deployment reject before auth, data or upload", async () => {
+  for (const [schoolYear, environment, expected] of [[undefined, "qa", 400], [2027, "qa", 400], [2026, null, 403]]) {
+    const result = response(); await submitHandler(request({ ...file, type: "tb", schoolYear }), result, {
+      environment: () => environment, verifyTb: async () => { throw new Error("unexpected auth"); },
+      postScript: async () => { throw new Error("unexpected script"); } });
+    assert.equal(result.statusCode, expected);
+  }
+});
+
+test("missing QA Script capability never forwards evidence or writes a request", async () => {
+  const f = qaTbFixture(); let scriptCalls = 0; const result = response();
+  await submitHandler(request({ ...file, type: "tb", schoolYear: 2026 }), result, { ...f.options,
+    postScript: async (_url, init) => { scriptCalls++; const payload = JSON.parse(JSON.parse(init.body).payloadJson);
+      assert.equal(payload.type, "qa-tb-upload-capability"); assert.equal(payload.fileBase64, undefined);
+      return { text: async () => JSON.stringify({ status: "error" }) }; } });
+  assert.equal(result.statusCode, 503); assert.equal(scriptCalls, 1); assert.equal(f.documents.size, 0);
+});
+
+test("concurrent and lost-response QA submissions create one Drive file, one certificate audit and one receipt", async () => {
+  const f = qaTbFixture(); const payload = { ...file, type: "tb", schoolYear: 2026,
+    fields: { ...file.fields, docType: "결핵검진 확인증" } };
+  let lostResponse = true;
+  const options = { ...f.options, postScript: async (...args) => {
+    const result = await f.options.postScript(...args); const forwarded = JSON.parse(JSON.parse(args[1].body).payloadJson);
+    if (forwarded.type === "tb" && lostResponse) { lostResponse = false; throw new Error("lost upload response"); }
+    return result;
+  } };
+  const failed = response(); await submitHandler(request(payload), failed, options); assert.equal(failed.statusCode, 503);
+  assert.match(failed.body.submissionId, /^QA-STAFF-TB-/);
+  const results = [response(), response()];
+  await Promise.all(results.map((result) => submitHandler(request(payload), result, options)));
+  assert.equal(results[0].statusCode, 200); assert.equal(results[1].statusCode, 200);
+  assert.equal(results[0].body.submissionId, results[1].body.submissionId);
+  assert.equal(f.uploads(), 1);
+  for (const collection of ["tb_certificate_submissions_qa/", "staff_submissions_qa/"]) {
+    assert.equal([...f.documents.keys()].filter((key) => key.startsWith(collection)).length, 1);
+  }
+});
+
+test("QA receipt Firestore failure returns recoverable file/id and retry never uploads again", async () => {
+  const f = qaTbFixture(); const payload = { ...file, type: "tb", schoolYear: 2026 };
+  const failed = response(); await submitHandler(request(payload), failed, { ...f.options,
+    recordTbReceipt: async () => { throw new Error("receipt unavailable"); } });
+  assert.equal(failed.statusCode, 503); assert.equal(failed.body.fileId, "qa-file"); assert.match(failed.body.submissionId, /^QA-STAFF-TB-/);
+  const retry = response(); await submitHandler(request(payload), retry, f.options);
+  assert.equal(retry.statusCode, 200); assert.equal(retry.body.submissionId, failed.body.submissionId); assert.equal(f.uploads(), 1);
+});
 
 test("canonical registry only enables current operating submit routes", () => {
   assert.deepEqual(Object.keys(SUBMISSION_WORKFLOWS), ["cpr", "tb", "tb_registration", "student_tb_reply", "inbody", "infection", "recruit", "other"]);
@@ -125,7 +294,7 @@ test("admin proxy TB submission enforces admin role, canonical subject and creat
   let auditInput;
   let statusInput;
   const options = {
-    destinationUrl, proxySecret, environment: () => "qa", qaTbCertificateFolderId: "qa-proxy-folder",
+    destinationUrl, proxySecret, environment: () => "production",
     verifyProxyAdmin: async () => ({ ok: true, assignment: { staffId: "T001", roles: ["health_teacher"] }, db: {} }),
     readDirectory: async () => ({ directory }), findDuplicates: async (_db, _staffId, options) => {
       duplicateCollection = options.collectionName;
@@ -151,8 +320,8 @@ test("admin proxy TB submission enforces admin role, canonical subject and creat
   assert.equal(savedRecord.submissionMode, "admin_proxy");
   assert.equal(auditInput.submissionMode, "admin_proxy");
   assert.equal(statusInput.payload.staffId, "T049");
-  assert.equal(duplicateCollection, "staff_submissions_qa");
-  assert.equal(savedCollection, "staff_submissions_qa");
+  assert.equal(duplicateCollection, "staff_submissions");
+  assert.equal(savedCollection, "staff_submissions");
 
   const duplicate = response();
   await submitHandler(request(payload), duplicate, { ...options,
@@ -180,6 +349,7 @@ test("submission API refuses cross-site simple form content types", async () => 
 test("authorized CPR and TB use the canonical server workflow", async () => {
   const forwarded = [];
   const options = { destinationUrl,
+    environment: () => "production",
     proxySecret,
     verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
     verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),

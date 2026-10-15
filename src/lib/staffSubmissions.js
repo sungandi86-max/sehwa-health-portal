@@ -1,6 +1,8 @@
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
 import { prepareSubmissionFile, validateSelectableSubmissionFile, validateSubmissionFile } from "./submissionFiles.js";
+import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
+import { isHealthScreeningTypeQaHost } from "./healthScreeningTypes.js";
 
 const SUBMIT_API_URL = "/api/submit";
 const RECRUIT_REQUEST_TYPE = "employment_checkup_substitution";
@@ -99,7 +101,7 @@ function getSubmitter(user) {
   };
 }
 
-async function uploadDriveSubmission({ type, fields, fileName, file }) {
+async function uploadDriveSubmission({ type, fields, fileName, file, schoolYear }) {
   const fileBase64 = await fileToBase64(file);
   return postWithTimeout({
     type,
@@ -107,11 +109,12 @@ async function uploadDriveSubmission({ type, fields, fileName, file }) {
     fileName,
     fileBase64,
     fileMimeType: file.type,
+    ...(schoolYear === undefined ? {} : { schoolYear }),
   });
 }
 
 export async function createAdminProxyTbSubmission({ subjectStaffId, subjectName, checkupDate,
-  documentType, proxyNote, file, allowDuplicate = false }) {
+  documentType, proxyNote, file, allowDuplicate = false, schoolYear = CURRENT_SCHOOL_YEAR }) {
   const selectionError = validateSelectableSubmissionFile(file);
   if (selectionError) throw new Error(selectionError);
   const preparedFile = await prepareSubmissionFile(file);
@@ -123,6 +126,7 @@ export async function createAdminProxyTbSubmission({ subjectStaffId, subjectName
   return postWithTimeout({
     action: "admin_proxy",
     type: "tb",
+    schoolYear,
     subjectStaffId,
     proxyNote,
     allowDuplicate,
@@ -195,19 +199,19 @@ export async function createCprSubmission({ user, trainingDate, institution, sta
   return { id: submissionRef.id, file: driveReference };
 }
 
-export async function createTbSubmission({ user, checkupDate, documentType, staffType, file }) {
+export async function createTbSubmission({ user, checkupDate, documentType, staffType, file, schoolYear = CURRENT_SCHOOL_YEAR }) {
   const selectionError = validateSelectableSubmissionFile(file);
   if (selectionError) throw new Error(selectionError);
   const preparedFile = await prepareSubmissionFile(file);
   const fileError = validateSubmissionFile(preparedFile);
   if (fileError) throw new Error(fileError);
 
-  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
   const submitter = getSubmitter(user);
   const originalName = sanitizeFilename(preparedFile.name || "tb-certificate.pdf");
   const fileName = sanitizeFilename(`${submitter.name}_결핵검진확인증_${todayString()}_${originalName}`);
   const uploadResult = await uploadDriveSubmission({
     type: "tb",
+    schoolYear,
     fields: {
       name: submitter.name,
       dept: "Firebase v2 테스트",
@@ -219,6 +223,15 @@ export async function createTbSubmission({ user, checkupDate, documentType, staf
     file: preparedFile,
   });
   const driveReference = getDriveReference(uploadResult, fileName, preparedFile.type);
+  if (isHealthScreeningTypeQaHost(globalThis.location?.hostname) || uploadResult.environment === "qa") {
+    if (uploadResult.environment !== "qa" || !uploadResult.submissionId ||
+      uploadResult.schoolYear !== schoolYear || !driveReference.driveFileId) {
+      throw new Error("QA 결핵검진 접수 영수증을 확인할 수 없습니다.");
+    }
+    return { id: uploadResult.submissionId, submissionId: uploadResult.submissionId,
+      schoolYear: uploadResult.schoolYear, environment: "qa", file: driveReference };
+  }
+  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
 
   await saveStaffSubmission(submissionRef, {
     itemId: "tb",

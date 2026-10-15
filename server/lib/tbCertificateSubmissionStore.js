@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { submissionEnvironment } from "./submissionConfig.js";
+import { validatedSchoolYear } from "../../src/lib/tbScreeningWorkflowModel.js";
 
 const COLLECTIONS = Object.freeze({ qa: "tb_certificate_submissions_qa", production: "tb_certificate_submissions_production" });
 const text = (value) => String(value ?? "").normalize("NFKC").trim();
@@ -74,13 +75,19 @@ export class TbCertificateSubmissionStore {
   get environment() { return submissionEnvironment(this.context()); }
   get collectionName() { return COLLECTIONS[this.environment]; }
   async createRequest({ staffId, submittedAt = new Date(), checkupDate, documentType, evidenceFile,
-    submissionMode = "self", subject = null, submittedBy = null, proxyNote = "" }) {
+    submissionMode = "self", subject = null, submittedBy = null, proxyNote = "",
+    submissionId, schoolYear, requestFingerprint, evidenceSha256, evidenceRoute }) {
     const canonicalStaffId = text(staffId);
     const file = normalizeEvidenceFile({ ...evidenceFile, exists: true });
     if (!canonicalStaffId || !text(checkupDate) || !file.fileId || !file.fileName || !file.mimeType) {
       throw new Error("결핵검진 확인증 감사 원장 필수값이 없습니다.");
     }
-    const id = this.submissionId();
+    const qa = this.environment === "qa";
+    const year = qa ? validatedSchoolYear(schoolYear) : null;
+    const id = qa ? text(submissionId) : this.submissionId();
+    if (qa && (!/^QA-STAFF-TB-[a-f0-9]{32}$/.test(id) || !/^[a-f0-9]{64}$/.test(text(requestFingerprint)))) {
+      throw new Error("QA 결핵검진 제출 식별자를 확인할 수 없습니다.");
+    }
     const timestamp = submittedAt instanceof Date ? submittedAt.toISOString() : text(submittedAt);
     const request = { submissionId: id, staffId: canonicalStaffId, candidateStaffId: "", submittedAt: timestamp,
       checkupDate: text(checkupDate), documentType: text(documentType), source: "portal", environment: this.environment,
@@ -91,7 +98,19 @@ export class TbCertificateSubmissionStore {
       submittedByStaffId: text(submittedBy?.staffId), submittedByName: text(submittedBy?.name),
       proxyNote: text(proxyNote).slice(0, 500), proxyRegisteredAt: submissionMode === "admin_proxy" ? timestamp : "",
       migration: { imported: false }, schemaVersion: 1, createdAt: timestamp, updatedAt: timestamp };
-    await this.database().collection(this.collectionName).doc(id).create(request);
+    if (qa) Object.assign(request, { schoolYear: year, requestFingerprint, evidenceSha256: text(evidenceSha256), evidenceRoute: evidenceRoute ?? null });
+    const ref = this.database().collection(this.collectionName).doc(id);
+    try { await ref.create(request); }
+    catch (error) {
+      if (!qa || ![6, "already-exists"].includes(error.code)) throw error;
+      const existing = await ref.get();
+      const stored = this.readDocument(existing);
+      if (stored.requestFingerprint !== requestFingerprint || stored.schoolYear !== year ||
+        stored.staffId !== canonicalStaffId || stored.evidenceFiles?.[0]?.fileId !== file.fileId) {
+        throw new Error("QA 결핵검진 접수 재시도 내용이 일치하지 않습니다.");
+      }
+      return stored;
+    }
     return request;
   }
   async listRequests() {

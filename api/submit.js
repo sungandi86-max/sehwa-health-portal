@@ -16,13 +16,15 @@ import { cprCertificateSubmissionStore } from "../server/lib/cprCertificateSubmi
 import { tbCertificateSubmissionStore } from "../server/lib/tbCertificateSubmissionStore.js";
 import { studentSubmissionAuditStore } from "../server/lib/studentSubmissionAuditStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
-import { readStaffDirectory, verifyDirectoryAdmin } from "../server/lib/staffDirectory.js";
+import { CURRENT_SCHOOL_YEAR } from "../src/config/school.js";
+import { validatedSchoolYear } from "../src/lib/tbScreeningWorkflowModel.js";
+import { QaTbSubmissionError, qaTbSubmissionIdentity, receiveQaTbSubmission } from "../server/lib/qaTbSubmission.js";
+import { recordQaTbReceipt } from "../server/lib/tbScreeningWorkflowStore.js";
+import { verifyQaTbProxyAdmin } from "../server/lib/qaTbSubmissionAuth.js";
+import { submissionScriptUrl } from "../server/lib/submissionScriptUrl.js";
+import { readStaffDirectory } from "../server/lib/staffDirectory.js";
 import { buildProxySubmissionRecord, createProxySubmission, findProxyDuplicates,
   proxySubmissionCollection, resolveProxySubject } from "../server/lib/adminProxySubmission.js";
-
-function scriptUrl() {
-  return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
-}
 
 export const config = {
   api: { bodyParser: false }
@@ -58,7 +60,7 @@ function buildTbStatusPayload(payload, staffId) {
   });
 }
 
-export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
+export default async function handler(req, res, { context = process.env, postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = submissionScriptUrl(context), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
   qaCprFolderId = process.env.QA_CPR_DRIVE_FOLDER_ID,
   qaTbCertificateFolderId = process.env.QA_TB_CERTIFICATE_DRIVE_FOLDER_ID,
   qaStudentReplyFolderId = process.env.QA_STUDENT_REPLY_DRIVE_FOLDER_ID,
@@ -67,9 +69,11 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
   tbCertificateStore = tbCertificateSubmissionStore,
   studentAuditStore = studentSubmissionAuditStore,
   saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
-  verifyProxyAdmin = verifyDirectoryAdmin, readDirectory = readStaffDirectory,
+  verifyProxyAdmin = verifyQaTbProxyAdmin, readDirectory = readStaffDirectory,
   findDuplicates = findProxyDuplicates, saveProxySubmission = createProxySubmission,
-  environment = trainingEnvironment, now = new Date() } = {}) {
+  environment = () => trainingEnvironment(context),
+  recordTbReceipt = recordQaTbReceipt,
+  now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
@@ -100,13 +104,25 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     const workflow = resolveSubmissionWorkflow(payload);
     const validation = validateSubmissionPayload(workflow, payload);
     if (!validation.ok) return res.status(validation.status).json({ status: "error", success: false, message: validation.message });
+    const tbEnvironment = workflow.id === "tb" ? environment() : null;
+    let tbSchoolYear;
+    if (workflow.id === "tb" && !["qa", "production"].includes(tbEnvironment)) {
+      return res.status(403).json({ status: "error", success: false, message: "승인된 배포 환경에서만 제출할 수 있습니다." });
+    }
+    if (tbEnvironment === "qa") {
+      try { tbSchoolYear = validatedSchoolYear(payload.schoolYear); }
+      catch { return res.status(400).json({ status: "error", success: false, message: "학년도를 명시해 주세요." }); }
+      if (tbSchoolYear !== CURRENT_SCHOOL_YEAR) return res.status(400).json({ status: "error", success: false,
+        message: "현재 학년도 자료만 제출할 수 있습니다." });
+    }
 
     let proxyAccess = null;
     let proxySubject = null;
     let proxyAdministrator = null;
+    let proxyFields = null;
     let proxyCollectionName = "staff_submissions";
     if (isAdminProxyTb) {
-      proxyAccess = await verifyProxyAdmin(req);
+      proxyAccess = await verifyProxyAdmin(req, tbEnvironment === "qa" ? { workflowEnvironment: "qa", schoolYear: tbSchoolYear } : undefined);
       if (!proxyAccess.ok) {
         return res.status(proxyAccess.status).json({ status: "error", success: false, message: proxyAccess.message });
       }
@@ -117,10 +133,16 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       } catch (error) {
         return res.status(409).json({ status: "error", success: false, message: error.message });
       }
+      proxyFields = { ...payload.fields, name: proxySubject.name, dept: proxySubject.department,
+        staffType: proxySubject.position || "교직원" };
       proxyCollectionName = proxySubmissionCollection(environment());
       const duplicates = await findDuplicates(proxyAccess.db, proxySubject.staffId,
-        { collectionName: proxyCollectionName });
-      if (duplicates.length && payload?.allowDuplicate !== true) {
+        { collectionName: proxyCollectionName, ...(tbEnvironment === "qa" ? { schoolYear: tbSchoolYear } : {}) });
+      const repeatFingerprint = tbEnvironment === "qa" ? qaTbSubmissionIdentity({ ...payload, fields: proxyFields,
+        schoolYear: tbSchoolYear, staffId: proxySubject.staffId, actorStaffId: proxyAdministrator.staffId,
+        submissionMode: "admin_proxy" }, proxySecret).requestFingerprint : null;
+      if (duplicates.length && payload?.allowDuplicate !== true &&
+        !(repeatFingerprint && duplicates.some((item) => item.requestFingerprint === repeatFingerprint))) {
         const latest = duplicates[0];
         return res.status(409).json({ status: "duplicate", success: false,
           message: "이미 제출 기록이 있습니다.", duplicate: {
@@ -132,7 +154,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     let tbGuard = null;
     let cprIdentity = null;
     if (workflow.authPolicy === "current_staff_tb_guard" && !isAdminProxyTb) {
-      tbGuard = await verifyTb(req, { allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa" });
+      tbGuard = await verifyTb(req, { allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa",
+        ...(tbEnvironment === "qa" ? { workflowEnvironment: "qa", schoolYear: tbSchoolYear,
+          allowCompletedReceiptRecovery: true } : {}) });
       if (!tbGuard.ok) {
         return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
       }
@@ -200,7 +224,11 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       });
     }
 
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {
+    if (workflow.id === "student_tb_reply" && !["qa", "production"].includes(environment())) {
+      return res.status(403).json({ status: "error", success: false, message: "승인된 배포 환경에서만 제출할 수 있습니다." });
+    }
+    if (!["qa", "production"].includes(environment()) ||
+      !/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {
       return res.status(503).json({ status: "error", success: false, message: "제출 저장소가 설정되지 않았습니다." });
     }
     const studentEnvironment = workflow.id === "student_tb_reply" ? environment() : null;
@@ -209,9 +237,6 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       ? submissionVisitor(req, proxySecret, { trustedVercel: qaStudentAudit }) : "";
     if (workflow.id === "student_tb_reply" && !visitor) {
       return res.status(503).json({ status: "error", success: false, message: "익명 제출 보호 설정을 확인해 주세요." });
-    }
-    if (workflow.id === "student_tb_reply" && !["qa", "production"].includes(studentEnvironment)) {
-      return res.status(403).json({ status: "error", success: false, message: "승인된 배포 환경에서만 제출할 수 있습니다." });
     }
     if (qaStudentAudit && !qaStudentReplyFolderId) {
       return res.status(503).json({ status: "error", success: false,
@@ -252,8 +277,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         message: "QA 결핵검진 확인증 증빙 저장소가 설정되지 않았습니다." });
     }
     const scriptPayload = isAdminProxyTb
-      ? { ...payload, fields: { ...payload.fields, name: proxySubject.name, dept: proxySubject.department,
-        staffType: proxySubject.position || "교직원" } }
+      ? { ...payload, fields: proxyFields }
       : (qaCprOnly || qaTbCertificateOnly)
       ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
       : payload;
@@ -270,6 +294,38 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     const envelope = buildSubmissionProxyEnvelope(scriptSubmission, proxySecret, { visitor });
     if (!envelope) {
       return res.status(503).json({ status: "error", success: false, message: "제출 보안 설정이 필요합니다." });
+    }
+    if (qaTbCertificateAudit) {
+      const probe = buildSubmissionProxyEnvelope({ type: "qa-tb-upload-capability", runtimeEnvironment: "qa",
+        recordMode: "firestore", qaEvidenceFolderId: qaTbCertificateFolderId }, proxySecret);
+      const probeResponse = await postScript(destinationUrl, { method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(probe) });
+      const capability = JSON.parse(await probeResponse.text());
+      if (capability.contract !== "qa-tb-idempotency-v1" || capability.folderId !== qaTbCertificateFolderId ||
+        capability.private !== true) throw new QaTbSubmissionError("QA 결핵검진 업로드 복구 계약이 준비되지 않았습니다.");
+      const qaTbUploadContract = capability.contract;
+      const subject = isAdminProxyTb ? proxySubject : identity.identity ? { ...identity.identity, staffId: identity.staffId } :
+        resolveProxySubject((await readDirectory({ allowInvalidEmploymentStatus: false })).directory, identity.staffId);
+      const actor = isAdminProxyTb ? proxyAdministrator : subject;
+      const receipt = await receiveQaTbSubmission({ ...scriptPayload, schoolYear: tbSchoolYear,
+        staffId: subject.staffId, actorStaffId: actor.staffId, subject, actor,
+        completedStatus: !isAdminProxyTb && identity.statusValue === "completed",
+        submissionMode: isAdminProxyTb ? "admin_proxy" : "self" }, {
+        db: isAdminProxyTb ? proxyAccess.db : identity.db, secret: proxySecret, folderId: qaTbCertificateFolderId,
+        uploadContract: qaTbUploadContract, certificateStore: tbCertificateStore, recordReceipt: recordTbReceipt, now,
+        upload: async (stableIdentity) => {
+          const stableSubmission = { ...scriptSubmission, qaSubmissionId: stableIdentity.submissionId,
+            qaRequestFingerprint: stableIdentity.requestFingerprint, schoolYear: tbSchoolYear,
+            qaUploadContract: qaTbUploadContract };
+          const signed = buildSubmissionProxyEnvelope(stableSubmission, proxySecret);
+          const response = await postScript(destinationUrl, { method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(signed) });
+          const result = JSON.parse(await response.text());
+          if (!isSuccessfulResponse(result)) throw new Error("QA upload failed");
+          return result;
+        },
+      });
+      return res.status(200).json(receipt);
     }
     const scriptRes = await postScript(destinationUrl, {
       method: "POST",
@@ -407,6 +463,8 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
     return res.status(200).json(json);
   } catch (err) {
+    if (err instanceof QaTbSubmissionError) return res.status(err.status).json({ status: "error", success: false,
+      message: err.message, ...(err.identity ? { submissionId: err.identity.submissionId, fileId: err.identity.fileId } : {}) });
     console.error("[SUBMISSION_PROXY_FAILED]", { name: err?.name || "Error" });
     return res.status(500).json({ status: "error", message: "제출을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." });
   }

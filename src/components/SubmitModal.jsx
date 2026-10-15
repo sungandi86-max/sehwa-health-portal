@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
 import { auth } from "../lib/firebase.js";
+import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
 import {
   getFriendlyAuthErrorMessage,
   getMicrosoftSchoolDomainBlockMessage,
@@ -283,6 +284,7 @@ function TbForm({ onSubmit, submitting }) {
 
       await onSubmit({
         type: "tb",
+        ...(globalThis.location?.hostname === QA_INBODY_HOST ? { schoolYear: CURRENT_SCHOOL_YEAR } : {}),
         folderId: null,
         fields: { ...form },
         fileName,
@@ -764,7 +766,7 @@ function TbRegistrationForm({ onSubmit, submitting, tbConfig, forceCompleted = f
 
           setTbStatusState({ status: "loading", value: "unknown", message: "" });
           try {
-            const nextStatus = await getStaffSubmissionTaskStatus(nextIdentity.staffId, TB_SCREENING_TASK_ID);
+            const nextStatus = await getStaffSubmissionTaskStatus(nextIdentity.staffId, TB_SCREENING_TASK_ID, { schoolYear: CURRENT_SCHOOL_YEAR });
             if (!ignore) {
               setTbStatusState({ status: "ready", value: nextStatus, message: "" });
               setIdentityStatus("ready");

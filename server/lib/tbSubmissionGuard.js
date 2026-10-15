@@ -4,6 +4,8 @@ import { isQaInbodyAssignment, isQaInbodyUid, qaInbodyDirectoryIdentity, QA_INBO
 import { isQaCprAssignment, isQaCprUid, qaCprIdentity, QA_CPR_ROLE } from "./qaCprSynthetic.js";
 import { isQaTbCertificateAssignment, isQaTbCertificateUid, qaTbCertificateIdentity,
   QA_TB_CERTIFICATE_ROLE } from "./qaTbCertificateSynthetic.js";
+import { validatedSchoolYear, tbWorkflowTaskId } from "../../src/lib/tbScreeningWorkflowModel.js";
+import { trainingEnvironment } from "./trainingDeployment.js";
 
 export const TB_SCREENING_TASK_ID = "tb-screening-2026";
 export const TB_COMPLETED_MESSAGE = "이미 결핵검진 완료가 확인되어 추가 신청할 수 없습니다.";
@@ -25,8 +27,14 @@ export function isCompletedTbStatus(statusData, staffId) {
 
 export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodySynthetic = false, allowQaCprSynthetic = false,
   allowQaTbCertificateSynthetic = false,
+  workflowEnvironment = null, schoolYear,
   auth = getFirebaseAdminAuth, database = getFirebaseAdminDb, directory = readStaffDirectory,
   context = process.env } = {}) {
+  if (workflowEnvironment === "qa") {
+    if (trainingEnvironment(context) !== "qa") return { ok: false, status: 403, message: "QA 환경에서만 이용할 수 있습니다." };
+    try { validatedSchoolYear(schoolYear); }
+    catch { return { ok: false, status: 400, message: "학년도를 명시해 주세요." }; }
+  }
   const idToken = getBearerToken(req);
   if (!idToken) return { ok: false, status: 401, message: "로그인이 필요합니다." };
   let decodedToken;
@@ -43,7 +51,7 @@ export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodyS
   }
   try {
     const db = database();
-    const assignmentCollection = (isQaCprUid(decodedToken.uid) || isQaTbCertificateUid(decodedToken.uid))
+    const assignmentCollection = (workflowEnvironment === "qa" || isQaCprUid(decodedToken.uid) || isQaTbCertificateUid(decodedToken.uid))
       ? "user_assignments_qa" : "user_assignments";
     const snapshot = await db.collection(assignmentCollection).doc(getAssignmentId(decodedToken.uid)).get();
     const assignment = snapshot.exists ? snapshot.data() : null;
@@ -91,16 +99,20 @@ export async function verifyTbSubmissionAllowed(req, options = {}) {
   if (!identity.ok) return identity;
   try {
     const { db, staffId, roles } = identity;
-    const statusCollection = identity.qaTbCertificateSynthetic ? "staff_submission_status_qa" : "staff_submission_status";
+    const qaWorkflow = options.workflowEnvironment === "qa";
+    const taskId = qaWorkflow ? tbWorkflowTaskId(options.schoolYear) : TB_SCREENING_TASK_ID;
+    const statusCollection = qaWorkflow || identity.qaTbCertificateSynthetic ? "staff_submission_status_qa" : "staff_submission_status";
     const statusSnapshot = await db
       .collection(statusCollection)
-      .doc(`${staffId}_${TB_SCREENING_TASK_ID}`)
+      .doc(`${staffId}_${taskId}`)
       .get();
     if (!statusSnapshot.exists) return { ...identity, ok: true, staffId, roles, statusValue: "unknown" };
 
     const statusData = statusSnapshot.data();
-    const statusMatchesIdentity = statusData?.staffId === staffId && statusData?.taskId === TB_SCREENING_TASK_ID;
-    if (isCompletedTbStatus(statusData, staffId)) {
+    const statusMatchesIdentity = statusData?.staffId === staffId && statusData?.taskId === taskId &&
+      (!qaWorkflow || statusData.schoolYear === validatedSchoolYear(options.schoolYear));
+    if (statusMatchesIdentity && statusData?.status === "completed" &&
+      !(qaWorkflow && options.allowCompletedReceiptRecovery === true)) {
       return { ok: false, status: 409, message: TB_COMPLETED_MESSAGE };
     }
 

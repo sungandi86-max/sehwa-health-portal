@@ -14,6 +14,7 @@ import {
 import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 import { getAuthenticatedStaffIdentity } from "../lib/staffIdentity.js";
 import { ensureUserProfile, getInternalDisplayName, getUserAssignmentResult } from "../lib/userProfile.js";
+import { isQaTbSyntheticOptIn, isQaTbSyntheticUser, loadQaTbPageAccess, signInQaTbSynthetic } from "../lib/qaTbSyntheticAccess.js";
 
 function AccessMessage({ title, description, action }) {
   return (
@@ -40,7 +41,7 @@ function SignOutButton({ disabled, onClick }) {
   );
 }
 
-export default function FirebaseStaffSubmissionAccessGate({ children, accessTitle = "교직원 제출", readOnly = false }) {
+export default function FirebaseStaffSubmissionAccessGate({ children, accessTitle = "교직원 제출", readOnly = false, allowQaTbSynthetic = false }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [staffIdentity, setStaffIdentity] = useState(null);
@@ -48,17 +49,24 @@ export default function FirebaseStaffSubmissionAccessGate({ children, accessTitl
   const [isLoading, setIsLoading] = useState(true);
   const [isWorking, setIsWorking] = useState(false);
   const [message, setMessage] = useState("");
+  const [qaAccess, setQaAccess] = useState(null);
+  const qaOptIn = allowQaTbSynthetic && isQaTbSyntheticOptIn();
 
   const assignment = assignmentResult?.assignment || null;
-  const hasActiveStaffAccess = assignment?.active === true;
-  const displayName = useMemo(() => getInternalDisplayName({ profile, user }) || "교직원", [profile, user]);
+  const qaSyntheticAccess = qaAccess?.qaSyntheticAccess === true;
+  const hasActiveStaffAccess = assignment?.active === true || qaSyntheticAccess;
+  const displayName = useMemo(() => qaAccess?.identity?.name || getInternalDisplayName({ profile, user }) || "교직원", [qaAccess, profile, user]);
 
   useEffect(() => {
+    let isMounted = true;
+    let authRequestId = 0;
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      const currentRequestId = ++authRequestId;
       setUser(currentUser);
       setProfile(null);
       setStaffIdentity(null);
       setAssignmentResult(null);
+      setQaAccess(null);
       if (currentUser) setMessage("");
       setIsLoading(false);
 
@@ -66,6 +74,14 @@ export default function FirebaseStaffSubmissionAccessGate({ children, accessTitl
 
       setIsLoading(true);
       try {
+        if (qaOptIn) {
+          const access = await loadQaTbPageAccess({ user: currentUser, schoolYear: CURRENT_SCHOOL_YEAR });
+          if (!isMounted || currentRequestId !== authRequestId) return;
+          setQaAccess(access); setStaffIdentity(access.identity);
+          setAssignmentResult({ status: "success", assignment: access.assignment });
+          return;
+        }
+        if (isQaTbSyntheticUser(currentUser)) throw new Error("QA 결핵검진 전용 경로로 접속해주세요.");
         const blockedMessage = getMicrosoftSchoolDomainBlockMessage(currentUser);
         if (blockedMessage) {
           await signOutFirebase();
@@ -98,19 +114,29 @@ export default function FirebaseStaffSubmissionAccessGate({ children, accessTitl
           }
         }
 
+        if (!isMounted || currentRequestId !== authRequestId) return;
         setProfile(ensuredProfile);
         setStaffIdentity(currentStaffIdentity);
         setAssignmentResult(currentAssignmentResult);
       } catch (error) {
+        if (!isMounted || currentRequestId !== authRequestId) return;
         console.error("[firebase-staff-submission] access load failed", error);
         setMessage("사용자 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
       } finally {
-        setIsLoading(false);
+        if (isMounted && currentRequestId === authRequestId) setIsLoading(false);
       }
     });
 
-    return unsubscribe;
-  }, [readOnly]);
+    return () => { isMounted = false; authRequestId += 1; unsubscribe(); };
+  }, [readOnly, qaOptIn]);
+
+  async function handleQaSignIn() {
+    setIsWorking(true); setMessage("");
+    try { await signInQaTbSynthetic(user); }
+    catch { setMessage("QA 결핵검진 계정으로 전환하지 못했습니다. 관리자 권한과 준비된 계정을 확인해주세요."); }
+    finally { setIsWorking(false); }
+  }
+  const qaAction = qaOptIn && user && !qaSyntheticAccess ? <button type="button" disabled={isWorking} onClick={handleQaSignIn} className="min-h-11 rounded-lg border border-[#DDEAE7] bg-white px-3 text-sm text-[#0D4EA6] disabled:opacity-50">{isWorking ? "전환 중…" : "QA 결핵검진 계정으로 전환"}</button> : null;
 
   const handleMicrosoftSignIn = async () => {
     setIsWorking(true);
@@ -195,7 +221,7 @@ export default function FirebaseStaffSubmissionAccessGate({ children, accessTitl
       <AccessMessage
         title="권한 정보를 확인할 수 없습니다."
         description={message || assignmentResult?.message || "Firestore 보안 설정과 권한 문서를 확인해 주세요."}
-        action={<SignOutButton disabled={isWorking} onClick={handleSignOut} />}
+        action={<>{qaAction}<SignOutButton disabled={isWorking} onClick={handleSignOut} /></>}
       />
     );
   }
@@ -210,5 +236,6 @@ export default function FirebaseStaffSubmissionAccessGate({ children, accessTitl
     );
   }
 
-  return children({ user, profile, assignment, staffIdentity, displayName, handleSignOut, isWorking });
+  const content = children({ user, profile, assignment, staffIdentity, displayName, handleSignOut, isWorking, qaSyntheticAccess, qaStaffType: qaSyntheticAccess ? qaAccess.staffType : "" });
+  return qaAction ? <>{qaAction}{content}</> : content;
 }

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../lib/firebase.js";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import {
@@ -7,6 +9,7 @@ import {
   INDIVIDUAL_HEALTH_CHECKUP_DEADLINE_LABEL,
   INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_GUIDE,
   INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS,
+  TB_QA_DOCUMENT_TYPE_OPTIONS,
   INDIVIDUAL_HEALTH_CHECKUP_FORM_GUIDE,
   INDIVIDUAL_HEALTH_CHECKUP_PRIVACY_GUIDE,
   INDIVIDUAL_HEALTH_CHECKUP_TARGET,
@@ -19,6 +22,12 @@ import { inferSubmissionStaffType } from "../lib/staffType.js";
 import { createTbSubmission, validateSelectableSubmissionFile as validateSubmissionFile } from "../lib/staffSubmissions.js";
 import { getStaffSubmissionTaskStatus, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
 import { getSubmissionItem } from "../lib/submissionItems.js";
+import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
+import { isHealthScreeningTypeQaHost } from "../lib/healthScreeningTypes.js";
+import { loadTbScreeningWorkflow } from "../lib/tbScreeningWorkflowClient.js";
+import { isQaTbSyntheticOptIn, isQaTbSyntheticUser } from "../lib/qaTbSyntheticAccess.js";
+
+const TB_QA = isHealthScreeningTypeQaHost(globalThis.location?.hostname);
 
 const DEFAULT_ITEM = {
   title: INDIVIDUAL_HEALTH_CHECKUP_TITLE,
@@ -61,7 +70,9 @@ function TbStatusGate({ staffId, forceCompleted, children }) {
     }
 
     setStatusState({ status: "loading", value: "unknown" });
-    getStaffSubmissionTaskStatus(staffId, TB_SCREENING_TASK_ID)
+    (TB_QA
+      ? loadTbScreeningWorkflow({ schoolYear: CURRENT_SCHOOL_YEAR }).then((result) => result.item?.completed ? "completed" : "pending")
+      : getStaffSubmissionTaskStatus(staffId, TB_SCREENING_TASK_ID))
       .then((status) => {
         if (!shouldIgnore) setStatusState({ status: "ready", value: status });
       })
@@ -98,7 +109,7 @@ function TbStatusGate({ staffId, forceCompleted, children }) {
         <p className="mt-2">현재 교직원 결핵검진 상태가 완료로 확인되어 추가 신청이 필요하지 않습니다.</p>
         <p className="mt-1 text-[#627083]">검진 상태가 실제와 다르다면 보건실에 문의해 주세요.</p>
         <Link
-          to="/my-submission-status"
+          to={isQaTbSyntheticOptIn() ? "/my-submission-status?qa-tb-test=1" : "/my-submission-status"}
           className="mt-4 inline-flex min-h-10 items-center rounded-[10px] border border-[#0D4EA6] bg-white px-4 text-sm font-semibold text-[#0D4EA6] hover:bg-[#EEF4FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0D4EA6] focus-visible:ring-offset-2"
         >
           나의 제출·이수 현황 보기
@@ -121,6 +132,10 @@ export default function FirebaseTbSubmitPage() {
 
   useEffect(() => {
     let shouldIgnore = false;
+    if (isQaTbSyntheticOptIn()) {
+      setItem(DEFAULT_ITEM); setLoadState({ status: "success", message: "" });
+      return () => { shouldIgnore = true; };
+    }
 
     async function loadItem() {
       setLoadState({ status: "loading", message: "" });
@@ -141,9 +156,16 @@ export default function FirebaseTbSubmitPage() {
       }
     }
 
-    loadItem();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (isQaTbSyntheticUser(currentUser)) {
+        setItem(DEFAULT_ITEM); setLoadState({ status: "success", message: "" });
+        return;
+      }
+      loadItem();
+    });
     return () => {
       shouldIgnore = true;
+      unsubscribe();
     };
   }, []);
 
@@ -170,6 +192,7 @@ export default function FirebaseTbSubmitPage() {
         documentType,
         staffType,
         file,
+        ...(TB_QA ? { schoolYear: CURRENT_SCHOOL_YEAR, evidenceRoute: TB_QA_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === documentType)?.evidenceRoute } : {}),
       });
       setCheckupDate("");
       setDocumentType("");
@@ -177,7 +200,7 @@ export default function FirebaseTbSubmitPage() {
       formElement.reset();
       setSubmitState({
         status: "success",
-        message: `개별 건강검진 확인서 제출이 완료되었습니다. 접수번호: ${result.id}`,
+        message: TB_QA ? `확인자료가 접수되었습니다. 관리자 확인 후 검진 완료로 표시됩니다. 접수번호: ${result.id}` : `개별 건강검진 확인서 제출이 완료되었습니다. 접수번호: ${result.id}`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "제출 중 오류가 발생했습니다.";
@@ -190,11 +213,11 @@ export default function FirebaseTbSubmitPage() {
   };
 
   return (
-    <FirebaseStaffSubmissionAccessGate>
-      {({ user, assignment, staffIdentity, displayName }) => {
+    <FirebaseStaffSubmissionAccessGate allowQaTbSynthetic>
+      {({ user, assignment, staffIdentity, displayName, qaSyntheticAccess, qaStaffType }) => {
         const submitterName = getStaffDisplayName({ identity: staffIdentity, displayName, user });
         const submitterRole = getStaffRoleDisplay({ assignment, identity: staffIdentity });
-        const staffType = inferSubmissionStaffType({ assignment, identity: staffIdentity });
+        const staffType = qaSyntheticAccess ? qaStaffType : inferSubmissionStaffType({ assignment, identity: staffIdentity });
         const isSubmitDisabled =
           submitState.status === "submitting" || Boolean(getFormError({ checkupDate, documentType, staffType, file }));
 
@@ -204,6 +227,7 @@ export default function FirebaseTbSubmitPage() {
             title={INDIVIDUAL_HEALTH_CHECKUP_TITLE}
             description="검진일자와 확인 가능한 최소 자료를 제출합니다."
             displayName={displayName}
+            showDashboardLink={!qaSyntheticAccess}
           >
           <TbStatusGate staffId={assignment?.staffId || ""} forceCompleted={completedAfterSubmit}>
           <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -255,6 +279,7 @@ export default function FirebaseTbSubmitPage() {
               )}
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                {TB_QA && <Field label="학년도"><input value={`${CURRENT_SCHOOL_YEAR}학년도`} readOnly className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm text-[#102047]" /></Field>}
                 <Field label="검진일자">
                   <input
                     type="date"
@@ -270,7 +295,7 @@ export default function FirebaseTbSubmitPage() {
                     className="min-h-12 w-full rounded-2xl border border-[#DDEAE7] bg-white px-4 text-sm font-bold text-[#102047] outline-none focus:ring-4 focus:ring-[#20A982]/20"
                   >
                     <option value="">선택 안 함</option>
-                    {INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS.map((type) => (
+                    {(TB_QA ? TB_QA_DOCUMENT_TYPE_OPTIONS : INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS).map((type) => (
                       <option key={type.value} value={type.value}>
                         {type.label}
                       </option>
@@ -304,6 +329,8 @@ export default function FirebaseTbSubmitPage() {
                   {submitState.message}
                 </p>
               )}
+
+              {qaSyntheticAccess && <Link to="/my-submission-status?qa-tb-test=1" className="mt-3 inline-flex min-h-11 items-center text-sm text-[#0D4EA6]">나의 결핵검진 현황 보기</Link>}
 
               <button
                 type="submit"

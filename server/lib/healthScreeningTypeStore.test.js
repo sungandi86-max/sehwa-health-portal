@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { healthScreeningTypeCollection, healthScreeningTypeDocumentId,
-  readHealthScreeningType, saveHealthScreeningType, validHealthScreeningTypeRecord } from "./healthScreeningTypeStore.js";
+  HEALTH_SCREENING_TYPES, readHealthScreeningType, saveHealthScreeningType, validHealthScreeningTypeRecord } from "./healthScreeningTypeStore.js";
+
+test("stored route enum retains all historical values and appends individual", () => {
+  assert.deepEqual([...HEALTH_SCREENING_TYPES], ["nhis", "employment", "none", "other", "individual"]);
+  for (const screeningType of HEALTH_SCREENING_TYPES) {
+    assert.equal(validHealthScreeningTypeRecord({ staffId: "fixture", schoolYear: 2026, environment: "qa",
+      schemaVersion: 1, revision: 1, screeningTypeConfirmed: true, screeningType }, "fixture", 2026), true);
+  }
+});
 
 test("collection and deterministic document helpers reject unsafe input", () => {
   assert.equal(healthScreeningTypeCollection({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }), "staff_health_screening_types_qa");

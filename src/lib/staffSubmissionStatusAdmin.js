@@ -1,7 +1,9 @@
 import { collection, doc, getDocs, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { auth, db } from "./firebase.js";
-import { isHealthScreeningTypeQaHost } from "./healthScreeningTypes.js";
+import { isHealthScreeningTypeQaHost, loadHealthScreeningTypes } from "./healthScreeningTypes.js";
+import { validatedSchoolYear, tbWorkflowTaskId } from "./tbScreeningWorkflowModel.js";
+import { reviewTbScreeningEvidence } from "./tbScreeningWorkflowClient.js";
 import {
   HEALTH_MANDATORY_TRAINING_TASK_ID,
   STAFF_STATUS_LABELS,
@@ -228,7 +230,10 @@ function sortStatusItems(left, right) {
   return left.staffId.localeCompare(right.staffId, "ko");
 }
 
-export async function getAdminStaffSubmissionStatusOverview() {
+export async function getAdminStaffSubmissionStatusOverview({ schoolYear } = {}) {
+  const qa = isHealthScreeningTypeQaHost(globalThis.location?.hostname);
+  const year = qa ? validatedSchoolYear(schoolYear) : CURRENT_SCHOOL_YEAR;
+  const annualData = qa ? await loadHealthScreeningTypes({ schoolYear: year, scope: "admin" }) : null;
   const taskIdSet = new Set(STAFF_STATUS_TASK_IDS);
   const taskSnapshot = await getDocs(collection(db, "staff_submission_tasks"));
   const tasks = taskSnapshot.docs
@@ -241,15 +246,31 @@ export async function getAdminStaffSubmissionStatusOverview() {
 
   const hasHealthMandatoryTrainingTask = tasks.some((task) => task.taskId === HEALTH_MANDATORY_TRAINING_TASK_ID);
   const [directoryResult, assignmentDirectoryResult, currentTargetsResult, ...statusSnapshots] = await Promise.all([
-    getCanonicalStaffDirectory(),
+    qa ? Promise.resolve({ status: "success", directory: new Map(annualData.items.map((item) => [item.staffId, normalizeCanonicalDirectoryItem(item)])) }) : getCanonicalStaffDirectory(),
     getCurrentAssignmentDirectory(),
     getHealthMandatoryTrainingCurrentTargetsResult(hasHealthMandatoryTrainingTask),
     ...tasks.map((task) =>
-      getDocs(query(collection(db, "staff_submission_status"), where("taskId", "==", task.taskId)))
+      qa && task.taskId === TB_SCREENING_TASK_ID ? Promise.resolve({ docs: [] })
+        : getDocs(query(collection(db, "staff_submission_status"), where("taskId", "==", task.taskId)))
     ),
   ]);
 
   const taskSummaries = tasks.flatMap((task, index) => {
+    if (qa && task.taskId === TB_SCREENING_TASK_ID) {
+      const items = (annualData.items || []).map((item) => ({
+        ...item.workflow?.status, staffId: item.staffId, taskId: tbWorkflowTaskId(year),
+        realName: item.name || "", department: item.department || "", position: item.position || "",
+        status: item.workflow?.status?.status || "unknown",
+        statusLabel: getStaffStatusLabel(item.workflow?.status?.status || "unknown"),
+        screening: normalizeTbScreening(item.workflow?.status?.screening), workflow: item.workflow,
+        hasDirectory: true, hasDisplayIdentity: true,
+      })).sort(sortStatusItems);
+      return [{ ...task, taskId: tbWorkflowTaskId(year), items, summary: {
+        ...countStatuses(items), total: items.length, directoryLinked: items.length,
+        displayIdentityLinked: items.length, latestSyncedAtLabel: "", preservedOrphans: 0,
+        ...buildTbAdminSummary(items),
+      } }];
+    }
     if (task.taskId === HEALTH_MANDATORY_TRAINING_TASK_ID && currentTargetsResult.status !== "success") {
       return [];
     }
@@ -305,6 +326,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
   });
 
   return {
+    ...(qa ? { annualData } : {}),
     tasks: taskSummaries,
     directoryStatus: directoryResult.status,
     assignmentDirectoryStatus: assignmentDirectoryResult.status,
@@ -312,8 +334,12 @@ export async function getAdminStaffSubmissionStatusOverview() {
   };
 }
 
-export async function updateAdminTbScreeningStatus(staffId, value) {
-  if (isHealthScreeningTypeQaHost(globalThis.location?.hostname)) throw new Error("QA에서는 기존 운영 결핵검진 상태를 변경할 수 없습니다.");
+export async function updateAdminTbScreeningStatus(staffId, value, workflow) {
+  if (isHealthScreeningTypeQaHost(globalThis.location?.hostname)) {
+    if (!workflow?.submissionId) throw new Error("확인할 접수자료를 선택해주세요.");
+    return reviewTbScreeningEvidence({ staffId, schoolYear: workflow.schoolYear, submissionId: workflow.submissionId,
+      expectedRevision: workflow.expectedRevision, action: value === "completed" ? "confirm" : "invalidate" });
+  }
   const normalizedStaffId = normalizeText(staffId);
   if (!normalizedStaffId) throw new Error("교직원ID를 확인할 수 없습니다.");
   const update = getTbAdminUpdate(value);

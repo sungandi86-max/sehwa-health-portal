@@ -26,6 +26,12 @@ export const INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS = [
   { value: "흉부 X-ray 확인 자료", label: "국민건강보험공단 검진" },
 ];
 
+export const TB_QA_DOCUMENT_TYPE_OPTIONS = [
+  { ...INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS[0], evidenceRoute: "individual" },
+  { ...INDIVIDUAL_HEALTH_CHECKUP_DOCUMENT_OPTIONS[1], evidenceRoute: "nhis" },
+  { value: "채용검진 확인 자료", label: "채용검진", evidenceRoute: "employment" },
+];
+
 export function applyIndividualHealthCheckupDisplay(item) {
   return {
     ...item,

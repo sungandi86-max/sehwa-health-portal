@@ -5,6 +5,7 @@ import {
   buildTbRegistrationStatus,
   getTbStatusFromSubmissionState,
   saveTbScreeningStatus,
+  buildQaTbCertificateReceiptStatus,
 } from "./tbScreeningStatus.js";
 
 test("registration status uses the authenticated canonical staffId", () => {
@@ -69,4 +70,31 @@ test("TB status writer allows only the production and isolated QA collections", 
     saveTbScreeningStatus({ db, payload, collectionName: "staff_submission_status_untrusted" }),
     /not allowed/
   );
+});
+
+test("QA opt-in status writer scopes year and preserves completed approval", async () => {
+  const writes = [];
+  const db = { collection: (name) => ({ doc: (id) => ({ id,
+    get: async () => ({ exists: true, data: () => ({ status: "completed", screening: { completed: true } }) }),
+    set: async (item) => writes.push({ name, id, item }),
+  }) }) };
+  const payload = buildTbCertificateStatus({ staffId: "QA-001", checkupDate: "2027-09-01", documentType: "QA" });
+  const id = await saveTbScreeningStatus({ db, payload, collectionName: "staff_submission_status_qa", qaWorkflow: true, schoolYear: 2027 });
+  assert.equal(id, "QA-001_tb-screening-2027");
+  assert.equal(writes.length, 0);
+  await assert.rejects(saveTbScreeningStatus({ db, payload, qaWorkflow: true, schoolYear: 2027 }), /requires QA/);
+});
+
+test("QA transaction writer uses supplied snapshot and retains certificate fields", async () => {
+  const writes = [];
+  const ref = { id: "QA-001_tb-screening-2026", get: async () => { throw new Error("transaction must own reads"); } };
+  const db = { collection: () => ({ doc: () => ref }) };
+  const payload = buildQaTbCertificateReceiptStatus({ submission: { staffId: "QA-001", schoolYear: 2026,
+    documentType: "결핵검진 확인증", checkupDate: "2026-10-01" }, current: { screening: { targetStatus: "exception", latentStatus: "completed" } } });
+  const currentSnapshot = { exists: false };
+  await saveTbScreeningStatus({ db, payload, collectionName: "staff_submission_status_qa", qaWorkflow: true, schoolYear: 2026,
+    transaction: { set: (target, value) => writes.push({ target, value }) }, currentSnapshot });
+  assert.equal(writes[0].value.screening.targetStatus, "exception");
+  assert.equal(writes[0].value.screening.latentStatus, "completed");
+  assert.equal(writes[0].value.screening.registrationStatus, "submitted");
 });
