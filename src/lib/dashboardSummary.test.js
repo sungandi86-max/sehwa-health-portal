@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { RECENT_SCAN_LIMIT, selectActionableRecentItems } from "./dashboardRecent.js";
+import { buildDashboardTaskCards, getTbDashboardCounts } from "./dashboardTasks.js";
 
 const dashboardSource = readFileSync(new URL("./dashboardSummary.js", import.meta.url), "utf8");
 
@@ -40,4 +41,35 @@ test("dashboard recent reads use one bounded query and reuse the current-term in
   assert.match(dashboardSource, /currentTermInfectionDocuments\.map\(normalizeInfectionSubmission\)/);
   assert.equal(dashboardSource.includes("infectionTodayQuery"), false);
   assert.equal(dashboardSource.includes("recentInfectionQuery"), false);
+});
+
+test("TB dashboard counts keep route, evidence review, and completion separate", () => {
+  const result = getTbDashboardCounts([
+    { staffId: "A", selfChoice: null, workflow: { evidence: [], completed: false } },
+    { staffId: "B", selfChoice: { screeningType: "individual" }, workflow: { evidence: [{ reviewState: "pending" }], completed: false } },
+    { staffId: "C", selfChoice: { screeningType: "nhis" }, workflow: { evidence: [{ reviewState: "confirmed" }], completed: true } },
+    { staffId: "D", selfChoice: { screeningType: "none" }, workflow: { evidence: [], completed: false } },
+  ]);
+
+  assert.deepEqual(result, { routeUnconfirmed: 1, evidencePending: 1, incomplete: 3 });
+});
+
+test("dashboard task cards preserve the six operational definitions and routes", () => {
+  const cards = buildDashboardTaskCards({
+    counts: { pendingStaffCount: 4, pendingInfectionCount: 2 },
+    pendingAccessCount: 3,
+    tbCounts: { routeUnconfirmed: 5, evidencePending: 6, incomplete: 7 },
+  });
+
+  assert.deepEqual(cards.map((item) => item.count), [4, 2, 3, 5, 6, 7]);
+  assert.equal(cards.length, 6);
+  assert.equal(cards[3].href, "/firebase-admin/staff-submission-status#annual-screening-type");
+});
+
+test("dashboard task cards do not turn unavailable data into a false zero", () => {
+  const cards = buildDashboardTaskCards({ counts: {}, pendingAccessCount: null, tbCounts: null });
+  assert.equal(cards[2].count, null);
+  assert.equal(cards[3].count, null);
+  assert.equal(cards[4].count, null);
+  assert.equal(cards[5].count, null);
 });
