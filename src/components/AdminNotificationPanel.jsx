@@ -35,7 +35,7 @@ export function AdminNotificationBadge({ user, enabled }) {
   ) : null;
 }
 
-export default function AdminNotificationPanel({ user, enabled, compact = false }) {
+export default function AdminNotificationPanel({ user, enabled, compact = false, maxItems = null }) {
   const navigate = useNavigate();
   const [showAcknowledged, setShowAcknowledged] = useState(false);
   const notifications = useAdminNotifications({ user, enabled, includeAcknowledged: showAcknowledged });
@@ -52,6 +52,9 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
       : "알림 받기";
   const firstUnreadNotification = notifications.notifications.find((notification) => !notification.acknowledged);
   const hasUnreadNotification = notifications.unreadCount > 0;
+  const visibleNotifications = Number.isInteger(maxItems) && maxItems > 0
+    ? notifications.notifications.slice(0, maxItems)
+    : notifications.notifications;
 
   const openNotification = async (notification) => {
     await notifications.markRead(notification.id);
@@ -79,9 +82,9 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
 
   if (compact) {
     return (
-      <section className="rounded-[10px] bg-[#F8FAFA] px-2.5 py-2 text-[#102047]">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-xs font-semibold text-[#102047]">관리자 알림</p>
+      <section className="text-[#102047]">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#DDEAE7] pb-3">
+          <p className="text-sm font-semibold text-[#102047]">관리자 알림</p>
           <span className="rounded-[8px] border border-[#DDEAE7] bg-white px-2 py-0.5 text-[11px] font-medium text-[#627083]">
             {notificationStatusText(notifications.permission, notifications.unreadCount)}
           </span>
@@ -89,7 +92,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
             <button
               type="button"
               onClick={openPrimaryNotificationAction}
-              className="min-h-8 rounded-[8px] border border-[#DDEAE7] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#102047] transition hover:border-[#C8D8FF]"
+              className="ml-auto min-h-8 rounded-[8px] border border-[#DDEAE7] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#102047] transition hover:border-[#C8D8FF]"
             >
               알림 확인
             </button>
@@ -99,7 +102,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
               type="button"
               onClick={notifications.register}
               disabled={notifications.isRegistering || notifications.registrationStatus === "checking" || isRegistered}
-              className={`ml-auto min-h-8 rounded-[8px] border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed ${
+              className={`min-h-8 rounded-[8px] border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed ${
                 isRegistered
                   ? "border-[#B8D8C9] bg-[#F3F8F6] text-[#08754B]"
                   : "border-[#C8D8FF] bg-white text-[#0D4EA6] hover:bg-[#FBFCFF] disabled:opacity-50"
@@ -125,6 +128,25 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
           <p className="mt-2 rounded-[8px] border border-[#F6D8D8] bg-[#FFF7F7] px-2.5 py-1.5 text-xs font-semibold text-[#B42318]">
             {notifications.state.message}
           </p>
+        )}
+
+        {visibleNotifications.length > 0 && (
+          <div className="divide-y divide-[#DDEAE7]">
+            {visibleNotifications.map((notification) => (
+              <button key={notification.id} type="button" onClick={() => openNotification(notification)}
+                className="block w-full py-3 text-left transition hover:bg-[#FBFCFF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/15">
+                <span className="flex items-start justify-between gap-2">
+                  <span className="line-clamp-1 text-xs font-semibold text-[#102047]">{notification.title}</span>
+                  <span className="shrink-0 text-[11px] font-medium text-[#8A96A8]">{formatDate(notification.createdAt)}</span>
+                </span>
+                <span className="mt-1 line-clamp-2 block text-xs font-medium leading-5 text-[#627083]">{notification.body}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {notifications.state.status === "success" && visibleNotifications.length === 0 && (
+          <p className="py-4 text-center text-xs font-medium text-[#627083]">최근 관리자 알림이 없습니다.</p>
         )}
       </section>
     );
@@ -179,7 +201,7 @@ export default function AdminNotificationPanel({ user, enabled, compact = false 
 
       {showRecent && (
         <div className="mt-3 divide-y divide-[#DDEAE7] border-t border-[#DDEAE7]">
-          {notifications.notifications.map((notification) => (
+          {visibleNotifications.map((notification) => (
             <button
               key={notification.id}
               type="button"
