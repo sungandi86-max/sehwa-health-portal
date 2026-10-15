@@ -177,7 +177,7 @@ export default function FirebaseTbSubmitPage() {
       formElement.reset();
       setSubmitState({
         status: "success",
-        message: `개별 건강검진 확인서 제출이 완료되었습니다. 접수번호: ${result.id}`,
+        message: `개별 건강검진 확인서가 접수되었습니다. 관리자 확인 후 검진 완료로 표시됩니다. 접수번호: ${result.id}`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "제출 중 오류가 발생했습니다.";

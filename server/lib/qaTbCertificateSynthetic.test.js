@@ -60,7 +60,7 @@ test("QA TB certificate submit writes QA audit and QA status without Sheet appen
 });
 
 test("Production TB certificate submit stores Drive evidence in the Production ledger without Sheet fallback", async () => {
-  let forwarded; let auditInput; let statusCollection = "default";
+  let forwarded; let auditInput; let mirrorRecord; let statusCollection = "default";
   const res = response();
   const payload = { type: "tb", fields: { name: "canonical", dept: "보건실", staffType: "교직원",
     checkupDate: "2026-10-12", docType: "확인증" }, fileName: "tb.pdf",
@@ -69,9 +69,14 @@ test("Production TB certificate submit stores Drive evidence in the Production l
     destinationUrl: "https://script.google.com/macros/s/production-endpoint/exec", proxySecret: "x".repeat(48),
     environment: () => "production",
     verifyTb: async () => ({ ok: true, staffId: "T054", roles: ["staff"], db: {} }),
+    readDirectory: async () => ({ directory: [{ staffId: "T054", name: "canonical", position: "교직원", employmentStatus: "재직" }] }),
+    saveProxyRecord: async (_db, record) => { mirrorRecord = record; },
     postScript: async (_url, init) => { forwarded = JSON.parse(JSON.parse(init.body).payloadJson);
       return { text: async () => JSON.stringify({ status: "success", fileId: "production-tb-file-id" }) }; },
-    tbCertificateStore: { createRequest: async (input) => { auditInput = input; } },
+    tbCertificateStore: { createRequest: async (input) => { auditInput = input; return { ...input, environment: "production",
+      subjectStaffId: input.staffId, evidenceFiles: [{ fileId: input.evidenceFile.fileId, fileName: input.evidenceFile.fileName,
+        mimeType: input.evidenceFile.mimeType }] }; } },
+    recordTbReceipt: async () => {},
     saveTbStatus: async ({ collectionName }) => { statusCollection = collectionName; },
   });
   assert.equal(res.statusCode, 200);
@@ -80,8 +85,14 @@ test("Production TB certificate submit stores Drive evidence in the Production l
   assert.equal(forwarded.qaEvidenceFolderId, "");
   assert.equal(auditInput.staffId, "T054");
   assert.equal(auditInput.evidenceFile.fileId, "production-tb-file-id");
-  assert.equal(statusCollection, undefined);
-  assert.deepEqual(res.body, { status: "success", success: true, staffId: "T054" });
+  assert.equal(mirrorRecord.staffId, "T054");
+  assert.equal(mirrorRecord.submissionMode, "self");
+  assert.equal(mirrorRecord.submissionId, res.body.submissionId);
+  assert.equal(statusCollection, "default");
+  assert.equal(res.body.status, "success");
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.staffId, "T054");
+  assert.match(res.body.submissionId, /^tb-[a-f0-9]{32}$/);
 });
 
 test("Apps Script routes QA TB audit to the QA secret and suppresses Sheet append", () => {

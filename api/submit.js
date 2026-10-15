@@ -16,6 +16,11 @@ import { cprCertificateSubmissionStore } from "../server/lib/cprCertificateSubmi
 import { tbCertificateSubmissionStore } from "../server/lib/tbCertificateSubmissionStore.js";
 import { studentSubmissionAuditStore } from "../server/lib/studentSubmissionAuditStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
+import { productionTbSubmissionIdentity } from "../server/lib/tbSubmissionIdentity.js";
+import { recordProductionTbReceipt } from "../server/lib/tbScreeningWorkflowStore.js";
+import { buildProxySubmissionRecord, buildSelfSubmissionRecord, createProxySubmission, findProxyDuplicates, resolveProxySubject } from "../server/lib/adminProxySubmission.js";
+import { readStaffDirectory, verifyDirectoryAdmin } from "../server/lib/staffDirectory.js";
+import { CURRENT_SCHOOL_YEAR } from "../src/config/school.js";
 
 function scriptUrl() {
   return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
@@ -75,7 +80,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
   tbCertificateStore = tbCertificateSubmissionStore,
   studentAuditStore = studentSubmissionAuditStore,
   saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
-  environment = trainingEnvironment, now = new Date() } = {}) {
+  environment = trainingEnvironment, recordTbReceipt = recordProductionTbReceipt,
+  verifyAdmin = verifyDirectoryAdmin, readDirectory = readStaffDirectory,
+  findProxyRecords = findProxyDuplicates, saveProxyRecord = createProxySubmission, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
@@ -106,10 +113,26 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     const validation = validateSubmissionPayload(workflow, payload);
     if (!validation.ok) return res.status(validation.status).json({ status: "error", success: false, message: validation.message });
 
+    const proxyMode = workflow.id === "tb" && payload.action === "admin_proxy";
+    let proxyAccess = null;
+    let proxySubject = null;
+    let proxyAdministrator = null;
+    let selfSubject = null;
+    if (proxyMode) {
+      if (environment() !== "production") return res.status(403).json({ status: "error", success: false, message: "운영 관리자 대리등록 경로가 아닙니다." });
+      proxyAccess = await verifyAdmin(req);
+      if (!proxyAccess.ok) return res.status(proxyAccess.status).json({ status: "error", success: false, message: proxyAccess.message });
+      const { directory } = await readDirectory({ allowInvalidEmploymentStatus: false });
+      try { proxySubject = resolveProxySubject(directory, payload.subjectStaffId); }
+      catch (error) { return res.status(400).json({ status: "error", success: false, message: error.message }); }
+      proxyAdministrator = { staffId: proxyAccess.assignment.staffId,
+        name: proxyAccess.assignment.displayName || proxyAccess.assignment.name || proxyAccess.decodedToken?.name || "관리자" };
+    }
     let tbGuard = null;
     let cprIdentity = null;
-    if (workflow.authPolicy === "current_staff_tb_guard") {
-      tbGuard = await verifyTb(req, { allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa" });
+    if (workflow.authPolicy === "current_staff_tb_guard" && !proxyMode) {
+      tbGuard = await verifyTb(req, { allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa",
+        ...(workflow.id === "tb" ? { schoolYear: payload.schoolYear } : {}) });
       if (!tbGuard.ok) {
         return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
       }
@@ -121,7 +144,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       });
       if (!cprIdentity.ok) return res.status(cprIdentity.status).json({ status: "error", success: false, message: cprIdentity.message });
     }
-    const identity = tbGuard || cprIdentity;
+    const identity = proxyMode ? { staffId: proxySubject.staffId, roles: proxyAccess.assignment.roles || [] } : tbGuard || cprIdentity;
     const qaInbodyOnly = workflow.id === "inbody" && inbodyStore.backend === "firestore" && identity?.qaSynthetic === true;
     const qaCprOnly = workflow.id === "cpr" && environment() === "qa" && identity?.qaCprSynthetic === true;
     const qaTbCertificateOnly = workflow.id === "tb" && environment() === "qa" && identity?.qaTbCertificateSynthetic === true;
@@ -234,7 +257,68 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       return res.status(503).json({ status: "error", success: false,
         message: "QA 결핵검진 확인증 증빙 저장소가 설정되지 않았습니다." });
     }
-    const scriptPayload = (qaCprOnly || qaTbCertificateOnly)
+    let tbReceiptIdentity = null;
+    const tbSchoolYear = payload.schoolYear ?? CURRENT_SCHOOL_YEAR;
+    if (workflow.id === "tb" && tbCertificateEnvironment === "production") {
+      if (!proxyMode) {
+        const { directory } = await readDirectory({ allowInvalidEmploymentStatus: false });
+        try { selfSubject = resolveProxySubject(directory, identity.staffId); }
+        catch (error) { return res.status(400).json({ status: "error", success: false, message: error.message }); }
+      }
+      try {
+        tbReceiptIdentity = productionTbSubmissionIdentity({
+          staffId: identity.staffId,
+          schoolYear: tbSchoolYear,
+          checkupDate: payload?.fields?.checkupDate,
+          documentType: payload?.fields?.docType,
+          fileBase64: payload.fileBase64,
+          fileMimeType: payload.fileMimeType,
+          submissionMode: proxyMode ? "admin_proxy" : "self",
+          actorStaffId: proxyMode ? proxyAccess.assignment.staffId : "",
+          requestId: proxyMode ? payload.requestId : "",
+        });
+      } catch (error) {
+        return res.status(error?.status || 400).json({ status: "error", success: false, message: error.message });
+      }
+      const existing = typeof tbCertificateStore.getRequest === "function"
+        ? await tbCertificateStore.getRequest(tbReceiptIdentity.submissionId) : null;
+      if (existing) {
+        if (existing.requestFingerprint !== tbReceiptIdentity.requestFingerprint || existing.staffId !== identity.staffId) {
+          return res.status(409).json({ status: "error", success: false, message: "기존 접수 내용과 일치하지 않습니다." });
+        }
+        if (proxyMode) {
+          try {
+            await saveProxyRecord(proxyAccess.db, buildProxySubmissionRecord({ subject: proxySubject,
+              administrator: proxyAdministrator, submissionId: existing.submissionId, schoolYear: tbSchoolYear,
+              checkupDate: existing.checkupDate, documentType: existing.documentType, proxyNote: existing.proxyNote,
+              file: { driveFileId: existing.evidenceFiles?.[0]?.fileId, driveUrl: "",
+                fileName: existing.evidenceFiles?.[0]?.fileName, mimeType: existing.evidenceFiles?.[0]?.mimeType }, now }));
+          } catch (error) {
+            if (!String(error?.code || error?.message || "").includes("already")) throw error;
+          }
+        } else {
+          await saveProxyRecord((tbGuard?.db || getFirebaseAdminDb()), buildSelfSubmissionRecord({ subject: selfSubject,
+            submissionId: existing.submissionId, schoolYear: tbSchoolYear, checkupDate: existing.checkupDate,
+            documentType: existing.documentType, file: { driveFileId: existing.evidenceFiles?.[0]?.fileId,
+              driveUrl: "", fileName: existing.evidenceFiles?.[0]?.fileName, mimeType: existing.evidenceFiles?.[0]?.mimeType }, now }));
+        }
+        await recordTbReceipt((tbGuard?.db || proxyAccess?.db) || getFirebaseAdminDb(), existing);
+        return res.status(200).json({ status: "success", success: true, duplicate: true,
+          submissionId: existing.submissionId, staffId: existing.staffId,
+          fileId: existing.evidenceFiles?.[0]?.fileId || "" });
+      }
+      if (proxyMode) {
+        const duplicates = await findProxyRecords(proxyAccess.db, proxySubject.staffId, tbSchoolYear);
+        if (duplicates.length && payload.allowDuplicate !== true) {
+          const duplicate = duplicates[0];
+          return res.status(409).json({ status: "duplicate", success: false, message: "이미 제출 기록이 있습니다.",
+            duplicate: { id: duplicate.id, checkupDate: duplicate.checkupDate || "", status: duplicate.status || "submitted" } });
+        }
+      }
+    }
+    const scriptPayload = proxyMode
+      ? { ...payload, fields: { ...payload.fields, name: proxySubject.name, dept: proxySubject.department || "", staffType: proxySubject.position || "교직원" } }
+      : (qaCprOnly || qaTbCertificateOnly)
       ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
       : payload;
     const scriptSubmission = buildScriptSubmission(workflow, scriptPayload, {
@@ -303,12 +387,34 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       return res.status(200).json({ status: "success", success: true, submittedAt: json.submittedAt,
         submissionId: studentIdentity.submissionId });
     }
-    if (tbGuard) {
+    if (tbGuard || proxyMode) {
       if (tbCertificateAudit) {
         try {
-          await tbCertificateStore.createRequest({ staffId: tbGuard.staffId, submittedAt: now,
+          const administrator = proxyMode ? proxyAdministrator : null;
+          const saved = await tbCertificateStore.createRequest({ staffId: identity.staffId, submittedAt: now,
             checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
-            evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType } });
+            evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType },
+            submissionMode: proxyMode ? "admin_proxy" : "self", subject: proxyMode ? proxySubject : null,
+            submittedBy: administrator, proxyNote: proxyMode ? payload.proxyNote : "",
+            ...(tbReceiptIdentity || {}),
+          });
+          if (tbCertificateEnvironment === "production") {
+            if (proxyMode) {
+              await saveProxyRecord(proxyAccess.db, buildProxySubmissionRecord({ subject: proxySubject,
+                administrator, submissionId: saved.submissionId, schoolYear: tbSchoolYear,
+                checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
+                proxyNote: payload.proxyNote, file: { driveFileId: json.fileId, driveUrl: json.fileUrl || json.fileLink || "",
+                  fileName: payload.fileName, mimeType: payload.fileMimeType }, now }));
+            } else {
+              await saveProxyRecord(tbGuard.db || getFirebaseAdminDb(), buildSelfSubmissionRecord({ subject: selfSubject,
+                submissionId: saved.submissionId, schoolYear: tbSchoolYear,
+                checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
+                file: { driveFileId: json.fileId, driveUrl: json.fileUrl || json.fileLink || "",
+                  fileName: payload.fileName, mimeType: payload.fileMimeType }, now }));
+            }
+          }
+          if (tbCertificateEnvironment === "production" && saved) await recordTbReceipt((tbGuard?.db || proxyAccess?.db) || getFirebaseAdminDb(), saved);
+          if (tbReceiptIdentity && saved?.submissionId) json.submissionId = saved.submissionId;
         } catch {
           console.error("[TB_CERTIFICATE_AUDIT_WRITE] Firestore audit write failed.");
           return res.status(503).json({ status: "error", success: false,
@@ -316,11 +422,16 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         }
       }
       try {
+        if (tbCertificateEnvironment === "production") {
+          json = { ...json, status: "success", success: true, staffId: identity.staffId,
+            submissionId: json.submissionId || tbReceiptIdentity?.submissionId };
+        } else {
         await saveTbStatus({
           db: tbGuard.db || getFirebaseAdminDb(),
-          payload: buildTbStatusPayload(payload, tbGuard.staffId),
+          payload: buildTbStatusPayload(payload, identity.staffId),
           collectionName: qaTbCertificateAudit ? "staff_submission_status_qa" : undefined,
         });
+        }
       } catch {
         console.error("[TB_STATUS_WRITE] Firestore status update failed.");
         return res.status(503).json({
@@ -329,9 +440,9 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
           message: "신청 자료는 접수되었지만 결핵검진 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요.",
         });
       }
-      json = tbCertificateAudit
-        ? { status: "success", success: true, staffId: tbGuard.staffId }
-        : { ...json, staffId: tbGuard.staffId };
+      json = tbCertificateEnvironment === "production" ? json : tbCertificateAudit
+        ? { status: "success", success: true, staffId: identity.staffId }
+        : { ...json, staffId: identity.staffId };
     }
     if (workflow.id === "cpr" && cprIdentity) {
       if (cprAudit) {

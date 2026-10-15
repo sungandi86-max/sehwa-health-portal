@@ -1,6 +1,8 @@
 import { CURRENT_SCHOOL_YEAR, readJsonBody, readStaffDirectory, sendCors } from "./staffDirectory.js";
 import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { trainingEnvironment } from "./trainingDeployment.js";
+import { listProductionTbWorkflowData, TbWorkflowError } from "./tbScreeningWorkflowStore.js";
+import { joinTbScreeningWorkflow } from "../../src/lib/tbScreeningWorkflowModel.js";
 import { HealthScreeningTypeError, listHealthScreeningTypes, readHealthScreeningType,
   readHealthScreeningTypeHistory, saveHealthScreeningType, unconfirmedScreeningType,
   validateScreeningYear } from "./healthScreeningTypeStore.js";
@@ -27,6 +29,8 @@ export async function handleHealthScreeningTypeRequest(req, res, {
     const scope = input.scope || "self";
     if (!["self", "admin"].includes(scope)) return bad(400, "조회 범위를 확인해 주세요.");
     const schoolYear = validateScreeningYear(input.schoolYear ?? CURRENT_SCHOOL_YEAR);
+    const includeWorkflow = environment === "production" &&
+      (input.includeWorkflow === "true" || input.includeWorkflow === true);
     const admin = scope === "admin";
     if (environment === "production" && input.staffId !== undefined && synthetic(input.staffId)) return bad(403, "교직원 권한이 필요합니다.");
     if (admin && !access.roles.some((role) => ["health_teacher", "admin"].includes(role))) return bad(403, "관리 권한이 필요합니다.");
@@ -38,17 +42,66 @@ export async function handleHealthScreeningTypeRequest(req, res, {
       if (input.staffId !== undefined && !staff.some((person) => person.staffId === input.staffId)) return bad(400, "현재 교직원 정보를 확인해 주세요.");
     }
     if (req.method === "GET") {
-      if (!admin) return res.status(200).json({ ok: true, item: await readHealthScreeningType(access.db, access.staffId, schoolYear, context) });
+      if (!admin) {
+        if (!includeWorkflow) {
+          return res.status(200).json({ ok: true, item: await readHealthScreeningType(access.db, access.staffId, schoolYear, context) });
+        }
+        const [item, data] = await Promise.all([
+          readHealthScreeningType(access.db, access.staffId, schoolYear, context),
+          listProductionTbWorkflowData(access.db, {
+            staffId: access.staffId,
+            schoolYear,
+            evidenceCursor: input.evidenceCursor || "",
+            statusCursor: input.statusCursor || "",
+          }),
+        ]);
+        return res.status(200).json({
+          ok: true,
+          item: { ...item, workflow: joinTbScreeningWorkflow({
+            staffId: access.staffId,
+            schoolYear,
+            route: item,
+            evidence: data.evidence,
+            status: data.statuses.find((status) => status.staffId === access.staffId),
+            evidenceComplete: data.completeness.evidence,
+          }) },
+          datasets: { completeness: data.completeness, cursors: data.cursors },
+        });
+      }
       if (input.history === "true" || input.history === true) {
         if (!input.staffId) return bad(400, "교직원을 선택해 주세요.");
         return res.status(200).json({ ok: true, history: await readHealthScreeningTypeHistory(access.db, input.staffId, schoolYear, context) });
       }
       const items = await listHealthScreeningTypes(access.db, schoolYear, context);
       const byId = new Map(items.map((item) => [item.staffId, item]));
+      if (!includeWorkflow) {
+        return res.status(200).json({ ok: true, items: staff.map((person) => ({
+          staffId: person.staffId, name: person.name, department: person.department, position: person.position,
+          ...(byId.get(person.staffId) || unconfirmedScreeningType(person.staffId, schoolYear)),
+        })) });
+      }
+      const data = await listProductionTbWorkflowData(access.db, {
+        schoolYear,
+        evidenceCursor: input.evidenceCursor || "",
+        statusCursor: input.statusCursor || "",
+      });
+      const evidenceByStaffId = new Map();
+      for (const evidence of data.evidence) {
+        evidenceByStaffId.set(evidence.staffId, [...(evidenceByStaffId.get(evidence.staffId) || []), evidence]);
+      }
+      const statusByStaffId = new Map(data.statuses.map((status) => [status.staffId, status]));
       return res.status(200).json({ ok: true, items: staff.map((person) => ({
         staffId: person.staffId, name: person.name, department: person.department, position: person.position,
         ...(byId.get(person.staffId) || unconfirmedScreeningType(person.staffId, schoolYear)),
-      })) });
+        workflow: joinTbScreeningWorkflow({
+          staffId: person.staffId,
+          schoolYear,
+          route: byId.get(person.staffId),
+          evidence: evidenceByStaffId.get(person.staffId) || [],
+          status: statusByStaffId.get(person.staffId),
+          evidenceComplete: data.completeness.evidence,
+        }),
+      })), datasets: { completeness: data.completeness, cursors: data.cursors } });
     }
     if (schoolYear !== CURRENT_SCHOOL_YEAR) return bad(400, "현재 학년도만 변경할 수 있습니다.");
     if (admin && (!input.staffId || !Number.isInteger(input.expectedRevision) || input.expectedRevision < 0)) return bad(400, "교직원과 현재 변경 번호를 확인해 주세요.");
@@ -60,7 +113,7 @@ export async function handleHealthScreeningTypeRequest(req, res, {
     }, context);
     return res.status(200).json({ ok: true, item });
   } catch (error) {
-    if (error instanceof HealthScreeningTypeError) return bad(error.status, error.message);
+    if (error instanceof HealthScreeningTypeError || error instanceof TbWorkflowError) return bad(error.status, error.message);
     if (error instanceof SyntaxError || error?.code === "body-too-large") return bad(400, "요청 내용을 확인해 주세요.");
     return bad(503, "검진 유형을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }

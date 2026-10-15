@@ -1,4 +1,5 @@
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
+import { mergeTbWorkflowPages } from "./tbScreeningWorkflowClient.js";
 
 export function canEditHealthScreeningYear(schoolYear = CURRENT_SCHOOL_YEAR) {
   return Number(schoolYear) === CURRENT_SCHOOL_YEAR;
@@ -7,7 +8,8 @@ export function canEditHealthScreeningYear(schoolYear = CURRENT_SCHOOL_YEAR) {
 export const SCREENING_TYPE_OPTIONS = [
   { value: "nhis", label: "공단검진" },
   { value: "employment", label: "채용검진" },
-  { value: "none", label: "해당 없음" },
+  { value: "individual", label: "개별 병·의원 검진" },
+  { value: "none", label: "해당 없음/예외" },
   { value: "other", label: "기타" },
 ];
 
@@ -46,14 +48,16 @@ export class HealthScreeningTypeError extends Error {
   }
 }
 
-async function request({ schoolYear, scope = "self", signal, body }) {
+async function request({ schoolYear, scope = "self", signal, body, evidenceCursor, statusCursor }) {
   const { auth } = await import("./firebase.js");
   if (!auth.currentUser) throw new HealthScreeningTypeError("로그인 후 이용해주세요.", 401);
   let token;
   try { token = await auth.currentUser.getIdToken(); }
   catch { throw new HealthScreeningTypeError("로그인 상태를 확인하지 못했습니다. 다시 로그인해주세요.", 401); }
-  const query = new URLSearchParams({ resource: "health-screening-types", schoolYear: String(schoolYear) });
+  const query = new URLSearchParams({ resource: "health-screening-types", schoolYear: String(schoolYear), includeWorkflow: "true" });
   if (scope === "admin") query.set("scope", "admin");
+  if (evidenceCursor) query.set("evidenceCursor", evidenceCursor);
+  if (statusCursor) query.set("statusCursor", statusCursor);
   let response;
   try { response = await fetch(`/api/firebase/staff-directory?${query}`, {
     method: body ? "POST" : "GET",
@@ -75,8 +79,19 @@ async function request({ schoolYear, scope = "self", signal, body }) {
   return data;
 }
 
-export function loadHealthScreeningTypes({ schoolYear = CURRENT_SCHOOL_YEAR, scope = "self", signal } = {}) {
-  return request({ schoolYear, scope, signal });
+export async function loadHealthScreeningTypes({ schoolYear = CURRENT_SCHOOL_YEAR, scope = "self", signal } = {}) {
+  let data = await request({ schoolYear, scope, signal });
+  const seen = new Set();
+  while (data.datasets && Object.values(data.datasets.completeness || {}).some((value) => value === false)) {
+    const { evidence: evidenceCursor, statuses: statusCursor } = data.datasets.cursors || {};
+    const key = JSON.stringify([evidenceCursor, statusCursor]);
+    if ((!evidenceCursor && !statusCursor) || seen.has(key) || seen.size >= 100) {
+      throw new HealthScreeningTypeError("전체 확인자료 조회가 완료되지 않았습니다. 다시 시도해주세요.", 0);
+    }
+    seen.add(key);
+    data = mergeTbWorkflowPages(data, await request({ schoolYear, scope, signal, evidenceCursor, statusCursor }));
+  }
+  return data;
 }
 
 export function saveHealthScreeningType({ schoolYear, scope = "self", screeningType, staffId, expectedRevision }) {

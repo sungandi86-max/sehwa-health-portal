@@ -1,6 +1,7 @@
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
 import { prepareSubmissionFile, validateSelectableSubmissionFile, validateSubmissionFile } from "./submissionFiles.js";
+import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
 
 const SUBMIT_API_URL = "/api/submit";
 const RECRUIT_REQUEST_TYPE = "employment_checkup_substitution";
@@ -52,7 +53,10 @@ async function postWithTimeout(payload) {
     });
     const json = await response.json();
     if (!response.ok || !(json?.status === "success" || json?.success === true || json?.ok === true)) {
-      throw new Error(json?.message || "Drive 업로드에 실패했습니다.");
+      const error = new Error(json?.message || "Drive 업로드에 실패했습니다.");
+      error.status = response.status;
+      error.result = json;
+      throw error;
     }
     return json;
   } catch (error) {
@@ -169,19 +173,20 @@ export async function createCprSubmission({ user, trainingDate, institution, sta
   return { id: submissionRef.id, file: driveReference };
 }
 
-export async function createTbSubmission({ user, checkupDate, documentType, staffType, file }) {
+export async function createTbSubmission({ user, checkupDate, documentType, staffType, file,
+  schoolYear = CURRENT_SCHOOL_YEAR }) {
   const selectionError = validateSelectableSubmissionFile(file);
   if (selectionError) throw new Error(selectionError);
   const preparedFile = await prepareSubmissionFile(file);
   const fileError = validateSubmissionFile(preparedFile);
   if (fileError) throw new Error(fileError);
 
-  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
   const submitter = getSubmitter(user);
   const originalName = sanitizeFilename(preparedFile.name || "tb-certificate.pdf");
   const fileName = sanitizeFilename(`${submitter.name}_결핵검진확인증_${todayString()}_${originalName}`);
   const uploadResult = await uploadDriveSubmission({
     type: "tb",
+    schoolYear,
     fields: {
       name: submitter.name,
       dept: "Firebase v2 테스트",
@@ -192,23 +197,26 @@ export async function createTbSubmission({ user, checkupDate, documentType, staf
     fileName,
     file: preparedFile,
   });
+  if (!uploadResult.submissionId) throw new Error("접수번호를 확인하지 못했습니다.");
   const driveReference = getDriveReference(uploadResult, fileName, preparedFile.type);
+  return { id: uploadResult.submissionId, file: driveReference, duplicate: uploadResult.duplicate === true };
+}
 
-  await saveStaffSubmission(submissionRef, {
-    itemId: "tb",
-    staffId: uploadResult.staffId,
-    submitter: {
-      uid: submitter.uid,
-      email: submitter.email,
-      displayName: submitter.displayName,
-    },
-    checkupDate: checkupDate || null,
-    documentType: documentType || null,
-    staffType: staffType || null,
-    file: driveReference,
+export async function createAdminProxyTbSubmission({ subjectStaffId, subjectName, checkupDate,
+  documentType, proxyNote, file, allowDuplicate = false, schoolYear = CURRENT_SCHOOL_YEAR, requestId }) {
+  const selectionError = validateSelectableSubmissionFile(file);
+  if (selectionError) throw new Error(selectionError);
+  const preparedFile = await prepareSubmissionFile(file);
+  const fileError = validateSubmissionFile(preparedFile);
+  if (fileError) throw new Error(fileError);
+  const originalName = sanitizeFilename(preparedFile.name || "tb-certificate.pdf");
+  const fileName = sanitizeFilename(`${subjectName}_관리자대리등록_${todayString()}_${originalName}`);
+  return postWithTimeout({
+    action: "admin_proxy", type: "tb", schoolYear, subjectStaffId, proxyNote, allowDuplicate,
+    requestId: requestId || crypto.randomUUID(),
+    fields: { name: subjectName, checkupDate, docType: documentType }, fileName,
+    fileBase64: await fileToBase64(preparedFile), fileMimeType: preparedFile.type,
   });
-
-  return { id: submissionRef.id, file: driveReference };
 }
 
 export async function createRecruitSubmission({

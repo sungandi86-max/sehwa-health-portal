@@ -4,6 +4,7 @@ import { isQaInbodyAssignment, isQaInbodyUid, qaInbodyDirectoryIdentity, QA_INBO
 import { isQaCprAssignment, isQaCprUid, qaCprIdentity, QA_CPR_ROLE } from "./qaCprSynthetic.js";
 import { isQaTbCertificateAssignment, isQaTbCertificateUid, qaTbCertificateIdentity,
   QA_TB_CERTIFICATE_ROLE } from "./qaTbCertificateSynthetic.js";
+import { tbWorkflowTaskId, validatedSchoolYear } from "../../src/lib/tbScreeningWorkflowModel.js";
 
 export const TB_SCREENING_TASK_ID = "tb-screening-2026";
 export const TB_COMPLETED_MESSAGE = "이미 결핵검진 완료가 확인되어 추가 신청할 수 없습니다.";
@@ -91,16 +92,19 @@ export async function verifyTbSubmissionAllowed(req, options = {}) {
   if (!identity.ok) return identity;
   try {
     const { db, staffId, roles } = identity;
+    const schoolYear = options.schoolYear === undefined ? null : validatedSchoolYear(options.schoolYear);
+    const taskId = schoolYear === null ? TB_SCREENING_TASK_ID : tbWorkflowTaskId(schoolYear);
     const statusCollection = identity.qaTbCertificateSynthetic ? "staff_submission_status_qa" : "staff_submission_status";
     const statusSnapshot = await db
       .collection(statusCollection)
-      .doc(`${staffId}_${TB_SCREENING_TASK_ID}`)
+      .doc(`${staffId}_${taskId}`)
       .get();
     if (!statusSnapshot.exists) return { ...identity, ok: true, staffId, roles, statusValue: "unknown" };
 
     const statusData = statusSnapshot.data();
-    const statusMatchesIdentity = statusData?.staffId === staffId && statusData?.taskId === TB_SCREENING_TASK_ID;
-    if (isCompletedTbStatus(statusData, staffId)) {
+    const statusMatchesIdentity = statusData?.staffId === staffId && statusData?.taskId === taskId &&
+      (schoolYear === null || statusData.schoolYear === schoolYear);
+    if (statusMatchesIdentity && statusData?.status === "completed") {
       return { ok: false, status: 409, message: TB_COMPLETED_MESSAGE };
     }
 
