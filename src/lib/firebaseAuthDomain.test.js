@@ -10,8 +10,12 @@ test("production uses its same-origin auth handler before the configured fallbac
   assert.equal(resolveFirebaseAuthDomain(PRODUCTION_HOST, "custom.example"), PRODUCTION_HOST);
 });
 
-test("fixed QA preview uses its same-origin auth handler", () => {
-  assert.equal(resolveFirebaseAuthDomain(QA_HOST, "custom.example"), QA_HOST);
+test("fixed QA preview never defaults to its production-backed same-origin handler", () => {
+  assert.equal(resolveFirebaseAuthDomain(QA_HOST, "isolated-health-qa.firebaseapp.com"), "isolated-health-qa.firebaseapp.com");
+});
+
+test("QA host without configuration has no production fallback", () => {
+  assert.equal(resolveFirebaseAuthDomain(QA_HOST), "");
 });
 
 test("legacy feature preview uses the configured fallback instead of same-origin auth", () => {

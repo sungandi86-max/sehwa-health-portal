@@ -6,11 +6,12 @@ import {
   signInWithRedirect,
   signOut,
 } from "firebase/auth";
-import { auth, googleProvider, microsoftProvider } from "./firebase.js";
+import { auth, googleProvider, microsoftProvider, assertAuthLoginBoundary } from "./firebase.js";
 import { shouldUseQaRedirectLogin } from "./firebaseAuthDomain.js";
 
 const SCHOOL_MICROSOFT_DOMAIN = "@sehwa-gs.hs.kr";
 const REDIRECT_ROUTE_KEY = "sehwa-health-portal:auth-redirect-route";
+const REDIRECT_PROVIDER_KEY = "sehwa-health-portal:auth-redirect-provider";
 const REDIRECT_MESSAGE_KEY = "sehwa-health-portal:auth-redirect-message";
 
 export const AUTH_REDIRECT_MESSAGE_EVENT = "sehwa-health-portal:auth-redirect-message";
@@ -119,6 +120,7 @@ function removeSessionItem(key) {
 }
 
 export function ensureAuthLocalPersistence() {
+  assertAuthLoginBoundary();
   if (!hasBrowserWindow()) return Promise.resolve();
 
   if (!authPersistencePromise) {
@@ -155,12 +157,13 @@ function isSafeInternalRoute(route) {
   }
 }
 
-function saveRedirectRoute() {
+function saveRedirectRoute(providerId) {
   if (!hasBrowserWindow()) return;
 
   const route = currentInternalRoute();
   if (!isSafeInternalRoute(route)) return;
   setSessionItem(REDIRECT_ROUTE_KEY, route);
+  setSessionItem(REDIRECT_PROVIDER_KEY, providerId || "");
 }
 
 export function takeRedirectRoute() {
@@ -193,10 +196,11 @@ function publishRedirectAuthMessage(message) {
 }
 
 async function startFederatedLogin(provider) {
+  assertAuthLoginBoundary(provider.providerId);
   await ensureAuthLocalPersistence();
 
   if (shouldUseRedirectSignIn()) {
-    saveRedirectRoute();
+    saveRedirectRoute(provider.providerId);
     return signInWithRedirect(auth, provider);
   }
 
@@ -204,7 +208,7 @@ async function startFederatedLogin(provider) {
     return await signInWithPopup(auth, provider);
   } catch (error) {
     if (error?.code === "auth/popup-blocked") {
-      saveRedirectRoute();
+      saveRedirectRoute(provider.providerId);
       return signInWithRedirect(auth, provider);
     }
     throw error;
@@ -250,10 +254,17 @@ export function getFriendlyRedirectAuthErrorMessage(error) {
 }
 
 export async function handleAuthRedirectResult() {
+  const providerId = hasBrowserWindow() ? getSessionItem(REDIRECT_PROVIDER_KEY) : "";
+  if (hasBrowserWindow()) removeSessionItem(REDIRECT_PROVIDER_KEY);
   const route = takeRedirectRoute();
 
   try {
+    assertAuthLoginBoundary(providerId);
     const result = await getRedirectResult(auth);
+    if (result?.user) {
+      try { assertAuthLoginBoundary(getFirebaseProviderId(result.user)); }
+      catch (error) { await signOut(auth); throw error; }
+    }
     if (result?.user) {
       const blockedMessage = getMicrosoftSchoolDomainBlockMessage(result.user);
       if (blockedMessage) {
