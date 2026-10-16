@@ -126,7 +126,7 @@ export async function reviewProductionTbEvidence(db, input, { now = () => new Da
   const evidenceRef = db.collection(EVIDENCE_COLLECTION).doc(input.submissionId);
   const preliminary = await evidenceRef.get();
   const candidate = preliminary.exists ? preliminary.data() : null;
-  if (!validEvidence(candidate, schoolYear)) throw new TbWorkflowError("해당 학년도 확인 자료를 찾지 못했습니다.", 404);
+  if (!validEvidence(candidate, schoolYear) || (input.staffId !== undefined && candidate.staffId !== input.staffId)) throw new TbWorkflowError("해당 학년도 확인 자료를 찾지 못했습니다.", 404);
   const currentStatusRef = statusRef(db, candidate.staffId, schoolYear);
   const routeRef = db.collection(ROUTE_COLLECTION).doc(`${candidate.staffId}_${schoolYear}`);
   return db.runTransaction(async (transaction) => {

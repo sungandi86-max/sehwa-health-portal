@@ -26,7 +26,8 @@ function trainingRows(values) {
   const headers = (values?.[0] || []).map((cell) => String(cell ?? "").normalize("NFKC").trim());
   const ownerIndex = headers.indexOf("ownerStaffId");
   if (ownerIndex < 0) return rows.map((row) => ({ ...row, ownerStaffId: "" }));
-  return rows.map((row, index) => ({ ...row,
+  const taskIndex = headers.indexOf("completionTaskId");
+  return rows.map((row, index) => ({ ...row, ...(taskIndex >= 0 ? { completionTaskId: String(values[index + 1]?.[taskIndex] || "") } : {}),
     ownerStaffId: String(values[index + 1]?.[ownerIndex] ?? "").normalize("NFKC").trim() }));
 }
 
@@ -156,6 +157,9 @@ export function validateTrainingInput(input, { existing = null, year = 2026 } = 
   if (!timestampPattern.test(fields.signatureOpenAt) || !timestampPattern.test(fields.signatureCloseAt) || !Number.isFinite(open) || !Number.isFinite(close) || open >= close) throw new RangeError("서명 가능 시간을 확인해 주세요.");
   fields["교육연도"] = String(year);
   fields["사용여부"] = truthy(fields["사용여부"]) ? "사용" : "미사용";
+  const task = input?.completionTaskId ?? existing?.completionTaskId ?? "";
+  if (!["", "none", "cpr-training-2026"].includes(task)) throw new RangeError("교육 연계 업무를 확인해 주세요.");
+  if (task) fields.completionTaskId = task;
   return fields;
 }
 
@@ -177,6 +181,6 @@ export function finalSheetModel(source, directory, eventId, attendanceStatuses =
         absenceNote: !excluded && !signature ? absence?.absenceNote || "" : "",
         absenceLabel: !excluded && !signature ? trainingAbsenceLabel(absence?.absenceReason, absence?.absenceNote) : "" };
     }).sort((a, b) => a.name.localeCompare(b.name, "ko") || a.staffId.localeCompare(b.staffId));
-  return { event: { eventId, title: event["교육명"], date: event["일자"], location: event["장소"] }, rows,
+  return { event: { ...(event.completionTaskId ? { completionTaskId: event.completionTaskId } : {}), eventId, title: event["교육명"], date: event["일자"], location: event["장소"] }, rows,
     counts: { target: rows.filter((row) => row.status !== "제외").length, signed: rows.filter((row) => row.status === "서명 완료").length, excluded: rows.filter((row) => row.status === "제외").length } };
 }

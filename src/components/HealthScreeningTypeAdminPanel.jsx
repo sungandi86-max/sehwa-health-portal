@@ -1,3 +1,4 @@
+import { isQaScreeningPreview } from "../lib/healthScreeningTypes.js";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
 import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, personalTbEvidenceRequired, screeningConfirmationLabel, screeningSourceLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
@@ -27,7 +28,7 @@ function RecordDetails({ item }) {
   </div>;
 }
 
-export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURRENT_SCHOOL_YEAR, onChange }) {
+export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURRENT_SCHOOL_YEAR, reviewContext = null, onChange }) {
   const id = useId();
   const dialog = useRef(null);
   const opener = useRef(null);
@@ -58,10 +59,11 @@ export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURR
     if (editing && !dialog.current.open) dialog.current.showModal();
   }, [editing]);
   const visible = useMemo(() => items.filter((item) => {
+    if (reviewContext && item.staffId !== reviewContext.staffId) return false;
     const matches = filter === "all" || (filter === "unconfirmed" ? !hasSelfScreeningConfirmation(item) : item.screeningType === filter);
     const query = search.trim().toLocaleLowerCase();
     return matches && `${item.name || ""} ${item.department || ""} ${item.position || ""}`.toLocaleLowerCase().includes(query);
-  }), [items, filter, search]);
+  }), [items, filter, search, reviewContext]);
   function open(item, event) {
     if (!canEdit) return;
     opener.current = event.currentTarget; setEditing(item); setChoice(item.screeningType || ""); setSaveError(""); setConflict(false);
@@ -84,7 +86,12 @@ export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURR
     finally { setSaving(false); }
   }
   async function review(item, evidence, action) {
+    if (isQaScreeningPreview()) { setError("QA에서는 운영 검진 확인 API를 실행하지 않습니다."); return; }
     if (action === "invalidate" && !window.confirm(`${item.name || "선택한 교직원"}의 확인자료를 무효 처리하시겠습니까?`)) return;
+    if (reviewContext && (item.staffId !== reviewContext.staffId || year !== reviewContext.schoolYear || evidence.submissionId !== reviewContext.submissionId ||
+      (reviewContext.screeningType && evidence.documentType !== reviewContext.screeningType))) {
+      setError("접수 연결 정보와 현재 확인자료가 다릅니다. 원본 자료를 다시 확인해 주세요."); return;
+    }
     setReviewing(evidence.submissionId); setError("");
     try {
       await reviewTbScreeningEvidence({ staffId: item.staffId, schoolYear: year,
@@ -96,14 +103,16 @@ export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURR
   const years = [...new Set([CURRENT_SCHOOL_YEAR, CURRENT_SCHOOL_YEAR + 1, initialSchoolYear])].sort();
   const editButton = (item) => canEdit ? <div className="flex flex-wrap gap-2">
     <button type="button" onClick={(event) => open(item, event)} aria-label={`${item.name || "교직원"} 검진 경로 수정`} className="min-h-11 rounded-lg border border-[#DDEAE7] px-3 text-[#0D4EA6] hover:bg-[#EEF4FF] focus-visible:outline focus-visible:outline-2">수정</button>
-    {item.workflow?.evidence?.filter((evidence) => evidence.reviewState === "pending").map((evidence) => <div key={evidence.submissionId} className="w-full rounded-lg border border-[#DDEAE7] p-2 text-xs sm:w-auto">
+    {item.workflow?.evidence?.filter((evidence) => evidence.reviewState === "pending" && (!reviewContext || evidence.submissionId === reviewContext.submissionId)).map((evidence) => <div key={evidence.submissionId} className="w-full rounded-lg border border-[#DDEAE7] p-2 text-xs sm:w-auto">
       <p className="max-w-64 break-words text-[#627083]">{evidence.evidenceFiles?.[0]?.fileName || evidence.documentType || "확인자료"} · {evidence.checkupDate || "검진일 미상"}</p>
       <div className="mt-2 flex flex-wrap gap-2">{evidence.evidenceFiles?.[0]?.fileId && <a href={`https://drive.google.com/open?id=${encodeURIComponent(evidence.evidenceFiles[0].fileId)}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center rounded-lg border border-[#DDEAE7] px-3 text-[#0D4EA6]">자료 보기</a>}
-        <button type="button" disabled={Boolean(reviewing)} onClick={() => review(item, evidence, "confirm")} className="min-h-10 rounded-lg bg-[#0D4EA6] px-3 text-white disabled:opacity-50">확인 완료</button>
-        <button type="button" disabled={Boolean(reviewing)} onClick={() => review(item, evidence, "invalidate")} className="min-h-10 rounded-lg border border-[#F6D8D8] px-3 text-[#B42318] disabled:opacity-50">자료 무효</button></div>
+        <button type="button" disabled={Boolean(reviewing) || isQaScreeningPreview()} onClick={() => review(item, evidence, "confirm")} className="min-h-10 rounded-lg bg-[#0D4EA6] px-3 text-white disabled:opacity-50">확인 완료</button>
+        <button type="button" disabled={Boolean(reviewing) || isQaScreeningPreview()} onClick={() => review(item, evidence, "invalidate")} className="min-h-10 rounded-lg border border-[#F6D8D8] px-3 text-[#B42318] disabled:opacity-50">자료 무효</button></div>
     </div>)}
   </div> : <span className="text-xs text-[#627083]">조회 전용</span>;
   return <section className="bogunon-panel p-4 text-sm text-[#102047]" aria-labelledby={`${id}-heading`}>
+    {isQaScreeningPreview() && <p role="status" className="mb-3 text-sm">QA 검진 유형 화면입니다. 운영 증빙 조회·확인·무효 API는 활성화되지 않습니다.</p>}
+    {reviewContext && <p className="mb-3 text-sm">접수번호 {reviewContext.submissionId} · 교직원 {reviewContext.staffId} · {reviewContext.schoolYear}년 · 자료유형 {reviewContext.screeningType || "미지정"}. URL은 조회 위치만 지정하며 처리 권한과 자료 일치는 서버에서 검증합니다.</p>}
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 id={`${id}-heading`} className="text-base font-semibold">연도별 건강검진 유형 관리</h3><span className="text-xs text-[#627083]">본인확인 {items.filter(hasSelfScreeningConfirmation).length} / {items.length}명</span></div>
     <div className="mt-3 flex flex-wrap gap-2">
       <label className="flex items-center gap-2">연도<select value={year} onChange={(event) => setYear(Number(event.target.value))} className="min-h-11 rounded-lg border border-[#DDEAE7] px-2">{years.map((value) => <option key={value} value={value}>{value}년</option>)}</select></label>

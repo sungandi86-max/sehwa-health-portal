@@ -1,5 +1,6 @@
+import { mergeCprProjection } from "../../common/cprProjection.js";
 import { clientFirestoreResource } from "./firestoreResources.js";
-import { collection, getDoc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
+import { collection, getCountFromServer, getDoc, getDocs, limit, orderBy, startAfter, documentId, runTransaction, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
 import {
@@ -66,8 +67,8 @@ function normalizeStaffSubmission(documentSnapshot) {
   const itemId = data.itemId || "unknown";
 
   return {
-    id: documentSnapshot.id,
     ...data,
+    id: documentSnapshot.id,
     itemId,
     typeLabel: STAFF_TYPE_LABELS[itemId] || "교직원 제출",
     status: data.status || "submitted",
@@ -86,8 +87,8 @@ function normalizeInfectionReport(documentSnapshot) {
   const statusLabels = getInfectionStatusLabels(data);
 
   return {
-    id: documentSnapshot.id,
     ...data,
+    id: documentSnapshot.id,
     status,
     submissionStatus,
     caseStatus,
@@ -103,13 +104,23 @@ function filterByStatus(items, status) {
   return status ? items.filter((item) => item.status === status) : items;
 }
 
-export async function getStaffSubmissions({ status = "" } = {}) {
-  const snapshot = await getDocs(
-    query(collection(db, clientFirestoreResource(db, "submissions")), orderBy("submittedAt", "desc"), limit(LIST_LIMIT))
-  );
-
-  return filterByStatus(snapshot.docs.map(normalizeStaffSubmission), status);
+export async function getStaffSubmissionPage({ status = "", cursor = null, submissionId = "" } = {}) {
+  const ref = collection(db, clientFirestoreResource(db, "submissions"));
+  if (submissionId) {
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(submissionId)) throw new Error("접수번호를 확인해 주세요.");
+    const snapshot = await getDoc(doc(ref, submissionId));
+    return { items: snapshot.exists() ? [normalizeStaffSubmission(snapshot)] : [], nextCursor: null, total: snapshot.exists() ? 1 : 0, direct: true };
+  }
+  if (status && !STAFF_STATUS_OPTIONS.includes(status)) throw new Error("지원하지 않는 제출 상태입니다.");
+  const conditions = status ? [where("status", "==", status)] : [];
+  const [snapshot, count] = await Promise.all([
+    getDocs(query(ref, ...conditions, orderBy("submittedAt", "desc"), orderBy(documentId(), "desc"), ...(cursor ? [startAfter(cursor)] : []), limit(LIST_LIMIT + 1))),
+    getCountFromServer(query(ref, ...conditions)),
+  ]);
+  const docs = snapshot.docs.slice(0, LIST_LIMIT);
+  return { items: docs.map(normalizeStaffSubmission), nextCursor: snapshot.docs.length > LIST_LIMIT ? docs.at(-1) : null, total: count.data().count };
 }
+export async function getStaffSubmissions(options = {}) { return (await getStaffSubmissionPage(options)).items; }
 
 export async function getInfectionReports({ status = "" } = {}) {
   const snapshot = await getDocs(
@@ -150,12 +161,29 @@ export async function updateStaffSubmissionStatus(submission, status) {
   }
 
   const mappedStatus = status === "completed" ? "completed" : status === "rejected" ? "incomplete" : "pending";
-  if (submission.itemId === "cpr" && status !== "completed") {
-    const current = await getDoc(doc(db, clientFirestoreResource(db, "statuses"), `${submission.staffId}_${statusTaskId}`));
-    if (current.exists() && current.data()?.status === "completed" && current.data()?.training?.completionMethod === "group") {
-      await updateDoc(doc(db, clientFirestoreResource(db, "submissions"), submissionId), { status, updatedAt: serverTimestamp() });
-      return;
-    }
+  if (submission.itemId === "cpr") {
+    const submissionRef = doc(db, clientFirestoreResource(db, "submissions"), submissionId);
+    const statusRef = doc(db, clientFirestoreResource(db, "statuses"), `${submission.staffId}_${statusTaskId}`);
+    const completed = await getDocs(query(collection(db, clientFirestoreResource(db, "submissions")), where("staffId", "==", submission.staffId), where("itemId", "==", "cpr"), where("status", "==", "completed"), orderBy("submittedAt", "desc"), orderBy(documentId(), "desc"), limit(2)));
+    const otherRef = completed.docs.find((item) => item.id !== submissionId)?.ref;
+    await runTransaction(db, async (transaction) => {
+      const [original, previous] = await Promise.all([transaction.get(submissionRef), transaction.get(statusRef)]);
+      const other = otherRef ? await transaction.get(otherRef) : null;
+      if (!original.exists() || original.data().status !== submission.status || original.data().staffId !== submission.staffId || original.data().itemId !== "cpr") throw new Error("접수 자료가 변경되었습니다.");
+      const current = previous.exists() ? previous.data() : {};
+      let incoming = { staffId: submission.staffId, taskId: statusTaskId, status: mappedStatus,
+        evidenceSubmissionId: submissionId, sourceType: "portal_certificate_review",
+        training: { completionMethod: "individual", completionDate: status === "completed" ? original.data().trainingDate || "" : "",
+          eventId: "", evidenceStatus: status, note: status === "completed" ? "외부·개별 이수 확인" : "이수증 확인 중" } };
+      if (status !== "completed" && other?.exists() && other.data().status === "completed" && other.data().staffId === submission.staffId && other.data().itemId === "cpr") {
+        incoming = { ...incoming, status: "completed", evidenceSubmissionId: other.id,
+          training: { completionMethod: "individual", completionDate: other.data().trainingDate || "", eventId: "", evidenceStatus: "completed", note: "다른 유효한 개별 이수 확인" } };
+      }
+      const next = mergeCprProjection(current, incoming);
+      transaction.update(submissionRef, { status, updatedAt: serverTimestamp() });
+      transaction.set(statusRef, { ...next, cprProjectionRevision: (current.cprProjectionRevision || 0) + 1, syncedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    });
+    return;
   }
   const batch = writeBatch(db);
   batch.update(doc(db, clientFirestoreResource(db, "submissions"), submissionId), {

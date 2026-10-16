@@ -217,3 +217,14 @@ test("synthetic QA event feeds public detail, QR eligibility, attendance and ros
   const roster = finalSheetModel(parsed, [], active.eventId);
   assert.deepEqual(roster.event, { eventId: active.eventId, title: active["교육명"], date: active["일자"], location: active["장소"] });
 });
+
+test("explicit CPR completion binding round-trips without changing legacy Sheet schema", async () => {
+  const db = fakeDatabase();
+  const store = new TrainingEventStore({ database: () => db, context: () => context });
+  await store.saveEvent({ ...values, completionTaskId: "cpr-training-2026" });
+  const loaded = await store.getEvent(values.eventId);
+  assert.equal(loaded.completionTaskId, "cpr-training-2026");
+  await store.saveEvent({ ...loaded, "교육명": "Renamed education" }, loaded);
+  assert.equal((await store.listEvents())[0].completionTaskId, "cpr-training-2026");
+  await assert.rejects(store.saveEvent({ ...loaded, completionTaskId: "arbitrary" }, loaded));
+});

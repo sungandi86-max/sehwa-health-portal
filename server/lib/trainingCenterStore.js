@@ -75,6 +75,21 @@ export class TrainingCenterStore {
     try { return await this.ledger.isReady(); } catch { return false; }
   }
 
+  async readCprSource(staffId) {
+    const base = await this.readBase();
+    if (!await this.ledger.isReady()) throw new TrainingSourceNotReadyError();
+    const records = await this.ledger.listStaffSignatures(staffId);
+    return { ...base, signatures: [SIGNATURE_HEADERS, ...records.map((record) => SIGNATURE_HEADERS.map((header) => record[header] || ""))] };
+  }
+
+  async assertCprAttendanceCurrent(transaction, staffId, records) {
+    return this.ledger.assertRecordsActive(transaction, staffId, records);
+  }
+
+  async assertCprSourceCurrent(transaction, staffId, source) {
+    return this.ledger.assertStaffSourceCurrent(transaction, staffId, source.signatures);
+  }
+
   async readSource(eventId = "") {
     const source = await readTrainingSheets({ events: this.events });
     if (!await this.ledger.isReady()) throw new TrainingSourceNotReadyError();

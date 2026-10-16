@@ -74,6 +74,7 @@ export async function handleTbScreeningWorkflowRequest(req, res, {
     if (!admin || schoolYear !== CURRENT_SCHOOL_YEAR) return bad(400, "현재 학년도 관리 요청을 확인해 주세요.");
     const item = await reviewProductionTbEvidence(access.db, {
       action: input.action,
+      staffId,
       submissionId: input.submissionId,
       schoolYear,
       expectedRevision: input.expectedRevision,

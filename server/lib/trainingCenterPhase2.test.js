@@ -16,6 +16,7 @@ import { SignatureStorageError } from "./trainingSignatureStorage.js";
 import { TrainingSignatureConflictError } from "./trainingSignatureLedger.js";
 
 process.env.APP_ENV = "qa";
+process.env.QA_FIREBASE_PROJECT_ID = "isolated-health-qa";
 process.env.VERCEL_ENV = "preview";
 process.env.VERCEL_GIT_COMMIT_REF = "qa";
 process.env.QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
@@ -103,6 +104,7 @@ function fakeDb() {
   };
   let chain = Promise.resolve();
   return {
+    app: { options: { projectId: process.env.APP_ENV === "production" ? "sehwa-health-portal-v2" : "isolated-health-qa" } },
     records,
     collection(name) {
       return { where(field, operator, value) {
@@ -219,6 +221,8 @@ function harness(options = {}) {
     directory: options.directory || (async () => ({ directory, stats: { duplicateStaffIds: 0 } })),
     store, rosterPdf: options.rosterPdf || { render: async () => Buffer.from("%PDF-test") },
     secret: () => options.secret ?? secret, now: options.now || now,
+    ...(options.saveCprGroupStatus ? { saveCprGroupStatus: options.saveCprGroupStatus } : {}),
+    ...(options.reconcileCprStatus ? { reconcileCprStatus: options.reconcileCprStatus } : {}),
   });
   async function call(resource, { token = "admin", method = "GET", query = {}, body = null } = {}) {
     const res = response();
@@ -1220,4 +1224,28 @@ test("runtime signature source is the readiness-gated ledger", async () => {
   assert.equal(await store.isSignatureSheetReady(), false);
   ready = true;
   assert.equal(await store.isSignatureSheetReady(), true);
+});
+
+
+test("attendance success reports CPR projection failure and authorized rebuild never appends or uploads", async () => {
+  let recoveries = 0;
+  const f = harness({ saveCprGroupStatus: async () => { throw new Error("synthetic projection failure"); }, reconcileCprStatus: async () => { recoveries++; } });
+  const qr = await f.call("training-qr", { query: { eventId: "EVENT-1" } });
+  const result = await f.call("training-attendance-submit", { token: "staff", method: "POST", body: { eventId: "EVENT-1", challenge: new URL(qr.body.path, "https://fixture.invalid").searchParams.get("challenge"), signature: `data:image/png;base64,${inkPng().toString("base64")}` } });
+  assert.equal(result.statusCode, 200); assert.equal(result.body.ok, true); assert.equal(result.body.cprProjectionSynced, false);
+  const before = { ...f.store.calls };
+  const body = { eventId: "EVENT-1", staffId: "QA001", action: "reconcile-cpr", reason: "projection repair" };
+  assert.equal((await f.call("training-attendance-correct", { token: "staff", method: "POST", body })).statusCode, 403);
+  assert.equal((await f.call("training-attendance-correct", { token: "training-b", method: "POST", body })).statusCode, 403);
+  assert.equal((await f.call("training-attendance-correct", { method: "POST", body: { ...body, staffId: "FOREIGN" } })).statusCode, 404);
+  assert.equal((await f.call("training-attendance-correct", { method: "POST", body })).body.cprProjectionSynced, true);
+  assert.equal(recoveries, 1); assert.equal(f.store.calls.uploads, before.uploads); assert.equal(f.store.calls.appended, before.appended);
+});
+
+test("CPR binding cannot be changed after signature history exists", async () => {
+  const f = harness();
+  f.store.values.signatures.push(row(SIGNATURE_HEADERS, { signatureId: "SIG-HISTORY", eventId: "EVENT-1", "교직원ID": "QA001", "상태": "취소", "취소여부": "Y" }));
+  const values = Object.fromEntries(TRAINING_RUNTIME_HEADERS.map((key, index) => [key, f.store.values.trainings[1][index]]));
+  const changed = await f.call("training-admin-save", { method: "POST", body: { ...values, completionTaskId: "cpr-training-2026" } });
+  assert.equal(changed.statusCode, 409); assert.equal(f.store.calls.saved, 0);
 });

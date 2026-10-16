@@ -11,7 +11,7 @@ import { TrainingTargetPicker } from "./TrainingTargetPicker.jsx";
 const fieldClass = "mt-1 min-h-11 w-full min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm text-[#102047] outline-none focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/10";
 const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50";
 const secondaryClass = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6]";
-const blank = { eventId: "", eventGroupId: "", "교육연도": "2026", "사용여부": "미사용", "상태": "예정", "교육명": "", "담당부서": "", "담당자": "", "일자": "", "시작시간": "", "종료시간": "", "장소": "", "교육내용": "", "이수기준": "", signatureOpenAt: "", signatureCloseAt: "", "정렬순서": "0" };
+const blank = { completionTaskId: "none", eventId: "", eventGroupId: "", "교육연도": "2026", "사용여부": "미사용", "상태": "예정", "교육명": "", "담당부서": "", "담당자": "", "일자": "", "시작시간": "", "종료시간": "", "장소": "", "교육내용": "", "이수기준": "", signatureOpenAt: "", signatureCloseAt: "", "정렬순서": "0" };
 
 function localInputValue(value) {
   return value ? value.slice(0, 16) : "";
@@ -76,6 +76,7 @@ function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTr
     <p className="text-xs text-[#627083]">새 교육은 기본적으로 미사용으로 저장됩니다. 대상과 QR 준비를 확인한 뒤 사용으로 전환하세요.</p>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold text-[#102047]">교육명<input className={fieldClass} value={form["교육명"]} onChange={set("교육명")} maxLength={150} required /></label>
+      <label className="text-sm font-semibold text-[#102047]">이수현황 연계<select className={fieldClass} value={form.completionTaskId || ""} onChange={set("completionTaskId")}><option value="">기존 교육명 판별 유지</option><option value="none">연계 없음</option><option value="cpr-training-2026">CPR 이수현황</option></select></label>
       <label className="text-sm font-semibold text-[#102047]">묶음 ID<input className={fieldClass} value={form.eventGroupId} onChange={set("eventGroupId")} placeholder="묶음 교육일 때만 입력" /></label>
       <label className="text-sm font-semibold text-[#102047]">상태<select className={fieldClass} value={form["상태"]} onChange={set("상태")}><option>예정</option><option>진행중</option><option>완료</option><option>비활성</option></select></label>
       <label className="text-sm font-semibold text-[#102047]">사용여부<select className={fieldClass} value={form["사용여부"]} onChange={set("사용여부")}><option>미사용</option><option>사용</option></select></label>

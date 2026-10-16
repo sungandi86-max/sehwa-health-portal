@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { tbReviewHref } from "../lib/submissionNavigation.js";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
@@ -9,7 +10,7 @@ import {
   STAFF_STATUS_LABELS,
   STAFF_STATUS_OPTIONS,
   getInfectionReports,
-  getStaffSubmissions,
+  getStaffSubmissionPage,
   updateInfectionReportStatus,
   updateStaffSubmissionStatus,
 } from "../lib/adminSubmissions.js";
@@ -159,9 +160,10 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-bold text-[#8A96A8]">
           {item.itemId === "tb" && item.schoolYear
-            ? "결핵검진 완료 처리는 연도별 검진 경로 관리에서 승인해 주세요."
+            ? "결핵검진 완료 처리는 연도별 검진 확인에서 진행합니다."
             : isUpdating ? "상태를 저장하는 중입니다." : "처리 상태 변경"}
         </p>
+        {item.itemId === "tb" && tbReviewHref(item) && <Link className="min-h-10 rounded-lg border px-3 py-2 text-sm text-[#0D4EA6]" to={tbReviewHref(item)}>이 접수의 검진 확인</Link>}
         {!(item.itemId === "tb" && item.schoolYear) && <StatusButtons
           currentStatus={item.status}
           labels={STAFF_STATUS_LABELS}
@@ -249,6 +251,9 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
   const [actionState, setActionState] = useState({ status: "idle", message: "" });
   const [pendingId, setPendingId] = useState("");
   const [proxyOpen, setProxyOpen] = useState(false);
+  const [pageInfo, setPageInfo] = useState({ total: 0, nextCursor: null });
+  const loadVersion = useRef(0);
+  const submissionId = searchParams.get("submissionId") || "";
 
   const visibleStatusOptions = useMemo(() => {
     return activeTab === "staff" ? STAFF_STATUS_OPTIONS : INFECTION_STATUS_OPTIONS;
@@ -261,20 +266,23 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
     setStatusFilter(nextStatus && (nextTab === "staff" || nextStatus !== "rejected") ? nextStatus : "");
   }, [searchParams]);
 
-  useEffect(() => {
-    const params = {};
-    if (activeTab !== "staff") params.tab = activeTab;
-    if (statusFilter) params.status = statusFilter;
+  const changeStatusFilter = (status) => {
+    const params = new URLSearchParams(searchParams);
+    if (status) params.set("status", status); else params.delete("status");
     setSearchParams(params, { replace: true });
-  }, [activeTab, statusFilter, setSearchParams]);
+  };
 
-  const loadItems = async () => {
+  const loadItems = async (cursor = null) => {
+    const version = ++loadVersion.current;
     setLoadState({ status: "loading", message: "" });
     setActionState({ status: "idle", message: "" });
 
     try {
       if (activeTab === "staff") {
-        const nextStaffItems = await getStaffSubmissions({ status: statusFilter });
+        const result = await getStaffSubmissionPage({ status: statusFilter, cursor, submissionId });
+        if (version !== loadVersion.current) return;
+        const nextStaffItems = result.items;
+        setPageInfo(result);
         setStaffItems(nextStaffItems);
         setInfectionReports([]);
         setLoadState({ status: nextStaffItems.length ? "success" : "empty", message: "" });
@@ -282,10 +290,12 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
       }
 
       const nextReports = await getInfectionReports({ status: statusFilter });
+      if (version !== loadVersion.current) return;
       setInfectionReports(nextReports);
       setStaffItems([]);
       setLoadState({ status: nextReports.length ? "success" : "empty", message: "" });
     } catch (error) {
+      if (version !== loadVersion.current) return;
       const isPermissionDenied = error?.code === "permission-denied";
       const needsIndex = error?.message?.includes("requires an index");
       setStaffItems([]);
@@ -303,11 +313,15 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
 
   useEffect(() => {
     loadItems();
-  }, [activeTab, statusFilter]);
+    return () => { loadVersion.current++; };
+  }, [activeTab, statusFilter, submissionId]);
 
   const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    if (tab === "infection" && statusFilter === "rejected") setStatusFilter("");
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", tab);
+    params.delete("submissionId");
+    if (tab === "infection" && statusFilter === "rejected") params.delete("status");
+    setSearchParams(params);
   };
 
   const handleStaffStatusChange = async (submissionId, status) => {
@@ -379,11 +393,11 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
 
           <div className="flex flex-wrap gap-2">
             {activeTab === "staff" && <button type="button" onClick={() => setProxyOpen(true)} className="min-h-10 rounded-2xl bg-[#0D4EA6] px-4 py-2 text-xs font-semibold text-white">대리등록</button>}
-            <FilterButton active={!statusFilter} onClick={() => setStatusFilter("")}>
+            <FilterButton active={!statusFilter} onClick={() => changeStatusFilter("")}>
               전체
             </FilterButton>
             {visibleStatusOptions.map((status) => (
-              <FilterButton key={status} active={statusFilter === status} onClick={() => setStatusFilter(status)}>
+              <FilterButton key={status} active={statusFilter === status} onClick={() => changeStatusFilter(status)}>
                 {(activeTab === "staff" ? STAFF_STATUS_LABELS : INFECTION_STATUS_LABELS)[status]}
               </FilterButton>
             ))}
@@ -405,6 +419,11 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
         )}
       </section>
 
+      {activeTab === "staff" ? <div className="flex flex-wrap gap-3 text-sm">
+        <p>{submissionId ? "접수번호 직접 조회" : `선택 조건 접수 총 ${pageInfo.total}건 · 현재 페이지 ${staffItems.length}건 · 페이지당 50건`}</p>
+        {submissionId && <Link to="/firebase-admin/submissions">목록으로</Link>}
+        {!submissionId && <><button disabled={loadState.status === "loading"} onClick={() => loadItems()}>처음 페이지</button><button disabled={!pageInfo.nextCursor || loadState.status === "loading"} onClick={() => loadItems(pageInfo.nextCursor)}>다음 50건</button></>}
+      </div> : <p className="text-sm">감염병 탭은 최대 50건 범위의 조회입니다. 전체 사례는 감염병 사례관리를 이용하세요.</p>}
       <AdminProxySubmissionDialog open={proxyOpen} onClose={() => setProxyOpen(false)} onSaved={loadItems} />
 
       <section className="space-y-4">

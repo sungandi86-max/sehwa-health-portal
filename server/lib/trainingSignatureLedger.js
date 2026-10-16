@@ -84,6 +84,33 @@ export class TrainingSignatureLedger {
     return entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.signatureId.localeCompare(b.signatureId));
   }
 
+  async assertRecordsActive(transaction, staffId, records) {
+    for (const record of records) {
+      const pair = await transaction.get(this.pairRef(record.eventId, staffId));
+      const data = pair.exists ? pair.data() : null;
+      if (!data || data.environment !== this.environment || data.staffId !== staffId || data.eventId !== record.eventId || data.activeSignatureId !== record.signatureId) {
+        throw new TrainingSignatureConflictError("현재 유효한 출석 원본을 다시 확인해 주세요.");
+      }
+    }
+  }
+
+  async assertStaffSourceCurrent(transaction, staffId, signatures) {
+    const pairs = await transaction.get(this.collection.where("staffId", "==", staffId));
+    const expected = signatures.filter((row) => row["교직원ID"] === staffId && activeSignature(row))
+      .map((row) => `${row.eventId}:${row.signatureId}`).sort();
+    const actual = pairs.docs.filter((doc) => doc.data().activeSignatureId).map((doc) => {
+      const data = doc.data();
+      if (data.environment !== this.environment || data.staffId !== staffId || doc.id !== signatureKey(data.eventId, staffId)) throw new TrainingSignatureConflictError();
+      return `${data.eventId}:${data.activeSignatureId}`;
+    }).sort();
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new TrainingSignatureConflictError("출석 원본이 변경되었습니다. 현황을 다시 계산해 주세요.");
+  }
+
+  async listStaffSignatures(staffId) {
+    const pairs = await this.collection.where("staffId", "==", staffId).get();
+    return this.signatureEntries(pairs);
+  }
+
   async listSignatures(eventId = "") {
     const pairs = eventId
       ? await this.collection.where("eventId", "==", eventId).get()

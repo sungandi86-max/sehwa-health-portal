@@ -8,7 +8,7 @@ export const TRAINING_SHEETS = {
 };
 
 export { TRAINING_HEADERS };
-export const TRAINING_RUNTIME_HEADERS = [...TRAINING_HEADERS, "ownerStaffId"];
+export const TRAINING_RUNTIME_HEADERS = [...TRAINING_HEADERS, "ownerStaffId", "completionTaskId"];
 export const TARGET_HEADERS = ["eventId", "교직원ID", "대상상태", "필수여부", "제외여부", "제외사유"];
 
 export function getTrainingSpreadsheetId() {

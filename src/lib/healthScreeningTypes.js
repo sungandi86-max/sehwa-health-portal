@@ -19,7 +19,7 @@ export function isHealthScreeningTypeQaHost(hostname) {
 }
 
 export function isHealthScreeningTypeEnabledHost(hostname) {
-  return isHealthScreeningTypeQaHost(hostname) || hostname === "sehwa-health-portal.vercel.app";
+  return isHealthScreeningTypeQaHost(hostname) || hostname === "sehwa-health-portal.vercel.app" || isQaScreeningPreview();
 }
 
 export function screeningTypeLabel(value) {
@@ -111,4 +111,8 @@ export function saveHealthScreeningType({ schoolYear, scope = "self", screeningT
     scope, schoolYear, screeningType, expectedRevision,
     ...(scope === "admin" ? { staffId } : {}),
   } });
+}
+
+export function isQaScreeningPreview() {
+  return typeof __FIREBASE_RUNTIME_POLICY__ !== "undefined" && __FIREBASE_RUNTIME_POLICY__.environment === "qa";
 }

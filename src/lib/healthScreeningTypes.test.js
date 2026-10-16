@@ -64,3 +64,16 @@ test("conflict errors retain status for explicit reconciliation", () => {
   assert.ok(error instanceof Error);
   assert.equal(error.status, 409);
 });
+
+test("feature Preview type panel requires explicit QA policy; hostname and unknown policy do not activate it", () => {
+  const old = globalThis.__FIREBASE_RUNTIME_POLICY__;
+  try {
+    globalThis.__FIREBASE_RUNTIME_POLICY__ = { environment: "unknown" };
+    assert.equal(isHealthScreeningTypeEnabledHost("feature-preview.example.invalid"), false);
+    globalThis.__FIREBASE_RUNTIME_POLICY__ = { environment: "qa", qaProjectId: "isolated-health-qa" };
+    assert.equal(isHealthScreeningTypeEnabledHost("feature-preview.example.invalid"), true);
+  } finally {
+    if (old === undefined) delete globalThis.__FIREBASE_RUNTIME_POLICY__;
+    else globalThis.__FIREBASE_RUNTIME_POLICY__ = old;
+  }
+});

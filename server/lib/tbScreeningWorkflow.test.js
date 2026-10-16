@@ -126,3 +126,11 @@ test("workflow API rejects unauthenticated, training admin, and foreign self acc
     { context, authAccess: async () => ({ ok: true, staffId: "T001", roles: ["staff"], db: {} }) });
   assert.equal(foreign.statusCode, 403);
 });
+
+test("TB review refuses a receipt linked to another canonical staff ID before transaction writes", async () => {
+  const item = receipt();
+  const db = fakeDb({ [`tb_certificate_submissions_production/${item.submissionId}`]: item });
+  await assert.rejects(reviewProductionTbEvidence(db, { action: "confirm", staffId: "T999", submissionId: item.submissionId,
+    schoolYear: 2026, expectedRevision: 0, actor: "ADMIN" }), /확인 자료를 찾지 못했습니다/);
+  assert.equal(db.data.size, 1);
+});

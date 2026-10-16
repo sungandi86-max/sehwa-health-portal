@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
 import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where,
-  documentId, serverTimestamp, writeBatch } from "firebase/firestore";
+  documentId, getCountFromServer, orderBy, limit, runTransaction, serverTimestamp, writeBatch } from "firebase/firestore";
 import { actors, resources, serverLedgers, assignment, status, submission, infection, accessRequest } from "./fixtures.mjs";
 import { PROJECT_ID, requireLocalTarget } from "./safety.mjs";
 
@@ -293,4 +293,24 @@ test("FAQ public read contract stays distinct from staff-only page and protected
     await assertSucceeds(getDocs(collection(db, "faqs")));
     await (actor.health ? assertSucceeds : assertFails)(deleteDoc(doc(db, "faqs", "existing")));
   }
+});
+
+
+test("paged admin receipt queries and CPR transaction retain existing role boundaries", async () => {
+  await environment.clearFirestore();
+  const manager = actors.find((actor) => actor.health);
+  const staff = actors.find((actor) => actor.approved && !actor.manager);
+  await seed(staff, "staff_submissions");
+  await seed(staff, "staff_submission_status_qa");
+  const db = client(manager);
+  const ref = collection(db, "staff_submissions");
+  await assertSucceeds(getDocs(query(ref, where("status", "==", "submitted"), orderBy("submittedAt", "desc"), orderBy(documentId(), "desc"), limit(51))));
+  await assertSucceeds(getCountFromServer(query(ref, where("status", "==", "submitted"))));
+  const statusRef = doc(db, "staff_submission_status_qa", `${staff.staffId}_cpr-training-2026`);
+  await assertSucceeds(runTransaction(db, async (transaction) => {
+    await transaction.get(statusRef);
+    transaction.set(statusRef, { staffId: staff.staffId, taskId: "cpr-training-2026", status: "completed",
+      training: { completionMethod: "group", eventId: "CPR-1", completionDate: "2026-10-01", evidenceStatus: "completed", note: "synthetic" }, cprProjectionRevision: 1 });
+  }));
+  await assertFails(updateDoc(doc(client(staff), "staff_submission_status_qa", `${staff.staffId}_cpr-training-2026`), { cprProjectionRevision: 2 }));
 });

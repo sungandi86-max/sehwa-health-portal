@@ -1,3 +1,5 @@
+import { useSearchParams } from "react-router-dom";
+import { tbReviewContext } from "../lib/submissionNavigation.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
@@ -295,7 +297,7 @@ function AdminStatusContent({ displayName }) {
         <a href="#legal-training-exceptions" className="rounded-lg border border-[#DDEAE7] px-3 py-3">법정의무연수 예외</a>
         {state.status === "success" && selectedTask && <a href="#completion-status" className="rounded-lg border border-[#DDEAE7] px-3 py-3">검진·연수 완료 현황</a>}
       </nav>
-      {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <section id="annual-screening-type" className="scroll-mt-4"><HealthScreeningTypeAdminPanel /></section>}
+      {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <section id="annual-screening-type" className="scroll-mt-4"><LinkedScreeningPanel /></section>}
       <section id="training-source-check" className="scroll-mt-4"><ResearchTrainingDryRunPanel onApplied={loadOverview} /></section>
       <section id="legal-training-exceptions" className="scroll-mt-4"><ResearchTrainingExceptionsPanel /></section>
 
@@ -412,4 +414,10 @@ export default function FirebaseStaffSubmissionStatusAdminPage() {
       {({ displayName }) => <AdminStatusContent displayName={displayName} />}
     </FirebaseAdminRoleAccessGate>
   );
+}
+
+function LinkedScreeningPanel() {
+  const [params] = useSearchParams();
+  const context = tbReviewContext(params);
+  return <HealthScreeningTypeAdminPanel key={JSON.stringify(context)} initialSchoolYear={context?.schoolYear} reviewContext={context} />;
 }

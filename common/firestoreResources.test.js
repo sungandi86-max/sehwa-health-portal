@@ -26,6 +26,7 @@ function database(project = QA) {
         set: async (value) => { calls.push(["set", path]); data.set(path, value); } };
     } };
   } };
+  db.runTransaction = async (fn) => fn({ get: (ref) => ref.get(), set: (ref, value) => ref.set(value) });
   return { db, data, calls };
 }
 for (const [name, policy, project, key, expected] of [
