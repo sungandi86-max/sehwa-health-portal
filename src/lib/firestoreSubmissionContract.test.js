@@ -36,18 +36,19 @@ test("real browser submission functions and status reader share QA contracts; pr
   globalThis.FileReader = class { readAsDataURL() { this.result = "data:application/pdf;base64,TU9DSw=="; this.onload(); } };
   globalThis.fetch = async (_url, options) => {
     apiCalls++; lastPayload = JSON.parse(options.body);
-    return { ok: true, json: async () => ({ success: true, staffId: "T001", submissionId: "mock-tb-receipt" }) };
+    return { ok: true, json: async () => ({ success: true, receiptSaved: true, statusSynced: true, staffId: "T001", submissionId: "mock-tb-receipt" }) };
   };
   const qa = { environment: "qa", qaProjectId: "isolated-health-qa" };
   const input = { user: { uid: "staff", email: "staff@example.invalid" }, staffType: "staff", file: { name: "mock.pdf", size: 4, type: "application/pdf" } };
   try {
     globalThis.__FIREBASE_RUNTIME_POLICY__ = qa;
     const cpr = await createCprSubmission({ ...input, trainingDate: "2026-10-01", institution: "mock" });
-    assert.equal(state.records.get(`staff_submissions/${cpr.id}`).staffId, "T001");
+    assert.equal(cpr.receiptSaved, true);
+    assert.equal(state.records.size, 0, "browser does not duplicate server-owned originals");
     state.records.set("staff_submission_status_qa/T001_cpr-training-2026", { staffId: "T001", taskId: "cpr-training-2026", status: "pending" });
     assert.equal(await getStaffSubmissionTaskStatus("T001", "cpr-training-2026"), "pending");
     await createTbSubmission({ ...input, checkupDate: "2026-10-01", documentType: "mock", schoolYear: 2027 });
-    assert.equal(state.records.get("staff_submissions/mock-tb-receipt").itemId, "tb");
+    assert.equal(state.records.has("staff_submissions/mock-tb-receipt"), false);
     assert.equal(lastPayload.schoolYear, 2027);
     const before = apiCalls;
     state.db.app.options.projectId = PROD;
@@ -62,5 +63,29 @@ test("real browser submission functions and status reader share QA contracts; pr
     Object.assign(globalThis, previous);
     delete globalThis.__FIREBASE_RUNTIME_POLICY__;
     delete globalThis.__submissionContractMock;
+  }
+});
+
+test("browser partial-success retry sends receipt ID without file bytes or another client original", async () => {
+  const previous = { fetch: globalThis.fetch, window: globalThis.window, FileReader: globalThis.FileReader };
+  globalThis.window = { setTimeout, clearTimeout };
+  globalThis.FileReader = class { readAsDataURL() { this.result = "data:application/pdf;base64,TU9DSw=="; this.onload(); } };
+  globalThis.__FIREBASE_RUNTIME_POLICY__ = { environment: "qa", qaProjectId: "isolated-health-qa" };
+  state.db.app.options.projectId = "isolated-health-qa";
+  const inputs = [];
+  globalThis.fetch = async (_url, init) => {
+    inputs.push(JSON.parse(init.body));
+    return { ok: true, json: async () => ({ status: "success", receiptSaved: true, statusSynced: inputs.length > 1,
+      syncPending: inputs.length === 1, submissionId: "cpr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", staffId: "T001" }) };
+  };
+  const input = { user: { uid: "staff", email: "staff@example.invalid" }, trainingDate: "2026-10-03", institution: "partial", staffType: "staff",
+    file: { name: "mock.pdf", size: 4, type: "application/pdf" } };
+  try {
+    const first = await createCprSubmission(input); assert.equal(first.syncPending, true);
+    const second = await createCprSubmission(input); assert.equal(second.statusSynced, true);
+    assert.ok(inputs[0].fileBase64); assert.equal(inputs[1].fileBase64, undefined);
+    assert.equal(inputs[1].resumeReceiptId, first.id);
+  } finally {
+    Object.assign(globalThis, previous); delete globalThis.__FIREBASE_RUNTIME_POLICY__;
   }
 });

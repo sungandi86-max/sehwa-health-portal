@@ -1,3 +1,4 @@
+import { staffReceiptTestOptions } from "../../tests/fixtures/staffReceiptDb.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -125,5 +126,5 @@ test("TB certificate synthetic login is admin-gated and unavailable in Productio
 function submitHandler(req, res, options = {}) {
   const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
   const context = options.context || submissionResourceContext(environment, options);
-  return rawSubmitHandler(req, res, { ...options, context });
+  return rawSubmitHandler(req, res, staffReceiptTestOptions(options, context));
 }

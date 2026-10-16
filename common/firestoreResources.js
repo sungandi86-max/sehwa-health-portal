@@ -3,6 +3,7 @@ import { validateFirebaseProject, rejectFirebaseConfiguration } from "./firebase
 // Names are contracts, not a suffix convention. Tasks and identity live in the
 // selected project; existing QA status ledgers retain their explicit names.
 export const FIRESTORE_RESOURCES = Object.freeze({
+  receipts: { type: "environmentScoped", production: "staff_submission_receipts_production", qa: "staff_submission_receipts_qa" },
   submissions: { type: "projectScoped", name: "staff_submissions" },
   tasks: { type: "projectScoped", name: "staff_submission_tasks" },
   statuses: { type: "environmentScoped", production: "staff_submission_status", qa: "staff_submission_status_qa", local: "staff_submission_status_qa" },

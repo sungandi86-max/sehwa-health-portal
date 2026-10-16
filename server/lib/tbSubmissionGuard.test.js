@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isCompletedTbStatus, isTbScreeningSubmission, TB_SCREENING_TASK_ID, verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
+import { isCompletedTbStatus, isTbScreeningSubmission, TB_SCREENING_TASK_ID, verifyCurrentStaffSubmissionIdentity, verifyTbSubmissionAllowed } from "./tbSubmissionGuard.js";
 
 test("TB confirmation and group registration payloads use the TB guard", () => {
   assert.equal(isTbScreeningSubmission({ type: "tb" }), true);
@@ -43,10 +43,24 @@ test("server submission identity keeps authenticated UID, approval and role chec
     return { result, reads };
   }
   assert.equal((await check({})).result.ok, true);
-  for (const change of [{ uid: "different" }, { active: false }, { roles: ["training_admin"] }, { qaOnly: true }]) {
+  for (const change of [{ uid: "different" }, { uid: undefined }, { schoolYear: "2026" }, { semester: 1 }, { schoolYear: 2025 }, { active: false }, { roles: ["training_admin"] }, { qaOnly: true }]) {
     assert.equal((await check(change)).result.status, 403);
   }
   const mismatched = await check({}, "different-health-qa");
   assert.equal(mismatched.result.status, 503);
   assert.equal(mismatched.reads, 0);
+});
+
+
+test("completed-TB exception is opt-in for exact receipt lookup; default submission guard remains closed", async () => {
+  const { staffReceiptDb } = await import("../../tests/fixtures/staffReceiptDb.js");
+  const db = staffReceiptDb();
+  db.records.set("user_assignments/staff_2026_2", { uid: "staff", staffId: "S-A", schoolYear: 2026, semester: 2, active: true, roles: ["staff"] });
+  db.records.set("staff_submission_status_qa/S-A_tb-screening-2026", { staffId: "S-A", taskId: "tb-screening-2026", schoolYear: 2026, status: "completed" });
+  const req = { headers: { authorization: "Bearer mock" } };
+  const options = { context: { APP_ENV: "qa", QA_FIREBASE_PROJECT_ID: "isolated-health-qa" }, schoolYear: 2026,
+    auth: () => ({ verifyIdToken: async () => ({ uid: "staff" }) }), database: () => db };
+  assert.equal((await verifyTbSubmissionAllowed(req, options)).status, 409);
+  const retry = await verifyTbSubmissionAllowed(req, { ...options, allowRecordedRetry: true });
+  assert.equal(retry.ok, true); assert.equal(retry.statusValue, "completed");
 });

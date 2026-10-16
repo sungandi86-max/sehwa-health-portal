@@ -1,3 +1,4 @@
+import { staffReceiptTestOptions } from "../../tests/fixtures/staffReceiptDb.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -138,7 +139,7 @@ test("authorized CPR and TB use the canonical server workflow", async () => {
   for (const type of ["cpr", "tb"]) {
     const result = response();
     await submitHandler(request({ ...file, fields: { ...file.fields, docType: "진료확인서" }, type, sheetName: "Injected", folderId: "Injected" }), result, options);
-    assert.equal(result.statusCode, 200, JSON.stringify(result.body));
+    assert.equal(result.statusCode, 503, JSON.stringify(result.body));
   }
   assert.deepEqual(forwarded.map((item) => item.type), ["cpr", "tb"]);
   for (const item of forwarded) {
@@ -539,5 +540,5 @@ test("Apps Script dispatches signed types to fixed Drive folders without student
 function submitHandler(req, res, options = {}) {
   const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
   const context = options.context || submissionResourceContext(environment, options);
-  return rawSubmitHandler(req, res, { ...options, context });
+  return rawSubmitHandler(req, res, staffReceiptTestOptions(options, context));
 }

@@ -1,3 +1,4 @@
+import { staffReceiptTestOptions } from "../../tests/fixtures/staffReceiptDb.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import rawSubmitHandler from "../../api/submit.js";
@@ -106,5 +107,5 @@ test("Apps Script isolates the QA CPR proxy secret from Production submissions",
 function submitHandler(req, res, options = {}) {
   const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
   const context = options.context || submissionResourceContext(environment, options);
-  return rawSubmitHandler(req, res, { ...options, context });
+  return rawSubmitHandler(req, res, staffReceiptTestOptions(options, context));
 }

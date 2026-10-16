@@ -268,3 +268,18 @@ test("TB direct assignment lookup rejects identity/term mismatch without changin
   await install(base);
   await assertSucceeds(setDoc(doc(db, "staff_submissions/new-tb"), payload));
 });
+
+test("receipt upload journals remain server-only for every client identity", async () => {
+  for (const name of ["staff_submission_receipts_qa", "staff_submission_receipts_production"]) {
+    for (const actor of actors) {
+      await environment.clearFirestore();
+      await seed(actor, name);
+      const db = client(actor), ref = doc(db, name, "existing");
+      await assertFails(getDoc(ref));
+      await assertFails(getDocs(collection(db, name)));
+      await assertFails(setDoc(doc(db, name, "new"), { state: "recorded" }));
+      await assertFails(updateDoc(ref, { state: "recorded" }));
+      await assertFails(deleteDoc(ref));
+    }
+  }
+});
