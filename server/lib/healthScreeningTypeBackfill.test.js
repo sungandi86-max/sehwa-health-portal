@@ -32,15 +32,17 @@ test("dry-run classifies only unambiguous legacy routes as create candidates", (
     annualRecords: [],
   });
 
-  assert.deepEqual(plan.summary.createByType, { nhis: 1, individual: 1, employment: 1, other: 1 });
-  assert.equal(plan.summary.create, 4);
-  assert.equal(plan.summary.unknown, 2);
-  assert.deepEqual(plan.summary.unknownByRaw, { group: 1, none: 1 });
+  assert.deepEqual(plan.summary.createByType, { nhis: 1, individual: 1, employment: 1, group: 1, other: 1 });
+  assert.equal(plan.summary.create, 5);
+  assert.equal(plan.summary.unknown, 1);
+  assert.deepEqual(plan.summary.unknownByRaw, { none: 1 });
   assert.equal(plan.summary.excludedInactive, 1);
   assert.equal(plan.summary.unmatched, 1);
-  assert.equal(plan.summary.annualUnconfirmedAfterWrite, 2);
+  assert.equal(plan.summary.annualUnconfirmedAfterWrite, 1);
   assert.equal(plan.entries.find((item) => item.staffId === "T001").mappedType, "nhis");
   assert.equal(plan.entries.find((item) => item.staffId === "T002").mappedType, "individual");
+  assert.equal(plan.entries.find((item) => item.staffId === "T003").mappedType, "group");
+  assert.equal(plan.entries.find((item) => item.staffId === "T004").action, "unknown");
 });
 
 test("dry-run skips matching annual records and reports mismatches as conflicts", () => {

@@ -45,13 +45,14 @@ test("dashboard recent reads use one bounded query and reuse the current-term in
 
 test("TB dashboard counts keep route, evidence review, and completion separate", () => {
   const result = getTbDashboardCounts([
-    { staffId: "A", selfChoice: null, workflow: { evidence: [], completed: false } },
-    { staffId: "B", selfChoice: { screeningType: "individual" }, workflow: { evidence: [{ reviewState: "pending" }], completed: false } },
-    { staffId: "C", selfChoice: { screeningType: "nhis" }, workflow: { evidence: [{ reviewState: "confirmed" }], completed: true } },
-    { staffId: "D", selfChoice: { screeningType: "none" }, workflow: { evidence: [], completed: false } },
+    { staffId: "A", screeningTypeConfirmed: false, workflow: { evidence: [], completed: false } },
+    { staffId: "B", screeningType: "individual", screeningTypeConfirmed: true, workflow: { evidence: [{ reviewState: "pending" }], completed: false } },
+    { staffId: "C", screeningType: "nhis", screeningTypeConfirmed: true, workflow: { evidence: [{ reviewState: "confirmed" }], completed: true } },
+    { staffId: "D", screeningType: "none", screeningTypeConfirmed: true, workflow: { evidence: [], completed: false } },
+    { staffId: "E", screeningType: "group", screeningTypeConfirmed: true, workflow: { evidence: [], completed: false } },
   ]);
 
-  assert.deepEqual(result, { routeUnconfirmed: 1, evidencePending: 1, incomplete: 3 });
+  assert.deepEqual(result, { routeUnconfirmed: 1, evidencePending: 1, incomplete: 4 });
 });
 
 test("dashboard task cards preserve the six operational definitions and routes", () => {

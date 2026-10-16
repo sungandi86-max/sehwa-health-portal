@@ -84,6 +84,17 @@ test("C: self choice preserved by administrator override with immutable history"
   assert.deepEqual(history.payload.history.map((item) => item.screeningType), ["nhis", "employment"]);
 });
 
+test("group route supports self and administrator writes with immutable history", async () => {
+  const f = fixture();
+  const self = await f.request("POST", { screeningType: "group", expectedRevision: 0 });
+  assert.equal(self.code, 200);
+  assert.equal(self.payload.item.screeningType, "group");
+  const admin = await f.request("POST", { scope: "admin", staffId: "self", screeningType: "group", expectedRevision: 1 }, f.admin);
+  assert.equal(admin.code, 200);
+  const history = await f.request("GET", { scope: "admin", staffId: "self", history: "true" }, f.admin);
+  assert.deepEqual(history.payload.history.map((item) => item.screeningType), ["group", "group"]);
+});
+
 test("D: concurrent revisions permit one update and reject stale revision", async () => {
   const f = fixture();
   const input = { scope: "admin", staffId: "self", screeningType: "none", expectedRevision: 0 };

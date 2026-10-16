@@ -2,7 +2,7 @@ export function getTbDashboardCounts(items = []) {
   return items.reduce(
     (counts, item) => {
       const workflow = item?.workflow || {};
-      if (!item?.selfChoice) counts.routeUnconfirmed += 1;
+      if (item?.screeningTypeConfirmed !== true) counts.routeUnconfirmed += 1;
       if ((workflow.evidence || []).some((evidence) => evidence?.reviewState === "pending" || evidence?.status === "pending")) {
         counts.evidencePending += 1;
       }

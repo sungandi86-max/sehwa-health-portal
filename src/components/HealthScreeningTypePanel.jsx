@@ -2,7 +2,7 @@ import React, { useEffect, useId, useState } from "react";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
 import { tbEvidenceLabel } from "../lib/tbScreeningWorkflowClient.js";
 import { joinTbScreeningWorkflow } from "../lib/tbScreeningWorkflowModel.js";
-import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, screeningConfirmationLabel, screeningSourceLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
+import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, personalTbEvidenceRequired, screeningConfirmationLabel, screeningSourceLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
 
 export default function HealthScreeningTypePanel({ schoolYear = CURRENT_SCHOOL_YEAR, completionLabel, initialItem, workflow, onChange }) {
   const id = useId();
@@ -46,7 +46,8 @@ export default function HealthScreeningTypePanel({ schoolYear = CURRENT_SCHOOL_Y
     <p className="mt-1 text-xs text-[#627083]">{schoolYear}년 · 검진 경로 확인이며 검진 완료 여부와는 별도입니다.</p>
     {loading ? <p className="mt-3" role="status">결핵검진 경로를 불러오는 중입니다.</p> : <>
       {item && <p className="mt-3">검진 경로: <strong>{screeningTypeLabel(item.screeningType)}</strong><span className="ml-3">본인확인: {screeningConfirmationLabel(item)}</span>{["admin", "legacy_firestore_backfill"].includes(item.source) && <span className="ml-3 text-xs text-[#627083]">{screeningSourceLabel(item)}</span>}</p>}
-      <p className="mt-1">확인자료: {tbEvidenceLabel(item?.workflow)}</p>
+      <p className="mt-1">확인자료: {personalTbEvidenceRequired(item?.screeningType) ? tbEvidenceLabel(item?.workflow) : "개인 확인자료 제출 불필요"}</p>
+      {choice === "group" && <p className="mt-2 text-xs text-[#3154A3]">학교에서 실시하는 단체 결핵검진에 참여합니다. 별도 개인 확인자료 제출은 필요하지 않습니다.</p>}
       <p className="mt-1">검진 완료: {item?.workflow ? item.workflow.completed ? "완료" : "미완료" : completionLabel || "확인 필요"}</p>
       {item?.workflow?.routeMismatch && <p className="mt-1 text-xs text-[#3154A3]">검진 경로와 접수자료 유형이 다릅니다. 보건실 확인이 필요합니다.</p>}
       {item?.workflow?.status?.discrepancy && <p className="mt-1 text-xs text-[#B42318]">확인자료에 보완이 필요합니다. 기존 완료 확인 이력은 유지됩니다.</p>}

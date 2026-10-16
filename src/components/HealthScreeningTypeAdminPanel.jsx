@@ -2,7 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
 import { reviewTbScreeningEvidence, tbEvidenceLabel } from "../lib/tbScreeningWorkflowClient.js";
 import { joinTbScreeningWorkflow } from "../lib/tbScreeningWorkflowModel.js";
-import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, screeningConfirmationLabel, screeningSourceLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
+import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, personalTbEvidenceRequired, screeningConfirmationLabel, screeningSourceLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
 
 function auditLabel(value) {
   if (!value) return "—";
@@ -19,7 +19,7 @@ function dateLabel(value) {
 function RecordDetails({ item }) {
   const original = typeof item.selfChoice === "string" ? item.selfChoice : item.selfChoice?.screeningType;
   return <div className="text-xs text-[#627083] leading-5">
-    <p>확인자료: {tbEvidenceLabel(item.workflow)}</p>
+    <p>확인자료: {personalTbEvidenceRequired(item.screeningType) ? tbEvidenceLabel(item.workflow) : "개인 확인자료 제출 불필요"}</p>
     {item.workflow?.evidence?.map((evidence) => <p key={evidence.submissionId}>{evidence.checkupDate || "검진일 확인 필요"} · {evidence.documentType || "자료 유형 확인 필요"} · {["admin_proxy", "proxy"].includes(evidence.submissionMode) ? "대리 접수" : "본인 접수"} · {evidence.reviewState === "invalid" ? "보완 필요" : evidence.reviewState === "confirmed" ? "확인 완료" : "확인 필요"}</p>)}
     <p>검진 완료: {item.workflow?.completed ? "완료" : "미완료"}</p>
     {item.workflow?.status?.confirmedAt && <p>완료 확인: {auditLabel(item.workflow.status.confirmedBy)} · {dateLabel(item.workflow.status.confirmedAt)} · 접수번호 {item.workflow.status.evidenceSubmissionId}</p>}
@@ -116,6 +116,7 @@ export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURR
     <dialog ref={dialog} aria-labelledby={`${id}-dialog-title`} onCancel={(event) => { event.preventDefault(); close(); }} className="w-[calc(100%_-_32px)] max-w-md rounded-2xl border border-[#DDEAE7] p-4 text-[#102047] backdrop:bg-black/30">
       {editing && <form onSubmit={save}><h4 id={`${id}-dialog-title`} className="text-base font-semibold">{editing.name || "교직원"} 검진 경로 수정</h4><p className="mt-1 text-xs text-[#627083]">{year}년 · 관리자 수정은 검진 완료 여부를 변경하지 않습니다.</p><div className="mt-3"><RecordDetails item={editing} /></div>
         <label className="mt-3 block">검진 경로<select autoFocus required disabled={saving || conflict} value={choice} onChange={(event) => setChoice(event.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-[#DDEAE7] px-3"><option value="" disabled>경로를 선택해주세요</option>{SCREENING_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        {choice === "group" && <p className="mt-2 text-xs text-[#3154A3]">학교 단체검진 경로는 개인 확인자료 제출을 요구하지 않으며, 검진 완료 여부는 별도로 관리됩니다.</p>}
         {saveError && <p role="alert" className="mt-3 text-sm text-[#B42318]">{saveError}</p>}
         <div className="mt-4 flex justify-end gap-2"><button type="button" disabled={saving} onClick={close} className="min-h-11 rounded-lg border border-[#DDEAE7] px-3">닫기</button>{conflict ? <button type="button" onClick={() => { close(); setRefresh((value) => value + 1); }} className="min-h-11 rounded-lg bg-[#0D4EA6] px-3 text-white">최신 내용 다시 확인</button> : <button disabled={!choice || saving} className="min-h-11 rounded-lg bg-[#0D4EA6] px-3 text-white hover:bg-[#183B8F] disabled:opacity-50">{saving ? "저장 중…" : "저장"}</button>}</div>
       </form>}

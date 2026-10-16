@@ -8,9 +8,10 @@ const LEGACY_ROUTE_MAP = new Map([
   ["national", "nhis"],
   ["individual", "individual"],
   ["employment", "employment"],
+  ["group", "group"],
   ["other", "other"],
 ]);
-const CREATE_TYPES = ["nhis", "individual", "employment", "other"];
+const CREATE_TYPES = ["nhis", "individual", "employment", "group", "other"];
 
 const text = (value) => String(value ?? "").normalize("NFKC").trim();
 
