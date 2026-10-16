@@ -51,7 +51,14 @@ export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "�
   const displayName = useMemo(() => getInternalDisplayName({ profile, user }) || "교직원", [profile, user]);
 
   useEffect(() => {
+    let version = 0, disposed = false, timer;
+    const expire = () => { version++; setAssignmentResult(null); setMessage("권한 확인 시간이 초과되었습니다. 새로고침 후 다시 확인해 주세요."); setIsLoading(false); };
+    timer = setTimeout(expire, 15000);
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      const request = ++version;
+      const isCurrent = () => !disposed && request === version;
+      clearTimeout(timer);
+      if (currentUser) timer = setTimeout(expire, 15000);
       setUser(currentUser);
       setProfile(null);
       setAssignmentResult(null);
@@ -64,7 +71,9 @@ export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "�
       try {
         const blockedMessage = getMicrosoftSchoolDomainBlockMessage(currentUser);
         if (blockedMessage) {
+          if (!isCurrent()) return;
           await signOutFirebase();
+          if (!isCurrent()) return;
           setUser(null);
           setMessage(blockedMessage);
           return;
@@ -77,17 +86,19 @@ export default function FirebaseAdminRoleAccessGate({ children, deniedTitle = "�
         );
         const currentProfile = await getUserProfile(currentUser.uid);
 
+        if (!isCurrent()) return;
         setProfile(currentProfile);
         setAssignmentResult(currentAssignmentResult);
       } catch (error) {
+        if (!isCurrent()) return;
         console.error("[firebase-admin-role] access load failed", error);
         setMessage("사용자 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
       } finally {
-        setIsLoading(false);
+        if (isCurrent()) { clearTimeout(timer); setIsLoading(false); }
       }
     });
 
-    return unsubscribe;
+    return () => { disposed = true; version++; clearTimeout(timer); unsubscribe(); };
   }, []);
 
   const handleMicrosoftSignIn = async () => {

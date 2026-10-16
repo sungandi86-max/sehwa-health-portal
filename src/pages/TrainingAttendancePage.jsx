@@ -56,7 +56,10 @@ export function TrainingAttendanceContent({ displayName, group = false, id, chal
   useEffect(() => {
     let active = true;
     if (!challenge) { setState({ status: "error", message: "QR 링크가 올바르지 않습니다.", items: [], canSubmit: false }); return; }
-    checkAttendance(scope).then((result) => { if (active) setState({ status: "ready", items: result.items, canSubmit: result.canSubmit }); })
+    checkAttendance(scope).then((result) => {
+      if (result?.ok !== true || !Array.isArray(result.items) || !result.items.length) throw new Error("출석 가능 여부를 확인하지 못했습니다.");
+      if (active) setState({ status: "ready", items: result.items, canSubmit: result.canSubmit === true && result.items.every((item) => item.eligible === true) });
+    })
       .catch((error) => { if (active) setState({ status: "error", message: error.message, items: [], canSubmit: false }); });
     return () => { active = false; };
   }, [id, challenge, group, checkAttendance]);
@@ -67,8 +70,19 @@ export function TrainingAttendanceContent({ displayName, group = false, id, chal
     setWorking(true); setMessage("");
     try {
       const result = await submitAttendance({ ...scope, signature: canvas.toDataURL("image/png") });
-      setState((current) => ({ ...current, status: "done", signedAt: result.signedAt || "" }));
-    } catch (error) { setMessage(error.message); }
+      if (result?.ok !== true || !Array.isArray(result.eventIds) || !result.eventIds.length || !Number.isFinite(Date.parse(result.signedAt)) || !state.items.every((item) => result.eventIds.includes(item.eventId))) throw new Error("출석 저장 결과를 확인하지 못했습니다. 다시 확인해 주세요.");
+      setState((current) => ({ ...current, status: "done", signedAt: result.signedAt }));
+    } catch (error) {
+      setMessage(error.message);
+      // A competing submission or lost response may already have committed.
+      // Recheck eligibility; never infer completion from a failed response.
+      try {
+        const checked = await checkAttendance(scope);
+        if (checked?.ok === true && Array.isArray(checked.items) && checked.items.length) {
+          setState({ status: "ready", items: checked.items, canSubmit: checked.canSubmit === true && checked.items.every((item) => item.eligible === true) });
+        } else setState({ status: "error", items: [], canSubmit: false, message: "출석 가능 여부를 다시 확인해 주세요." });
+      } catch { setState({ status: "error", items: [], canSubmit: false, message: "출석 가능 여부를 다시 확인해 주세요." }); }
+    }
     finally { setWorking(false); }
   }
 

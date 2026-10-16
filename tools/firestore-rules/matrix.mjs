@@ -283,3 +283,14 @@ test("receipt upload journals remain server-only for every client identity", asy
     }
   }
 });
+
+test("FAQ public read contract stays distinct from staff-only page and protected role data", async () => {
+  for (const actor of actors) {
+    await environment.clearFirestore();
+    await seed(actor, "faqs");
+    const db = client(actor);
+    await assertSucceeds(getDoc(doc(db, "faqs", "existing")));
+    await assertSucceeds(getDocs(collection(db, "faqs")));
+    await (actor.health ? assertSucceeds : assertFails)(deleteDoc(doc(db, "faqs", "existing")));
+  }
+});

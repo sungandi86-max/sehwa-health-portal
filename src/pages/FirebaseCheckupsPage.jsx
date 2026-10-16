@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
+import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
 import {
   PortalAction,
@@ -57,7 +57,7 @@ export default function FirebaseCheckupsPage() {
   }, []);
 
   return (
-    <FirebaseV2AccessGate>
+    <FirebaseStaffSubmissionAccessGate readOnly accessTitle="검진·검사">
       {({ displayName }) => (
         <PortalPageLayout>
           <PortalBackToHome />
@@ -170,6 +170,6 @@ export default function FirebaseCheckupsPage() {
           )}
         </PortalPageLayout>
       )}
-    </FirebaseV2AccessGate>
+    </FirebaseStaffSubmissionAccessGate>
   );
 }

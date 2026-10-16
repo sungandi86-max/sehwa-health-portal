@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
+import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { getActiveFaqs, searchFaqs } from "../lib/faqs.js";
 
@@ -47,7 +47,7 @@ export default function FirebaseFaqPage() {
   const hasNoSearchResult = loadState.status === "success" && filteredFaqs.length === 0;
 
   return (
-    <FirebaseV2AccessGate>
+    <FirebaseStaffSubmissionAccessGate readOnly accessTitle="FAQ">
       {({ displayName }) => (
         <FirebaseV2PageShell
           label="FAQ"
@@ -115,6 +115,6 @@ export default function FirebaseFaqPage() {
           </section>
         </FirebaseV2PageShell>
       )}
-    </FirebaseV2AccessGate>
+    </FirebaseStaffSubmissionAccessGate>
   );
 }
