@@ -9,6 +9,7 @@ export const SCREENING_TYPE_OPTIONS = [
   { value: "nhis", label: "공단검진" },
   { value: "employment", label: "채용검진" },
   { value: "individual", label: "개별 병·의원 검진" },
+  { value: "group", label: "학교 단체검진" },
   { value: "none", label: "해당 없음/예외" },
   { value: "other", label: "기타" },
 ];
@@ -23,6 +24,10 @@ export function isHealthScreeningTypeEnabledHost(hostname) {
 
 export function screeningTypeLabel(value) {
   return SCREENING_TYPE_OPTIONS.find((option) => option.value === value)?.label || "확인 필요";
+}
+
+export function personalTbEvidenceRequired(screeningType) {
+  return screeningType !== "group";
 }
 
 export function hasSelfScreeningConfirmation(item) {

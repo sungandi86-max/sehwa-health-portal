@@ -35,9 +35,11 @@ test("health screening type UI is allowed only on the exact fixed QA hostname", 
   }
 });
 
-test("annual type options include the individual screening route", () => {
-  assert.deepEqual(SCREENING_TYPE_OPTIONS.map(({ value }) => value), ["nhis", "employment", "individual", "none", "other"]);
+test("annual type options include school group screening", () => {
+  assert.deepEqual(SCREENING_TYPE_OPTIONS.map(({ value }) => value), ["nhis", "employment", "individual", "group", "none", "other"]);
   assert.equal(screeningTypeLabel("none"), "해당 없음/예외");
+  assert.equal(screeningTypeLabel("individual"), "개별 병·의원 검진");
+  assert.equal(screeningTypeLabel("group"), "학교 단체검진");
   assert.equal(screeningTypeLabel(null), "확인 필요");
   assert.equal(screeningTypeLabel("unknown"), "확인 필요");
 });

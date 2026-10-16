@@ -1,6 +1,6 @@
 import { trainingEnvironment } from "./trainingDeployment.js";
 
-export const HEALTH_SCREENING_TYPES = new Set(["nhis", "employment", "individual", "none", "other"]);
+export const HEALTH_SCREENING_TYPES = new Set(["nhis", "employment", "individual", "group", "none", "other"]);
 export const HEALTH_SCREENING_TYPE_SOURCES = new Set(["self", "admin", "legacy_firestore_backfill"]);
 export const HEALTH_SCREENING_TYPE_WRITE_SOURCES = new Set(["self", "admin"]);
 export const HEALTH_SCREENING_TYPE_COLLECTION = "staff_health_screening_types_qa";

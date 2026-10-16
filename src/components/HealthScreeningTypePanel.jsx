@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useState } from "react";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
-import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, screeningConfirmationLabel, screeningSourceLabel, screeningSelfConfirmationDateLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
+import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, personalTbEvidenceRequired, screeningConfirmationLabel, screeningSourceLabel, screeningSelfConfirmationDateLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
 import { tbEvidenceLabel } from "../lib/tbScreeningWorkflowClient.js";
 
 export default function HealthScreeningTypePanel({ schoolYear = CURRENT_SCHOOL_YEAR, completionLabel, onChange }) {
@@ -40,7 +40,7 @@ export default function HealthScreeningTypePanel({ schoolYear = CURRENT_SCHOOL_Y
       {item && <p className="mt-3">검진 유형: <strong>{screeningTypeLabel(item.screeningType)}</strong><span className="ml-3">본인확인: {screeningConfirmationLabel(item)}</span>{["admin", "legacy_firestore_backfill"].includes(item.source) && <span className="ml-3 text-xs text-[#627083]">{screeningSourceLabel(item)}</span>}</p>}
       {item && <p className="mt-1 text-xs text-[#627083]">본인확인일: {screeningSelfConfirmationDateLabel(item)}</p>}
       {item?.workflow && <div className="mt-3 rounded-lg border border-[#DDEAE7] bg-[#F7FBF9] p-3">
-        <p>확인자료: <strong>{tbEvidenceLabel(item.workflow)}</strong></p>
+        <p>확인자료: <strong>{personalTbEvidenceRequired(item.screeningType) ? tbEvidenceLabel(item.workflow) : "개인 확인자료 제출 불필요"}</strong></p>
         <p className="mt-1">결핵검진 상태: <strong>{item.workflow.completed ? "완료" : "확인 필요"}</strong></p>
         {item.workflow.routeMismatch && <p className="mt-1 text-[#B42318]">검진 경로와 확인자료 유형이 다릅니다. 보건실에서 확인할 예정입니다.</p>}
         {item.workflow.status?.discrepancy && <p className="mt-1 text-[#B42318]">확인자료 보완이 필요합니다. 기존 완료 확인 이력은 유지됩니다.</p>}
@@ -52,6 +52,7 @@ export default function HealthScreeningTypePanel({ schoolYear = CURRENT_SCHOOL_Y
       {item && canEdit && <form onSubmit={confirm} className="mt-3">
         <fieldset disabled={saving || conflict}><legend className="text-sm font-medium">결핵검진 경로</legend>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">{SCREENING_TYPE_OPTIONS.map((option) => <label key={option.value} className="flex min-h-11 items-center gap-2 cursor-pointer"><input type="radio" name={`${id}-type`} value={option.value} checked={choice === option.value} onChange={() => setChoice(option.value)} required className="accent-[#0D4EA6]" />{option.label}</label>)}</div>
+          {choice === "group" && <p className="mt-2 text-xs text-[#3154A3]">학교에서 실시하는 단체 결핵검진에 참여합니다. 별도 개인 확인자료 제출은 필요하지 않습니다.</p>}
         </fieldset>
         <button disabled={!choice || saving || conflict} className="mt-2 min-h-11 rounded-lg bg-[#0D4EA6] px-4 text-white hover:bg-[#183B8F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50">{saving ? "저장 중…" : hasSelfScreeningConfirmation(item) ? "수정 후 다시 확인" : "확인 완료"}</button>
       </form>}

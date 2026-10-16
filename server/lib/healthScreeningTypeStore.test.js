@@ -1,7 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { healthScreeningTypeCollection, healthScreeningTypeDocumentId,
-  readHealthScreeningType, saveHealthScreeningType, validHealthScreeningTypeRecord } from "./healthScreeningTypeStore.js";
+  HEALTH_SCREENING_TYPES, readHealthScreeningType, saveHealthScreeningType, validHealthScreeningTypeRecord } from "./healthScreeningTypeStore.js";
+
+test("stored route enum supports school group screening", () => {
+  assert.deepEqual([...HEALTH_SCREENING_TYPES], ["nhis", "employment", "individual", "group", "none", "other"]);
+  const migrated = { staffId: "fixture", schoolYear: 2026, environment: "qa", schemaVersion: 1, revision: 1,
+    screeningType: "group", screeningTypeConfirmed: true, source: "legacy_firestore_backfill",
+    selfChoice: null, confirmedBy: null, confirmedAt: null,
+    migration: { id: "migration", sourceCollection: "staff_submission_status",
+      sourceDocumentId: "fixture_tb-screening-2026", importedAt: "2026-10-15T00:00:00.000Z", manifestHash: "hash" } };
+  assert.equal(validHealthScreeningTypeRecord(migrated, "fixture", 2026), true);
+});
 
 test("collection and deterministic document helpers reject unsafe input", () => {
   assert.equal(healthScreeningTypeCollection({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }), "staff_health_screening_types_qa");

@@ -50,9 +50,10 @@ test("TB dashboard counts keep route, evidence review, and completion separate",
     { staffId: "C", screeningTypeConfirmed: true, selfChoice: { screeningType: "nhis" }, workflow: { evidence: [{ reviewState: "confirmed" }], completed: true } },
     { staffId: "D", screeningTypeConfirmed: true, selfChoice: { screeningType: "none" }, workflow: { evidence: [], completed: false } },
     { staffId: "E", screeningTypeConfirmed: true, selfChoice: null, source: "admin", workflow: { evidence: [], completed: false } },
+    { staffId: "F", screeningType: "group", screeningTypeConfirmed: true, selfChoice: null, source: "admin", workflow: { evidence: [], completed: false } },
   ]);
 
-  assert.deepEqual(result, { routeUnconfirmed: 1, evidencePending: 1, incomplete: 4 });
+  assert.deepEqual(result, { routeUnconfirmed: 1, evidencePending: 1, incomplete: 5 });
 });
 
 test("dashboard task cards preserve the six operational definitions and routes", () => {
