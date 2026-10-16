@@ -152,7 +152,7 @@ export class TrainingSignatureLedger {
   async getAttendanceStatus(eventId, staffId) { return Boolean(await this.getSignature(eventId, staffId)); }
   async getSignatureFile(eventId, staffId) { return (await this.getSignature(eventId, staffId))?.signatureFileId || null; }
 
-  async appendSignatures(records) {
+  async appendSignatures(records, { prepare, applyWrites, source = {} } = {}) {
     const environment = this.environment;
     if (environment === "production" && !await this.isReady()) throw new TrainingSignatureConflictError("운영 서명 원장이 준비되지 않았습니다.");
     const rows = records.map(normalizedRow);
@@ -160,12 +160,14 @@ export class TrainingSignatureLedger {
       rows.some((row) => !activeSignature(row))) throw new TrainingSignatureConflictError();
     const db = this.database();
     const refs = rows.map((row) => this.pairRef(row.eventId, row["교직원ID"]));
-    await db.runTransaction(async (transaction) => {
+    return db.runTransaction(async (transaction) => {
       const snapshots = [];
       const entryRefs = rows.map((row, index) => refs[index].collection("signatures").doc(row.signatureId));
       const entries = [];
       for (const ref of refs) snapshots.push(await transaction.get(ref));
       for (const ref of entryRefs) entries.push(await transaction.get(ref));
+      const prepared = prepare ? await prepare(transaction, { refs, snapshots, entries, entryRefs, rows }) : null;
+      if (prepared?.skip) return prepared;
       for (let index = 0; index < rows.length; index += 1) {
         const row = rows[index];
         const ref = refs[index];
@@ -176,10 +178,12 @@ export class TrainingSignatureLedger {
         if (entries[index].exists) throw new TrainingSignatureConflictError();
         transaction.set(ref, { eventId: row.eventId, staffId: row["교직원ID"], environment,
           activeSignatureId: row.signatureId, createdAt: pair?.createdAt || new Date(), updatedAt: new Date() }, { merge: true });
-        transaction.create(entryRef, ledgerEntry(row, environment));
+        transaction.create(entryRef, { ...ledgerEntry(row, environment, source), ...(source.manualEvidence ? { manualEvidence: source.manualEvidence } : {}) });
         transaction.create(entryRef.collection("history").doc(`create-${randomUUID()}`),
-          { action: "created", at: row.createdAt || row["서명일시"], actor: row["정정자"] || null, row });
+          { action: source.manualEvidence ? "offline_roster_confirmed" : "created", at: row.createdAt || row["서명일시"], actor: row["정정자"] || null, row });
       }
+      if (applyWrites) applyWrites(transaction, prepared);
+      return prepared;
     });
   }
 

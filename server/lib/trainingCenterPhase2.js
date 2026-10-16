@@ -27,7 +27,8 @@ function trainingRows(values) {
   const ownerIndex = headers.indexOf("ownerStaffId");
   if (ownerIndex < 0) return rows.map((row) => ({ ...row, ownerStaffId: "" }));
   const taskIndex = headers.indexOf("completionTaskId");
-  return rows.map((row, index) => ({ ...row, ...(taskIndex >= 0 ? { completionTaskId: String(values[index + 1]?.[taskIndex] || "") } : {}),
+  const modeIndex = headers.indexOf("registrationMode");
+  return rows.map((row, index) => ({ ...row, ...(modeIndex >= 0 ? { registrationMode: String(values[index + 1]?.[modeIndex] || "") } : {}), ...(taskIndex >= 0 ? { completionTaskId: String(values[index + 1]?.[taskIndex] || "") } : {}),
     ownerStaffId: String(values[index + 1]?.[ownerIndex] ?? "").normalize("NFKC").trim() }));
 }
 
@@ -84,7 +85,8 @@ export function attendanceEligibility(source, events, staffId, now = new Date())
     const target = source.targets.find((row) => row.eventId === event.eventId && row["교직원ID"] === staffId);
     const already = source.signatures.find((row) => row.eventId === event.eventId && row["교직원ID"] === staffId && activeSignature(row));
     let reason = "";
-    if (!target || !["대상", "교육 대상"].includes(target["대상상태"])) reason = "교육 대상이 아닙니다.";
+    if (event.registrationMode === "admin_offline_cpr_2026") reason = "오프라인 명부 확인 관리자 등록 교육입니다.";
+    else if (!target || !["대상", "교육 대상"].includes(target["대상상태"])) reason = "교육 대상이 아닙니다.";
     else if (truthy(target["제외여부"])) reason = "교육 대상에서 제외되었습니다.";
     else if (already) reason = "이미 출석이 기록되었습니다.";
     else {
@@ -176,11 +178,12 @@ export function finalSheetModel(source, directory, eventId, attendanceStatuses =
       const excluded = truthy(target["제외여부"]) || target["대상상태"] === "제외";
       const absence = attendanceStatuses.find((row) => row.eventId === eventId && row.staffId === staff.staffId && row.attendanceStatus === "absent");
       return { staffId: staff.staffId, name: staff.name, department: staff.department, position: staff.position,
-        status: excluded ? "제외" : signature ? "서명 완료" : "미서명", signedAt: signature?.["서명일시"] || "", method: signature?.["출석방식"] || "", fileId: signature?.["서명파일ID"] || "",
+        status: excluded ? "제외" : signature?.["출석방식"] === "admin_offline_cpr_2026" ? "관리자 등록" : signature ? "서명 완료" : "미서명",
+        ...(signature?.["출석방식"] === "admin_offline_cpr_2026" ? {registeredAt:signature.createdAt,registeredBy:signature["정정자"],registrationBasis:signature["취소사유"]} : {}), signedAt: signature?.["서명일시"] || "", method: signature?.["출석방식"] || "", fileId: signature?.["서명파일ID"] || "",
         absenceReason: !excluded && !signature ? absence?.absenceReason || null : null,
         absenceNote: !excluded && !signature ? absence?.absenceNote || "" : "",
         absenceLabel: !excluded && !signature ? trainingAbsenceLabel(absence?.absenceReason, absence?.absenceNote) : "" };
     }).sort((a, b) => a.name.localeCompare(b.name, "ko") || a.staffId.localeCompare(b.staffId));
-  return { event: { ...(event.completionTaskId ? { completionTaskId: event.completionTaskId } : {}), eventId, title: event["교육명"], date: event["일자"], location: event["장소"] }, rows,
-    counts: { target: rows.filter((row) => row.status !== "제외").length, signed: rows.filter((row) => row.status === "서명 완료").length, excluded: rows.filter((row) => row.status === "제외").length } };
+  return { event: { ...(event.registrationMode ? {registrationMode:event.registrationMode} : {}), ...(event.completionTaskId ? { completionTaskId: event.completionTaskId } : {}), eventId, title: event["교육명"], date: event["일자"], location: event["장소"] }, rows,
+    counts: { ...(rows.some(row=>row.method === "admin_offline_cpr_2026") ? {manual:rows.filter(row=>row.status === "관리자 등록").length} : {}), target: rows.filter((row) => row.status !== "제외").length, signed: rows.filter((row) => row.status === "서명 완료").length, excluded: rows.filter((row) => row.status === "제외").length } };
 }

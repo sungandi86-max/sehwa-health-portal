@@ -1,3 +1,5 @@
+import { serverFirestoreResource } from "./firestoreResources.js";
+import { runManualCprBatch, ManualCprError } from "./cprManualBatch.js";
 import { trainingDriveConfig, resourceSecret, ResourcePolicyError, sendResourceError } from "./environmentResources.js";
 import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
@@ -152,12 +154,14 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         if (["training-signature-storage-bootstrap", "training-attendance-submit", "training-attendance-recovery-apply"].includes(resource) ||
             (resource === "training-final-sheet" && req.query?.download === "pdf")) trainingDriveConfig();
       }
-      const access = await resolveTrainingAccess(req, { auth, db, directory });
+      const manualDb = resource.startsWith("training-manual-cpr-") ? db() : null;
+      if (manualDb) serverFirestoreResource(manualDb,"statuses");
+      const access = await resolveTrainingAccess(req, { auth, db: manualDb ? () => manualDb : db, directory });
       if (!access.ok) return bad(res, access.status, access.message);
       const adminOnly = !["training-attendance-check", "training-attendance-submit"].includes(resource);
       if (adminOnly && !access.isAdmin && !access.isTrainingAdmin) return bad(res, 403, "교육 관리자 권한이 없습니다.");
       const topLevelOnly = resource === "training-runtime-preflight" || resource === "training-signature-storage-bootstrap" ||
-        resource.startsWith("training-attendance-recovery-");
+        resource.startsWith("training-attendance-recovery-") || resource.startsWith("training-manual-cpr-");
       if (topLevelOnly && !access.isAdmin) return bad(res, 403, "보건교사 또는 최상위 관리자 권한이 필요합니다.");
       if (req.method === "POST" || resource.startsWith("training-attendance-recovery-") ||
         (resource === "training-final-sheet" && req.query?.download === "pdf")) requireTrainingEnvironment();
@@ -207,6 +211,14 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           canReviewedRetry: result.canReviewedRetry === true, reviewedRelease: result.reviewedRelease === true });
       }
 
+      if (resource.startsWith("training-manual-cpr-")) {
+        if (req.method !== "POST") return bad(res,405,"지원하지 않는 요청입니다.");
+        const events = await store.events.listEvents();
+        const result = await runManualCprBatch({db:access.db, actor:access.assignment.staffId, directory:access.directory,
+          input:body, commit:resource === "training-manual-cpr-commit", now:now(), events});
+        return res.status(200).json(result);
+      }
+
       if (resource === "training-admin-list" && req.method === "GET") {
         const base = await store.readBase();
         const items = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS).filter((row) => row.eventId && canManageTraining(access, row))
@@ -224,6 +236,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const rows = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS);
         const existing = rows.find((row) => row.eventId === body?.eventId);
         if (body?.eventId && !existing) return bad(res, 404, "수정할 교육을 찾을 수 없습니다.");
+        if (existing?.registrationMode === "admin_offline_cpr_2026") return bad(res,409,"오프라인 일괄 등록 교육의 원본은 일반 교육 수정으로 변경할 수 없습니다.");
         if (existing) {
           const denied = denyUnownedTraining(res, access, existing);
           if (denied) return denied;
@@ -274,6 +287,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const base = await store.readBase();
         const training = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS).find((row) => row.eventId === eventId);
         if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        if (training.registrationMode === "admin_offline_cpr_2026") return bad(res,409,"오프라인 확정 명부는 일반 대상자 편집으로 변경할 수 없습니다.");
         const denied = denyUnownedTraining(res, access, training);
         if (denied) return denied;
         const currentRows = sheetRows(base.targets, TARGET_HEADERS).filter((row) => row.eventId === eventId);
@@ -295,6 +309,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const source = { trainings: sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS), targets: sheetRows(base.targets, TARGET_HEADERS) };
         const training = source.trainings.find((row) => row.eventId === eventId);
         if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        if (training.registrationMode === "admin_offline_cpr_2026") return bad(res,409,"오프라인 확정 명부는 일반 대상자 편집으로 변경할 수 없습니다.");
         const denied = denyUnownedTraining(res, access, training);
         if (denied) return denied;
         if (store.events?.environment === "qa") return bad(res, 409, "QA 교육 대상은 일괄 설정에서 변경해 주세요.");
@@ -464,6 +479,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         if (!event) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const denied = denyUnownedTraining(res, access, event);
         if (denied) return denied;
+        if (event.registrationMode === "admin_offline_cpr_2026" && (!access.isAdmin || !["cancel","reconcile-cpr"].includes(action))) return bad(res,403,"오프라인 원본은 관리자 취소·현황 복구만 가능합니다.");
         const target = source.targets.find((row) => row.eventId === eventId && row["교직원ID"] === staffId);
         if (!target || access.directory.filter((row) => row.staffId === staffId && row.employmentStatus === "재직").length !== 1) return bad(res, 404, "정정 대상을 찾을 수 없습니다.");
         if (action === "reconcile-cpr") {
@@ -529,6 +545,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       }
       return bad(res, 405, "지원하지 않는 요청입니다.");
     } catch (error) {
+      if (error instanceof ManualCprError) return bad(res,error.status,error.message,error.code);
       if (error instanceof ResourcePolicyError) return sendResourceError(res, error);
       if (error instanceof TrainingDeploymentError) return bad(res, 503, error.message, error.code);
       if (error instanceof AttendanceConflictError) return bad(res, 409, error.message, error.code);

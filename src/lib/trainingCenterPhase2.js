@@ -44,3 +44,6 @@ export async function downloadTrainingFinalSheet(eventId, filename) {
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+export const previewManualCprBatch = (body) => request("training-manual-cpr-preview", {method:"POST",body});
+export const commitManualCprBatch = (body) => request("training-manual-cpr-commit", {method:"POST",body});

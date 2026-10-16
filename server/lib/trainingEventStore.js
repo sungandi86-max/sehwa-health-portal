@@ -24,7 +24,7 @@ export class TrainingEventStore {
       return data;
     });
     docs.sort((a, b) => (a.sourceRow || Infinity) - (b.sourceRow || Infinity) || a.eventId.localeCompare(b.eventId));
-    return docs.map((data) => ({ ...trainingEventToSheetRow(data), ...(data.completionTaskId ? { completionTaskId: data.completionTaskId } : {}), ...(data.ownerStaffId ? { ownerStaffId: data.ownerStaffId } : {}),
+    return docs.map((data) => ({ ...trainingEventToSheetRow(data), ...(data.registrationMode ? { registrationMode: data.registrationMode } : {}), ...(data.completionTaskId ? { completionTaskId: data.completionTaskId } : {}), ...(data.ownerStaffId ? { ownerStaffId: data.ownerStaffId } : {}),
       ...(data.targetSnapshot?.schemaVersion === 1 ? { targetSnapshot: data.targetSnapshot } : {}) }));
   }
 
@@ -32,7 +32,7 @@ export class TrainingEventStore {
     const doc = await this.database().collection(this.collectionName).doc(eventId).get();
     if (!doc.exists) return null;
     if (doc.data().eventId !== doc.id || doc.data().environment !== this.environment) throw new Error("교육 이벤트 원본을 확인해 주세요.");
-    return { ...trainingEventToSheetRow(doc.data()), ...(doc.data().completionTaskId ? { completionTaskId: doc.data().completionTaskId } : {}), ...(doc.data().ownerStaffId ? { ownerStaffId: doc.data().ownerStaffId } : {}),
+    return { ...trainingEventToSheetRow(doc.data()), ...(doc.data().registrationMode ? { registrationMode: doc.data().registrationMode } : {}), ...(doc.data().completionTaskId ? { completionTaskId: doc.data().completionTaskId } : {}), ...(doc.data().ownerStaffId ? { ownerStaffId: doc.data().ownerStaffId } : {}),
       ...(doc.data().targetSnapshot?.schemaVersion === 1 ? { targetSnapshot: doc.data().targetSnapshot } : {}) };
   }
 

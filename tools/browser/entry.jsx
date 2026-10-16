@@ -1,3 +1,4 @@
+import TrainingAdmin from '../../src/pages/FirebaseTrainingAdminPage.jsx';
 import Submissions from '../../src/pages/FirebaseAdminSubmissionsPage.jsx';
 import Status from '../../src/pages/FirebaseSubmissionStatusPage.jsx';
 import StaffStatus from '../../src/pages/FirebaseStaffSubmissionStatusAdminPage.jsx';
@@ -14,6 +15,7 @@ import Qr from '../../src/pages/FirebaseTrainingQrPage.jsx';
 import AdminAttendance from '../../src/pages/FirebaseTrainingAttendanceAdminPage.jsx';
 import '../../src/index.css';
 createRoot(document.getElementById('root')).render(<BrowserRouter><Routes>
+ <Route path="/firebase-admin/trainings" element={<TrainingAdmin/>}/>
  <Route path="/firebase-admin/submissions" element={<Submissions/>}/>
  <Route path="/firebase-admin/submission-status" element={<Status/>}/>
  <Route path="/firebase-admin/staff-submission-status" element={<StaffStatus/>}/>

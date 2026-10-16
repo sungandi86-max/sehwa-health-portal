@@ -1,3 +1,4 @@
+import ManualCprBatchPanel from "../components/ManualCprBatchPanel.jsx";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
@@ -167,13 +168,14 @@ export function TrainingRuntimePreflight({
   </section>;
 }
 
-export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
+export function TrainingAdminContent({ actorUid = "", displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
   const [items, setItems] = useState([]);
   const [summaries, setSummaries] = useState({});
   const [summaryFailures, setSummaryFailures] = useState(0);
   const [state, setState] = useState("loading");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(null);
+  const [manualCprOpen, setManualCprOpen] = useState(false);
   async function reload() {
     setState("loading");
     try {
@@ -192,7 +194,8 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
     .sort((left, right) => left["일자"].localeCompare(right["일자"]))[0];
   const currentCounts = upcoming && summaries[upcoming.eventId];
   return <TrainingAdminLayout displayName={displayName} active="manage" title="교직원 교육 운영관리" description="교육 등록과 대상·QR·출석 업무를 한곳에서 관리합니다.">
-    <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><div className="flex flex-wrap gap-2">{hasTopLevelAdminAccess && <button className={secondaryClass} type="button" onClick={()=>setManualCprOpen(old=>!old)}>2026 CPR 단체교육 일괄 등록</button>}<button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button></div></div>
+    {manualCprOpen && hasTopLevelAdminAccess && <ManualCprBatchPanel key={actorUid} uid={actorUid} onSaved={reload} />}
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     {state === "loading" && <p className="text-sm text-[#627083]">교육 목록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
@@ -209,8 +212,8 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
         const counts = summaries[item.eventId];
         const path = `/firebase-admin/trainings/${encodeURIComponent(item.eventId)}`;
         return <article className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center" key={item.eventId}>
-          <div className="min-w-0"><h3 className="break-keep text-sm font-bold text-[#102047]">{item["교육명"]}</h3><p className="mt-1 text-xs text-[#627083]">{item["일자"]} {item["시작시간"]} · {item["장소"] || "장소 미정"} · {item["상태"]} · {item["사용여부"]}</p><p className="mt-1 text-xs tabular-nums text-[#627083]">대상 {counts ? counts.target : "—"} · 출석 {counts ? counts.signed : "—"} · 미출석 {counts ? counts.missing : "—"}</p></div>
-          <div className="flex flex-wrap gap-2"><button className={secondaryClass} type="button" onClick={() => setEditing(item)}>수정</button><Link className={secondaryClass} to={`${path}/targets`}>대상</Link><Link className={secondaryClass} to={`${path}/qr`}>QR</Link><Link className={secondaryClass} to={`${path}/attendance`}>출석</Link><Link className={secondaryClass} to={`${path}/final-sheet`}>등록부</Link></div>
+          <div className="min-w-0"><h3 className="break-keep text-sm font-bold text-[#102047]">{item["교육명"]}{item.registrationMode === "admin_offline_cpr_2026" && <span className="ml-2 text-xs">오프라인 명부 · 관리자 등록</span>}</h3><p className="mt-1 text-xs text-[#627083]">{item["일자"]} {item["시작시간"]} · {item["장소"] || "장소 미정"} · {item["상태"]} · {item["사용여부"]}</p><p className="mt-1 text-xs tabular-nums text-[#627083]">대상 {counts ? counts.target : "—"} · 출석 {counts ? counts.attended ?? counts.signed : "—"} · 미출석 {counts ? counts.missing : "—"}</p></div>
+          <div className="flex flex-wrap gap-2">{item.registrationMode !== "admin_offline_cpr_2026" && <><button className={secondaryClass} type="button" onClick={() => setEditing(item)}>수정</button><Link className={secondaryClass} to={`${path}/targets`}>대상</Link><Link className={secondaryClass} to={`${path}/qr`}>QR</Link></>}<Link className={secondaryClass} to={`${path}/attendance`}>출석</Link><Link className={secondaryClass} to={`${path}/final-sheet`}>등록부</Link></div>
         </article>;
       })}</div>}
     </section>}
@@ -219,5 +222,5 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
 }
 
 export default function FirebaseTrainingAdminPage() {
-  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 관리자 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess }) => <TrainingAdminContent displayName={displayName} hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 관리자 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess, user }) => <TrainingAdminContent actorUid={user.uid} displayName={displayName} hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}</FirebaseAdminRoleAccessGate>;
 }
