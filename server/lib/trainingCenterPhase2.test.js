@@ -15,9 +15,10 @@ import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
 import { SignatureStorageError } from "./trainingSignatureStorage.js";
 import { TrainingSignatureConflictError } from "./trainingSignatureLedger.js";
 
+process.env.APP_ENV = "qa";
 process.env.VERCEL_ENV = "preview";
 process.env.VERCEL_GIT_COMMIT_REF = "qa";
-process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
+process.env.QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
 
 const row = (headers, values) => headers.map((header) => values[header] ?? "");
 const open = "2026-10-06T08:00:00+09:00";
@@ -45,17 +46,20 @@ test("QA attendance locks never appear in production recovery or duplicate check
   try {
     const qaLock = await reserveAttendance(db, ["EVENT-1"], "QA001", 0);
     assert.equal(qaLock.refs.length, 1);
+    process.env.APP_ENV = "production";
     process.env.VERCEL_ENV = "production";
     process.env.VERCEL_GIT_COMMIT_REF = "main";
     assert.deepEqual((await listAttendanceRecoveryCandidates({ db, now: 20 * 60 * 1000 })).items, []);
     const productionLock = await reserveAttendance(db, ["EVENT-1"], "QA001", 0);
     assert.equal(productionLock.refs.length, 1);
     assert.equal(db.records.size, 2);
-    process.env.VERCEL_ENV = "preview";
+    process.env.APP_ENV = "qa";
+process.env.VERCEL_ENV = "preview";
     process.env.VERCEL_GIT_COMMIT_REF = "qa";
     assert.equal((await listAttendanceRecoveryCandidates({ db, now: 20 * 60 * 1000 })).items.length, 1);
   } finally {
     if (originalEnvironment === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = originalEnvironment;
+    process.env.APP_ENV = "qa";
     if (originalRef === undefined) delete process.env.VERCEL_GIT_COMMIT_REF; else process.env.VERCEL_GIT_COMMIT_REF = originalRef;
   }
 });
@@ -63,6 +67,7 @@ test("QA attendance locks never appear in production recovery or duplicate check
 test("feature Preview cannot write training rows or inspect attendance recovery", async () => {
   const originalRef = process.env.VERCEL_GIT_COMMIT_REF;
   try {
+    delete process.env.APP_ENV;
     process.env.VERCEL_GIT_COMMIT_REF = "feature/training-center-phase2";
     const { call, store } = harness();
     const write = await call("training-admin-save", { method: "POST", body: {} });
@@ -71,6 +76,7 @@ test("feature Preview cannot write training rows or inspect attendance recovery"
     assert.equal(recovery.statusCode, 503);
     assert.equal(store.calls.saved, 0);
   } finally {
+    process.env.APP_ENV = "qa";
     if (originalRef === undefined) delete process.env.VERCEL_GIT_COMMIT_REF; else process.env.VERCEL_GIT_COMMIT_REF = originalRef;
   }
 });
@@ -925,27 +931,30 @@ test("QR issuance requires authenticated private bootstrapped storage without wr
 
 test("Phase 2 admin GET rejects unapproved Preview before canonical directory or Sheet reads", async () => {
   const prior = process.env.VERCEL_GIT_COMMIT_REF;
-  const workbook = process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID;
+  const workbook = process.env.QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID;
   try {
+    delete process.env.APP_ENV;
     process.env.VERCEL_GIT_COMMIT_REF = "feature/other";
-    delete process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID;
+    delete process.env.QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID;
     let directoryReads = 0;
     const { call, store } = harness({ directory: async () => { directoryReads += 1; return { directory, stats: { duplicateStaffIds: 0 } }; } });
     for (const resource of ["training-admin-list", "training-targets", "training-final-sheet"]) {
       const result = await call(resource, { query: { eventId: "EVENT-1" } });
       assert.equal(result.statusCode, 503);
-      assert.equal(result.body.code, "training-environment-not-allowed");
+      assert.equal(result.body.code, "ENVIRONMENT_UNRESOLVED");
     }
     assert.equal(directoryReads, 0);
     assert.deepEqual(store.calls, { uploads: 0, appended: 0, saved: 0, sheetWrites: 0, bootstraps: 0 });
+    delete process.env.APP_ENV;
     process.env.VERCEL_GIT_COMMIT_REF = "feature/training-center-phase2";
-    process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
+    process.env.QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID = "QA_WORKBOOK_TEST_ONLY";
     assert.equal((await call("training-admin-list")).statusCode, 503);
     assert.equal(directoryReads, 0);
     assert.equal((await call("training-admin-save", { method: "POST", body: {} })).statusCode, 503);
   } finally {
+    process.env.APP_ENV = "qa";
     if (prior === undefined) delete process.env.VERCEL_GIT_COMMIT_REF; else process.env.VERCEL_GIT_COMMIT_REF = prior;
-    if (workbook === undefined) delete process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID; else process.env.STAFF_ROSTER_SOURCE_SPREADSHEET_ID = workbook;
+    if (workbook === undefined) delete process.env.QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID; else process.env.QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID = workbook;
   }
 });
 

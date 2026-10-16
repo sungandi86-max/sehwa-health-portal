@@ -5,7 +5,7 @@ import { TrainingEventConflictError, TrainingEventStore } from "./trainingEventS
 import { applyTrainingEventMigration, planTrainingEventMigration, TrainingEventMigrationConflictError } from "./trainingEventMigration.js";
 import { attendanceEligibility, finalSheetModel, parseTrainingSource, resolveEvents, SIGNATURE_HEADERS } from "./trainingCenterPhase2.js";
 
-const context = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa", STAFF_ROSTER_SOURCE_SPREADSHEET_ID: "QA_WORKBOOK" };
+const context = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa", QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID: "QA_WORKBOOK" };
 const values = { eventId: "QA-EVENT-001", eventGroupId: "QA-GROUP-001", "교육연도": "2026", "사용여부": "미사용",
   "상태": "진행중", "교육명": "[QA] mirror", "담당부서": "QA", "담당자": "", "일자": "2026-10-10",
   "시작시간": "09:00", "종료시간": "10:00", "장소": "QA", "교육내용": "테스트", "이수기준": "전자서명",

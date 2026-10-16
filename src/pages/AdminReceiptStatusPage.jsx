@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
 
 const ADMIN_API = "/api/health-room-status";
-const DEV_ADMIN_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/health-room-status";
 
 async function requestReceiptSummary(firebaseUser) {
   const idToken = await firebaseUser.getIdToken();
@@ -22,17 +21,6 @@ async function requestReceiptSummary(firebaseUser) {
     return response.json();
   }
 
-  if (import.meta.env.DEV) {
-    const fallbackResponse = await fetch(DEV_ADMIN_API_FALLBACK, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${idToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    return fallbackResponse.json();
-  }
 
   throw new Error(`HTTP ${response.status}`);
 }

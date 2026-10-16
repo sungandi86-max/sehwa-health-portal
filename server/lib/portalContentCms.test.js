@@ -6,7 +6,7 @@ import { handlePortalCmsResource } from "./portalContentCmsApi.js";
 import { CMS_SHEETS, planCmsMigration } from "./portalContentMigration.js";
 import { CmsInputError, cmsCollection, cmsPublicItems, readCms, saveCmsItem, validateCmsInput } from "./portalContentCms.js";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 
 function row(type, cells) {

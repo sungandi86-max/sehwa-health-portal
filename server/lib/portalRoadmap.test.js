@@ -7,7 +7,7 @@ import {
 import { handlePortalRoadmapResource } from "./portalRoadmapApi.js";
 
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 
 function sheetRow({ category = "감염병", name = "보고", step = "접수", order = "1" } = {}) {
   const row = Array(24).fill("");

@@ -1,3 +1,4 @@
+import { sheetResource } from "./lib/environmentResources.js";
 import { FieldValue } from "firebase-admin/firestore";
 import {
   buildSnapshotPlan,
@@ -8,7 +9,6 @@ import {
 import { readStoredExceptions, summarizeStoredExceptions } from "./healthMandatoryTrainingExceptions.js";
 import { readGoogleSheetValues, readStaffDirectory } from "./lib/staffDirectory.js";
 
-const RESEARCH_SPREADSHEET_ID = "1rn4CVt41lq2f_o8Uiodij4h_R4Q9lVbpPMNFJjy6-IM";
 const RESEARCH_SHEET_NAME = "법정의무연수 묶음과정";
 const RESEARCH_RANGE = `${RESEARCH_SHEET_NAME}!A1:Z1000`;
 const TASK_ID = "health-mandatory-training-2026";
@@ -109,9 +109,11 @@ function buildSummary(source, exceptions, plan, snapshotPlan, taskEnabled) {
 }
 
 export async function getResearchTrainingSummary({ db } = {}) {
+  sheetResource("staff");
+  const researchId = sheetResource("research");
   const [directoryResult, researchValues, exceptionRecords, taskSnapshot] = await Promise.all([
     readStaffDirectory({ allowInvalidEmploymentStatus: true }),
-    readGoogleSheetValues({ spreadsheetId: RESEARCH_SPREADSHEET_ID, range: RESEARCH_RANGE }),
+    readGoogleSheetValues({ spreadsheetId: researchId, range: RESEARCH_RANGE }),
     readStoredExceptions(db),
     db ? db.collection("staff_submission_tasks").doc(TASK_ID).get() : Promise.resolve(null),
   ]);

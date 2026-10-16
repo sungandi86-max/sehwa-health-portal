@@ -1,5 +1,4 @@
 const PORTAL_API_URL = "/api/portal";
-const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
 const PORTAL_CACHE_TTL_MS = 45_000;
 const SEOUL_TIME_ZONE = "Asia/Seoul";
 const FIXED_TB_REGISTRATION_TYPE = "단체검진 신청";
@@ -196,13 +195,6 @@ export async function fetchPortalContent(type, signal, options) {
     `content:${type}`,
     async () => {
       const response = await fetchNoStore(portalContentUrl(type));
-      const contentType = response.headers.get("content-type") || "";
-
-      if (!contentType.includes("application/json") && import.meta.env.DEV) {
-        const fallbackUrl = `${DEV_PORTAL_API_FALLBACK}?scope=fallback&type=${encodeURIComponent(type)}&preview=local`;
-        const fallbackResponse = await fetchNoStore(fallbackUrl);
-        return readPortalJson(fallbackResponse, "fallback");
-      }
 
       return readPortalJson(response, "portal");
     },
@@ -220,12 +212,6 @@ export async function fetchPortalHome(signal, options) {
     "home",
     async () => {
       const response = await fetchNoStore(portalHomeUrl());
-      const contentType = response.headers.get("content-type") || "";
-
-      if (!contentType.includes("application/json") && import.meta.env.DEV) {
-        const fallbackResponse = await fetchNoStore(`${DEV_PORTAL_API_FALLBACK}?scope=home&preview=local`);
-        return readPortalJson(fallbackResponse, "fallback");
-      }
 
       return readPortalJson(response, "portal");
     },
@@ -244,12 +230,6 @@ export async function fetchPortalUploads(signal, options) {
     "uploads",
     async () => {
       const response = await fetchNoStore(`${PORTAL_API_URL}?scope=upload`);
-      const contentType = response.headers.get("content-type") || "";
-
-      if (!contentType.includes("application/json") && import.meta.env.DEV) {
-        const fallbackResponse = await fetchNoStore(`${DEV_PORTAL_API_FALLBACK}?scope=upload&preview=local`);
-        return readPortalJson(fallbackResponse, "fallback");
-      }
 
       return readPortalJson(response, "portal");
     },

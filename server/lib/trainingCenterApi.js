@@ -1,3 +1,4 @@
+import { ResourcePolicyError, sendResourceError } from "./environmentResources.js";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { readStaffDirectory, sendCors } from "./staffDirectory.js";
 import { buildTrainingView, getTrainingSpreadsheetId, readTrainingSheets, TrainingSourceNotReadyError } from "./trainingCenter.js";
@@ -26,6 +27,7 @@ export function createTrainingHandler({ auth = getFirebaseAdminAuth, db = getFir
       if (resource === "training-detail" && !view) return res.status(404).json({ ok: false, message: "교육을 찾을 수 없습니다." });
       return res.status(200).json(resource === "training-detail" ? { ok: true, item: view } : { ok: true, items: view });
     } catch (error) {
+    if (error instanceof ResourcePolicyError) return sendResourceError(res, error);
       if (error instanceof TrainingDeploymentError) {
         return res.status(503).json({ ok: false, code: error.code, message: error.message });
       }

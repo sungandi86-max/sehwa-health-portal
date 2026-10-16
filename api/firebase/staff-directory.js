@@ -1,3 +1,4 @@
+import { sheetResource, ResourcePolicyError, sendResourceError } from "../../server/lib/environmentResources.js";
 import {
   applyHealthMandatoryTrainingSnapshot,
   getResearchTrainingSummary,
@@ -199,7 +200,7 @@ export async function handleQaTbCertificateLogin(req, res, { environment = train
   return res.status(200).json({ ok: true, customToken: await auth.createCustomToken(QA_TB_CERTIFICATE_UID) });
 }
 
-export async function staffDirectoryHandler(req, res, { trainingHandler = handleTrainingResource, trainingPhase2Handler = null } = {}) {
+export async function staffDirectoryHandler(req, res, { context = process.env, trainingHandler = handleTrainingResource, trainingPhase2Handler = null } = {}) {
   sendCors(res, "GET, POST, OPTIONS");
 
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -257,6 +258,8 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
       return await handler(req, res);
     }
 
+    sheetResource("staff", context);
+    if (["health-mandatory-training-sync", "health-mandatory-training-current-targets"].includes(req.query?.resource)) sheetResource("research", context);
     const access = await verifyDirectoryAdmin(req);
     if (!access.ok) return res.status(access.status).json({ ok: false, message: access.message });
 
@@ -321,6 +324,7 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
     const { directory, stats } = await readStaffDirectory();
     return res.status(200).json({ ok: true, directory, stats });
   } catch (error) {
+    if (error instanceof ResourcePolicyError) return sendResourceError(res, error);
     if (req.query?.resource === "health-mandatory-training-exceptions") {
       return res.status(500).json({ ok: false, message: "법정의무연수 예외 목록을 처리하지 못했습니다." });
     }

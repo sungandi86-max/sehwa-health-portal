@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildLegacyStudentSubmissionRecord, planLegacyStudentSubmissionMigration,
   StudentSubmissionAuditStore, studentEvidenceIdFromUrl } from "./studentSubmissionAuditStore.js";
-import submitHandler from "../../api/submit.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
 import { buildScriptSubmission, SUBMISSION_WORKFLOWS } from "./submissionWorkflows.js";
 import { buildSubmissionProxyEnvelope, qaStudentSubmissionIdentity, submissionVisitor } from "./submissionProxyEnvelope.js";
 import { createHash, createHmac } from "node:crypto";
@@ -88,7 +90,7 @@ test("QA signed and legacy fixtures read back in QA only without a Drive or Shee
   const db = database();
   let sequence = 0;
   const store = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }),
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }),
     id: () => `QA-STUDENT-AUDIT-${++sequence}` });
   await store.createQaFixture({ pattern: "signed", evidenceFile: { fileId: "QA-EVIDENCE-001", fileName: "QA.pdf" } });
   await store.createQaFixture({ pattern: "legacy_manual_review", evidenceFile: { fileId: "QA-EVIDENCE-002", fileName: "QA.pdf" } });
@@ -105,7 +107,7 @@ test("QA signed and legacy fixtures read back in QA only without a Drive or Shee
 test("QA request create is isolated, create-only and rejects non-synthetic names", async () => {
   const db = database();
   const qa = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
   const input = { requestId: "QA-REQUEST-001", evidenceSha256: "a".repeat(64),
     fields: { grade: "2", classNumber: "1", studentNumber: "99",
     studentName: "[QA] synthetic" }, evidenceFile: { fileId: "QA-FILE-001", fileName: "QA-test.pdf",
@@ -130,7 +132,7 @@ test("QA evidence lookup recognizes additive v1 tag without copying or changing 
     evidenceFiles: [{ fileId: "QA-DRIVE-V1", mimeType: "image/png", exists: true }] };
   db.collections.set("student_submission_audit_qa", new Map([[v1.submissionId, v1]]));
   const store = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
   const matched = await store.getQaEvidenceMatch({ evidenceSha256: digest, fileMimeType: "image/png",
     fields: { grade: "1", classNumber: "1", studentNumber: "99", studentName: "[QA] synthetic" } });
   assert.equal(matched.submissionId, v1.submissionId);
@@ -318,7 +320,8 @@ test("QA missing evidence destination and arbitrary Preview fail before Apps Scr
   assert.equal(missing.statusCode, 503);
   const arbitrary = response();
   await submitHandler(request(payload), arbitrary, { ...options, environment: () => null });
-  assert.equal(arbitrary.statusCode, 403);
+  assert.equal(arbitrary.statusCode, 503);
+  assert.equal(arbitrary.body.code, "ENVIRONMENT_UNRESOLVED");
   assert.equal(calls, 0);
 });
 
@@ -429,7 +432,7 @@ test("QA evidence reuse survives audit failure without duplicate Drive upload or
   assert.equal(uploads, 1);
   const db = database();
   const store = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
   await store.createQaRequest({ requestId: id.submissionId, requestFingerprint: id.requestFingerprint,
     evidenceSha256: id.evidenceSha256,
     fields: payload.fields, evidenceFile: { fileId: uploaded.fileId, fileName: payload.fileName,
@@ -469,3 +472,9 @@ test("Vercel QA student envelope verifies with QA key but not Production key", (
   assert.throws(() => context.verify(buildSubmissionProxyEnvelope(payload, productionSecret, options)), /인증/);
   assert.deepEqual(selected, ["QA_SUBMISSION_PROXY_SECRET", "QA_SUBMISSION_PROXY_SECRET"]);
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, { ...options, context });
+}

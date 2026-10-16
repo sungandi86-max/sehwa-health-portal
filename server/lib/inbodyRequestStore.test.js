@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import submitHandler from "../../api/submit.js";
-import adminHandler, { replaceQaInbodySummary } from "../../api/health-room-status.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
+import rawAdminHandler, { replaceQaInbodySummary } from "../../api/health-room-status.js";
 import { InbodyRequestStore } from "./inbodyRequestStore.js";
 
-const qaContext = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qaContext = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const productionContext = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const fields = { name: "[QA] 합성", dept: "[QA] 부서", preferredDate: "2026-10-15", preferredTime: "12:00" };
 
@@ -189,3 +191,13 @@ test("common summary replaces Inbody counts with Firestore counts in both enviro
   assert.equal(productionSummary.sections[0].items[0].source, "firestore");
   assert.equal(productionSummary.alert.items.at(-1).id, "inbody");
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, { ...options, context });
+}
+
+function adminHandler(req, res, options = {}) {
+  return rawAdminHandler(req, res, { ...options, context: options.context || { APP_ENV: options.inbodyStore?.environment || "production" } });
+}

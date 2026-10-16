@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import submitHandler from "../../api/submit.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
 import { handleQaTbCertificateLogin } from "../../api/firebase/staff-directory.js";
 import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { isQaTbCertificateAssignment, QA_TB_CERTIFICATE_ROLE,
   QA_TB_CERTIFICATE_EMAIL, QA_TB_CERTIFICATE_STAFF_ID, QA_TB_CERTIFICATE_UID } from "./qaTbCertificateSynthetic.js";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const assignment = { uid: QA_TB_CERTIFICATE_UID, staffId: QA_TB_CERTIFICATE_STAFF_ID, active: false,
   qaOnly: true, environment: "qa", roles: [QA_TB_CERTIFICATE_ROLE], schoolYear: 2026, semester: 2,
@@ -119,3 +121,9 @@ test("TB certificate synthetic login is admin-gated and unavailable in Productio
   assert.equal(accepted.body.customToken, "qa-token");
   assert.equal(authWrites, 1);
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, { ...options, context });
+}

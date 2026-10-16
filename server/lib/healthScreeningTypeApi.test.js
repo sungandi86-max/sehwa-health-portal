@@ -30,7 +30,7 @@ function fixture() {
   let directoryReads = 0;
   let authReads = 0;
   const options = {
-    context: { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" },
+    context: { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" },
     authAccess: async () => { authReads += 1; return { ok: true, db, staffId: "self", roles: ["staff"] }; },
     directory: async () => { directoryReads += 1; return { directory: [{ staffId: "self", name: "Fixture", employmentStatus: "재직" }, { staffId: "other", employmentStatus: "재직" }] }; },
     time: () => "2026-10-14T00:00:00.000Z",
@@ -164,7 +164,7 @@ test("G: caller cannot spoof deployment environment", async () => {
 
 test("H: unknown deployments fail closed before authentication or data access", async () => {
   const f = fixture();
-  for (const context of [{}, { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "qa" }, { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "main" }]) {
+  for (const context of [{}, { APP_ENV: "qa", VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "qa" }, { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "main" }]) {
     assert.equal((await f.request("GET", {}, { context })).code, 503);
     assert.equal((await f.request("POST", { screeningType: "nhis" }, { context })).code, 503);
   }

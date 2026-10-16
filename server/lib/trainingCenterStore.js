@@ -1,3 +1,4 @@
+import { assertSheetResource } from "./environmentResources.js";
 import { JWT } from "google-auth-library";
 import { getFirebaseServiceAccount } from "./firebaseAdmin.js";
 import { getTrainingSpreadsheetId, readTrainingSheets, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
@@ -106,6 +107,7 @@ export class TrainingCenterStore {
 
   async sheetId(name) {
     if (this.sheetIdCache.has(name)) return this.sheetIdCache.get(name);
+    assertSheetResource(this.spreadsheetId);
     const auth = googleAuth(["https://www.googleapis.com/auth/spreadsheets.readonly"]);
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}?fields=sheets(properties(sheetId,title))`;
     const result = await auth.request({ url });
@@ -116,6 +118,7 @@ export class TrainingCenterStore {
   }
 
   async batchUpdate(requests) {
+    assertSheetResource(this.spreadsheetId, process.env, "write");
     const auth = googleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
     await auth.request({
       url: `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}:batchUpdate`,
@@ -125,6 +128,7 @@ export class TrainingCenterStore {
   }
 
   async saveRow(name, headers, values, rowNumber = null) {
+    assertSheetResource(this.spreadsheetId, process.env, "write");
     const sheetId = await this.sheetId(name);
     const first = await readGoogleSheetValues({ spreadsheetId: this.spreadsheetId, range: `'${name}'!A1:Z1` });
     const actual = (first[0] || []).map((header) => String(header ?? "").normalize("NFKC").trim());

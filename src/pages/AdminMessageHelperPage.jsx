@@ -1,8 +1,9 @@
+import { productionOnlyExternalLink } from "../lib/externalResourceLinks.js";
 import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
 
 export const MESSAGE_HELPER_LITE_URL =
-  "https://script.google.com/macros/s/AKfycbxVONfUYNf63cvJhiehe8N9TAka14MuKAXxXDVQG79H_R1DeX4kwXfHtjo25hDGsYFU/exec";
+  productionOnlyExternalLink("https://script.google.com/macros/s/AKfycbxVONfUYNf63cvJhiehe8N9TAka14MuKAXxXDVQG79H_R1DeX4kwXfHtjo25hDGsYFU/exec");
 
 function LiteOpenButton({ className = "" }) {
   return (

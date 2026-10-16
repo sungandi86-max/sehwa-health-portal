@@ -44,7 +44,7 @@ test("QA TB registration ledger stores canonical audit fields without personal p
   const fixture = databaseFixture();
   const store = new TbRegistrationRequestStore({
     database: fixture.database,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }),
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }),
     requestId: () => "qa-request-1",
   });
   const saved = await store.createRequest({

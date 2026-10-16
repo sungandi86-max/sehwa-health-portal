@@ -14,7 +14,7 @@ test("stored route enum supports school group screening", () => {
 });
 
 test("collection and deterministic document helpers reject unsafe input", () => {
-  assert.equal(healthScreeningTypeCollection({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }), "staff_health_screening_types_qa");
+  assert.equal(healthScreeningTypeCollection({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }), "staff_health_screening_types_qa");
   assert.equal(healthScreeningTypeCollection({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }), "staff_health_screening_types");
   assert.throws(() => healthScreeningTypeCollection({}));
   assert.equal(healthScreeningTypeDocumentId("fixture", 2026), "fixture_2026");
@@ -27,7 +27,7 @@ test("read ignores wrong identity, year, environment and schema metadata", async
   assert.equal(validHealthScreeningTypeRecord(base, "fixture", 2026), true);
   for (const override of [{ staffId: "other" }, { schoolYear: 2025 }, { environment: "production" }, { schemaVersion: 2 }, { revision: 0 }, { screeningType: "invalid" }]) {
     const db = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({ ...base, ...override }) }) }) }) };
-    assert.equal((await readHealthScreeningType(db, "fixture", 2026, { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" })).screeningTypeConfirmed, false);
+    assert.equal((await readHealthScreeningType(db, "fixture", 2026, { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" })).screeningTypeConfirmed, false);
   }
 });
 

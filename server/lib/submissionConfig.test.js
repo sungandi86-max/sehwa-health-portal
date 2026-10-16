@@ -4,7 +4,7 @@ import { assertRegistrationOpen, publicSubmissionConfig, readSubmissionConfig, s
   saveSubmissionCard, validatePublicCard } from "./submissionConfig.js";
 import { planSubmissionConfigMigration, submissionConfigMigrationRecords } from "./submissionConfigMigration.js";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const uploadHeaders = ["사용여부", "제목", "제목1줄", "제목2줄", "설명", "대상", "제출자료", "마감", "안내문",
   "버튼명", "링크", "상태", "유형", "강조", "정렬순서", "노출시작일", "노출종료일", "노출상태"];

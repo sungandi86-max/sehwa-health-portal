@@ -1,3 +1,4 @@
+import { resourceEnvironment, gasResource, sendResourceError } from "../server/lib/environmentResources.js";
 import fetch from "node-fetch";
 import { buildHomeSchedules, filterCurrentPortalItems } from "../src/lib/portalSchedule.js";
 import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
@@ -11,16 +12,13 @@ const CMS_FALLBACK_TYPES = {
   education: ["education", "educations"],
 };
 
-function getScriptUrl() {
-  return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
-}
 
 function jsonError(res, status, message, debug) {
   return res.status(status).json({
     success: false,
     result: "error",
     message,
-    debug,
+    // Do not return upstream bodies, URLs or SDK diagnostics.
   });
 }
 
@@ -78,6 +76,8 @@ export default async function handler(req, res, { db, context = process.env, now
     return jsonError(res, 405, "허용되지 않는 요청 방식입니다.", `method=${req.method}`);
   }
 
+  try { resourceEnvironment(context); }
+  catch (error) { return sendResourceError(res, error); }
   const scope = String(req.query?.scope || "").trim();
   if (!["home", "upload", "fallback"].includes(scope)) {
     return jsonError(res, 410, "이 포털 데이터 범위는 더 이상 제공되지 않습니다. 업무 로드맵은 교직원 인증 API를 이용해 주세요.");
@@ -116,24 +116,9 @@ export default async function handler(req, res, { db, context = process.env, now
     }
   }
 
-  const scriptUrl = getScriptUrl();
-  if (!scriptUrl) {
-    return jsonError(
-      res,
-      500,
-      "포털 데이터 Apps Script URL이 설정되지 않았습니다. Vercel의 GAS_URL 또는 VITE_GAS_BASE_URL 환경변수를 확인해 주세요.",
-      "missing GAS_URL and VITE_GAS_BASE_URL"
-    );
-  }
-
-  if (!/\/exec(?:\?|$)/.test(scriptUrl)) {
-    return jsonError(
-      res,
-      500,
-      "Apps Script 웹앱 URL은 /exec 배포 URL이어야 합니다.",
-      "GAS URL does not look like a web app /exec URL"
-    );
-  }
+  let scriptUrl;
+  try { scriptUrl = gasResource("portal", context); }
+  catch (error) { return sendResourceError(res, error); }
 
   const targetUrl = `${scriptUrl}?${portalQuery(req)}`;
   console.log("[portal] proxy request", {
@@ -182,7 +167,7 @@ export default async function handler(req, res, { db, context = process.env, now
         json,
       );
     } catch (error) {
-      console.error("[portal] JSON parse failed", error);
+      console.error("[portal] JSON parse failed");
       return jsonError(
         res,
         502,
@@ -191,7 +176,7 @@ export default async function handler(req, res, { db, context = process.env, now
       );
     }
   } catch (error) {
-    console.error("[portal] proxy failed", error);
+    console.error("[portal] proxy failed", { name: error?.name || "Error" });
     return jsonError(
       res,
       502,

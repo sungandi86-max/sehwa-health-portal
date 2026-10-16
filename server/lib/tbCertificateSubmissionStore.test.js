@@ -3,7 +3,7 @@ import test from "node:test";
 import { buildLegacyTbCertificateRecord, planLegacyTbCertificateMigration,
   TbCertificateSubmissionStore } from "./tbCertificateSubmissionStore.js";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const original = { submittedAt: "2026-03-02 09:00:00", name: "Legacy", department: "QA",
   staffType: "교직원", checkupDate: "2026-03-01", documentType: "검진확인증",
   fileName: "evidence.pdf", fileUrl: "https://drive.google.com/file/d/example/view" };

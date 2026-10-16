@@ -1,3 +1,4 @@
+import { resourceEnvironment, gasResource, resourceSecret, driveFolderResource, ResourcePolicyError, sendResourceError } from "../server/lib/environmentResources.js";
 import fetch from "node-fetch";
 import { verifyCurrentStaffSubmissionIdentity, verifyTbSubmissionAllowed } from "../server/lib/tbSubmissionGuard.js";
 import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
@@ -22,9 +23,6 @@ import { buildProxySubmissionRecord, buildSelfSubmissionRecord, createProxySubmi
 import { readStaffDirectory, verifyDirectoryAdmin } from "../server/lib/staffDirectory.js";
 import { CURRENT_SCHOOL_YEAR } from "../src/config/school.js";
 
-function scriptUrl() {
-  return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
-}
 
 export const config = {
   api: { bodyParser: false }
@@ -71,7 +69,7 @@ function buildTbStatusPayload(payload, staffId) {
   });
 }
 
-export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = scriptUrl(), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
+export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, context = process.env, destinationUrl, proxySecret,
   qaCprFolderId = process.env.QA_CPR_DRIVE_FOLDER_ID,
   qaTbCertificateFolderId = process.env.QA_TB_CERTIFICATE_DRIVE_FOLDER_ID,
   qaStudentReplyFolderId = process.env.QA_STUDENT_REPLY_DRIVE_FOLDER_ID,
@@ -80,7 +78,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
   tbCertificateStore = tbCertificateSubmissionStore,
   studentAuditStore = studentSubmissionAuditStore,
   saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
-  environment = trainingEnvironment, recordTbReceipt = recordProductionTbReceipt,
+  environment = () => trainingEnvironment(context), recordTbReceipt = recordProductionTbReceipt,
   verifyAdmin = verifyDirectoryAdmin, readDirectory = readStaffDirectory,
   findProxyRecords = findProxyDuplicates, saveProxyRecord = createProxySubmission, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
@@ -113,6 +111,17 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     const validation = validateSubmissionPayload(workflow, payload);
     if (!validation.ok) return res.status(validation.status).json({ status: "error", success: false, message: validation.message });
 
+    const runtime = resourceEnvironment(context);
+    if (environment() !== runtime) throw new ResourcePolicyError("RESOURCE_ENV_MISMATCH");
+    if (workflow.acceptsFile) {
+      destinationUrl = gasResource("submission", context);
+      proxySecret = resourceSecret("submission", context);
+      const folder = driveFolderResource(workflow.id, context);
+      qaCprFolderId = workflow.id === "cpr" ? folder : "";
+      qaTbCertificateFolderId = workflow.id === "tb" ? folder : "";
+      qaStudentReplyFolderId = workflow.id === "student_tb_reply" ? folder : "";
+    }
+
     const proxyMode = workflow.id === "tb" && payload.action === "admin_proxy";
     let proxyAccess = null;
     let proxySubject = null;
@@ -139,8 +148,8 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
     if (workflow.authPolicy === "current_staff") {
       cprIdentity = await verifyStaff(req, {
-        allowQaInbodySynthetic: workflow.id === "inbody" && trainingEnvironment() === "qa",
-        allowQaCprSynthetic: workflow.id === "cpr" && trainingEnvironment() === "qa",
+        allowQaInbodySynthetic: workflow.id === "inbody" && trainingEnvironment(context) === "qa",
+        allowQaCprSynthetic: workflow.id === "cpr" && trainingEnvironment(context) === "qa",
       });
       if (!cprIdentity.ok) return res.status(cprIdentity.status).json({ status: "error", success: false, message: cprIdentity.message });
     }
@@ -485,6 +494,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
     return res.status(200).json(json);
   } catch (err) {
+    if (err instanceof ResourcePolicyError) return sendResourceError(res, err);
     console.error("[SUBMISSION_PROXY_FAILED]", { name: err?.name || "Error" });
     return res.status(500).json({ status: "error", message: "제출을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." });
   }

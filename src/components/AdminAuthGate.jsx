@@ -5,7 +5,6 @@ import FirebaseAdminRoleAccessGate from "./FirebaseAdminRoleAccessGate.jsx";
 import { acknowledgeAdminNotice, fetchAdminNoticeAcknowledgement } from "../lib/adminNotifications.js";
 
 const ADMIN_AUTH_API = "/api/health-room-status";
-const DEV_ADMIN_AUTH_FALLBACK = "https://sehwa-health-portal.vercel.app/api/health-room-status";
 
 async function loadAdminDashboard(firebaseUser) {
   const idToken = await firebaseUser.getIdToken();
@@ -24,17 +23,6 @@ async function loadAdminDashboard(firebaseUser) {
     return response.json();
   }
 
-  if (import.meta.env.DEV) {
-    const fallbackResponse = await fetch(DEV_ADMIN_AUTH_FALLBACK, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${idToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    return fallbackResponse.json();
-  }
 
   throw new Error(`HTTP ${response.status}`);
 }

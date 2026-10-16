@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import handler from "../../api/portal.js";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const records = [
   { id: "_config", kind: "config", migrationComplete: true, counts: { checkup: 1 } },
   { id: "checkup_one", kind: "item", type: "checkup", active: true, visible: true, title: "검진 안내",

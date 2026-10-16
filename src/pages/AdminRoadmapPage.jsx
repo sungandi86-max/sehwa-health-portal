@@ -1,3 +1,4 @@
+import { productionOnlyExternalLink } from "../lib/externalResourceLinks.js";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
@@ -5,7 +6,7 @@ import RoadmapEditor from "../components/RoadmapEditor.jsx";
 import { requestPortalRoadmap } from "../lib/portalRoadmap.js";
 
 const emptyRoadmap = { enabled: false, adminOnly: true, items: [] };
-const MESSAGE_HELPER_LITE_URL = "https://script.google.com/macros/s/AKfycbxVONfUYNf63cvJhiehe8N9TAka14MuKAXxXDVQG79H_R1DeX4kwXfHtjo25hDGsYFU/exec";
+const MESSAGE_HELPER_LITE_URL = productionOnlyExternalLink("https://script.google.com/macros/s/AKfycbxVONfUYNf63cvJhiehe8N9TAka14MuKAXxXDVQG79H_R1DeX4kwXfHtjo25hDGsYFU/exec");
 
 function safeText(value, fallback = "-") {
   const text = String(value || "").trim();

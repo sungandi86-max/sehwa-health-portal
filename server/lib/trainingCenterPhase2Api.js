@@ -1,3 +1,4 @@
+import { trainingDriveConfig, resourceSecret, ResourcePolicyError, sendResourceError } from "./environmentResources.js";
 import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
@@ -136,7 +137,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
   store = trainingCenterStore, rosterPdf = trainingRosterPdfRenderer,
   saveCprGroupStatus = saveCompletedCprGroupTraining,
   reconcileCprStatus = reconcileCprTrainingStatus,
-  secret = () => process.env.TRAINING_QR_SECRET || "", now = () => new Date() } = {}) {
+  secret = () => resourceSecret("qr"), now = () => new Date() } = {}) {
   return async function handleTrainingPhase2(req, res) {
     sendCors(res, "GET, POST, OPTIONS");
     res.setHeader("Cache-Control", "private, no-store");
@@ -146,6 +147,11 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
     if (!TRAINING_PHASE2_RESOURCES.has(resource)) return bad(res, 400, "교육 요청 종류가 올바르지 않습니다.");
     try {
       getTrainingSpreadsheetId();
+      if (store === trainingCenterStore) {
+        if (["training-qr", "training-attendance-check", "training-attendance-submit"].includes(resource)) secret();
+        if (["training-signature-storage-bootstrap", "training-attendance-submit", "training-attendance-recovery-apply"].includes(resource) ||
+            (resource === "training-final-sheet" && req.query?.download === "pdf")) trainingDriveConfig();
+      }
       const access = await resolveTrainingAccess(req, { auth, db, directory });
       if (!access.ok) return bad(res, access.status, access.message);
       const adminOnly = !["training-attendance-check", "training-attendance-submit"].includes(resource);
@@ -509,6 +515,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       }
       return bad(res, 405, "지원하지 않는 요청입니다.");
     } catch (error) {
+      if (error instanceof ResourcePolicyError) return sendResourceError(res, error);
       if (error instanceof TrainingDeploymentError) return bad(res, 503, error.message, error.code);
       if (error instanceof AttendanceConflictError) return bad(res, 409, error.message, error.code);
       if (error instanceof RecoveryConflictError) return bad(res, 409, error.message, "recovery-conflict");

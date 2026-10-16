@@ -1,3 +1,4 @@
+import { resourceSecret, sendResourceError } from "../../server/lib/environmentResources.js";
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
 
@@ -61,7 +62,7 @@ const PRESENCE_HOMEROOM_FORBIDDEN_KEYS = new Set([
 ]);
 
 function getProxySecret() {
-  return process.env.STUDENT_CARE_PROXY_SECRET || "";
+  return resourceSecret("studentCare");
 }
 
 async function getRequestBody(req) {
@@ -650,6 +651,8 @@ export default async function handler(req, res) {
     return jsonError(res, 400, "요청 본문을 JSON으로 해석할 수 없습니다.");
   }
 
+  try { getProxySecret(); }
+  catch (error) { return sendResourceError(res, error); }
   if (!hasValidSecret(req, body)) {
     return jsonError(res, 403, "학생 건강관리 동기화 권한을 확인할 수 없습니다.");
   }

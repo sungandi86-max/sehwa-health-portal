@@ -3,7 +3,9 @@ import fs from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { createHash, createHmac } from "node:crypto";
-import submitHandler from "../../api/submit.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
 import { buildSubmissionProxyEnvelope } from "./submissionProxyEnvelope.js";
 import { buildScriptSubmission, publicSubmissionCard, resolveSubmissionWorkflow, SUBMISSION_WORKFLOWS, validateSubmissionPayload } from "./submissionWorkflows.js";
 
@@ -125,6 +127,8 @@ test("submission API refuses cross-site simple form content types", async () => 
 test("authorized CPR and TB use the canonical server workflow", async () => {
   const forwarded = [];
   const options = { destinationUrl,
+    readDirectory: async () => ({ directory: [{ staffId: "T022", name: "QA", employmentStatus: "재직" }] }),
+    tbCertificateStore: { environment: "production", getRequest: async () => null },
     proxySecret,
     verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
     verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
@@ -133,8 +137,8 @@ test("authorized CPR and TB use the canonical server workflow", async () => {
   };
   for (const type of ["cpr", "tb"]) {
     const result = response();
-    await submitHandler(request({ ...file, type, sheetName: "Injected", folderId: "Injected" }), result, options);
-    assert.equal(result.statusCode, 200);
+    await submitHandler(request({ ...file, fields: { ...file.fields, docType: "진료확인서" }, type, sheetName: "Injected", folderId: "Injected" }), result, options);
+    assert.equal(result.statusCode, 200, JSON.stringify(result.body));
   }
   assert.deepEqual(forwarded.map((item) => item.type), ["cpr", "tb"]);
   for (const item of forwarded) {
@@ -531,3 +535,9 @@ test("Apps Script dispatches signed types to fixed Drive folders without student
   properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() + 20 * 60 * 1000));
   assert.equal(callEnvelope(legacyCpr).status, "error");
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, { ...options, context });
+}
