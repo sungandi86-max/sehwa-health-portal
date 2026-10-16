@@ -60,7 +60,7 @@ with sync_playwright() as p:
  def roster():
   go('/firebase-admin/submission-status?item=cpr')
   expect(page.get_by_text('항목별 접수 총 621건',exact=False)).to_contain_text('대상 계정 32개')
-  expect(page.get_by_text('현재 페이지 제출자',exact=True)).to_be_visible()
+  expect(page.get_by_text('현재 페이지 제출 계정',exact=True)).to_be_visible()
   expect(page.get_by_text('교직원 u00',exact=True)).to_be_visible()
   expect(page.locator('article h2')).to_have_count(25)
   first=page.locator('article h2').all_text_contents()

@@ -50,6 +50,7 @@ function normalizeStatus(documentSnapshot) {
     status,
     statusLabel: getStaffStatusLabel(status, data.taskId || ""),
     sourceType: data.sourceType || "",
+    ...(data.evidenceSubmissionId ? {evidenceSubmissionId:data.evidenceSubmissionId} : {}),
     syncedAt: data.syncedAt || null,
     screening: normalizeTbScreening(data.screening),
     training: normalizeCprTraining(data.training),

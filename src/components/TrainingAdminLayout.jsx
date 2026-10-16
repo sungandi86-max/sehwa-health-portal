@@ -5,7 +5,7 @@ const root = "/firebase-admin/trainings";
 export function TrainingAdminLayout({ displayName, title, description, active, eventId, children }) {
   const eventRoot = eventId ? `${root}/${encodeURIComponent(eventId)}` : null;
   const links = [
-    { id: "manage", label: "연수 운영관리", to: root },
+    { id: "manage", label: "교직원 교육 관리", to: root },
     ...(eventRoot ? [
       { id: "targets", label: "대상자 관리", to: `${eventRoot}/targets` },
       { id: "qr", label: "교직원 교육 QR 출석체크", to: `${eventRoot}/qr` },

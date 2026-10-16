@@ -1,22 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import FirebaseHomeAuthPanel from "../components/FirebaseHomeAuthPanel.jsx";
 import HeroSection from "../components/HeroSection.jsx";
 import HomeDashboardSummary from "../components/HomeDashboardSummary.jsx";
 import PwaInstallCard from "../components/PwaInstallCard.jsx";
 import QuickMenu from "../components/QuickMenu.jsx";
-import { firebaseV2MenuItems } from "../data/firebaseV2Navigation.js";
-import { quickMenuItems } from "../data/fallbackData.js";
+import { portalMenuItems } from "../data/portalNavigation.js";
 import {
   fetchPortalContent,
   fetchPortalHome,
   getCachedPortalHome,
 } from "../lib/portalContent.js";
 import { buildHomeSchedules, filterCurrentPortalItems } from "../lib/portalSchedule.js";
-
-const legacyMenuRoutes = {
-  studentCare: "/student-care",
-  resources: "/resources",
-};
 
 const portalHomePrivacyNotice =
   "학생 개인정보·민감정보는 화면에 직접 표시하지 않으며, 제출 자료는 보건교사가 관리자 화면에서 확인합니다.";
@@ -40,30 +34,7 @@ export default function HomePage({ config }) {
     privacyNotice: portalHomePrivacyNotice,
     managerNote: "",
   };
-  const restoredMenuItems = useMemo(() => {
-    const firebaseMenuById = new Map(firebaseV2MenuItems.map((item) => [item.id, item]));
-    const legacyMenuById = new Map(quickMenuItems.map((item) => [item.id, item]));
-
-    return [
-      firebaseMenuById.get("today"),
-      { ...firebaseMenuById.get("upload"), description: "보건서류 제출 · 감염병 보고" },
-      firebaseMenuById.get("checkup"),
-      { ...firebaseMenuById.get("education"), description: "학생 보건교육 자료와 안내 문서" },
-      {
-        id: "educationCenter",
-        title: "교직원 교육센터",
-        description: "교육 일정 · 교육 대상 확인",
-        href: "/training",
-      },
-      {
-        ...legacyMenuById.get("studentCare"),
-        href: legacyMenuRoutes.studentCare,
-        description: "권한에 따라 학생 건강관리 자료와 보건실 현황을 확인합니다.",
-      },
-      { ...legacyMenuById.get("resources"), href: legacyMenuRoutes.resources },
-      firebaseMenuById.get("faq"),
-    ].filter(Boolean);
-  }, []);
+  const restoredMenuItems = portalMenuItems;
 
   useEffect(() => {
     let shouldIgnore = false;

@@ -162,7 +162,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
 
   if (eligibility.status === "needs-staff-id") {
     return (
-      <FirebaseV2PageShell
+      <FirebaseV2PageShell showDashboardLink={false}
         label="내 현황"
         title="나의 제출·이수 현황"
         description="로그인 계정과 교직원 정보를 연결한 뒤 확인할 수 있습니다."
@@ -178,7 +178,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
 
   if (eligibility.status === "not-target") {
     return (
-      <FirebaseV2PageShell
+      <FirebaseV2PageShell showDashboardLink={false}
         label="내 현황"
         title="나의 제출·이수 현황"
         description="현재 계정에 표시할 제출·이수 관리 항목을 확인합니다."
@@ -191,7 +191,7 @@ function MySubmissionStatusContent({ assignment, displayName }) {
   }
 
   return (
-    <FirebaseV2PageShell
+    <FirebaseV2PageShell showDashboardLink={false}
       label="내 현황"
       title="나의 제출·이수 현황"
       description="현재 연결된 교직원 정보를 기준으로 제출·이수·검진 상태를 확인합니다."

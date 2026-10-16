@@ -1,6 +1,6 @@
-import { submissionReviewHref } from "../lib/submissionNavigation.js";
+import { submissionReviewHref, withAdminReturn } from "../lib/submissionNavigation.js";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
@@ -80,7 +80,8 @@ function SummaryCard({ label, value, tone = "text-[#102047]" }) {
 }
 
 function RosterRow({ row, selectedItem }) {
-  const adminHref = submissionReviewHref(row.submission);
+  const location = useLocation();
+  const adminHref = withAdminReturn(submissionReviewHref(row.submission), location.pathname + location.search);
 
   return (
     <article
@@ -130,7 +131,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedItem, setSelectedItem] = useState(() => getInitialItem(searchParams.get("item")));
   const [statusFilter, setStatusFilter] = useState(() => getInitialFilter(searchParams.get("status")));
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
   const [page, setPage] = useState(0);
   const [cursors, setCursors] = useState([null]);
   const [overview, setOverview] = useState(null);
@@ -146,8 +147,9 @@ function FirebaseSubmissionStatusContent({ displayName }) {
   useEffect(() => {
     const params = { item: selectedItem };
     if (statusFilter !== "all") params.status = statusFilter;
+    if (searchTerm) params.search = searchTerm;
     setSearchParams(params, { replace: true });
-  }, [selectedItem, setSearchParams, statusFilter]);
+  }, [selectedItem, setSearchParams, statusFilter, searchTerm]);
 
   useEffect(() => {
     let shouldIgnore = false;
@@ -188,8 +190,8 @@ function FirebaseSubmissionStatusContent({ displayName }) {
   return (
     <AdminWorkspaceLayout
       label="관리자"
-      title="교직원 제출 현황"
-      description="현재 학기 대상자 명단과 실제 제출 기록을 비교해 미제출자를 확인합니다."
+      title="제출 현황"
+      description="개별 제출자료의 접수·검토 상태를 대상 계정과 비교합니다. 업무별 완료 인원은 교직원 제출·이수 현황에서 확인합니다."
       displayName={displayName}
     >
       <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
@@ -233,7 +235,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
         {overview?.summary && (
           <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <SummaryCard label="전체 대상 계정" value={overview.totalTargets} />
-            <SummaryCard label="현재 페이지 제출자" value={overview.summary.submitted} tone="text-[#20A982]" />
+            <SummaryCard label="현재 페이지 제출 계정" value={overview.summary.submitted} tone="text-[#20A982]" />
             <SummaryCard label="현재 페이지 미제출" value={overview.summary.missing} tone="text-[#9A5B00]" />
             <SummaryCard label="현재 페이지 보완 필요" value={overview.summary.rejected} tone="text-[#B42318]" />
             <SummaryCard label="현재 페이지 확인 중" value={overview.summary.reviewing} tone="text-[#3154A3]" />

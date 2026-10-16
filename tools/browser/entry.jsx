@@ -1,3 +1,7 @@
+import Header from "../../src/components/Header.jsx";
+import Home from "../../src/pages/HomePage.jsx";
+import HealthPanel from "../../src/components/HealthScreeningTypeAdminPanel.jsx";
+import MyStatus from "../../src/pages/MySubmissionStatusPage.jsx";
 import TrainingAdmin from '../../src/pages/FirebaseTrainingAdminPage.jsx';
 import Submissions from '../../src/pages/FirebaseAdminSubmissionsPage.jsx';
 import Status from '../../src/pages/FirebaseSubmissionStatusPage.jsx';
@@ -14,7 +18,10 @@ import StudentGate from '../../src/components/FirebaseStudentHealthAccessGate.js
 import Qr from '../../src/pages/FirebaseTrainingQrPage.jsx';
 import AdminAttendance from '../../src/pages/FirebaseTrainingAttendanceAdminPage.jsx';
 import '../../src/index.css';
-createRoot(document.getElementById('root')).render(<BrowserRouter><Routes>
+createRoot(document.getElementById('root')).render(<BrowserRouter><Header/><Routes>
+ <Route path="/" element={<Home config={{appName:"합성 온라인 보건실",subtitle:"합성 테스트"}}/>}/>
+ <Route path="/my-submission-status" element={<MyStatus/>}/>
+ <Route path="/fixture/tb-panel" element={<AdminGate>{()=> <HealthPanel initialSchoolYear={2026} reviewContext={{staffId:"S0",submissionId:"tb-exact",schoolYear:2026,screeningType:"공단 확인서"}}/>}</AdminGate>}/>
  <Route path="/firebase-admin/trainings" element={<TrainingAdmin/>}/>
  <Route path="/firebase-admin/submissions" element={<Submissions/>}/>
  <Route path="/firebase-admin/submission-status" element={<Status/>}/>

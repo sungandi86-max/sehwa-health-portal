@@ -1,8 +1,10 @@
-import { tbReviewHref } from "../lib/submissionNavigation.js";
+import { tbReviewHref, tbReviewContext, staffWorkHref, withAdminReturn, adminReturnHref } from "../lib/submissionNavigation.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
+import HealthScreeningTypeAdminPanel from "../components/HealthScreeningTypeAdminPanel.jsx";
+import { isHealthScreeningTypeEnabledHost } from "../lib/healthScreeningTypes.js";
 import AdminProxySubmissionDialog from "../components/AdminProxySubmissionDialog.jsx";
 import {
   INFECTION_STATUS_LABELS,
@@ -98,7 +100,13 @@ function DetailRow({ label, value }) {
   );
 }
 
-function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
+function StaffSubmissionCard({ item, pendingId, onStatusChange, onRefresh }) {
+  const [inlineReview, setInlineReview] = useState(false);
+  const reviewHref = tbReviewHref(item);
+  const reviewContext = reviewHref ? tbReviewContext(new URL(reviewHref, "https://navigation.invalid").searchParams) : null;
+  const workHref = staffWorkHref(item);
+  const [params] = useSearchParams();
+  const returnTo = adminReturnHref(params.get("returnTo"));
   const submitterName = item.submitter?.displayName || "제출자";
   const submitterEmail = item.submitter?.email || "";
   const isUpdating = pendingId === item.id;
@@ -157,6 +165,13 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
         {item.submissionMode === "admin_proxy" && <DetailRow label="등록 메모" value={item.proxyNote} />}
       </dl>
 
+      <nav aria-label="접수자료 업무 연결" className="mt-4 flex flex-wrap gap-3 text-sm text-[#0D4EA6]">
+        {returnTo && <Link className="min-h-11 py-3" to={returnTo}>이전 현황으로 돌아가기</Link>}
+        {workHref && <Link className="min-h-11 py-3" to={withAdminReturn(workHref, `/firebase-admin/submissions?tab=staff&submissionId=${encodeURIComponent(item.id)}`)}>이 교직원 업무현황</Link>}
+        {item.itemId === "cpr" && <Link className="min-h-11 py-3" to="/firebase-admin/trainings?mode=manual-cpr-2026">학교 단체교육 일괄 등록</Link>}
+        {reviewContext && isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <button type="button" aria-expanded={inlineReview} className="min-h-11 rounded-lg border px-3" onClick={()=>setInlineReview(value=>!value)}>이 화면에서 검진 확인</button>}
+      </nav>
+      {inlineReview && reviewContext && <HealthScreeningTypeAdminPanel initialSchoolYear={reviewContext.schoolYear} reviewContext={reviewContext} onChange={()=>onRefresh(item.id)} />}
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-bold text-[#8A96A8]">
           {item.itemId === "tb" && item.schoolYear
@@ -324,6 +339,19 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
     setSearchParams(params);
   };
 
+  const refreshStaffReceipt = async (receiptId) => {
+    const version = loadVersion.current;
+    try {
+      const result = await getStaffSubmissionPage({submissionId:receiptId});
+      if (version !== loadVersion.current) return;
+      const updated = result.items?.find(item=>item.id === receiptId);
+      if (updated) setStaffItems(current=>current.map(item=>item.id === receiptId ? updated : item));
+      else setActionState({status:"error",message:"검진 처리는 저장됐으나 접수자료를 다시 확인하지 못했습니다. 새로고침해 주세요."});
+    } catch {
+      if (version === loadVersion.current) setActionState({status:"error",message:"검진 처리는 저장됐으나 접수 상태 조회가 실패했습니다. 다시 확인해 주세요."});
+    }
+  };
+
   const handleStaffStatusChange = async (submissionId, status) => {
     setPendingId(submissionId);
     setActionState({ status: "loading", message: "상태를 저장하는 중입니다." });
@@ -435,6 +463,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
                 item={item}
                 pendingId={pendingId}
                 onStatusChange={handleStaffStatusChange}
+                onRefresh={refreshStaffReceipt}
               />
             ))}
           </>

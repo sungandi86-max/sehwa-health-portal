@@ -60,7 +60,7 @@ export function TrainingListView({ displayName, state, canManageTrainings = fals
   const currentTrainings = state.items.filter((item) => item.status === "진행중" || item.status === "예정");
 
   return (
-    <FirebaseV2PageShell label="교직원 교육" title="교직원 교육센터" description="교육 일정과 본인의 교육 대상 여부를 확인합니다." displayName={displayName}>
+    <FirebaseV2PageShell showDashboardLink={false} label="교직원 교육" title="교직원 교육센터" description="교육 일정과 본인의 교육 대상 여부를 확인합니다." displayName={displayName}>
       {canManageTrainings && <div className="flex justify-end"><Link to="/firebase-admin/trainings" className="inline-flex min-h-11 items-center rounded-[9px] border border-[#D7E8FF] bg-[#F1F7FF] px-4 text-[13px] font-semibold text-[#0D4EA6]">내 교육 관리</Link></div>}
       <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
         <h2 className="text-base font-bold text-[#102047]">이번 교육</h2>
@@ -107,7 +107,7 @@ function TrainingDetailContent({ displayName }) {
 export function TrainingDetailView({ displayName, state }) {
   const item = state.item;
   return (
-    <FirebaseV2PageShell label="교직원 교육" title="교육 상세" description="교육 정보와 본인의 대상 여부를 확인합니다." displayName={displayName}>
+    <FirebaseV2PageShell showDashboardLink={false} label="교직원 교육" title="교육 상세" description="교육 정보와 본인의 대상 여부를 확인합니다." displayName={displayName}>
       <Link to="/training" className="inline-flex min-h-11 items-center text-[13px] font-semibold text-[#0D4EA6]">← 교육 목록으로</Link>
       <SourceState status={state.status} message={state.message} />
       {item && <>
@@ -124,7 +124,7 @@ export function TrainingDetailView({ displayName, state }) {
           <h3 className="text-sm font-bold text-[#102047]">교육자료</h3>
           {item.materials.length ? <ul className="mt-2 space-y-2">{item.materials.map((material, index) => <li key={`${material.title}-${index}`} className="min-w-0 break-keep break-words text-[13px]">{material.url ? <a href={material.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[#0D4EA6] underline underline-offset-2">{material.title}</a> : <span className="text-[#627083]">{material.title} · 자료 준비 중</span>}</li>)}</ul> : <p className="mt-1 text-[13px] text-[#627083]">등록된 자료가 없습니다.</p>}
         </section>
-        <p className="rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 break-keep text-[13px] text-[#627083]">QR 출석과 이수증 제출은 추후 이 화면에서 제공할 예정입니다.</p>
+        <p className="rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 break-keep text-[13px] text-[#627083]">QR 출석은 교육 현장에서 제공하는 유효한 QR을 스캔해 시작합니다. 교육 상세에서는 직접 출석할 수 없습니다. 개별 CPR 이수증은 제출·보고 센터에서 제출해 주세요.</p>
       </>}
     </FirebaseV2PageShell>
   );

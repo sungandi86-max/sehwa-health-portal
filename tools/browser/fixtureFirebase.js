@@ -1,15 +1,16 @@
 import { enabled as submissionAudit, snapshot, execute, transaction } from "./submissionFixture.js";
 // Test-only SDK replacement; loaded solely by the loopback fixture server.
 const q = new URLSearchParams(location.search);
-const role = q.get('role') || sessionStorage.getItem('fixture-role') || 'staff';
+let role = q.get('role') || sessionStorage.getItem('fixture-role') || 'staff';
 sessionStorage.setItem('fixture-role',role);
-const user = role === 'anonymous' ? null : {uid:'synthetic-'+role,email:'fixture@example.invalid',displayName:'Synthetic',providerData:[{providerId:'google.com'}],getIdToken:async()=> 'synthetic-'+role};
-export const auth={currentUser:user},db={app:{options:{projectId:'isolated-health-qa'}}};
+let user = role === 'anonymous' ? null : {uid:'synthetic-'+role,email:'fixture@example.invalid',displayName:'Synthetic',providerData:[{providerId:'google.com'}],getIdToken:async()=> 'synthetic-'+role};
+export const auth={currentUser:user},db={app:{options:{projectId:__FIREBASE_RUNTIME_POLICY__.environment === 'production' ? 'sehwa-health-portal-v2' : 'isolated-health-qa'}}};
 export const googleProvider={providerId:'google.com'},microsoftProvider={providerId:'microsoft.com',getCustomParameters:()=>({})};
 export const assertAuthLoginBoundary=()=>{};
 const callbacks = new Set();
 export function onAuthStateChanged(_auth,cb){callbacks.add(cb);queueMicrotask(()=>cb(auth.currentUser));return ()=>callbacks.delete(cb);}
 window.fixtureSignOut=()=>{auth.currentUser=null;for(const cb of callbacks)cb(null);};
+window.fixtureSwitchRole=(next)=>{role=next;sessionStorage.setItem('fixture-role',next);user=next==='anonymous'?null:{uid:'synthetic-'+next,email:'fixture@example.invalid',displayName:'Synthetic',providerData:[{providerId:'google.com'}],getIdToken:async()=> 'synthetic-'+next};auth.currentUser=user;for(const cb of callbacks)cb(user);};
 export const signOut=async()=>window.fixtureSignOut();
 export const browserLocalPersistence={};export const setPersistence=async()=>{};
 export const getRedirectResult=async()=>null;
@@ -39,3 +40,9 @@ export const runTransaction=transaction;
 export const setDoc=async()=>{throw Error('Unexpected fixture write');};
 export const updateDoc=setDoc;
 export const writeBatch=()=>{throw Error('Unexpected fixture batch');};
+// Home notification imports stay offline too; messaging registration is unsupported.
+export const app={options:db.app.options};
+export const isSupported=async()=>false;
+export const getMessaging=()=>({});
+export const onMessage=()=>()=>{};
+export const getToken=async()=>{throw Error('Live messaging forbidden in synthetic browser');};

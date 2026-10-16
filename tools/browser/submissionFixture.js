@@ -18,7 +18,7 @@ if (enabled && !records.size) {
   submitter:{uid:'u00',displayName:'정확한 TB 접수'},submittedAt:{seconds:1800000000},status:'submitted'});
  add('staff_submissions/cpr-individual', {itemId:'cpr',staffId:'S0',submitter:{uid:'u00',displayName:'개별 CPR 접수'},
   submittedAt:{seconds:1800000001},status:'submitted',trainingDate:'2026-10-01',institution:'합성기관'});
- add('staff_submission_status_qa/S0_cpr-training-2026', {staffId:'S0',taskId:'cpr-training-2026',status:'completed',
+ add('staff_submission_status_qa/S0_cpr-training-2026', {staffId:'S0',taskId:'cpr-training-2026',status:'completed',evidenceSubmissionId:'cpr-individual',
   training:{completionMethod:'group',eventId:'GROUP-CPR',completionDate:'2026-09-01',evidenceStatus:'completed',note:'단체교육 완료'}});
  add('submission_items/cpr',{submissionType:'cpr',title:'심폐소생술',enabled:true});add('submission_items/tb',{submissionType:'tb',title:'건강검진',enabled:true});
  add('staff_submission_tasks/cpr-training-2026',{taskId:'cpr-training-2026',title:'심폐소생술',enabled:true});persist();

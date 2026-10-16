@@ -1,5 +1,5 @@
-import { useSearchParams } from "react-router-dom";
-import { tbReviewContext } from "../lib/submissionNavigation.js";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { tbReviewContext, submissionReviewHref, withAdminReturn, adminReturnHref } from "../lib/submissionNavigation.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
@@ -151,6 +151,8 @@ function FilterBar({ filters, options, selectedTask, onChange }) {
 }
 
 function StaffRow({ item, isTbTask, pending, onTbSave }) {
+  const location = useLocation();
+  const receiptHref = withAdminReturn(submissionReviewHref({id:item.evidenceSubmissionId || item.training?.evidenceSubmissionId}), location.pathname + location.search);
   const [form, setForm] = useState(() => ({ status: item.status, ...item.screening }));
 
   useEffect(() => {
@@ -168,6 +170,7 @@ function StaffRow({ item, isTbTask, pending, onTbSave }) {
       <p className="text-[13px] font-semibold text-[#627083]">{item.department || "-"}</p>
       <p className="text-[13px] font-semibold text-[#627083]">{item.position || "-"}</p>
       <StatusBadge status={item.status} label={item.statusLabel} />
+      {receiptHref && <Link className="min-h-11 py-3 text-sm text-[#0D4EA6]" to={receiptHref}>정확한 접수자료 확인</Link>}
       {isTbTask && (
         <details className="rounded-[8px] bg-[#F7FBF9] p-3 text-[12px] sm:col-span-4">
           <summary className="cursor-pointer font-semibold text-[#3154A3]">검진 상세 확인·수정</summary>
@@ -228,9 +231,19 @@ function getDefaultStatusFilter(task) {
 }
 
 function AdminStatusContent({ displayName }) {
+  const [params, setParams] = useSearchParams();
+  const focusedStaffId = params.get("staffId") || "";
+  const returnTo = adminReturnHref(params.get("returnTo"));
   const [overview, setOverview] = useState(null);
-  const [selectedTaskId, setSelectedTaskId] = useState("tb-screening-2026");
-  const [filters, setFilters] = useState({ status: "incomplete", department: "all", position: "all", screeningType: "all", cprMethod: "all", search: "" });
+  const [selectedTaskId, setSelectedTaskId] = useState(params.get("task") || "tb-screening-2026");
+  const [filters, setFilters] = useState({ status: params.get("filterStatus") || (params.has("staffId") ? "all" : "incomplete"), department: params.get("department") || "all", position: params.get("position") || "all", screeningType: params.get("screeningTypeFilter") || "all", cprMethod: params.get("cprMethod") || "all", search: params.get("search") || "" });
+  useEffect(()=>{if(params.get("task"))setSelectedTaskId(params.get("task"));},[params]);
+  function changeFilters(next) {
+    setFilters(next);
+    setParams(current=>{const values=new URLSearchParams(current);for(const [key,param] of Object.entries({status:"filterStatus",department:"department",position:"position",screeningType:"screeningTypeFilter",cprMethod:"cprMethod",search:"search"})){
+      if(next[key])values.set(param,next[key]);else values.delete(param);
+    }return values;},{replace:true});
+  }
   const [state, setState] = useState({ status: "loading", message: "" });
   const [pendingStaffId, setPendingStaffId] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -280,17 +293,24 @@ function AdminStatusContent({ displayName }) {
     };
   }, [loadOverview]);
 
-  const selectedTask = overview?.tasks.find((task) => task.taskId === selectedTaskId) || overview?.tasks[0] || null;
+  const selectedTask = params.has("schoolYear") && !selectedTaskId.endsWith(`-${params.get("schoolYear")}`) ? null : overview?.tasks.find((task) => task.taskId === selectedTaskId) || (!params.has("task") ? overview?.tasks[0] : null) || null;
   const filterOptions = useMemo(() => buildFilterOptions(selectedTask?.items || []), [selectedTask]);
-  const filteredItems = useMemo(() => filterItems(selectedTask?.items || [], filters), [selectedTask, filters]);
+  const filteredItems = useMemo(() => filterItems(selectedTask?.items || [], filters).filter(item=>!focusedStaffId || item.staffId === focusedStaffId), [selectedTask, filters, focusedStaffId]);
 
   return (
     <AdminWorkspaceLayout
       label="관리자"
       title="교직원 제출·이수 현황"
-      description="결핵검진, 심폐소생술 연수, 보건 관련 법정의무연수 상태를 Firestore projection 기준으로 확인합니다."
+      description="대상 교직원의 업무별 완료 상태입니다. 접수 건수·대상 계정 수와 완료 인원 수는 서로 다릅니다. 개인 이수증과 학교 단체교육 근거를 구분합니다."
       displayName={displayName}
     >
+      <nav aria-label="업무현황 연결" className="flex flex-wrap gap-3 text-sm text-[#0D4EA6]">
+        {returnTo && <Link className="min-h-11 py-3" to={returnTo}>접수자료로 돌아가기</Link>}
+        {focusedStaffId && <Link className="min-h-11 py-3" to={`/firebase-admin/staff-submission-status?task=${encodeURIComponent(selectedTaskId)}`}>전체 교직원 현황</Link>}
+        {focusedStaffId && <p className="py-3">선택 교직원 {focusedStaffId} · {params.get("schoolYear") || "현재"}학년도 요청 (표시 학년도는 업무 제목 확인)</p>}
+        <Link className="min-h-11 py-3" to="/firebase-admin/trainings?mode=manual-cpr-2026">2026 CPR 학교 단체교육 일괄 등록</Link>
+        <Link className="min-h-11 py-3" to="/firebase-admin/submission-status?item=cpr">개별 CPR 이수증 접수 현황</Link>
+      </nav>
       <nav aria-label="제출·이수 현황 섹션 이동" className="flex flex-wrap gap-2 text-sm text-[#3154A3]">
         {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <a href="#annual-screening-type" className="rounded-lg border border-[#DDEAE7] px-3 py-3">건강검진 유형</a>}
         <a href="#training-source-check" className="rounded-lg border border-[#DDEAE7] px-3 py-3">연수 원본 점검</a>
@@ -301,6 +321,7 @@ function AdminStatusContent({ displayName }) {
       <section id="training-source-check" className="scroll-mt-4"><ResearchTrainingDryRunPanel onApplied={loadOverview} /></section>
       <section id="legal-training-exceptions" className="scroll-mt-4"><ResearchTrainingExceptionsPanel /></section>
 
+      {state.status === "success" && !selectedTask && <p role="alert">요청한 학년도·업무 원장을 찾을 수 없습니다. 다른 학년도 현황으로 대체하지 않습니다. <Link to="/firebase-admin/staff-submission-status" className="underline">현재 학년도 현황으로</Link></p>}
       {state.status === "success" && selectedTask && (
         <>
           <section id="completion-status" aria-label="검진·연수 완료 현황" className="grid scroll-mt-4 gap-2 lg:grid-cols-3">
@@ -311,6 +332,7 @@ function AdminStatusContent({ displayName }) {
                 selected={task.taskId === selectedTask.taskId}
                 onSelect={() => {
                   setSelectedTaskId(task.taskId);
+                  setParams(current=>{const next=new URLSearchParams(current);next.set("task",task.taskId);for(const key of ["filterStatus","department","position","screeningTypeFilter","cprMethod","search"])next.delete(key);return next;});
                   setFilters((current) => ({ ...current, status: getDefaultStatusFilter(task), department: "all", position: "all", screeningType: "all", cprMethod: "all", search: "" }));
                 }}
               />
@@ -378,7 +400,7 @@ function AdminStatusContent({ displayName }) {
             </section>
           )}
 
-          <FilterBar filters={filters} options={filterOptions} selectedTask={selectedTask} onChange={setFilters} />
+          <FilterBar filters={filters} options={filterOptions} selectedTask={selectedTask} onChange={changeFilters} />
           {actionMessage && <p className="rounded-[8px] border border-[#DDEAE7] bg-white px-3 py-2 text-[12px] font-semibold text-[#3154A3]">{actionMessage}</p>}
 
           <section className="overflow-hidden rounded-[12px] border border-[#DDEAE7] bg-white shadow-[var(--shh-soft-shadow)]">
