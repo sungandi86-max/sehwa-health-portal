@@ -1,26 +1,17 @@
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider, OAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { resolveFirebaseAuthDomain } from "./firebaseAuthDomain.js";
+import { initializeFirebaseClient } from "./firebaseInitialization.js";
 
-function getFirebaseAuthDomain() {
-  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
-  return resolveFirebaseAuthDomain(hostname, import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
-}
-
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCSIwxcdU2x5g8BhNLUckWoNFU7uWSHU94",
-  authDomain: getFirebaseAuthDomain(),
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "sehwa-health-portal-v2",
-  storageBucket:
-    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "sehwa-health-portal-v2.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "30487759503",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:30487759503:web:c97b1169e3bc2318647efa",
-};
-
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Vite supplies only non-secret policy fields from server-owned configuration.
+const policy = typeof __FIREBASE_RUNTIME_POLICY__ === "undefined"
+  ? { environment: "unknown", qaProjectId: "" } : __FIREBASE_RUNTIME_POLICY__;
+const { app, auth, db } = initializeFirebaseClient({
+  policy,
+  env: import.meta.env,
+  hostname: typeof window !== "undefined" ? window.location.hostname : "",
+  sdk: { initializeApp, getApp, getApps, getAuth, getFirestore },
+});
 const googleProvider = new GoogleAuthProvider();
 const microsoftProvider = new OAuthProvider("microsoft.com");
 const microsoftTenantId = import.meta.env.VITE_MICROSOFT_TENANT_ID || "sehwa-gs.hs.kr";

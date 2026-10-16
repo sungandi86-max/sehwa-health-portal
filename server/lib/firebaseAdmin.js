@@ -5,7 +5,9 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 
-const DEFAULT_PROJECT_ID = "sehwa-health-portal-v2";
+import { initializeFirebaseAdmin, validatedAdminConfiguration } from "./firebaseAdminInitialization.js";
+
+const adminSdk = { cert, getApps, initializeApp };
 const LOCAL_ENV_FILE = ".env.local";
 
 function loadLocalEnv() {
@@ -50,23 +52,13 @@ function getServiceAccount() {
 }
 
 export function getFirebaseServiceAccount() {
-  return getServiceAccount();
+  loadLocalEnv();
+  return validatedAdminConfiguration(process.env, getServiceAccount).account;
 }
 
 export function getFirebaseAdminApp() {
-  if (getApps().length) {
-    return getApps()[0];
-  }
-
-  const serviceAccount = getServiceAccount();
-  if (!serviceAccount) {
-    throw new Error("Firebase Admin 서비스 계정 환경변수가 필요합니다.");
-  }
-
-  return initializeApp({
-    credential: cert(serviceAccount),
-    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || DEFAULT_PROJECT_ID,
-  });
+  loadLocalEnv();
+  return initializeFirebaseAdmin({ context: process.env, readAccount: getServiceAccount, sdk: adminSdk });
 }
 
 export function getFirebaseAdminAuth() {

@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { firebaseRuntimePolicy } from './common/firebaseEnvironment.js'
 import accessRequestsHandler from './api/firebase/access-requests.js'
 import ensureTeamStaffHandler from './api/firebase/ensure-team-staff.js'
 import studentCareSyncHandler from './api/firebase/student-care-sync.js'
@@ -85,6 +86,10 @@ function viteEnvDevCompatibility(mode) {
   }
 }
 
-export default defineConfig(({ mode }) => ({
-  plugins: [viteEnvDevCompatibility(mode), react()],
-}))
+export default defineConfig(({ mode }) => {
+  const context = { ...loadEnv(mode, process.cwd(), ''), ...process.env }
+  return {
+    define: { __FIREBASE_RUNTIME_POLICY__: JSON.stringify(firebaseRuntimePolicy(context)) },
+    plugins: [viteEnvDevCompatibility(mode), react()],
+  }
+})
