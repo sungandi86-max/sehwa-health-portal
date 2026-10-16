@@ -443,6 +443,8 @@ test('read-only assignment auditor: real Emulator pages, counts, redaction and u
     assert.equal(c.usersRead,213); assert.equal(c.assignmentsRead,215);
     assert.equal(c.currentChecked,214); assert.equal(c.historicalSkipped,1);
     assert.equal(c.compatible,204); assert.equal(c.incompatible,9); assert.equal(c.pendingRegistration,1);
+    assert.equal(c.activeIncompatible,8);
+    assert.equal(Object.entries(c).filter(([k])=>k.startsWith('activeIssues__')).reduce((sum,[,n])=>sum+n,0),8);
     assert.equal(c.inactive,2); assert.equal(c.missingCurrentAssignment,1); assert.equal(c.assignmentWithoutUser,3);
     assert.equal(c.uidOrPathError,2);
     for (const key of ['schoolYearError','semesterError','activeTypeError','rolesError','staffIdError','homeroomFieldsError','qaOnlyInProduction','trainingAdminOnly']) assert.equal(c[key],1,key);
@@ -460,4 +462,48 @@ test('read-only assignment auditor: real Emulator pages, counts, redaction and u
     assert.deepEqual(JSON.parse(cli.stdout),c);
     assert.equal(await dump(),before);
   } finally { await database.terminate(); await deleteApp(app); }
+});
+
+test('assignment audit synthetic reported totals: four active incompatible documents have four exclusive groups', async () => {
+  await environment.clearFirestore();
+  const { initializeApp, deleteApp } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  const app = initializeApp({projectId:PROJECT_ID}, 'assignment-audit-groups');
+  const db = getFirestore(app); db.settings({universeDomain:'googleapis.com'});
+  try {
+    const batch = db.batch();
+    const assignment = uid => ({uid,schoolYear:2026,semester:2,active:true,roles:['staff'],staffId:'PRIVATE_STAFF_SENTINEL'});
+    for (let i=0;i<42;i++) {
+      const uid=`compatible-${i}`;
+      batch.set(db.doc(`user_assignments/${uid}_2026_2`),assignment(uid));
+      if(i<41) batch.set(db.doc(`users/${uid}`),{displayName:'PRIVATE_NAME_SENTINEL'});
+    }
+    for (const [uid,patch,profile] of [
+      ['qa-marked',{qaOnly:true},false],
+      ['qa-role',{qaOnly:true,roles:['qa_PRIVATE_ROLE_SENTINEL']},false],
+      ['empty-roles',{roles:[]},true],
+      ['missing-staff',{staffId:null},true],
+      ['inactive-one',{active:false,qaOnly:true,staffId:null},false],
+      ['inactive-two',{active:false,qaOnly:true},false]
+    ]) {
+      batch.set(db.doc(`user_assignments/${uid}_2026_2`),{...assignment(uid),...patch});
+      if(profile) batch.set(db.doc(`users/${uid}`),{});
+    }
+    batch.set(db.doc('user_assignments/historical_2025_2'),{...assignment('historical'),schoolYear:2025});
+    await batch.commit();
+    const count = async collection => (await db.collection(collection).count().get()).data().count;
+    const c = await auditAssignments(db);
+    for (const [k,n] of Object.entries({usersRead:43,assignmentsRead:49,historicalSkipped:1,currentChecked:48,
+      compatible:42,incompatible:6,activeCompatible:42,inactive:2,missingCurrentAssignment:0,
+      assignmentWithoutUser:5,rolesError:2,staffIdError:2,qaOnlyInProduction:4,activeIncompatible:4})) assert.equal(c[k],n,k);
+    const keys = Object.keys(c).filter(k=>k.startsWith('activeIssues__'));
+    assert.equal(keys.length,4); assert.equal(keys.reduce((sum,k)=>sum+c[k],0),4);
+    for (const key of [
+      'activeIssues__qaOnlyInProduction__supportedRolePresent__profileAbsent',
+      'activeIssues__rolesError__qaOnlyInProduction__noSupportedRole__profileAbsent',
+      'activeIssues__rolesError__noSupportedRole__profilePresent',
+      'activeIssues__staffIdError__supportedRolePresent__profilePresent']) assert.equal(c[key],1);
+    assert.doesNotMatch(JSON.stringify(c),/SENTINEL|compatible-|inactive-|qa_PRIVATE/);
+    assert.equal(await count('users'),43); assert.equal(await count('user_assignments'),49);
+  } finally { await db.terminate(); await deleteApp(app); }
 });

@@ -77,3 +77,47 @@ FIRESTORE_EMULATOR_JAR=/path/to/verified/cloud-firestore-emulator-v1.19.8.jar np
 검사기 테스트만 합성 fixture를 생성하며 운영 검사기에는 생성/수정/삭제 API가 없다.
 222번째 테스트는 실제 Emulator에 200건 초과 자료·오류 유형·연결 누락을 넣고 검사 전후 모든 fixture가 같은지 확인한다.
 CLI는 합성 demo 프로젝트와 loopback 주소를 동시에 명시한 테스트 모드만 추가로 허용한다.
+
+## 활성 부적합 오류 조합별 집계
+
+기존 집계와 판정·조회 필드·대상 프로젝트·실행 확인 인자는 그대로 유지한다.
+새 `activeIncompatible`는 `active === true`이면서 부적합인 문서 수다.
+관찰된 조합에 대해서만 다음 형식의 평탄한 숫자 집계를 추가한다.
+
+```text
+activeIssues__오류1__오류2__역할분류__프로필분류: 건수
+```
+
+- 오류 이름은 기존 고정 오류 항목이며 검사 순서대로 나열한다. 문서별 오류 조합이 정확히 같은 경우에만 합산한다.
+- 역할분류는 `rolesMalformed`(배열 아님), `noSupportedRole`(지원 역할 없음),
+  `supportedRolePresent`(지원 역할 하나 이상) 중 하나다. 실제 역할 문자열은 출력하지 않는다.
+- 프로필분류는 저장 UID에 대응하는 users 문서 ID가 있는지에 따라 `profilePresent`/`profileAbsent` 중 하나다.
+- 모든 activeIssues 조합 건수의 합은 activeIncompatible와 같아야 한다. 문서 한 건은 한 조합에만 들어간다.
+  기존 rolesError 등 개별 오류 집계는 중복 집계 그대로이며 이 합산 규칙의 대상이 아니다.
+- 비활성·가입대기·적합 문서는 activeIssues 집계에 들어가지 않는다.
+
+예: `activeIssues__rolesError__qaOnlyInProduction__noSupportedRole__profileAbsent`는
+역할 오류와 QA 표시가 함께 있고 지원 역할과 연결 프로필이 없는 활성 부적합 문서의 건수다.
+실제 UID·staffId·assignmentSource·미지원 역할 값이 JSON 키에 들어가는 일은 없다.
+출력은 고정 분류 이름과 숫자만이며 오류가 없으면 해당 조합 키는 생기지 않는다.
+
+### 배포 판단에 사용할 범위
+
+- `qaOnlyInProduction` 조합은 qaOnly=true 또는 qa_ 역할 표시가 있는 자료다.
+  QA/테스트 용도의 근거지만 소유자나 실제 사용 여부를 증명하지는 않는다.
+- `profileAbsent`는 프로필 연결 부재이며 Firebase Auth 계정 부재를 뜻하지 않는다.
+- QA 표시가 없고 profilePresent여도 실제 재직 교직원임을 증명하지 않는다. 명단·Auth는 추가 조회하지 않는다.
+- `rolesError` + `supportedRolePresent`는 보수적 검사 오류일 수 있다.
+  클라이언트/Rules 일부는 지원 역할이 하나라도 있으면 통과하지만, 전역 staff/admin 허용 여부는 역할 종류별로 다르다.
+  이 분류를 '로그인 가능', '관리자', '정상 교직원'으로 해석하지 않는다.
+- 활성 실사용 계정의 staffId/역할 문제와 QA 표시 혼입은 내부 확인 대상으로 삼되, 검사 결과만으로 자동 수정·삭제·권한 부여하지 않는다.
+- 기존 실행 명령으로 다시 읽으려면 사용자가 별도로 승인해야 한다. 이번 개발·push는 운영 검사 실행 승인이 아니다.
+
+### 검증 자산
+
+단위 테스트는 잘못된 역할 원문·staffId·가입 출처가 키나 값으로 노출되지 않으며 중복 없는 합계가 나오는지 확인한다.
+Emulator는 기존 200건 초과·CLI·문서 불변 테스트를 유지하고, 보고된 43 users / 49 assignments / 부적합 6 / 활성 부적합 4라는
+총계를 만드는 **새 합성 fixture**로 조합별 집계를 추가 검증한다. 이는 운영 4건의 실제 분포를 재현하거나 추정한 결과가 아니다.
+
+이번 로컬 검증: 관련 단위 테스트 3/3, 전체 일반 테스트 657/657, Firestore Emulator 223/223 PASS.
+운영 Firestore 검사·조회는 수행하지 않았으며, 생성/수정/삭제는 합성 Emulator fixture 준비에만 사용했다.

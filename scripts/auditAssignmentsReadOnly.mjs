@@ -37,7 +37,7 @@ export async function auditAssignments(db) {
     'currentChecked','compatible','incompatible','activeCompatible','inactive','pendingRegistration',
     'missingCurrentAssignment','assignmentWithoutUser','uidOrPathError','schoolYearError','semesterError',
     'activeTypeError','rolesError','staffIdError','staffIdWhitespace','homeroomFieldsError','qaOnlyInProduction',
-    'trainingAdminOnly'].map(k => [k, 0]));
+    'trainingAdminOnly','activeIncompatible'].map(k => [k, 0]));
   const users = new Set(), covered = new Set();
   for await (const item of pages(db, 'users', [])) { users.add(item.id); counts.usersRead++; }
   for await (const item of pages(db, 'user_assignments', FIELDS)) {
@@ -48,8 +48,8 @@ export async function auditAssignments(db) {
     }
     counts.currentChecked++;
     if (item.id.endsWith(SUFFIX)) covered.add(item.id.slice(0, -SUFFIX.length));
-    let invalid = false;
-    const check = (key, condition) => { if (condition) { counts[key]++; invalid = true; } };
+    const issues = [];
+    const check = (key, condition) => { if (condition) { counts[key]++; issues.push(key); } };
     check('uidOrPathError', typeof d.uid !== 'string' || !d.uid || item.id !== `${d.uid}${SUFFIX}`);
     check('schoolYearError', d.schoolYear !== 2026);
     check('semesterError', d.semester !== 2);
@@ -57,7 +57,7 @@ export async function auditAssignments(db) {
     if (d.active === false) counts.inactive++;
     if (typeof d.uid === 'string' && !users.has(d.uid)) counts.assignmentWithoutUser++;
     const pending = d.assignmentSource === 'google_signup_pending' && (!Array.isArray(d.roles) || !d.roles.length);
-    if (pending && !invalid) { counts.pendingRegistration++; continue; }
+    if (pending && !issues.length) { counts.pendingRegistration++; continue; }
     check('rolesError', !Array.isArray(d.roles) || !d.roles.length || d.roles.some(r => !ROLES.includes(r)));
     check('staffIdError', typeof d.staffId !== 'string' || !d.staffId.trim());
     if (typeof d.staffId === 'string' && d.staffId !== d.staffId.trim()) counts.staffIdWhitespace++;
@@ -65,8 +65,18 @@ export async function auditAssignments(db) {
       (!Number.isFinite(d.grade) || !Number.isFinite(d.classNo)));
     check('qaOnlyInProduction', d.qaOnly === true || (Array.isArray(d.roles) && d.roles.some(r => typeof r === 'string' && r.startsWith('qa_'))));
     if (Array.isArray(d.roles) && d.roles.length === 1 && d.roles[0] === 'training_admin') counts.trainingAdminOnly++;
-    counts[invalid ? 'incompatible' : 'compatible']++;
-    if (!invalid && d.active === true) counts.activeCompatible++;
+    counts[issues.length ? 'incompatible' : 'compatible']++;
+    if (!issues.length && d.active === true) counts.activeCompatible++;
+    if (issues.length && d.active === true) {
+      counts.activeIncompatible++;
+      // Exactly one bucket per active incompatible document. Only fixed labels
+      // enter keys: never interpolate identifiers, role values or source text.
+      const roleState = !Array.isArray(d.roles) ? 'rolesMalformed'
+        : d.roles.some(r => ROLES.includes(r)) ? 'supportedRolePresent' : 'noSupportedRole';
+      const profileState = users.has(d.uid) ? 'profilePresent' : 'profileAbsent';
+      const key = ['activeIssues', ...issues, roleState, profileState].join('__');
+      counts[key] = (counts[key] || 0) + 1;
+    }
   }
   for (const uid of users) if (!covered.has(uid)) counts.missingCurrentAssignment++;
   counts.scanCompleted = 1;
