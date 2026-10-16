@@ -6,6 +6,7 @@ import { collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, 
   documentId, getCountFromServer, orderBy, limit, runTransaction, serverTimestamp, writeBatch } from "firebase/firestore";
 import { actors, resources, serverLedgers, assignment, status, submission, infection, accessRequest } from "./fixtures.mjs";
 import { PROJECT_ID, requireLocalTarget } from "./safety.mjs";
+import { auditAssignments, runAudit } from "../../scripts/auditAssignmentsReadOnly.mjs";
 
 // Deliberately outside Node's default test discovery: npm test must not silently
 // skip integration cases. npm run test:rules requires a real local emulator.
@@ -402,4 +403,61 @@ test("real local Admin SDK: 100 synthetic staff / 80 offline CPR attendees / rol
     await database.terminate();
     await deleteApp(app);
   }
+});
+
+test('read-only assignment auditor: real Emulator pages, counts, redaction and unchanged documents', async () => {
+  await environment.clearFirestore();
+  const { initializeApp, deleteApp } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  const app = initializeApp({projectId:PROJECT_ID}, 'assignment-audit-test');
+  const database = getFirestore(app);
+  database.settings({universeDomain:'googleapis.com'});
+  try {
+    const batch = database.batch();
+    const fields = uid => ({uid,schoolYear:2026,semester:2,active:true,roles:['staff'],staffId:`S-${uid}`});
+    for (let n=0;n<201;n++) {
+      const uid=`synthetic-${String(n).padStart(3,'0')}`;
+      batch.set(database.doc(`users/${uid}`), {email:'PRIVATE_EMAIL_SENTINEL',displayName:'PRIVATE_NAME_SENTINEL'});
+      batch.set(database.doc(`user_assignments/${uid}_2026_2`),fields(uid));
+    }
+    const variants = [
+      ['bad-uid',{uid:'WRONG_UID_SENTINEL'}], ['bad-year',{schoolYear:'2026'}], ['bad-term',{semester:'2'}],
+      ['bad-active',{active:'true'}], ['bad-roles',{roles:'admin'}], ['bad-staff',{staffId:null}],
+      ['bad-homeroom',{roles:['homeroom'],grade:'1',classNo:1}], ['qa-only',{qaOnly:true}],
+      ['inactive',{active:false}], ['training-only',{roles:['training_admin']}],
+      ['pending',{assignmentSource:'google_signup_pending',roles:[],staffId:null,active:false}]
+    ];
+    for (const [uid,patch] of variants) {
+      batch.set(database.doc(`users/${uid}`),{});
+      batch.set(database.doc(`user_assignments/${uid}_2026_2`),{...fields(uid),...patch});
+    }
+    batch.set(database.doc('users/missing'),{});
+    batch.set(database.doc('user_assignments/orphan_2026_2'),fields('orphan'));
+    batch.set(database.doc('user_assignments/historical_2025_2'),{...fields('historical'),schoolYear:2025});
+    batch.set(database.doc('user_assignments/misplaced'),fields('misplaced'));
+    await batch.commit();
+    const dump = async () => JSON.stringify(await Promise.all(['users','user_assignments'].map(async c =>
+      (await database.collection(c).orderBy('__name__').get()).docs.map(d=>[d.id,d.data()]))));
+    const before = await dump();
+    const c = await auditAssignments(database);
+    assert.equal(c.usersRead,213); assert.equal(c.assignmentsRead,215);
+    assert.equal(c.currentChecked,214); assert.equal(c.historicalSkipped,1);
+    assert.equal(c.compatible,204); assert.equal(c.incompatible,9); assert.equal(c.pendingRegistration,1);
+    assert.equal(c.inactive,2); assert.equal(c.missingCurrentAssignment,1); assert.equal(c.assignmentWithoutUser,3);
+    assert.equal(c.uidOrPathError,2);
+    for (const key of ['schoolYearError','semesterError','activeTypeError','rolesError','staffIdError','homeroomFieldsError','qaOnlyInProduction','trainingAdminOnly']) assert.equal(c[key],1,key);
+    const args=['--project',PROJECT_ID,'--confirm-read-only',`${PROJECT_ID}:2026:2`], lines=[];
+    assert.equal(await runAudit({args,env:{FIRESTORE_EMULATOR_HOST:process.env.FIRESTORE_EMULATOR_HOST},
+      connect:async()=>({projectId:database.projectId,collection:name=>database.collection(name),terminate:async()=>{}}),output:x=>lines.push(x)}),2);
+    assert.deepEqual(JSON.parse(lines[0]),c);
+    assert.ok(Object.values(JSON.parse(lines[0])).every(Number.isInteger));
+    assert.doesNotMatch(lines.join(''),/SENTINEL|synthetic-|S-|@/);
+    const { spawnSync } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const cli = spawnSync(process.execPath, [fileURLToPath(new URL('../../scripts/auditAssignmentsReadOnly.mjs',import.meta.url)),...args],
+      {env:process.env,encoding:'utf8',stdio:['ignore','pipe','pipe']});
+    assert.equal(cli.status,2); assert.equal(cli.stderr,'');
+    assert.deepEqual(JSON.parse(cli.stdout),c);
+    assert.equal(await dump(),before);
+  } finally { await database.terminate(); await deleteApp(app); }
 });
