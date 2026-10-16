@@ -1,3 +1,4 @@
+import { validateFirestoreDb } from "../../common/firestoreResources.js";
 import { FirebaseConfigurationError, PRODUCTION_FIREBASE_PROJECT_ID, rejectFirebaseConfiguration, validateFirebaseProject } from "../../common/firebaseEnvironment.js";
 import { resolveFirebaseAuthDomain } from "./firebaseAuthDomain.js";
 
@@ -53,7 +54,8 @@ export function initializeFirebaseClient({ policy, env = {}, hostname = "", sdk 
       rejectFirebaseConfiguration("existing-app");
     }
     const app = apps.length ? sdk.getApp() : sdk.initializeApp(config);
-    return { app, auth: sdk.getAuth(app), db: sdk.getFirestore(app) };
+    const db = validateFirestoreDb(policy, sdk.getFirestore(app));
+    return { app, auth: sdk.getAuth(app), db };
   } catch (error) {
     if (error instanceof FirebaseConfigurationError) throw error;
     rejectFirebaseConfiguration("client-initialization");

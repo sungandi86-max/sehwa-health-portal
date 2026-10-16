@@ -1,3 +1,4 @@
+import { serverFirestoreResource } from "./firestoreResources.js";
 export const CPR_TRAINING_TASK_ID = "cpr-training-2026";
 
 const CPR_TITLE_PATTERN = /(?:심폐소생술|\bCPR\b)/i;
@@ -44,25 +45,25 @@ export function buildCprGroupTrainingStatus({ staffId, event }) {
   };
 }
 
-export async function saveCprTrainingStatus({ db, payload, collectionName = "staff_submission_status" }) {
+export async function saveCprTrainingStatus({ db, payload, collectionName, context = process.env }) {
   if (!db || !payload?.staffId || payload.taskId !== CPR_TRAINING_TASK_ID) throw new RangeError("CPR 교육 상태 정보를 확인해 주세요.");
   const now = new Date();
-  await db.collection(collectionName).doc(`${payload.staffId}_${CPR_TRAINING_TASK_ID}`).set({
+  await db.collection(serverFirestoreResource(db, "statuses", context, collectionName)).doc(`${payload.staffId}_${CPR_TRAINING_TASK_ID}`).set({
     ...payload,
     syncedAt: now,
     updatedAt: now,
   }, { merge: true });
 }
 
-export async function saveCompletedCprGroupTraining({ db, staffId, events }) {
+export async function saveCompletedCprGroupTraining({ db, staffId, events, context = process.env }) {
   const cprEvents = (events || []).filter(isCprTrainingEvent);
   if (!cprEvents.length) return false;
   if (cprEvents.length > 1) throw new RangeError("묶음 교육에 CPR 교육이 중복되어 있습니다.");
-  await saveCprTrainingStatus({ db, payload: buildCprGroupTrainingStatus({ staffId, event: cprEvents[0] }) });
+  await saveCprTrainingStatus({ db, context, payload: buildCprGroupTrainingStatus({ staffId, event: cprEvents[0] }) });
   return true;
 }
 
-export async function reconcileCprTrainingStatus({ db, staffId, source }) {
+export async function reconcileCprTrainingStatus({ db, staffId, source, context = process.env }) {
   const activeGroup = (source?.signatures || []).find((signature) => {
     const event = source.trainings.find((item) => item.eventId === signature.eventId);
     return signature["교직원ID"] === staffId && signature["상태"] === "완료" &&
@@ -70,10 +71,10 @@ export async function reconcileCprTrainingStatus({ db, staffId, source }) {
   });
   if (activeGroup) {
     const event = source.trainings.find((item) => item.eventId === activeGroup.eventId);
-    await saveCompletedCprGroupTraining({ db, staffId, events: [event] });
+    await saveCompletedCprGroupTraining({ db, context, staffId, events: [event] });
     return "group";
   }
-  const snapshot = await db.collection("staff_submissions").where("staffId", "==", staffId).get();
+  const snapshot = await db.collection(serverFirestoreResource(db, "submissions", context)).where("staffId", "==", staffId).get();
   const individual = snapshot.docs.map((doc) => doc.data()).filter((item) => item.itemId === "cpr")
     .sort((left, right) => Number(right.updatedAt?.toMillis?.() || 0) - Number(left.updatedAt?.toMillis?.() || 0))[0];
   const payload = individual
@@ -81,6 +82,6 @@ export async function reconcileCprTrainingStatus({ db, staffId, source }) {
     : { staffId, taskId: CPR_TRAINING_TASK_ID, status: "incomplete", sourceType: "training_center", training: {
       completionMethod: "none", completionDate: "", eventId: "", evidenceStatus: "", note: "이수 기록 없음",
     } };
-  await saveCprTrainingStatus({ db, payload });
+  await saveCprTrainingStatus({ db, context, payload });
   return individual ? "individual" : "none";
 }

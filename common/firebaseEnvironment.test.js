@@ -16,7 +16,7 @@ function clientSdk(existing = []) {
   const calls = [];
   const sdk = { getApps: () => { calls.push("getApps"); return existing; }, getApp: () => existing[0],
     initializeApp: (options) => { calls.push("initializeApp"); const app = { options }; existing.push(app); return app; },
-    getAuth: () => { calls.push("getAuth"); return {}; }, getFirestore: () => { calls.push("getFirestore"); return {}; } };
+    getAuth: () => { calls.push("getAuth"); return {}; }, getFirestore: (app) => { calls.push("getFirestore"); return { app }; } };
   return { sdk, calls };
 }
 function adminSdk(existing = []) {
@@ -50,7 +50,7 @@ test("valid explicit QA configuration initializes client and admin using the QA 
   const result = initializeFirebaseClient({ policy: firebaseRuntimePolicy(context()), env: clientEnv(), sdk: client.sdk });
   assert.equal(result.app.options.projectId, QA);
   assert.equal(result.app.options.authDomain, `${QA}.firebaseapp.com`);
-  assert.deepEqual(client.calls, ["getApps", "initializeApp", "getAuth", "getFirestore"]);
+  assert.deepEqual(client.calls, ["getApps", "initializeApp", "getFirestore", "getAuth"]);
   const admin = adminSdk();
   const app = initializeFirebaseAdmin({ context: context(), readAccount: () => account(), sdk: admin.sdk });
   assert.equal(app.options.projectId, QA);

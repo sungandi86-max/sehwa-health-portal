@@ -11,7 +11,7 @@ import { SUBMISSION_WORKFLOWS } from "./submissionWorkflows.js";
 import { isQaInbodyAssignment, isQaInbodyUid, QA_INBODY_EMAIL,
   QA_INBODY_ROLE, QA_INBODY_STAFF_ID, QA_INBODY_UID } from "./qaInbodySynthetic.js";
 
-const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", QA_FIREBASE_PROJECT_ID: "isolated-health-qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const assignment = { uid: QA_INBODY_UID, staffId: QA_INBODY_STAFF_ID, active: false,
   qaOnly: true, environment: "qa", roles: [QA_INBODY_ROLE], schoolYear: 2026, semester: 2,
@@ -26,7 +26,7 @@ function response() {
 }
 
 function database(data = assignment) {
-  return { collection(name) { assert.equal(name, "user_assignments"); return {
+  return { app: { options: { projectId: "isolated-health-qa" } }, collection(name) { assert.equal(name, "user_assignments"); return {
     doc() { return { get: async () => ({ exists: true, data: () => data }) }; },
   }; } };
 }
@@ -35,7 +35,9 @@ function guard(context, data = assignment, allowQaInbodySynthetic = true, uid = 
   return verifyCurrentStaffSubmissionIdentity({ headers: { authorization: "Bearer synthetic" } }, {
     allowQaInbodySynthetic, context,
     auth: () => ({ verifyIdToken: async () => ({ uid }) }),
-    database: () => database(data), directory: async () => ({ directory: roster }),
+    database: () => { const db = database(data);
+      if (context.VERCEL_ENV === "production") db.app.options.projectId = "sehwa-health-portal-v2";
+      return db; }, directory: async () => ({ directory: roster }),
   });
 }
 

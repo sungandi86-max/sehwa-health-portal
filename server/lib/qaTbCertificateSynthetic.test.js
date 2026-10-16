@@ -9,7 +9,7 @@ import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { isQaTbCertificateAssignment, QA_TB_CERTIFICATE_ROLE,
   QA_TB_CERTIFICATE_EMAIL, QA_TB_CERTIFICATE_STAFF_ID, QA_TB_CERTIFICATE_UID } from "./qaTbCertificateSynthetic.js";
 
-const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", QA_FIREBASE_PROJECT_ID: "isolated-health-qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const assignment = { uid: QA_TB_CERTIFICATE_UID, staffId: QA_TB_CERTIFICATE_STAFF_ID, active: false,
   qaOnly: true, environment: "qa", roles: [QA_TB_CERTIFICATE_ROLE], schoolYear: 2026, semester: 2,
@@ -18,7 +18,7 @@ const response = () => ({ statusCode: 200, headers: {}, setHeader() {}, status(c
   json(body) { this.body = body; return this; }, end() { return this; } });
 const request = (payload) => ({ method: "POST", headers: { "content-type": "application/json", authorization: "Bearer qa" },
   async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(payload)); } });
-const database = () => ({ collection(name) { assert.equal(name, "user_assignments_qa"); return {
+const database = () => ({ app: { options: { projectId: "isolated-health-qa" } }, collection(name) { assert.equal(name, "user_assignments_qa"); return {
   doc() { return { get: async () => ({ exists: true, data: () => assignment }) }; },
 }; } });
 

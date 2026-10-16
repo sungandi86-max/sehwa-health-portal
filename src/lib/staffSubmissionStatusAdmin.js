@@ -1,3 +1,4 @@
+import { clientFirestoreResource } from "./firestoreResources.js";
 import { collection, doc, getDocs, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { auth, db } from "./firebase.js";
@@ -229,7 +230,7 @@ function sortStatusItems(left, right) {
 
 export async function getAdminStaffSubmissionStatusOverview() {
   const taskIdSet = new Set(STAFF_STATUS_TASK_IDS);
-  const taskSnapshot = await getDocs(collection(db, "staff_submission_tasks"));
+  const taskSnapshot = await getDocs(collection(db, clientFirestoreResource(db, "tasks")));
   const tasks = taskSnapshot.docs
     .map(normalizeTask)
     .filter((task) => task.enabled && taskIdSet.has(task.taskId))
@@ -244,7 +245,7 @@ export async function getAdminStaffSubmissionStatusOverview() {
     getCurrentAssignmentDirectory(),
     getHealthMandatoryTrainingCurrentTargetsResult(hasHealthMandatoryTrainingTask),
     ...tasks.map((task) =>
-      getDocs(query(collection(db, "staff_submission_status"), where("taskId", "==", task.taskId)))
+      getDocs(query(collection(db, clientFirestoreResource(db, "statuses")), where("taskId", "==", task.taskId)))
     ),
   ]);
 
@@ -315,7 +316,7 @@ export async function updateAdminTbScreeningStatus(staffId, value) {
   const normalizedStaffId = normalizeText(staffId);
   if (!normalizedStaffId) throw new Error("교직원ID를 확인할 수 없습니다.");
   const update = getTbAdminUpdate(value);
-  await setDoc(doc(db, "staff_submission_status", `${normalizedStaffId}_${TB_SCREENING_TASK_ID}`), {
+  await setDoc(doc(db, clientFirestoreResource(db, "statuses"), `${normalizedStaffId}_${TB_SCREENING_TASK_ID}`), {
     staffId: normalizedStaffId,
     taskId: TB_SCREENING_TASK_ID,
     ...update,

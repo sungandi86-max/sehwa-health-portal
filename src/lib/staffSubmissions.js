@@ -1,3 +1,4 @@
+import { clientFirestoreResource } from "./firestoreResources.js";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
 import { prepareSubmissionFile, validateSelectableSubmissionFile, validateSubmissionFile } from "./submissionFiles.js";
@@ -100,10 +101,11 @@ function getSubmitter(user) {
   };
 }
 
-async function uploadDriveSubmission({ type, fields, fileName, file }) {
+async function uploadDriveSubmission({ type, fields, fileName, file, schoolYear }) {
   const fileBase64 = await fileToBase64(file);
   return postWithTimeout({
     type,
+    ...(schoolYear === undefined ? {} : { schoolYear }),
     fields,
     fileName,
     fileBase64,
@@ -138,7 +140,7 @@ export async function createCprSubmission({ user, trainingDate, institution, sta
   const fileError = validateSubmissionFile(preparedFile);
   if (fileError) throw new Error(fileError);
 
-  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
+  const submissionRef = doc(db, clientFirestoreResource(db, "submissions"), crypto.randomUUID());
   const submitter = getSubmitter(user);
   const originalName = sanitizeFilename(preparedFile.name || "cpr-certificate.pdf");
   const fileName = sanitizeFilename(`${submitter.name}_심폐소생술이수증_${todayString()}_${originalName}`);
@@ -181,6 +183,8 @@ export async function createTbSubmission({ user, checkupDate, documentType, staf
   const fileError = validateSubmissionFile(preparedFile);
   if (fileError) throw new Error(fileError);
 
+  const submissionCollection = clientFirestoreResource(db, "submissions");
+  const statusCollection = clientFirestoreResource(db, "statuses");
   const submitter = getSubmitter(user);
   const originalName = sanitizeFilename(preparedFile.name || "tb-certificate.pdf");
   const fileName = sanitizeFilename(`${submitter.name}_결핵검진확인증_${todayString()}_${originalName}`);
@@ -199,6 +203,14 @@ export async function createTbSubmission({ user, checkupDate, documentType, staf
   });
   if (!uploadResult.submissionId) throw new Error("접수번호를 확인하지 못했습니다.");
   const driveReference = getDriveReference(uploadResult, fileName, preparedFile.type);
+  if (statusCollection === "staff_submission_status_qa" && uploadResult.duplicate !== true) {
+    await saveStaffSubmission(doc(db, submissionCollection, uploadResult.submissionId), {
+      itemId: "tb", staffId: uploadResult.staffId,
+      submitter: { uid: submitter.uid, email: submitter.email, displayName: submitter.displayName },
+      checkupDate: checkupDate || null, documentType: documentType || null,
+      staffType: staffType || null, file: driveReference,
+    });
+  }
   return { id: uploadResult.submissionId, file: driveReference, duplicate: uploadResult.duplicate === true };
 }
 
@@ -232,7 +244,7 @@ export async function createRecruitSubmission({
   });
   if (requestError) throw new Error(requestError);
 
-  const submissionRef = doc(db, "staff_submissions", crypto.randomUUID());
+  const submissionRef = doc(db, clientFirestoreResource(db, "submissions"), crypto.randomUUID());
   const submitter = getSubmitter(user);
 
   await saveStaffSubmission(

@@ -1,3 +1,4 @@
+import { clientFirestoreResource } from "./firestoreResources.js";
 import { collection, getDoc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
 import { db } from "./firebase.js";
@@ -14,7 +15,6 @@ import {
 import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
 export { INFECTION_STATUS_LABELS } from "./infectionStatus.js";
 
-const STAFF_COLLECTION = "staff_submissions";
 const STUDENT_HEALTH_COLLECTION = "student_health_submissions";
 const LIST_LIMIT = 50;
 
@@ -105,7 +105,7 @@ function filterByStatus(items, status) {
 
 export async function getStaffSubmissions({ status = "" } = {}) {
   const snapshot = await getDocs(
-    query(collection(db, STAFF_COLLECTION), orderBy("submittedAt", "desc"), limit(LIST_LIMIT))
+    query(collection(db, clientFirestoreResource(db, "submissions")), orderBy("submittedAt", "desc"), limit(LIST_LIMIT))
   );
 
   return filterByStatus(snapshot.docs.map(normalizeStaffSubmission), status);
@@ -142,7 +142,7 @@ export async function updateStaffSubmissionStatus(submission, status) {
   if (!submissionId) throw new Error("제출 기록을 확인할 수 없습니다.");
   const statusTaskId = submission?.itemId === "tb" ? "tb-screening-2026" : submission?.itemId === "cpr" ? "cpr-training-2026" : "";
   if (typeof submission === "string" || !statusTaskId || !submission?.staffId) {
-    await updateDoc(doc(db, STAFF_COLLECTION, submissionId), {
+    await updateDoc(doc(db, clientFirestoreResource(db, "submissions"), submissionId), {
       status,
       updatedAt: serverTimestamp(),
     });
@@ -151,14 +151,14 @@ export async function updateStaffSubmissionStatus(submission, status) {
 
   const mappedStatus = status === "completed" ? "completed" : status === "rejected" ? "incomplete" : "pending";
   if (submission.itemId === "cpr" && status !== "completed") {
-    const current = await getDoc(doc(db, "staff_submission_status", `${submission.staffId}_${statusTaskId}`));
+    const current = await getDoc(doc(db, clientFirestoreResource(db, "statuses"), `${submission.staffId}_${statusTaskId}`));
     if (current.exists() && current.data()?.status === "completed" && current.data()?.training?.completionMethod === "group") {
-      await updateDoc(doc(db, STAFF_COLLECTION, submissionId), { status, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, clientFirestoreResource(db, "submissions"), submissionId), { status, updatedAt: serverTimestamp() });
       return;
     }
   }
   const batch = writeBatch(db);
-  batch.update(doc(db, STAFF_COLLECTION, submissionId), {
+  batch.update(doc(db, clientFirestoreResource(db, "submissions"), submissionId), {
     status,
     updatedAt: serverTimestamp(),
   });
@@ -181,7 +181,7 @@ export async function updateStaffSubmissionStatus(submission, status) {
       note: status === "completed" ? "외부·개별 이수 확인" : status === "rejected" ? "이수증 보완 필요" : "이수증 확인 중",
     },
   };
-  batch.set(doc(db, "staff_submission_status", `${submission.staffId}_${statusTaskId}`), {
+  batch.set(doc(db, clientFirestoreResource(db, "statuses"), `${submission.staffId}_${statusTaskId}`), {
     ...statusPayload,
     syncedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

@@ -1,3 +1,4 @@
+import { clientFirestoreResource } from "./firestoreResources.js";
 import { collection, getDocs, limit, query, where } from "firebase/firestore";
 import { STAFF_STATUS_LABELS, formatSubmissionDateTime } from "./adminSubmissions.js";
 import { applyIndividualHealthCheckupDisplay } from "../data/individualHealthCheckupSubmission.js";
@@ -143,10 +144,11 @@ export function filterSubmissionRoster(roster, statusFilter, searchTerm) {
 }
 
 export async function getSubmissionStatusOverview(itemId, schoolYear, semester) {
+  const submissionsCollection = clientFirestoreResource(db, "submissions");
   const [items, users, submissionSnapshot] = await Promise.all([
     getActiveSubmissionItems(),
     getUsersWithAssignments(schoolYear, semester),
-    getDocs(query(collection(db, "staff_submissions"), where("itemId", "==", itemId), limit(SUBMISSION_LIMIT))),
+    getDocs(query(collection(db, submissionsCollection), where("itemId", "==", itemId), limit(SUBMISSION_LIMIT))),
   ]);
 
   const submissions = submissionSnapshot.docs.map(normalizeSubmission);

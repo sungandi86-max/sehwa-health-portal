@@ -28,11 +28,11 @@ test("completion updates leave the annual Production record and history unchange
   const annual = { staffId: "STAFF-LOCAL-001", schoolYear: 2026, screeningType: "nhis", revision: 1 };
   const records = new Map([["staff_health_screening_types/STAFF-LOCAL-001_2026", annual]]);
   const accessed = [];
-  const db = { collection: (name) => {
+  const db = { app: { options: { projectId: "sehwa-health-portal-v2" } }, collection: (name) => {
     accessed.push(name);
     return { doc: (id) => ({ id, get: async () => ({ exists: false }), set: async (item) => records.set(`${name}/${id}`, item) }) };
   } };
-  await saveTbScreeningStatus({ db, payload: { staffId: annual.staffId, taskId: TB_SCREENING_TASK_ID, status: "completed", screening: { completed: true } } });
+  await saveTbScreeningStatus({ db, context: { APP_ENV: "production" }, payload: { staffId: annual.staffId, taskId: TB_SCREENING_TASK_ID, status: "completed", screening: { completed: true } } });
   assert.deepEqual(records.get("staff_health_screening_types/STAFF-LOCAL-001_2026"), annual);
   assert.deepEqual(accessed, ["staff_submission_status"]);
 });

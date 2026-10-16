@@ -1,3 +1,5 @@
+import { serverFirestoreResource } from "./firestoreResources.js";
+import { firebaseRuntimePolicy } from "../../common/firebaseEnvironment.js";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
 import { getAssignmentId, getBearerToken, readStaffDirectory } from "./staffDirectory.js";
 import { isQaInbodyAssignment, isQaInbodyUid, qaInbodyDirectoryIdentity, QA_INBODY_ROLE } from "./qaInbodySynthetic.js";
@@ -43,9 +45,13 @@ export async function verifyCurrentStaffSubmissionIdentity(req, { allowQaInbodyS
     return { ok: false, status: 403, message: "이 제출 유형을 이용할 권한이 없습니다." };
   }
   try {
+    if ((isQaInbodyUid(decodedToken.uid) || isQaCprUid(decodedToken.uid) || isQaTbCertificateUid(decodedToken.uid)) &&
+        firebaseRuntimePolicy(context).environment !== "qa") {
+      return { ok: false, status: 403, message: "QA 전용 신청 권한이 없습니다." };
+    }
     const db = database();
-    const assignmentCollection = (isQaCprUid(decodedToken.uid) || isQaTbCertificateUid(decodedToken.uid))
-      ? "user_assignments_qa" : "user_assignments";
+    const assignmentCollection = serverFirestoreResource(db,
+      isQaCprUid(decodedToken.uid) || isQaTbCertificateUid(decodedToken.uid) ? "syntheticAssignments" : "assignments", context);
     const snapshot = await db.collection(assignmentCollection).doc(getAssignmentId(decodedToken.uid)).get();
     const assignment = snapshot.exists ? snapshot.data() : null;
     const staffId = String(assignment?.staffId || "").trim();
@@ -94,7 +100,7 @@ export async function verifyTbSubmissionAllowed(req, options = {}) {
     const { db, staffId, roles } = identity;
     const schoolYear = options.schoolYear === undefined ? null : validatedSchoolYear(options.schoolYear);
     const taskId = schoolYear === null ? TB_SCREENING_TASK_ID : tbWorkflowTaskId(schoolYear);
-    const statusCollection = identity.qaTbCertificateSynthetic ? "staff_submission_status_qa" : "staff_submission_status";
+    const statusCollection = serverFirestoreResource(db, "statuses", options.context || process.env);
     const statusSnapshot = await db
       .collection(statusCollection)
       .doc(`${staffId}_${taskId}`)

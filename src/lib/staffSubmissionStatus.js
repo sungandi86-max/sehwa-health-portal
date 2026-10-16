@@ -1,3 +1,4 @@
+import { clientFirestoreResource } from "./firestoreResources.js";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "./firebase.js";
 import { normalizeTbScreening } from "./tbScreeningStatusModel.js";
@@ -91,7 +92,7 @@ export function isHealthMandatoryTrainingTask(taskId) {
 export async function getStaffSubmissionTaskStatus(staffId, taskId) {
   if (!staffId || !taskId) return "unknown";
 
-  const statusSnapshot = await getDoc(doc(db, "staff_submission_status", `${staffId}_${taskId}`));
+  const statusSnapshot = await getDoc(doc(db, clientFirestoreResource(db, "statuses"), `${staffId}_${taskId}`));
   if (!statusSnapshot.exists()) return "unknown";
 
   const statusItem = normalizeStatus(statusSnapshot);
@@ -110,8 +111,8 @@ export function getStaffStatusLabel(status, taskId = "") {
 export async function getMyStaffSubmissionStatus(staffId) {
   const taskIdSet = new Set(STAFF_STATUS_TASK_IDS);
   const [taskSnapshot, statusSnapshot] = await Promise.all([
-    getDocs(collection(db, "staff_submission_tasks")),
-    getDocs(query(collection(db, "staff_submission_status"), where("staffId", "==", staffId))),
+    getDocs(collection(db, clientFirestoreResource(db, "tasks"))),
+    getDocs(query(collection(db, clientFirestoreResource(db, "statuses")), where("staffId", "==", staffId))),
   ]);
 
   const tasks = taskSnapshot.docs

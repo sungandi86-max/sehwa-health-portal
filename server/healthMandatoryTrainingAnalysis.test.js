@@ -133,6 +133,7 @@ test("safe apply requires no unresolved source-only or canonical active source g
 test("snapshot writer only upserts planned documents and never deletes existing history", async () => {
   const calls = { set: 0, delete: 0, commit: 0 };
   const db = {
+    app: { options: { projectId: "sehwa-health-portal-v2" } },
     batch() {
       return {
         set() {
@@ -152,7 +153,7 @@ test("snapshot writer only upserts planned documents and never deletes existing 
   };
 
   await writeSnapshotPlan({
-    db,
+    db, context: { APP_ENV: "production" },
     docs: [
       { id: "T001_health-mandatory-training-2026", data: { staffId: "T001" } },
       { id: "T002_health-mandatory-training-2026", data: { staffId: "T002" } },

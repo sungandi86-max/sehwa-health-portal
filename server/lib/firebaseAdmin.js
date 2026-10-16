@@ -1,3 +1,5 @@
+import { validateFirestoreDb } from "../../common/firestoreResources.js";
+import { firebaseRuntimePolicy } from "../../common/firebaseEnvironment.js";
 import fs from "node:fs";
 import path from "node:path";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
@@ -66,7 +68,8 @@ export function getFirebaseAdminAuth() {
 }
 
 export function getFirebaseAdminDb() {
-  return getFirestore(getFirebaseAdminApp());
+  const app = getFirebaseAdminApp(); // Loads supported local configuration before resolving policy.
+  return validateFirestoreDb(firebaseRuntimePolicy(process.env), getFirestore(app));
 }
 
 export function getFirebaseAdminMessaging() {

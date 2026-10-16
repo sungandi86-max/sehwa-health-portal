@@ -1,3 +1,4 @@
+import { serverFirestoreResource } from "./firestoreResources.js";
 import { FieldValue } from "firebase-admin/firestore";
 
 export const TB_SCREENING_TASK_ID = "tb-screening-2026";
@@ -54,11 +55,8 @@ export function getTbStatusFromSubmissionState(submissionStatus) {
   return { status: "pending", completed: false };
 }
 
-export async function saveTbScreeningStatus({ db, payload, collectionName = "staff_submission_status" }) {
-  if (!["staff_submission_status", "staff_submission_status_qa"].includes(collectionName)) {
-    throw new Error("TB status collection is not allowed");
-  }
-  const ref = db.collection(collectionName).doc(`${payload.staffId}_${TB_SCREENING_TASK_ID}`);
+export async function saveTbScreeningStatus({ db, payload, collectionName, context = process.env }) {
+  const ref = db.collection(serverFirestoreResource(db, "statuses", context, collectionName)).doc(`${payload.staffId}_${TB_SCREENING_TASK_ID}`);
   const snapshot = await ref.get();
   const current = snapshot.exists ? snapshot.data() : {};
   await ref.set({

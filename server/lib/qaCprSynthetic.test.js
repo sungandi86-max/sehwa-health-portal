@@ -8,7 +8,7 @@ import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { isQaCprAssignment, QA_CPR_EMAIL, QA_CPR_ROLE, QA_CPR_STAFF_ID, QA_CPR_UID } from "./qaCprSynthetic.js";
 import fs from "node:fs";
 
-const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", QA_FIREBASE_PROJECT_ID: "isolated-health-qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const assignment = { uid: QA_CPR_UID, staffId: QA_CPR_STAFF_ID, active: false, qaOnly: true,
   environment: "qa", roles: [QA_CPR_ROLE], schoolYear: 2026, semester: 2,
@@ -26,7 +26,7 @@ function request(payload) {
 }
 
 function database(data = assignment) {
-  return { collection(name) { assert.equal(name, "user_assignments_qa"); return {
+  return { app: { options: { projectId: "isolated-health-qa" } }, collection(name) { assert.equal(name, "user_assignments_qa"); return {
     doc() { return { get: async () => ({ exists: true, data: () => data }) }; },
   }; } };
 }

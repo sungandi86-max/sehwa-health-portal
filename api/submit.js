@@ -140,7 +140,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     let tbGuard = null;
     let cprIdentity = null;
     if (workflow.authPolicy === "current_staff_tb_guard" && !proxyMode) {
-      tbGuard = await verifyTb(req, { allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa",
+      tbGuard = await verifyTb(req, { context, allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa",
         ...(workflow.id === "tb" ? { schoolYear: payload.schoolYear } : {}) });
       if (!tbGuard.ok) {
         return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
@@ -148,6 +148,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
     }
     if (workflow.authPolicy === "current_staff") {
       cprIdentity = await verifyStaff(req, {
+        context,
         allowQaInbodySynthetic: workflow.id === "inbody" && trainingEnvironment(context) === "qa",
         allowQaCprSynthetic: workflow.id === "cpr" && trainingEnvironment(context) === "qa",
       });
@@ -188,6 +189,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       });
       try {
         await saveTbStatus({
+          context,
           db: tbGuard.db || getFirebaseAdminDb(),
           payload: buildTbStatusPayload(payload, tbGuard.staffId),
           collectionName: tbRegistrationStore.environment === "qa" ? "staff_submission_status_qa" : undefined,
@@ -423,7 +425,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
             }
           }
           if (tbCertificateEnvironment === "production" && saved) await recordTbReceipt((tbGuard?.db || proxyAccess?.db) || getFirebaseAdminDb(), saved);
-          if (tbReceiptIdentity && saved?.submissionId) json.submissionId = saved.submissionId;
+          if (saved?.submissionId) json.submissionId = saved.submissionId;
         } catch {
           console.error("[TB_CERTIFICATE_AUDIT_WRITE] Firestore audit write failed.");
           return res.status(503).json({ status: "error", success: false,
@@ -436,6 +438,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
             submissionId: json.submissionId || tbReceiptIdentity?.submissionId };
         } else {
         await saveTbStatus({
+          context,
           db: tbGuard.db || getFirebaseAdminDb(),
           payload: buildTbStatusPayload(payload, identity.staffId),
           collectionName: qaTbCertificateAudit ? "staff_submission_status_qa" : undefined,
@@ -450,7 +453,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
         });
       }
       json = tbCertificateEnvironment === "production" ? json : tbCertificateAudit
-        ? { status: "success", success: true, staffId: identity.staffId }
+        ? { status: "success", success: true, staffId: identity.staffId, submissionId: json.submissionId }
         : { ...json, staffId: identity.staffId };
     }
     if (workflow.id === "cpr" && cprIdentity) {
@@ -471,6 +474,7 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       }
       try {
         await saveCprStatus({
+          context,
           db: cprIdentity.db,
           payload: buildCprExternalSubmissionStatus({
             staffId: cprIdentity.staffId,
