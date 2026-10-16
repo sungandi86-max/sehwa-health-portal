@@ -74,7 +74,7 @@ export default function ManualCprBatchPanel({ uid, onSaved = () => {}, loadDirec
       <button className={`${button} bg-[#0D4EA6] text-white`} disabled={working || !confirmed} onClick={commit}>{working ? "처리 중" : result?.counts.failed ? "실패 항목 같은 요청으로 재시도" : locked ? "동일 요청 결과 다시 확인" : "참석자 일괄 이수 등록"}</button>
     </div>}
     {result && <div role="status" className="rounded-lg bg-[#F0FBF7] p-3 text-sm">성공 {result.counts.success}명 · 건너뜀 {result.counts.skipped}명 · 실패 {result.counts.failed}명 · 이 요청 등록 확인 {result.counts.registered}명
-      <div className="mt-2 flex flex-wrap gap-4"><Link to="/firebase-admin/staff-submission-status">CPR 통합 이수현황</Link><Link to={`/firebase-admin/trainings/${encodeURIComponent(result.eventId)}/attendance`}>이 교육 관리자 등록 원본</Link></div>
+      <div className="mt-2 flex flex-wrap gap-4"><Link to="/firebase-admin/staff-submission-status?task=cpr-training-2026">CPR 통합 이수현황</Link><Link to={`/firebase-admin/trainings/${encodeURIComponent(result.eventId)}/attendance`}>이 교육 관리자 등록 원본</Link></div>
       {!result.counts.failed && <button className={`${button} mt-3`} disabled={working} onClick={startAnother}>다른 교육·명단 새로 등록</button>}
     </div>}
     {rows.length>0 && <div className="max-h-80 overflow-auto"><table className="w-full text-left text-sm"><thead><tr><th>교직원</th><th>처리 결과</th><th>확인 내용</th></tr></thead><tbody>{rows.map(row=><tr key={row.staffId} className="border-t"><td className="p-2">{row.name} · {row.staffId}</td><td>{row.outcome === "success" ? "성공" : row.outcome === "failed" ? "실패" : row.outcome === "skipped" ? "건너뜀" : "미리보기"}</td><td>{reasonLabels[row.reason] || "확인 필요"}</td></tr>)}</tbody></table></div>}

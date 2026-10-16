@@ -45,7 +45,7 @@ with sync_playwright() as p:
  expect(panel.get_by_text('이전 처리 요청을 복구했습니다.',exact=False)).to_be_visible();review(panel)
  panel.get_by_label('실제 참석 명부 최종 확인').check();panel.get_by_role('button',name='동일 요청 결과 다시 확인').click()
  expect(panel.get_by_text('성공 0명 · 건너뜀 80명 · 실패 0명',exact=False)).to_be_visible(timeout=20000)
- panel.get_by_role('link',name='CPR 통합 이수현황').is_visible()
+ expect(panel.get_by_role('link',name='CPR 통합 이수현황')).to_have_attribute('href','/firebase-admin/staff-submission-status?task=cpr-training-2026')
  assert control(ctx,'state')['entries']==80
  listing=ctx.request.get(BASE+'/api/firebase/staff-directory?resource=training-admin-list',headers={'Authorization':'Bearer synthetic-admin'}).json()
  counts=next(iter(listing['summaries'].values()))['counts'];assert counts['manual']==80 and counts['signed']==0 and counts['target']==80

@@ -89,3 +89,24 @@ tools/browser/manualCprServer.mjs
 tools/browser/check_manual_cpr.py
 docs/CPR_MANUAL_GROUP_2026.md
 ```
+
+## 재요청 점검 및 실제 로컬 Admin SDK 보강 검증
+
+시작 HEAD `67e4fbec50386ced063b81f59870b44abf596b74`, working tree clean에서 기존 구현을 확인했다. 요청한 일괄 등록 기능은 이미 포함되어 있어 중복 구현하지 않았다. 업무 코드는 저장 결과의 CPR 현황 링크가 기본 TB 업무를 열지 않도록 `?task=cpr-training-2026`을 명시한 것만 수정했다. 등록 원장·서버 권한·증빙·이수 보호 계약은 그대로 유지한다.
+
+기존 Chromium 100명/80명 검사에 정확한 CPR 현황 링크 검증을 추가했다. PC·모바일에서 검색/부서별 범위 선택/미참석자 제외, 미리보기/최종 확인, 79+1 부분 실패/재시도, 중복 클릭/동일 요청 재전송, 새로고침 복구, 기존 개인·단체 완료 보존, 통계, 일반 교직원 차단을 다시 실행한다.
+
+기존 Emulator 권한 행렬 끝에 실제 `firebase-admin/firestore` transaction을 사용하는 로컬 통합 검사 1개를 추가했다. 기존 합성 fixture의 100명과 assignment/readiness marker만 demo-project에 seed한다. 이 marker는 테스트용 합성 자료이며 운영 migration이나 readiness 변경을 뜻하지 않는다.
+
+- 기존 runner의 checksum 검증 JAR, demo-project ID 고정, loopback 주소 검사를 사용한다.
+- credential이 없는 임시 HOME/환경에서 실행하며 서비스 계정이나 실계정은 사용하지 않는다. 선택적 ADC/universe metadata 탐색을 막기 위해 테스트 Firestore client의 universeDomain을 명시한다. SDK endpoint는 기존 Emulator 환경변수로 loopback에 고정된다.
+- 실제 server `runManualCprBatch`, 기존 event store/signature ledger/CPR projection을 사용한다. mock DB로 성공을 반환하는 검사가 아니다.
+- 미리보기 80명, 쓰기 0을 확인한다. 한 명의 projection write를 transaction 안에서 의도적으로 실패시켜 원본/잠금/현황이 함께 rollback되는지 검사한다.
+- 79명 성공/1명 실패 후 같은 요청을 동시에 두 번 재시도한다. 새 원본은 합계 1개만 추가되고 최종 완료/원본은 80개, 이벤트는 1개, 미참석자 기록은 0개여야 한다.
+- 각 실제 원본의 감사 history 1개, 관리자/근거 보존, 빈 본인 서명 시각/서명 파일을 검사한다.
+- Admin SDK는 Rules를 우회한다. 이 새 검사만으로 API 인증·Rules 권한을 검증했다고 해석하지 않으며 기존 서버 mock와 220개 Rules 권한 검사를 함께 유지한다.
+- runner 종료 시 client/Emulator/임시 데이터는 정리한다. 실제 Firebase·Sheets·Drive·GAS 호출, 인덱스/Rules 배포, commit/push는 하지 않는다.
+
+이번 변경 파일은 `src/components/ManualCprBatchPanel.jsx`, `tools/browser/check_manual_cpr.py`, `tools/firestore-rules/matrix.mjs`, 이 문서의 4개다. Live QA/실제 원장 준비 상태/실프로젝트 인덱스/운영 처리 시간 및 비용은 여전히 미검증이다. 기존 명부 출력 최대 95명 제한도 유지한다.
+
+재실행 결과: 일반 테스트 **652/652 PASS**, 기존 Rules 220개 + 실제 로컬 Admin SDK 일괄 등록 통합 1개 = Emulator **221/221 PASS**, 실제 Chromium PC·모바일 **4/4 PASS**, 일반/명시적 production 빌드 PASS, `git diff --check` PASS. 최종 Emulator 실행에는 MetadataLookup 경고가 없었다. Checkpoint 준비 YES이며 실제 운영 사용/배포 승인은 별개다.

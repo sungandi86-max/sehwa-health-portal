@@ -314,3 +314,92 @@ test("paged admin receipt queries and CPR transaction retain existing role bound
   }));
   await assertFails(updateDoc(doc(client(staff), "staff_submission_status_qa", `${staff.staffId}_cpr-training-2026`), { cprProjectionRevision: 2 }));
 });
+
+test("real local Admin SDK: 100 synthetic staff / 80 offline CPR attendees / rollback and concurrent recovery", async () => {
+  // This exercises the real server transaction, NOT an Admin SDK permission test:
+  // Admin bypasses Rules; the existing role matrix verifies the client boundary.
+  requireLocalTarget(PROJECT_ID, process.env.FIRESTORE_EMULATOR_HOST);
+  assert.ok(!process.env.GOOGLE_APPLICATION_CREDENTIALS);
+  assert.ok(!Object.keys(process.env).some(key => key.startsWith("FIREBASE_SERVICE_ACCOUNT")));
+  const { initializeApp, deleteApp } = await import("firebase-admin/app");
+  const { getFirestore } = await import("firebase-admin/firestore");
+  const { runManualCprBatch, MANUAL_CPR_MODE } = await import("../../server/lib/cprManualBatch.js");
+  const { TrainingEventStore } = await import("../../server/lib/trainingEventStore.js");
+  const { signatureKey } = await import("../../server/lib/trainingCenterPhase2.js");
+  const { manualCprFixture } = await import("../../tests/fixtures/manualCprDb.js");
+  await environment.clearFirestore();
+  const app = initializeApp({ projectId: PROJECT_ID }, "local-manual-cpr-integration");
+  const database = getFirestore(app);
+  // Avoid optional ADC/universe metadata discovery; gRPC remains insecure loopback only.
+  database.settings({ universeDomain: "googleapis.com" });
+  try {
+    assert.equal(database.projectId, PROJECT_ID);
+    const fixture = manualCprFixture();
+    assert.equal(fixture.directory.length, 100);
+    const seedBatch = database.batch();
+    for (const [path, data] of fixture.db.records) seedBatch.set(database.doc(path), data);
+    await seedBatch.commit();
+    let failProjectionOnce = true;
+    const failedStatus = "staff_submission_status_qa/S010_cpr-training-2026";
+    const db = {
+      app: database.app, projectId: database.projectId,
+      collection: (...args) => database.collection(...args),
+      runTransaction: callback => database.runTransaction(transaction => callback({
+        get: (...args) => transaction.get(...args),
+        create: (...args) => transaction.create(...args),
+        set: (ref, ...args) => {
+          const result = transaction.set(ref, ...args);
+          if (ref.path === failedStatus && failProjectionOnce) {
+            failProjectionOnce = false;
+            throw new Error("synthetic transaction rollback before commit");
+          }
+          return result;
+        },
+      })),
+    };
+    const context = { APP_ENV: "qa", QA_FIREBASE_PROJECT_ID: PROJECT_ID };
+    const events = new TrainingEventStore({ database: () => db, context: () => context });
+    const now = new Date("2026-10-16T06:00:00Z");
+    const input = { requestId: "emulator-offline-cpr-2026", schoolYear: 2026,
+      title: "합성 학교 단체 CPR 교육", date: "2026-05-20", startTime: "13:00", endTime: "15:00",
+      basis: "합성 오프라인 참석 명부 대조 확인", staffIds: fixture.directory.slice(0, 80).map(person => person.staffId) };
+    const call = async (body, commit = false) => runManualCprBatch({ db, context, actor: "S000",
+      directory: fixture.directory, input: body, commit, now, events: await events.listEvents() });
+    const preview = await call(input);
+    assert.equal(preview.rows.length, 80);
+    assert.equal((await database.collection("training_events_qa").get()).size, 0);
+    assert.equal((await database.collection("staff_submission_status_qa").get()).size, 0);
+    const confirmed = { ...input, reviewFingerprint: preview.reviewFingerprint, confirmedOfflineRoster: true };
+    const first = await call(confirmed, true);
+    assert.deepEqual(first.counts, { success: 79, skipped: 0, failed: 1, registered: 79 });
+    assert.equal((await database.doc(failedStatus).get()).exists, false);
+    assert.equal((await database.doc(`training_signature_ledger_qa/${signatureKey(first.eventId, "S010")}`).get()).exists, false);
+    const retries = await Promise.all([call(confirmed, true), call(confirmed, true)]);
+    assert.equal(retries.reduce((sum, result) => sum + result.counts.success, 0), 1);
+    assert.ok(retries.every(result => result.counts.failed === 0 && result.counts.registered === 80));
+    const statuses = await database.collection("staff_submission_status_qa").get();
+    assert.equal(statuses.size, 80);
+    assert.ok(statuses.docs.every(doc => doc.data().status === "completed" && doc.data().training.eventId === first.eventId));
+    assert.equal((await database.doc("staff_submission_status_qa/S080_cpr-training-2026").get()).exists, false);
+    assert.equal((await database.collection("training_events_qa").get()).size, 1);
+    const pairs = (await database.collection("training_signature_ledger_qa").get()).docs.filter(doc => doc.id !== "__migration");
+    assert.equal(pairs.length, 80);
+    for (const pair of pairs) {
+      const originals = await pair.ref.collection("signatures").get();
+      assert.equal(originals.size, 1);
+      const original = originals.docs[0].data();
+      assert.equal(original.sourceType, MANUAL_CPR_MODE);
+      assert.equal(original.signedAt, "");
+      assert.equal(original.signatureFileId, null);
+      assert.equal(original.manualEvidence.actor, "S000");
+      assert.equal(original.manualEvidence.basis, input.basis);
+      assert.equal((await originals.docs[0].ref.collection("history").get()).size, 1);
+    }
+    evidence.push({ scenario: "manual-cpr-real-local-admin-transaction", project: PROJECT_ID,
+      syntheticStaff: 100, attendees: 80, firstSuccess: 79, firstFailed: 1,
+      newOriginalsAfterConcurrentRetry: 1, totalOriginals: 80, fakeSignatures: 0, liveResources: 0 });
+  } finally {
+    await database.terminate();
+    await deleteApp(app);
+  }
+});
