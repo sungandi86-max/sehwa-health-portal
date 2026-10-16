@@ -18,35 +18,49 @@ service cloud.firestore {
       return uid + "_2026_2";
     }
 
-    function hasCurrentHealthTeacherAssignment() {
+    // The path is fixed to the current term. Stored identity/term fields must
+    // match it exactly; missing fields and string/number coercion are rejected.
+    function hasCurrentAssignmentIntegrity() {
       return signedIn()
         && exists(currentAssignmentPath(request.auth.uid))
+        && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["uid", "schoolYear", "semester"])
+        && get(currentAssignmentPath(request.auth.uid)).data.uid is string
+        && get(currentAssignmentPath(request.auth.uid)).data.uid == request.auth.uid
+        && get(currentAssignmentPath(request.auth.uid)).data.schoolYear is number
+        && get(currentAssignmentPath(request.auth.uid)).data.schoolYear == 2026
+        && get(currentAssignmentPath(request.auth.uid)).data.semester is number
+        && get(currentAssignmentPath(request.auth.uid)).data.semester == 2;
+    }
+
+    function hasCurrentHealthTeacherAssignment() {
+      return hasCurrentAssignmentIntegrity()
         && get(currentAssignmentPath(request.auth.uid)).data.active == true
         && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles"])
+        && get(currentAssignmentPath(request.auth.uid)).data.roles is list
         && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["health_teacher"]);
     }
 
     function hasCurrentHealthTeacherOrAdminAssignment() {
-      return signedIn()
-        && exists(currentAssignmentPath(request.auth.uid))
+      return hasCurrentAssignmentIntegrity()
         && get(currentAssignmentPath(request.auth.uid)).data.active == true
         && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles"])
+        && get(currentAssignmentPath(request.auth.uid)).data.roles is list
         && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["health_teacher", "admin"]);
     }
 
     function hasCurrentStudentCarePublicAssignment() {
-      return signedIn()
-        && exists(currentAssignmentPath(request.auth.uid))
+      return hasCurrentAssignmentIntegrity()
         && get(currentAssignmentPath(request.auth.uid)).data.active == true
         && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles"])
+        && get(currentAssignmentPath(request.auth.uid)).data.roles is list
         && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["staff", "homeroom", "health_teacher", "admin"]);
     }
 
     function hasCurrentHomeroomAssignment() {
-      return signedIn()
-        && exists(currentAssignmentPath(request.auth.uid))
+      return hasCurrentAssignmentIntegrity()
         && get(currentAssignmentPath(request.auth.uid)).data.active == true
         && get(currentAssignmentPath(request.auth.uid)).data.keys().hasAll(["roles", "grade", "classNo"])
+        && get(currentAssignmentPath(request.auth.uid)).data.roles is list
         && get(currentAssignmentPath(request.auth.uid)).data.roles.hasAny(["homeroom"]);
     }
 
@@ -462,6 +476,7 @@ service cloud.firestore {
 
       function isValidCprSubmission() {
         return request.resource.data.itemId == "cpr"
+          && hasCurrentStudentCarePublicAssignment()
           && request.resource.data.keys().hasOnly([
             "itemId",
             "staffId",
@@ -480,6 +495,7 @@ service cloud.firestore {
 
       function isValidTbSubmission() {
         return request.resource.data.itemId == "tb"
+          && hasCurrentAssignmentIntegrity()
           && request.resource.data.keys().hasOnly([
             "itemId",
             "staffId",
