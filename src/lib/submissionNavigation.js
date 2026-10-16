@@ -45,3 +45,22 @@ export function matchesTbReviewEvidence(item, evidence, schoolYear, context = nu
     (!context || (item.staffId === context.staffId && schoolYear === context.schoolYear &&
       evidence.submissionId === context.submissionId && (!context.screeningType || evidence.documentType === context.screeningType)));
 }
+
+export function screeningPanelContext(input) {
+  const params = input instanceof URLSearchParams ? input : new URLSearchParams(input);
+  if (params.has('submissionId')) {
+    const reviewContext = tbReviewContext(params);
+    return reviewContext ? {reviewContext,focusedStaffId:reviewContext.staffId,schoolYear:reviewContext.schoolYear} : null;
+  }
+  const staffId = params.get('staffId') || '';
+  const year = params.get('schoolYear') ?? String(CURRENT_SCHOOL_YEAR);
+  if ((params.has('staffId') && !identifier(staffId)) || !/^20\d{2}$/.test(year)) return null;
+  return {reviewContext:null,focusedStaffId:staffId,schoolYear:Number(year)};
+}
+
+export function adminStaffFilters(input) {
+  const params = input instanceof URLSearchParams ? input : new URLSearchParams(input);
+  return {status:params.get('filterStatus') || (params.has('staffId') || params.has('task') ? 'all' : 'incomplete'),
+    department:params.get('department') || 'all',position:params.get('position') || 'all',
+    screeningType:params.get('screeningTypeFilter') || 'all',cprMethod:params.get('cprMethod') || 'all',search:params.get('search') || ''};
+}

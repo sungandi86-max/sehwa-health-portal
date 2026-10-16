@@ -93,3 +93,31 @@ tools/browser/fixtureFirebase.js
 tools/browser/serve.mjs
 tools/browser/submissionFixture.js
 ```
+
+## f113122 기준 최종 동선 보완
+
+기존 접수 카드의 TB 인라인 확인·무효, 교직원 업무현황 왕복 링크, CPR 일괄 등록 진입점,
+유효 QR 출석 및 출석 완료 후 내 이수현황 링크를 재사용한다. 서버 처리와 원장은 변경하지 않는다.
+
+- 이전: 교직원 업무현황 링크는 staffId·학년도를 전달해도 연도별 검진 패널이 전체 명단을 표시해 재검색이 필요했다.
+  이후: 접수 문맥이 없는 교직원 링크에서도 정확한 staffId·학년도로 패널을 좁힌다.
+  접수 문맥이 있는 경우 submissionId·자료유형까지 기존 검증을 유지하며, 잘못된 문맥은 다른 대상/학년도로 대체하지 않는다.
+- 이전: 같은 화면에서 URL·뒤로가기 이동 시 로컬 필터 상태가 남거나 URL을 덮어쓸 수 있었다.
+  이후: 검색·상태·업무 필터의 단일 기준을 URL로 통일해 직접 접근·새로고침·뒤로가기에 복원한다.
+- CPR 통합 현황 직접 링크는 기본적으로 전체 상태를 보여 완료된 대상도 숨기지 않는다.
+  사용자가 업무 카드를 직접 선택할 때의 기존 기본 상태 필터는 유지한다.
+- 업무 전체 집계와 선택 교직원/필터 명단, 검진 패널 전체 조회 인원과 표시 인원을 구분한다.
+- 미등록 업무·학년도 링크를 다른 업무로 조용히 대체하지 않는다.
+
+이 변경은 UI 조회 문맥만 지정한다. canonical staffId와 증빙 일치·권한 검증,
+TB transaction/confirmationHistory·무효 계약, CPR 원본/projection 복구는 기존 코드 그대로다.
+QA/Preview의 운영 TB 확인·무효 API 차단도 유지한다.
+새 쿼리·전체 다운로드·실시간 구독·Rules·인덱스·메뉴·운영 GAS 변경은 없다.
+페이지 커서는 URL에 저장하지 않으므로 화면 재진입 시 첫 페이지부터 조회하는 기존 제한은 남는다.
+
+검증: 일반 테스트 654/654, Emulator 221/221, 관리자 PC·모바일 Chromium synthetic 9/9,
+제출·페이지네이션 Chromium 7/7, CPR 일괄 등록 Chromium 4/4, 기존 권한·교육 Chromium 53/53 및 추가 회귀 7/7,
+총 Chromium 80/80, 일반/production 명시 빌드 PASS.
+lint/typecheck는 미정의로 N/A다. 브라우저 SDK/HTTP는 합성 mock이고 Emulator는 loopback demo 프로젝트다.
+실제 Firebase 로그인·Vercel Preview·Drive 증빙 열람·운영 TB 완료 처리는 검증하지 않았다.
+실제 외부 자원 접근·commit·push·배포는 수행하지 않는다.

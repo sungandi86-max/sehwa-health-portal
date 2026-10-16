@@ -17,6 +17,7 @@ with sync_playwright() as p:
    qs=parse_qs(urlparse(url).query);resource=qs.get('resource',[''])[0]
    if resource=='health-screening-types':
     year=int(qs.get('schoolYear',['2026'])[0]);body={'ok':True,'items':[{'staffId':'S0','name':'합성 TB 대상','schoolYear':year,'screeningType':'nhis','revision':1,'selfChoice':{'screeningType':'nhis'},'workflow':{'completed':state['completed'],'evidence':[{'staffId':'S0','schoolYear':year,'submissionId':'tb-exact','documentType':'공단 확인서','reviewState':state['review'],'checkupDate':'2026-10-01','evidenceFiles':[{'fileId':'SYNTHETIC_FILE_ONLY','fileName':'합성 확인서.pdf'}]}],'status':{'revision':state['revision']}}}]}
+    body['items'].append({'staffId':'S1','name':'다른 합성 교직원','schoolYear':year,'screeningType':'nhis','revision':1})
    elif resource=='tb-screening-workflow':
     assert port==4180,'QA must never invoke production TB mutation';assert r.request.method=='POST'
     value=r.request.post_data_json;assert value['staffId']=='S0' and value['schoolYear']==2026 and value['submissionId']=='tb-exact' and value['expectedRevision']==state['revision']
@@ -45,7 +46,7 @@ with sync_playwright() as p:
  page.get_by_role('link',name='이전 현황으로 돌아가기',exact=True).click()
  expect(page.get_by_placeholder('이름, 이메일, 보직 검색')).to_have_value('u00')
  page.get_by_role('link',name='제출 보기',exact=True).click();page.get_by_role('link',name='이 교직원 업무현황',exact=True).click()
- assert parse_qs(urlparse(page.url).query)['staffId']==['S0'];expect(page.get_by_text('선택 교직원 S0',exact=False)).to_be_visible()
+ assert parse_qs(urlparse(page.url).query)['staffId']==['S0'];expect(page.get_by_text('선택 교직원 S0 · 2026학년도 요청',exact=False)).to_be_visible()
  page.get_by_role('link',name='정확한 접수자료 확인',exact=True).click();expect(page.get_by_role('heading',name='개별 CPR 접수',exact=True)).to_be_visible()
  results.append('A PC exact receipt, staff/task context and search-preserving round trip')
  page.goto(base+'/firebase-admin/submissions?submissionId=tb-exact')
@@ -62,6 +63,20 @@ with sync_playwright() as p:
  page.get_by_role('link',name='CPR 통합 이수현황',exact=True).first.click()
  assert parse_qs(urlparse(page.url).query)['task']==['cpr-training-2026']
  results.append('C discoverable existing CPR batch registration and integrated completion view')
+ expect(page.get_by_label('상태 필터',exact=True)).to_have_value('all')
+ page.goto(base+'/firebase-admin/staff-submission-status?role=admin&audit=1&staffId=S0&schoolYear=2026&task=cpr-training-2026')
+ expect(page.get_by_text('표시 1명 · 선택 교직원 S0',exact=False)).to_be_visible()
+ expect(page.get_by_role('table').get_by_text('다른 합성 교직원',exact=True)).to_have_count(0)
+ page.evaluate("history.pushState({},'', '?role=admin&audit=1&staffId=S1&schoolYear=2026&task=cpr-training-2026&filterStatus=completed');dispatchEvent(new PopStateEvent('popstate'))")
+ expect(page.get_by_label('상태 필터',exact=True)).to_have_value('completed')
+ expect(page.get_by_text('표시 1명 · 선택 교직원 S1',exact=False)).to_be_visible()
+ page.reload();expect(page.get_by_text('표시 1명 · 선택 교직원 S1',exact=False)).to_be_visible()
+ page.goto(base+'/firebase-admin/submission-status?role=admin&audit=1&item=cpr&search=u00')
+ page.evaluate("history.pushState({},'', '?role=admin&audit=1&item=cpr&search=u01');dispatchEvent(new PopStateEvent('popstate'))")
+ expect(page.get_by_placeholder('이름, 이메일, 보직 검색')).to_have_value('u01')
+ page.go_back();expect(page.get_by_placeholder('이름, 이메일, 보직 검색')).to_have_value('u00')
+ results.append('G PC focused staff panel, completed CPR visibility and SPA/back/reload query restoration')
+
  page.goto(base+'/?role=admin')
  header=page.get_by_role('navigation',name='주요 메뉴')
  titles=header.get_by_role('button').all_text_contents();assert len(titles)==8
@@ -73,6 +88,15 @@ with sync_playwright() as p:
  results.append('shared home/header service names and active nested training location; no challenge bypass')
  close(ctx,state)
  base,ctx,page,state=session(mobile=True)
+
+ page.goto(base+'/firebase-admin/staff-submission-status?role=admin&audit=1&staffId=S0&schoolYear=2026&task=cpr-training-2026')
+ expect(page.get_by_text('표시 1명 · 선택 교직원 S0',exact=False)).to_be_visible()
+ expect(page.get_by_role('table').get_by_text('다른 합성 교직원',exact=True)).to_have_count(0)
+ page.goto(base+'/firebase-admin/staff-submission-status?role=admin&audit=1&submissionId=tb-exact&schoolYear=2026')
+ expect(page.get_by_text('검진 연결 정보가 올바르지 않습니다.',exact=False)).to_be_visible()
+ expect(page.get_by_role('button',name='확인 완료',exact=True)).to_have_count(0)
+ assert not state['writes']
+ results.append('H mobile focused TB panel and malformed receipt context rejection without mutation')
  page.goto(base+'/training/attendance/UX-CPR?role=staff&challenge=synthetic')
  expect(page.get_by_label('전자서명 입력 영역',exact=True)).to_be_visible()
  expect(page.get_by_role('link',name='대시보드로',exact=True)).to_have_count(0)

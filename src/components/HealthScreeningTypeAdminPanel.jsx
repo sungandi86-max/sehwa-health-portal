@@ -29,7 +29,7 @@ function RecordDetails({ item }) {
   </div>;
 }
 
-export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURRENT_SCHOOL_YEAR, reviewContext = null, onChange }) {
+export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURRENT_SCHOOL_YEAR, reviewContext = null, focusedStaffId = "", onChange }) {
   const id = useId();
   const dialog = useRef(null);
   const opener = useRef(null);
@@ -60,11 +60,11 @@ export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURR
     if (editing && !dialog.current.open) dialog.current.showModal();
   }, [editing]);
   const visible = useMemo(() => items.filter((item) => {
-    if (reviewContext && item.staffId !== reviewContext.staffId) return false;
+    if ((reviewContext?.staffId || focusedStaffId) && item.staffId !== (reviewContext?.staffId || focusedStaffId)) return false;
     const matches = filter === "all" || (filter === "unconfirmed" ? !hasSelfScreeningConfirmation(item) : item.screeningType === filter);
     const query = search.trim().toLocaleLowerCase();
     return matches && `${item.name || ""} ${item.department || ""} ${item.position || ""}`.toLocaleLowerCase().includes(query);
-  }), [items, filter, search, reviewContext]);
+  }), [items, filter, search, reviewContext, focusedStaffId]);
   function open(item, event) {
     if (!canEdit) return;
     opener.current = event.currentTarget; setEditing(item); setChoice(item.screeningType || ""); setSaveError(""); setConflict(false);
@@ -115,7 +115,8 @@ export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURR
   return <section className="bogunon-panel p-4 text-sm text-[#102047]" aria-labelledby={`${id}-heading`}>
     {isQaScreeningPreview() && <p role="status" className="mb-3 text-sm">QA 검진 유형 화면입니다. 운영 증빙 조회·확인·무효 API는 활성화되지 않습니다.</p>}
     {reviewContext && <p className="mb-3 text-sm">접수번호 {reviewContext.submissionId} · 교직원 {reviewContext.staffId} · {reviewContext.schoolYear}년 · 자료유형 {reviewContext.screeningType || "미지정"}. URL은 조회 위치만 지정하며 처리 권한과 자료 일치는 서버에서 검증합니다.</p>}
-    <div className="flex flex-wrap items-center justify-between gap-2"><h3 id={`${id}-heading`} className="text-base font-semibold">연도별 건강검진 유형 관리</h3><span className="text-xs text-[#627083]">본인확인 {items.filter(hasSelfScreeningConfirmation).length} / {items.length}명</span></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 id={`${id}-heading`} className="text-base font-semibold">연도별 건강검진 유형 관리</h3><span className="text-xs text-[#627083]">전체 조회 대상 본인확인 {items.filter(hasSelfScreeningConfirmation).length} / {items.length}명</span></div>
+    <p className="mt-2 text-xs text-[#627083]">표시 {visible.length}명 · {(reviewContext?.staffId || focusedStaffId) ? `선택 교직원 ${reviewContext?.staffId || focusedStaffId}` : "전체 교직원"} · 현재 검색·유형 필터 기준</p>
     <div className="mt-3 flex flex-wrap gap-2">
       <label className="flex items-center gap-2">연도<select value={year} disabled={Boolean(reviewing)} onChange={(event) => {setNotice("");setYear(Number(event.target.value));}} className="min-h-11 rounded-lg border border-[#DDEAE7] px-2">{years.map((value) => <option key={value} value={value}>{value}년</option>)}</select></label>
       <label className="flex items-center gap-2">유형<select value={filter} onChange={(event) => setFilter(event.target.value)} className="min-h-11 rounded-lg border border-[#DDEAE7] px-2"><option value="all">전체</option><option value="unconfirmed">본인 미확인</option>{SCREENING_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>

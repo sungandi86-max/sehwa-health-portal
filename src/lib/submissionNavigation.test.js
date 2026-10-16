@@ -30,3 +30,20 @@ test('TB exact review binding rejects other staff, year, receipt and document ty
  for(const patch of [{staffId:'S2'},{schoolYear:2025},{submissionId:'tb-2'},{documentType:'개별 확인서'}])assert.equal(matchesTbReviewEvidence(item,{...evidence,...patch},2026,context),false);
  assert.equal(matchesTbReviewEvidence(item,{...evidence,schoolYear:'2026'},2026,context),false);
 });
+
+test('staff-only screening context keeps staff/year without requiring an unrelated receipt',async()=>{
+ const {screeningPanelContext}=await import('./submissionNavigation.js');
+ assert.deepEqual(screeningPanelContext('staffId=S1&schoolYear=2026'),{reviewContext:null,focusedStaffId:'S1',schoolYear:2026});
+ const exact=screeningPanelContext('staffId=S1&schoolYear=2026&submissionId=tb-1&screeningType=공단');
+ assert.equal(exact.reviewContext.submissionId,'tb-1');assert.equal(exact.reviewContext.screeningType,'공단');
+ for(const query of ['staffId=../S1','staffId=&schoolYear=2026','staffId=S1&schoolYear=bad','submissionId=tb-1&schoolYear=2026'])assert.equal(screeningPanelContext(query),null);
+ assert.equal(screeningPanelContext('').focusedStaffId,'');
+});
+test('URL filters restore task-completion and search context without hiding completed direct-link targets',async()=>{
+ const {adminStaffFilters}=await import('./submissionNavigation.js');
+ assert.equal(adminStaffFilters('').status,'incomplete');
+ assert.equal(adminStaffFilters('task=cpr-training-2026').status,'all');
+ assert.equal(adminStaffFilters('staffId=S1').status,'all');
+ const filters=adminStaffFilters('task=cpr-training-2026&filterStatus=completed&search=synthetic&department=부서&cprMethod=group');
+ assert.equal(filters.status,'completed');assert.equal(filters.search,'synthetic');assert.equal(filters.department,'부서');assert.equal(filters.cprMethod,'group');
+});

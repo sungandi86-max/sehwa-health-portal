@@ -129,27 +129,19 @@ function RosterRow({ row, selectedItem }) {
 
 function FirebaseSubmissionStatusContent({ displayName }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedItem, setSelectedItem] = useState(() => getInitialItem(searchParams.get("item")));
-  const [statusFilter, setStatusFilter] = useState(() => getInitialFilter(searchParams.get("status")));
-  const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
+  const selectedItem = getInitialItem(searchParams.get("item"));
+  const statusFilter = getInitialFilter(searchParams.get("status"));
+  const searchTerm = searchParams.get("search") || "";
+  function changeQuery(key,value) {
+    setSearchParams(current=>{const next=new URLSearchParams(current);if(value)next.set(key,value);else next.delete(key);return next;},{replace:true});
+  }
+  const setSelectedItem = value => changeQuery("item",value);
+  const setStatusFilter = value => changeQuery("status",value);
+  const setSearchTerm = value => changeQuery("search",value);
   const [page, setPage] = useState(0);
   const [cursors, setCursors] = useState([null]);
   const [overview, setOverview] = useState(null);
   const [state, setState] = useState({ status: "idle", message: "" });
-
-  useEffect(() => {
-    const nextItem = getInitialItem(searchParams.get("item"));
-    const nextStatus = getInitialFilter(searchParams.get("status"));
-    setSelectedItem(nextItem);
-    setStatusFilter(nextStatus);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const params = { item: selectedItem };
-    if (statusFilter !== "all") params.status = statusFilter;
-    if (searchTerm) params.search = searchTerm;
-    setSearchParams(params, { replace: true });
-  }, [selectedItem, setSearchParams, statusFilter, searchTerm]);
 
   useEffect(() => {
     let shouldIgnore = false;

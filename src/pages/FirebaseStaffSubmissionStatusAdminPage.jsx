@@ -1,5 +1,5 @@
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { tbReviewContext, submissionReviewHref, withAdminReturn, adminReturnHref } from "../lib/submissionNavigation.js";
+import { screeningPanelContext, adminStaffFilters, submissionReviewHref, withAdminReturn, adminReturnHref } from "../lib/submissionNavigation.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
@@ -235,11 +235,9 @@ function AdminStatusContent({ displayName }) {
   const focusedStaffId = params.get("staffId") || "";
   const returnTo = adminReturnHref(params.get("returnTo"));
   const [overview, setOverview] = useState(null);
-  const [selectedTaskId, setSelectedTaskId] = useState(params.get("task") || "tb-screening-2026");
-  const [filters, setFilters] = useState({ status: params.get("filterStatus") || (params.has("staffId") ? "all" : "incomplete"), department: params.get("department") || "all", position: params.get("position") || "all", screeningType: params.get("screeningTypeFilter") || "all", cprMethod: params.get("cprMethod") || "all", search: params.get("search") || "" });
-  useEffect(()=>{if(params.get("task"))setSelectedTaskId(params.get("task"));},[params]);
+  const selectedTaskId = params.has("task") ? params.get("task") : (overview?.tasks.some(task=>task.taskId === TB_SCREENING_TASK_ID) ? TB_SCREENING_TASK_ID : overview?.tasks[0]?.taskId || TB_SCREENING_TASK_ID);
+  const filters = adminStaffFilters(params);
   function changeFilters(next) {
-    setFilters(next);
     setParams(current=>{const values=new URLSearchParams(current);for(const [key,param] of Object.entries({status:"filterStatus",department:"department",position:"position",screeningType:"screeningTypeFilter",cprMethod:"cprMethod",search:"search"})){
       if(next[key])values.set(param,next[key]);else values.delete(param);
     }return values;},{replace:true});
@@ -254,10 +252,6 @@ function AdminStatusContent({ displayName }) {
       const nextOverview = await getAdminStaffSubmissionStatusOverview();
       if (!shouldApply()) return;
       setOverview(nextOverview);
-      setSelectedTaskId((currentTaskId) => {
-        if (nextOverview.tasks.some((task) => task.taskId === currentTaskId)) return currentTaskId;
-        return nextOverview.tasks[0]?.taskId || "tb-screening-2026";
-      });
       setState({ status: nextOverview.tasks.length ? "success" : "empty", message: "" });
     } catch (error) {
       if (!shouldApply()) return;
@@ -304,6 +298,7 @@ function AdminStatusContent({ displayName }) {
       description="대상 교직원의 업무별 완료 상태입니다. 접수 건수·대상 계정 수와 완료 인원 수는 서로 다릅니다. 개인 이수증과 학교 단체교육 근거를 구분합니다."
       displayName={displayName}
     >
+      <p className="text-sm text-[#627083]">상단 집계는 해당 업무의 전체 조회 대상 기준이며 접수 건수가 아닙니다. 아래 명단은 선택 교직원·검색·상태 필터 기준입니다.</p>
       <nav aria-label="업무현황 연결" className="flex flex-wrap gap-3 text-sm text-[#0D4EA6]">
         {returnTo && <Link className="min-h-11 py-3" to={returnTo}>접수자료로 돌아가기</Link>}
         {focusedStaffId && <Link className="min-h-11 py-3" to={`/firebase-admin/staff-submission-status?task=${encodeURIComponent(selectedTaskId)}`}>전체 교직원 현황</Link>}
@@ -331,9 +326,7 @@ function AdminStatusContent({ displayName }) {
                 task={task}
                 selected={task.taskId === selectedTask.taskId}
                 onSelect={() => {
-                  setSelectedTaskId(task.taskId);
-                  setParams(current=>{const next=new URLSearchParams(current);next.set("task",task.taskId);for(const key of ["filterStatus","department","position","screeningTypeFilter","cprMethod","search"])next.delete(key);return next;});
-                  setFilters((current) => ({ ...current, status: getDefaultStatusFilter(task), department: "all", position: "all", screeningType: "all", cprMethod: "all", search: "" }));
+                  setParams(current=>{const next=new URLSearchParams(current);next.set("task",task.taskId);for(const key of ["filterStatus","department","position","screeningTypeFilter","cprMethod","search"])next.delete(key);next.set("filterStatus",getDefaultStatusFilter(task));return next;});
                 }}
               />
             ))}
@@ -440,6 +433,7 @@ export default function FirebaseStaffSubmissionStatusAdminPage() {
 
 function LinkedScreeningPanel() {
   const [params] = useSearchParams();
-  const context = tbReviewContext(params);
-  return <HealthScreeningTypeAdminPanel key={JSON.stringify(context)} initialSchoolYear={context?.schoolYear} reviewContext={context} />;
+  const context = screeningPanelContext(params);
+  if (!context) return <p role="alert">검진 연결 정보가 올바르지 않습니다. 다른 교직원·학년도로 대신 조회하지 않습니다.</p>;
+  return <HealthScreeningTypeAdminPanel key={JSON.stringify(context)} initialSchoolYear={context.schoolYear} reviewContext={context.reviewContext} focusedStaffId={context.focusedStaffId} />;
 }
