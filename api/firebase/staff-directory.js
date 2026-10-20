@@ -32,6 +32,7 @@ import { handleTbCertificateAuditResource } from "../../server/lib/tbCertificate
 import { handleStudentSubmissionAuditResource } from "../../server/lib/studentSubmissionAuditApi.js";
 import { handleHealthScreeningTypeRequest } from "../../server/lib/healthScreeningTypeApi.js";
 import { handleTbScreeningWorkflowRequest } from "../../server/lib/tbScreeningWorkflowApi.js";
+import { handleSubmissionFileAccessResource } from "../../server/lib/submissionFileAccessApi.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "training_admin", "health_teacher", "admin"];
 
@@ -247,6 +248,9 @@ export async function staffDirectoryHandler(req, res, { context = process.env, t
     }
     if (req.query?.resource === "tb-screening-workflow") {
       return await handleTbScreeningWorkflowRequest(req, res);
+    }
+    if (req.query?.resource === "submission-file") {
+      return await handleSubmissionFileAccessResource(req, res);
     }
 
     if (["training-list", "training-detail"].includes(req.query?.resource)) {

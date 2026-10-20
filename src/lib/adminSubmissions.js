@@ -14,6 +14,7 @@ import {
   getInfectionSubmissionStatus,
 } from "./infectionStatus.js";
 import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
+import { normalizeSubmissionEvidenceFiles } from "../../common/submissionEvidenceFiles.js";
 export { INFECTION_STATUS_LABELS } from "./infectionStatus.js";
 
 const STUDENT_HEALTH_COLLECTION = "student_health_submissions";
@@ -75,6 +76,7 @@ function normalizeStaffSubmission(documentSnapshot) {
     statusLabel: STAFF_STATUS_LABELS[data.status] || data.status || STAFF_STATUS_LABELS.submitted,
     submittedAtMillis,
     submittedAtLabel: formatSubmissionDateTime(data.submittedAt),
+    evidenceFiles: normalizeSubmissionEvidenceFiles(data),
   };
 }
 
