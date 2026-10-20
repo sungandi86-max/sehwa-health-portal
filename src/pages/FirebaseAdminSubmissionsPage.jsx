@@ -6,6 +6,7 @@ import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import HealthScreeningTypeAdminPanel from "../components/HealthScreeningTypeAdminPanel.jsx";
 import { isHealthScreeningTypeEnabledHost } from "../lib/healthScreeningTypes.js";
 import AdminProxySubmissionDialog from "../components/AdminProxySubmissionDialog.jsx";
+import { getAdminSubmissionFileUrl } from "../lib/adminSubmissionFiles.js";
 import {
   INFECTION_STATUS_LABELS,
   INFECTION_STATUS_OPTIONS,
@@ -102,6 +103,7 @@ function DetailRow({ label, value }) {
 
 function StaffSubmissionCard({ item, pendingId, onStatusChange, onRefresh }) {
   const [inlineReview, setInlineReview] = useState(false);
+  const [fileState, setFileState] = useState({ pending: -1, message: "" });
   const reviewHref = tbReviewHref(item);
   const reviewContext = reviewHref ? tbReviewContext(new URL(reviewHref, "https://navigation.invalid").searchParams) : null;
   const workHref = staffWorkHref(item);
@@ -110,6 +112,27 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange, onRefresh }) {
   const submitterName = item.submitter?.displayName || "제출자";
   const submitterEmail = item.submitter?.email || "";
   const isUpdating = pendingId === item.id;
+  const evidenceFiles = item.evidenceFiles || [];
+
+  const openFile = async (fileIndex) => {
+    const preview = window.open("", "_blank");
+    if (!preview) {
+      setFileState({ pending: -1, message: "팝업이 차단되었습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해 주세요." });
+      return;
+    }
+    preview.opener = null;
+    preview.document.title = "첨부파일 여는 중";
+    preview.document.body.textContent = "첨부파일을 확인하고 있습니다.";
+    setFileState({ pending: fileIndex, message: "" });
+    try {
+      const file = await getAdminSubmissionFileUrl(item.id, fileIndex);
+      preview.location.replace(file.url);
+      setFileState({ pending: -1, message: "" });
+    } catch (error) {
+      preview.close();
+      setFileState({ pending: -1, message: error?.message || "첨부파일을 열지 못했습니다." });
+    }
+  };
 
   return (
     <article className="rounded-[28px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.06)]">
@@ -126,21 +149,28 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange, onRefresh }) {
           {submitterEmail && <p className="mt-1 break-all text-sm font-bold text-[#627083]">{submitterEmail}</p>}
           <p className="mt-2 text-xs font-bold text-[#8A96A8]">제출일시 {item.submittedAtLabel}</p>
         </div>
-        {item.file?.driveUrl ? (
-          <a
-            href={item.file.driveUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-2xl bg-[#20A982] px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
-          >
-            제출 파일 보기
-          </a>
+        {evidenceFiles.length ? (
+          <div className="flex max-w-full shrink-0 flex-wrap justify-end gap-2 sm:max-w-[50%]">
+            {evidenceFiles.map((file, index) => (
+              <button
+                key={file.fileId}
+                type="button"
+                disabled={fileState.pending >= 0}
+                onClick={() => openFile(index)}
+                title={file.fileName}
+                className="inline-flex min-h-10 max-w-full items-center justify-center rounded-2xl bg-[#20A982] px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-wait disabled:opacity-60"
+              >
+                <span className="max-w-48 truncate">{evidenceFiles.length > 1 ? `파일 ${index + 1} 보기` : "파일 보기"}</span>
+              </button>
+            ))}
+          </div>
         ) : (
           <span className="inline-flex min-h-10 shrink-0 items-center rounded-2xl bg-[#F7FBF9] px-4 py-2 text-xs font-semibold text-[#8A96A8]">
-            {item.itemId === "recruit" ? "파일 없음" : "파일 링크 없음"}
+            첨부파일 없음
           </span>
         )}
       </div>
+      {fileState.message && <p role="alert" className="mt-3 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-semibold text-[#B42318]">{fileState.message}</p>}
 
       <dl className="mt-5 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-3">
         {item.itemId === "cpr" && (
