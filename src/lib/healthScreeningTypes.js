@@ -34,8 +34,30 @@ export function hasSelfScreeningConfirmation(item) {
   return Boolean(item?.selfChoice);
 }
 
+export function screeningConfirmationBasis(item) {
+  return item?.workflow?.confirmationBasis || (hasSelfScreeningConfirmation(item) ? "self_choice" : "none");
+}
+
+export function hasScreeningConfirmation(item) {
+  return screeningConfirmationBasis(item) !== "none";
+}
+
 export function screeningConfirmationLabel(item) {
-  return hasSelfScreeningConfirmation(item) ? "확인 완료" : "미확인";
+  return hasScreeningConfirmation(item) ? "확인 완료" : "미확인";
+}
+
+export function screeningConfirmationBasisLabel(item) {
+  return {
+    self_choice: "본인 선택 확인",
+    self_submission: "본인 제출 확인",
+    admin_evidence_confirmation: "관리자 증빙 확인 완료",
+    none: "확인 근거 없음",
+  }[screeningConfirmationBasis(item)];
+}
+
+export function screeningSelfChoiceLabel(item) {
+  const value = typeof item?.selfChoice === "string" ? item.selfChoice : item?.selfChoice?.screeningType;
+  return value ? screeningTypeLabel(value) : "선택 기록 없음";
 }
 
 export function screeningSourceLabel(item) {

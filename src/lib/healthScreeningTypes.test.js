@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
-import { SCREENING_TYPE_OPTIONS, HealthScreeningTypeError, canEditHealthScreeningYear, hasSelfScreeningConfirmation, isHealthScreeningTypeQaHost, isHealthScreeningTypeEnabledHost, screeningConfirmationLabel, screeningSelfConfirmationDateLabel, screeningTypeLabel } from "./healthScreeningTypes.js";
+import { SCREENING_TYPE_OPTIONS, HealthScreeningTypeError, canEditHealthScreeningYear, hasScreeningConfirmation, hasSelfScreeningConfirmation, isHealthScreeningTypeQaHost, isHealthScreeningTypeEnabledHost, screeningConfirmationBasisLabel, screeningConfirmationLabel, screeningSelfChoiceLabel, screeningSelfConfirmationDateLabel, screeningTypeLabel } from "./healthScreeningTypes.js";
 
 test("production activation permits only exact production and fixed QA hosts", () => {
   assert.equal(isHealthScreeningTypeEnabledHost("sehwa-health-portal.vercel.app"), true);
@@ -57,6 +57,26 @@ test("admin override retains the original self confirmation", () => {
   assert.equal(screeningConfirmationLabel(item), "확인 완료");
   assert.equal(screeningTypeLabel(item.screeningType), "채용검진");
   assert.equal(screeningTypeLabel(item.selfChoice.screeningType), "공단검진");
+});
+
+test("all screens use the same projected confirmation basis labels", () => {
+  const cases = [
+    ["self_choice", "본인 선택 확인"],
+    ["self_submission", "본인 제출 확인"],
+    ["admin_evidence_confirmation", "관리자 증빙 확인 완료"],
+    ["none", "확인 근거 없음"],
+  ];
+  for (const [confirmationBasis, label] of cases) {
+    const item = { workflow: { confirmationBasis } };
+    assert.equal(screeningConfirmationBasisLabel(item), label);
+    assert.equal(hasScreeningConfirmation(item), confirmationBasis !== "none");
+    assert.equal(screeningConfirmationLabel(item), confirmationBasis === "none" ? "미확인" : "확인 완료");
+  }
+});
+
+test("missing self choice is described as no selection rather than another required confirmation", () => {
+  assert.equal(screeningSelfChoiceLabel({ selfChoice: null }), "선택 기록 없음");
+  assert.equal(screeningSelfChoiceLabel({ selfChoice: { screeningType: "nhis" } }), "공단검진");
 });
 
 test("conflict errors retain status for explicit reconciliation", () => {
