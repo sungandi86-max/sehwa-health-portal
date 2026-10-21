@@ -27,14 +27,20 @@ export const listTrainingTargets = (eventId) => request("training-targets", { pa
 export const saveTrainingTarget = (body) => request("training-target-save", { method: "POST", body });
 export const saveTrainingTargetsBatch = (body) => request("training-targets-batch-save", { method: "POST", body });
 export const createTrainingQr = (params) => request("training-qr", { params });
+export const listTrainingGroupCandidates = () => request("training-group-candidates");
+export const listTrainingGroups = () => request("training-group-list");
+export const saveTrainingGroup = (body) => request("training-group-save", { method: "POST", body });
+export const approveTrainingGroupEvent = (body) => request("training-group-approve", { method: "POST", body });
+export const createTrainingGroupQr = (groupId) => request("training-group-qr", { params: { groupId } });
+export const transferTrainingOwner = (body) => request("training-owner-transfer", { method: "POST", body });
 export const checkTrainingAttendance = (params) => request("training-attendance-check", { params });
 export const submitTrainingAttendance = (body) => request("training-attendance-submit", { method: "POST", body });
 export const getTrainingAttendanceSummary = (eventId) => request("training-attendance-summary", { params: { eventId } });
 export const correctTrainingAttendance = (body) => request("training-attendance-correct", { method: "POST", body });
 export const getTrainingFinalSheet = (eventId) => request("training-final-sheet", { params: { eventId } });
 
-export async function downloadTrainingFinalSheet(eventId, filename) {
-  const blob = await request("training-final-sheet", { params: { eventId, download: "pdf" }, download: true });
+async function downloadTrainingFile(eventId, filename, format) {
+  const blob = await request("training-final-sheet", { params: { eventId, download: format }, download: true });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -44,6 +50,9 @@ export async function downloadTrainingFinalSheet(eventId, filename) {
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+export const downloadTrainingFinalSheet = (eventId, filename) => downloadTrainingFile(eventId, filename, "pdf");
+export const downloadTrainingFinalSheetXlsx = (eventId, filename) => downloadTrainingFile(eventId, filename, "xlsx");
 
 export const previewManualCprBatch = (body) => request("training-manual-cpr-preview", {method:"POST",body});
 export const commitManualCprBatch = (body) => request("training-manual-cpr-commit", {method:"POST",body});

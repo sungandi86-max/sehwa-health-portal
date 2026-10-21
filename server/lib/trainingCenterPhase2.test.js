@@ -8,7 +8,7 @@ import { createTrainingPhase2Handler } from "./trainingCenterPhase2Api.js";
 import { AttendanceConflictError, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { listAttendanceRecoveryCandidates } from "./trainingAttendanceRecovery.js";
 import { managedCellUpdates, TrainingCenterStore } from "./trainingCenterStore.js";
-import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
+import { attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, parseTrainingSource, readQrChallenge, resolveEventsByIds, SIGNATURE_HEADERS, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
 import { trainingAbsenceLabel } from "./trainingAbsenceStatus.js";
 import { makeTrainingRosterXlsx } from "./trainingFinalSheet.js";
@@ -34,6 +34,21 @@ const source = () => ({
   trainings: [TRAINING_RUNTIME_HEADERS, event("EVENT-1"), event("EVENT-2")],
   targets: [TARGET_HEADERS, target("EVENT-1", "QA001"), target("EVENT-2", "QA001"), target("EVENT-1", "QA002")],
   signatures: [SIGNATURE_HEADERS],
+});
+
+test("managed bundle QR binds the exact revision and event digest", () => {
+  const token = issueQrChallenge({ eventGroupId: "GROUP-1", groupRevision: 4, groupDigest: "a".repeat(64), secret, now: now().getTime() });
+  assert.equal(verifyQrChallenge(token, { eventGroupId: "GROUP-1", groupRevision: 4, groupDigest: "a".repeat(64), secret, now: now().getTime() }), true);
+  assert.equal(verifyQrChallenge(token, { eventGroupId: "GROUP-1", groupRevision: 5, groupDigest: "b".repeat(64), secret, now: now().getTime() }), false);
+  assert.deepEqual(readQrChallenge(token, { secret, now: now().getTime() }), {
+    eventId: "", eventGroupId: "GROUP-1", groupRevision: 4, groupDigest: "a".repeat(64),
+  });
+});
+
+test("managed bundle resolves only the event IDs fixed in its document", () => {
+  const parsed = parseTrainingSource(source());
+  assert.deepEqual(resolveEventsByIds(parsed, ["EVENT-2", "EVENT-1"]).map((item) => item.eventId), ["EVENT-1", "EVENT-2"]);
+  assert.deepEqual(resolveEventsByIds(parsed, ["EVENT-1", "MISSING"]), []);
 });
 const directory = [{ staffId: "QA001", name: "테스트 교직원", department: "보건실", position: "교사", employmentStatus: "재직" },
   { staffId: "QA002", name: "다른 교직원", department: "교무실", position: "교사", employmentStatus: "재직" }];
@@ -219,7 +234,7 @@ function harness(options = {}) {
     } }),
     db: () => db,
     directory: options.directory || (async () => ({ directory, stats: { duplicateStaffIds: 0 } })),
-    store, rosterPdf: options.rosterPdf || { render: async () => Buffer.from("%PDF-test") },
+    store, groups: options.groups, rosterPdf: options.rosterPdf || { render: async () => Buffer.from("%PDF-test") },
     secret: () => options.secret ?? secret, now: options.now || now,
     ...(options.saveCprGroupStatus ? { saveCprGroupStatus: options.saveCprGroupStatus } : {}),
     ...(options.reconcileCprStatus ? { reconcileCprStatus: options.reconcileCprStatus } : {}),
@@ -278,11 +293,130 @@ test("training admins can manage only owned education while top-level admins ret
   assert.equal((await call("training-attendance-summary", { token: "training-b", query: { eventId: "EVENT-1" } })).statusCode, 403);
   assert.equal((await call("training-final-sheet", { token: "training-a", query: { eventId: "EVENT-1", download: "pdf" } })).statusCode, 200);
   assert.equal((await call("training-final-sheet", { token: "training-a", query: { eventId: "EVENT-2", download: "pdf" } })).statusCode, 403);
+  assert.equal((await call("training-final-sheet", { token: "training-b", query: { eventId: "EVENT-2", download: "xlsx" } })).statusCode, 200);
+  assert.equal((await call("training-final-sheet", { token: "training-b", query: { eventId: "EVENT-1", download: "xlsx" } })).statusCode, 403);
   assert.equal((await call("training-qr", { token: "training-a", query: { eventId: "EVENT-1" } })).statusCode, 200);
   assert.equal((await call("training-qr", { token: "training-a", query: { eventId: "EVENT-2" } })).statusCode, 403);
   assert.equal((await call("training-qr", { token: "training-a", query: { eventGroupId: "GROUP-1" } })).statusCode, 403);
   assert.equal((await call("training-runtime-preflight", { token: "training-a" })).statusCode, 403);
   assert.equal((await call("training-targets", { query: { eventId: "EVENT-2" } })).statusCode, 200);
+});
+
+test("designated bundle manager issues a revision-bound QR without receiving other event permissions", async () => {
+  const managed = { groupId: "GROUP-MANAGED", name: "부서 공동교육", eventIds: ["EVENT-1", "EVENT-2", "EVENT-3"], managerStaffId: "QA001",
+    revision: 3, digest: "c".repeat(64), status: "ready", ready: true, lockedAt: null,
+    approvals: [{ eventId: "EVENT-1", ownerStaffId: "QA001", approved: true },
+      { eventId: "EVENT-2", ownerStaffId: "QA002", approved: true },
+      { eventId: "EVENT-3", ownerStaffId: "QA003", approved: true }] };
+  const locks = [];
+  const groups = { getGroup: async (id) => id === managed.groupId ? managed : null,
+    beginAttendance: async (id, input) => { locks.push({ action: "begin", id, ...input }); return managed; },
+    completeAttendance: async (id, input) => { locks.push({ action: "complete", id, ...input }); return { ...managed, lockedAt: now().toISOString() }; },
+    releaseAttendance: async (id, input) => { locks.push({ action: "release", id, ...input }); return true; } };
+  const { call, store } = harness({ groups });
+  store.values.trainings.push(event("EVENT-3", { ownerStaffId: "QA003" }));
+  store.values.targets.push(target("EVENT-3", "QA001"));
+  const denied = await call("training-group-qr", { token: "training-b", query: { groupId: managed.groupId } });
+  assert.equal(denied.statusCode, 403);
+  const issued = await call("training-group-qr", { token: "training-a", query: { groupId: managed.groupId } });
+  assert.equal(issued.statusCode, 200);
+  assert.equal(issued.body.group.events.length, 3);
+  const challenge = new URL(`https://example.invalid${issued.body.path}`).searchParams.get("challenge");
+  const checked = await call("training-attendance-check", { token: "staff",
+    query: { eventGroupId: managed.groupId, challenge } });
+  assert.equal(checked.statusCode, 200);
+  assert.equal(checked.body.group.revision, 3);
+  const signed = await call("training-attendance-submit", { token: "staff", method: "POST",
+    body: { eventGroupId: managed.groupId, challenge, signature: `data:image/png;base64,${inkPng().toString("base64")}` } });
+  assert.equal(signed.statusCode, 200);
+  assert.deepEqual(signed.body.eventIds, ["EVENT-1", "EVENT-2", "EVENT-3"]);
+  assert.deepEqual(locks.map((item) => item.action), ["begin", "complete"]);
+  assert.equal(store.calls.uploads, 1);
+  assert.equal(store.values.signatures.slice(-3).every((record) => record[SIGNATURE_HEADERS.indexOf("eventGroupId")] === managed.groupId), true);
+  assert.equal((await call("training-final-sheet", { token: "training-a", query: { eventId: "EVENT-2" } })).statusCode, 403);
+});
+
+test("bundle creation never grants approval for another owner's education", async () => {
+  const inputs = [];
+  const groups = { createGroup: async (input) => { inputs.push(input); return { groupId: "GROUP-NEW" }; }, getGroup: async () => null };
+  const { call } = harness({ groups });
+  const denied = await call("training-group-save", { token: "training-a", method: "POST", body: {
+    name: "부서 공동교육", eventIds: ["EVENT-1", "EVENT-2"], managerStaffId: "QA002",
+  } });
+  assert.equal(denied.statusCode, 403);
+  const result = await call("training-group-save", { token: "training-a", method: "POST", body: {
+    name: "부서 공동교육", eventIds: ["EVENT-1", "EVENT-2"], managerStaffId: "QA001",
+  } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(inputs.length, 1);
+  assert.equal(inputs[0].managerStaffId, "QA001");
+  assert.equal("approveAll" in inputs[0], false);
+});
+
+test("only a top-level administrator can transfer an education owner", async () => {
+  const transfers = [];
+  const store = fakeStore();
+  store.events = { transferOwner: async (eventId, input) => { transfers.push({ eventId, ...input }); return { eventId, ownerStaffId: input.newOwnerStaffId }; } };
+  const { call } = harness({ store });
+  const body = { eventId: "EVENT-1", expectedOwnerStaffId: "QA001", newOwnerStaffId: "QA002", reason: "담당 부서 변경" };
+  assert.equal((await call("training-owner-transfer", { token: "training-a", method: "POST", body })).statusCode, 403);
+  const allowed = await call("training-owner-transfer", { method: "POST", body });
+  assert.equal(allowed.statusCode, 200);
+  assert.equal(transfers.length, 1);
+  assert.deepEqual({ eventId: transfers[0].eventId, expectedOwnerStaffId: transfers[0].expectedOwnerStaffId,
+    newOwnerStaffId: transfers[0].newOwnerStaffId, actorStaffId: transfers[0].actorStaffId, reason: transfers[0].reason },
+  { eventId: "EVENT-1", expectedOwnerStaffId: "QA001", newOwnerStaffId: "QA002", actorStaffId: "QA001", reason: "담당 부서 변경" });
+});
+
+test("changed managed bundle revision invalidates an issued QR before attendance writes", async () => {
+  const original = { groupId: "GROUP-STALE", name: "변경 전", eventIds: ["EVENT-1", "EVENT-2"], managerStaffId: "QA001",
+    revision: 1, digest: "d".repeat(64), status: "ready", ready: true, approvals: [
+      { eventId: "EVENT-1", ownerStaffId: "QA001", approved: true }, { eventId: "EVENT-2", ownerStaffId: "QA002", approved: true }] };
+  let current = original;
+  const groups = { getGroup: async () => current, beginAttendance: async () => { throw new Error("must not lock"); } };
+  const { call, store } = harness({ groups });
+  const issued = await call("training-group-qr", { token: "training-a", query: { groupId: original.groupId } });
+  const challenge = new URL(`https://example.invalid${issued.body.path}`).searchParams.get("challenge");
+  current = { ...original, revision: 2, digest: "e".repeat(64) };
+  const result = await call("training-attendance-submit", { token: "staff", method: "POST", body: {
+    eventGroupId: original.groupId, challenge, signature: `data:image/png;base64,${inkPng().toString("base64")}` } });
+  assert.equal(result.statusCode, 409);
+  assert.equal(store.calls.uploads, 0);
+  assert.equal(store.calls.appended, 0);
+});
+
+test("bundle attendance releases only confirmed no-write failures and preserves uncertain attempts", async () => {
+  const managed = { groupId: "GROUP-OUTCOME", name: "결과별 잠금", eventIds: ["EVENT-1", "EVENT-2"], managerStaffId: "QA001",
+    revision: 2, digest: "f".repeat(64), status: "ready", ready: true, lockedAt: null,
+    approvals: [{ eventId: "EVENT-1", ownerStaffId: "QA001", approved: true },
+      { eventId: "EVENT-2", ownerStaffId: "QA002", approved: true }] };
+  const challenge = issueQrChallenge({ eventGroupId: managed.groupId, groupRevision: managed.revision,
+    groupDigest: managed.digest, secret, now: now().getTime() });
+  const body = { eventGroupId: managed.groupId, challenge, signature: `data:image/png;base64,${inkPng().toString("base64")}` };
+  const scenario = async ({ appendMode, firestoreLedger = false }) => {
+    const actions = [];
+    const groups = { getGroup: async () => managed,
+      beginAttendance: async (_id, input) => { actions.push(["begin", input.requestId]); return managed; },
+      completeAttendance: async (_id, input) => { actions.push(["complete", input.requestId]); return { ...managed, lockedAt: now().toISOString() }; },
+      releaseAttendance: async (_id, input) => { actions.push(["release", input.requestId]); return true; } };
+    const store = fakeStore({ appendMode });
+    store.usesFirestoreSignatureLedger = firestoreLedger;
+    const fixture = harness({ groups, store });
+    const result = await fixture.call("training-attendance-submit", { token: "staff", method: "POST", body });
+    return { result, actions };
+  };
+
+  const definite = await scenario({ appendMode: "before", firestoreLedger: true });
+  assert.equal(definite.result.statusCode, 503);
+  assert.deepEqual(definite.actions.map(([action]) => action), ["begin", "release"]);
+
+  const uncertain = await scenario({ appendMode: "before" });
+  assert.equal(uncertain.result.statusCode, 503);
+  assert.deepEqual(uncertain.actions.map(([action]) => action), ["begin"]);
+
+  const committed = await scenario({ appendMode: "after" });
+  assert.equal(committed.result.statusCode, 200);
+  assert.deepEqual(committed.actions.map(([action]) => action), ["begin", "complete"]);
 });
 
 test("education list returns all attendance summaries from one scoped source read", async () => {

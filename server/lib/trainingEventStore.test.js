@@ -4,6 +4,7 @@ import { buildTrainingView, readTrainingSheets, TARGET_HEADERS, TRAINING_HEADERS
 import { TrainingEventConflictError, TrainingEventStore } from "./trainingEventStore.js";
 import { applyTrainingEventMigration, planTrainingEventMigration, TrainingEventMigrationConflictError } from "./trainingEventMigration.js";
 import { attendanceEligibility, finalSheetModel, parseTrainingSource, resolveEvents, SIGNATURE_HEADERS } from "./trainingCenterPhase2.js";
+import { TrainingCenterStore } from "./trainingCenterStore.js";
 
 const context = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa", QA_STAFF_ROSTER_SOURCE_SPREADSHEET_ID: "QA_WORKBOOK" };
 const values = { eventId: "QA-EVENT-001", eventGroupId: "QA-GROUP-001", "교육연도": "2026", "사용여부": "미사용",
@@ -17,17 +18,19 @@ function fakeDatabase() {
   const calls = { creates: 0, updates: 0 };
   const collection = (name) => ({
     firestore: { batch: () => database.batch() },
-    async get() { const docs = [...records.entries()].filter(([key]) => key.startsWith(`${name}/`))
-      .map(([key, data]) => ({ id: key.slice(name.length + 1), data: () => data })); return { docs, size: docs.length }; },
-    doc(id) { const key = `${name}/${id}`; return { id, key, async get() { const data = records.get(key); return { exists: Boolean(data), id, data: () => data }; } }; },
+    async get() { const docs = [...records.entries()].filter(([key]) => key.startsWith(`${name}/`) && !key.slice(name.length + 1).includes("/"))
+      .map(([key, data]) => { const reference = collection(name).doc(key.slice(name.length + 1)); return { id: reference.id, ref: reference, data: () => data }; }); return { docs, size: docs.length }; },
+    where(field, operator, value) { return { get: async () => { const snapshot = await collection(name).get(); return { docs: snapshot.docs.filter((doc) =>
+      operator === "array-contains" && doc.data()[field]?.includes(value)) }; } }; },
+    doc(id) { const key = `${name}/${id}`; return { id, key, collection(child) { return collection(`${key}/${child}`); }, async get() { const data = records.get(key); return { exists: Boolean(data), id, data: () => data }; } }; },
   });
   const create = (ref, data) => { if (records.has(ref.key)) throw new TrainingEventConflictError("이미 존재합니다."); records.set(ref.key, data); calls.creates++; };
   const database = { records, calls, collection, batch() { const pending = []; return { create(ref, data) { pending.push([ref, data]); },
     async commit() { if (pending.some(([ref]) => records.has(ref.key))) throw new TrainingEventConflictError("이미 존재합니다."); pending.forEach(([ref, data]) => create(ref, data)); } }; },
   async runTransaction(callback) { const pending = []; const transaction = { get: (ref) => ref.get(), create: (ref, data) => pending.push(["create", ref, data]),
-    update: (ref, data) => pending.push(["update", ref, data]) }; await callback(transaction); for (const [kind, ref, data] of pending) {
+    update: (ref, data) => pending.push(["update", ref, data]) }; const result = await callback(transaction); for (const [kind, ref, data] of pending) {
       if (kind === "create") create(ref, data); else { records.set(ref.key, { ...records.get(ref.key), ...data }); calls.updates++; }
-    } } };
+    } return result; } };
   return database;
 }
 
@@ -74,6 +77,78 @@ test("QA and Production admin create and update use isolated Firestore collectio
   assert.deepEqual(db.records.get(`training_events_production/${values.eventId}`).targetSnapshot,
     { schemaVersion: 1, members: [{ staffId: "QA-ONE" }] });
   assert.equal((await qa.listEvents()).length, 1);
+});
+
+test("new events keep immutable creator identity and explicit owner transfer writes audit history", async () => {
+  const db = fakeDatabase();
+  const store = new TrainingEventStore({ database: () => db, context: () => context });
+  await store.saveEvent({ ...values, ownerStaffId: "OWNER-A" }, null, { uid: "uid-owner-a", staffId: "OWNER-A" });
+  const key = `training_events_qa/${values.eventId}`;
+  assert.equal(db.records.get(key).createdByUid, "uid-owner-a");
+  assert.equal(db.records.get(key).createdByStaffId, "OWNER-A");
+  const groupKey = "training_event_groups_qa/GROUP-TRANSFER";
+  db.records.set(groupKey, { groupId: "GROUP-TRANSFER", environment: "qa", eventIds: [values.eventId, "EVENT-B"],
+    managerStaffId: "OWNER-A", participantOwnerStaffIds: ["OWNER-A", "OWNER-C"], revision: 2,
+    approvals: [{ eventId: values.eventId, ownerStaffId: "OWNER-A", approved: true, approvedByStaffId: "OWNER-A", approvedAt: "2026-10-01T00:00:00.000Z" },
+      { eventId: "EVENT-B", ownerStaffId: "OWNER-C", approved: true, approvedByStaffId: "OWNER-C", approvedAt: "2026-10-01T00:00:00.000Z" }],
+    status: "ready", lockedAt: null });
+  const lockedGroupKey = "training_event_groups_qa/GROUP-LOCKED";
+  db.records.set("training_events_qa/EVENT-B", { eventId: "EVENT-B", environment: "qa", ownerStaffId: "OWNER-C" });
+  db.records.set(lockedGroupKey, { groupId: "GROUP-LOCKED", environment: "qa", eventIds: [values.eventId, "EVENT-B"],
+    managerStaffId: "OWNER-A", participantOwnerStaffIds: ["OWNER-A", "OWNER-C"], revision: 4, digest: "signed-snapshot",
+    approvals: [{ eventId: values.eventId, ownerStaffId: "OWNER-A", approved: true, approvedByStaffId: "OWNER-A", approvedAt: "2026-10-01T00:00:00.000Z" },
+      { eventId: "EVENT-B", ownerStaffId: "OWNER-C", approved: true, approvedByStaffId: "OWNER-C", approvedAt: "2026-10-01T00:00:00.000Z" }],
+    status: "ready", lockedAt: "2026-10-02T00:00:00.000Z" });
+
+  const transferred = await store.transferOwner(values.eventId, { expectedOwnerStaffId: "OWNER-A", newOwnerStaffId: "OWNER-B",
+    actorUid: "uid-admin", actorStaffId: "ADMIN", reason: "부서 업무 이관" });
+  assert.deepEqual(transferred, { eventId: values.eventId, ownerStaffId: "OWNER-B", ownerRevision: 2 });
+  assert.equal(db.records.get(key).ownerStaffId, "OWNER-B");
+  assert.equal(db.records.get(key).createdByStaffId, "OWNER-A");
+  const history = db.records.get(`${key}/ownershipHistory/2`);
+  assert.equal(history.previousOwnerStaffId, "OWNER-A");
+  assert.equal(history.ownerStaffId, "OWNER-B");
+  assert.equal(history.transferredByStaffId, "ADMIN");
+  const group = db.records.get(groupKey);
+  assert.equal(group.managerStaffId, "OWNER-B");
+  assert.equal(group.revision, 3);
+  assert.equal(group.status, "pending_approval");
+  assert.deepEqual(group.participantOwnerStaffIds, ["OWNER-B", "OWNER-C"]);
+  assert.deepEqual(group.approvals.find((item) => item.eventId === values.eventId), {
+    eventId: values.eventId, ownerStaffId: "OWNER-B", approved: false, approvedByStaffId: null, approvedAt: null,
+  });
+  assert.equal(db.records.get(`${groupKey}/revisions/3`).changeType, "event_owner_transferred");
+  const lockedGroup = db.records.get(lockedGroupKey);
+  assert.equal(lockedGroup.managerStaffId, "OWNER-B");
+  assert.deepEqual(lockedGroup.participantOwnerStaffIds, ["OWNER-B", "OWNER-C"]);
+  assert.equal(lockedGroup.revision, 4);
+  assert.equal(lockedGroup.digest, "signed-snapshot");
+  assert.equal(lockedGroup.approvals[0].ownerStaffId, "OWNER-A");
+  assert.equal(db.records.has(`${lockedGroupKey}/revisions/5`), false);
+  await assert.rejects(store.transferOwner(values.eventId, { expectedOwnerStaffId: "OWNER-A", newOwnerStaffId: "OWNER-C",
+    actorUid: "uid-admin", actorStaffId: "ADMIN", reason: "stale retry" }), TrainingEventConflictError);
+});
+
+test("owner transfer and bundle approval cannot race an in-flight attendance attempt", async () => {
+  const db = fakeDatabase();
+  const store = new TrainingEventStore({ database: () => db, context: () => context });
+  await store.saveEvent({ ...values, ownerStaffId: "OWNER-A" }, null, { uid: "uid-owner-a", staffId: "OWNER-A" });
+  db.records.set("training_event_groups_qa/GROUP-RACE", { groupId: "GROUP-RACE", environment: "qa", eventIds: [values.eventId, "EVENT-B"],
+    managerStaffId: "OWNER-A", participantOwnerStaffIds: ["OWNER-A", "OWNER-C"], revision: 1,
+    approvals: [], status: "ready", lockedAt: null, attendanceAttempt: { requestId: "REQUEST-1" } });
+  await assert.rejects(store.transferOwner(values.eventId, { expectedOwnerStaffId: "OWNER-A", newOwnerStaffId: "OWNER-B",
+    actorUid: "uid-admin", actorStaffId: "ADMIN", reason: "경합" }), TrainingEventConflictError);
+  assert.equal(db.records.get(`training_events_qa/${values.eventId}`).ownerStaffId, "OWNER-A");
+});
+
+test("training center store forwards only the authenticated creator identity to event persistence", async () => {
+  const calls = [];
+  const store = new TrainingCenterStore({
+    events: { saveEvent: async (...args) => { calls.push(args); return { ok: true }; } },
+  });
+  const actor = { uid: "verified-uid", staffId: "OWNER-A" };
+  await store.saveEvent({ ...values, createdByUid: "forged", createdByStaffId: "FORGED" }, null, actor);
+  assert.deepEqual(calls, [[{ ...values, createdByUid: "forged", createdByStaffId: "FORGED" }, null, actor]]);
 });
 
 test("production event reads never access the Sheet while targets remain Sheet-backed", async () => {

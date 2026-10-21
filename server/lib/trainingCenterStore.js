@@ -108,8 +108,8 @@ export class TrainingCenterStore {
     return readTrainingSheets({ events: this.events });
   }
 
-  async saveEvent(values, existing = null) {
-    return this.events.saveEvent(values, existing);
+  async saveEvent(values, existing = null, actor = null) {
+    return this.events.saveEvent(values, existing, actor);
   }
 
   async saveSnapshotTarget(eventId, values, person) {

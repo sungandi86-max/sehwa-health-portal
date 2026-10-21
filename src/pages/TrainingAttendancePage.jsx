@@ -58,7 +58,7 @@ export function TrainingAttendanceContent({ displayName, group = false, id, chal
     if (!challenge) { setState({ status: "error", message: "QR 링크가 올바르지 않습니다.", items: [], canSubmit: false }); return; }
     checkAttendance(scope).then((result) => {
       if (result?.ok !== true || !Array.isArray(result.items) || !result.items.length) throw new Error("출석 가능 여부를 확인하지 못했습니다.");
-      if (active) setState({ status: "ready", items: result.items, canSubmit: result.canSubmit === true && result.items.every((item) => item.eligible === true) });
+      if (active) setState({ status: "ready", items: result.items, group: result.group || null, canSubmit: result.canSubmit === true && result.items.every((item) => item.eligible === true) });
     })
       .catch((error) => { if (active) setState({ status: "error", message: error.message, items: [], canSubmit: false }); });
     return () => { active = false; };
@@ -79,7 +79,7 @@ export function TrainingAttendanceContent({ displayName, group = false, id, chal
       try {
         const checked = await checkAttendance(scope);
         if (checked?.ok === true && Array.isArray(checked.items) && checked.items.length) {
-          setState({ status: "ready", items: checked.items, canSubmit: checked.canSubmit === true && checked.items.every((item) => item.eligible === true) });
+          setState({ status: "ready", items: checked.items, group: checked.group || null, canSubmit: checked.canSubmit === true && checked.items.every((item) => item.eligible === true) });
         } else setState({ status: "error", items: [], canSubmit: false, message: "출석 가능 여부를 다시 확인해 주세요." });
       } catch { setState({ status: "error", items: [], canSubmit: false, message: "출석 가능 여부를 다시 확인해 주세요." }); }
     }
@@ -92,7 +92,7 @@ export function TrainingAttendanceContent({ displayName, group = false, id, chal
     {state.status === "error" && <p role="alert" className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] p-3 text-sm text-[#B42318]">{state.message}</p>}
     {state.status === "done" && <section role="status" className="rounded-[12px] border border-[#BFEBDC] bg-white p-5 text-center sm:p-6"><div aria-hidden="true" className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#F0FBF7] text-2xl font-bold text-[#08754B]">✓</div><h2 className="mt-3 text-lg font-bold text-[#102047]">전자서명 출석이 완료되었습니다.</h2><p className="mt-2 break-keep text-sm font-semibold text-[#102047]">{state.items.map((item) => item.title).join(", ")}</p>{state.signedAt && <div className="mx-auto mt-4 max-w-sm rounded-[10px] bg-[#F8FAFA] px-4 py-3"><p className="text-xs font-semibold text-[#627083]">출석 시각</p><p className="mt-1 text-sm font-semibold tabular-nums text-[#102047]">{formatTrainingDateTime(state.signedAt)}</p></div>}{state.cprProjectionSynced === false && <p role="status" className="mt-3 text-sm">출석 원본은 저장됐습니다. CPR 이수현황 반영은 대기 중이며 다시 서명할 필요가 없습니다. 관리자에게 현황 재계산을 요청해 주세요.</p>}<Link to="/my-submission-status" className="mt-3 inline-flex min-h-11 items-center px-3 text-sm">내 이수현황</Link><Link to="/training" className="mt-4 inline-flex min-h-11 items-center rounded-[9px] bg-[#0D4EA6] px-4 text-sm font-semibold text-white">교육 목록으로</Link></section>}
     {state.status === "ready" && <section className="space-y-3 rounded-[12px] border border-[#DDEAE7] bg-white p-3 sm:p-4">
-      <h2 className="text-base font-bold text-[#102047]">{group ? "묶음 교육 출석" : "교육 출석"}</h2>
+      <div><h2 className="text-base font-bold text-[#102047]">{state.group?.name || (group ? "묶음 교육 출석" : "교육 출석")}</h2>{state.group && <p className="mt-1 break-keep text-sm text-[#627083]">전자서명 한 번이 아래 {state.items.length}개 교육의 출석 원장에 각각 기록됩니다.</p>}</div>
       <ul className="divide-y divide-[#DDEAE7]">{state.items.map((item) => <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm" key={item.eventId}><span className="break-keep font-semibold text-[#102047]">{item.title}</span><span className={item.eligible ? "text-[#08754B]" : "text-[#B42318]"}>{item.eligible ? "서명 가능" : item.reason}</span></li>)}</ul>
       {!state.canSubmit && <p className="break-keep text-sm text-[#627083]">묶음 교육은 모든 교육이 출석 가능해야 한 번에 서명할 수 있습니다.</p>}
       {state.canSubmit && <div ref={canvasHost} className="space-y-3 border-t border-[#DDEAE7] pt-3"><label className="block text-sm font-semibold text-[#102047]">전자서명</label><SignaturePad onChange={setHasInk} /><p className="text-xs text-[#627083]">손가락이나 마우스로 직접 서명해 주세요. 이 서명은 비공개 파일로 저장됩니다.</p><button type="button" disabled={working || !hasInk} onClick={submit} className="min-h-11 rounded-[9px] bg-[#0D4EA6] px-5 text-sm font-semibold text-white disabled:opacity-50">{working ? "저장 중" : "서명 제출"}</button></div>}

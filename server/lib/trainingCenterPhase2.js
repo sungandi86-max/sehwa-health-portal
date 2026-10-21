@@ -80,6 +80,14 @@ export function resolveEvents(source, { eventId = "", eventGroupId = "" }) {
   return events.sort((a, b) => a.eventId.localeCompare(b.eventId));
 }
 
+export function resolveEventsByIds(source, eventIds) {
+  const ids = [...new Set((eventIds || []).map((value) => String(value).trim()).filter(Boolean))].sort();
+  if (!ids.length) return [];
+  const byId = new Map(source.trainings.filter((row) => truthy(row["사용여부"])).map((row) => [row.eventId, row]));
+  const events = ids.map((id) => byId.get(id));
+  return events.some((event) => !event) ? [] : events;
+}
+
 export function attendanceEligibility(source, events, staffId, now = new Date()) {
   return events.map((event) => {
     const target = source.targets.find((row) => row.eventId === event.eventId && row["교직원ID"] === staffId);
@@ -99,15 +107,20 @@ export function attendanceEligibility(source, events, staffId, now = new Date())
   });
 }
 
-export function issueQrChallenge({ eventId = "", eventGroupId = "", secret, now = Date.now() }) {
+export function issueQrChallenge({ eventId = "", eventGroupId = "", groupRevision, groupDigest, secret, now = Date.now() }) {
   if (typeof secret !== "string" || Buffer.byteLength(secret, "utf8") < 32 || Boolean(eventId) === Boolean(eventGroupId)) throw new Error("QR 설정을 확인해 주세요.");
-  const payload = { eventId, eventGroupId, expiresAt: now + MAX_QR_AGE_MS, nonce: randomUUID() };
+  const managedGroup = groupRevision !== undefined || groupDigest !== undefined;
+  if (managedGroup && (!Number.isSafeInteger(groupRevision) || groupRevision < 1 || !/^[a-f0-9]{64}$/.test(groupDigest || ""))) {
+    throw new Error("묶음 QR 설정을 확인해 주세요.");
+  }
+  const payload = { eventId, eventGroupId, ...(managedGroup ? { groupRevision, groupDigest } : {}),
+    expiresAt: now + MAX_QR_AGE_MS, nonce: randomUUID() };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = createHmac("sha256", secret).update(encoded).digest("base64url");
   return `${encoded}.${signature}`;
 }
 
-export function verifyQrChallenge(token, { eventId = "", eventGroupId = "", secret, now = Date.now() }) {
+function verifiedQrPayload(token, { secret, now = Date.now() }) {
   if (typeof secret !== "string" || Buffer.byteLength(secret, "utf8") < 32 || typeof token !== "string" || token.length > 1000) return false;
   const [encoded, actual, extra] = token.split(".");
   if (!encoded || !actual || extra) return false;
@@ -117,9 +130,22 @@ export function verifyQrChallenge(token, { eventId = "", eventGroupId = "", secr
   if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) return false;
   try {
     const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
-    return payload.eventId === eventId && payload.eventGroupId === eventGroupId &&
-      Number.isSafeInteger(payload.expiresAt) && payload.expiresAt > now && payload.expiresAt <= now + MAX_QR_AGE_MS;
+    return Number.isSafeInteger(payload.expiresAt) && payload.expiresAt > now && payload.expiresAt <= now + MAX_QR_AGE_MS ? payload : false;
   } catch { return false; }
+}
+
+export function readQrChallenge(token, options) {
+  const payload = verifiedQrPayload(token, options);
+  if (!payload) return null;
+  return { eventId: payload.eventId || "", eventGroupId: payload.eventGroupId || "",
+    ...(payload.groupRevision !== undefined ? { groupRevision: payload.groupRevision } : {}),
+    ...(payload.groupDigest !== undefined ? { groupDigest: payload.groupDigest } : {}) };
+}
+
+export function verifyQrChallenge(token, { eventId = "", eventGroupId = "", groupRevision, groupDigest, secret, now = Date.now() }) {
+  const payload = verifiedQrPayload(token, { secret, now });
+  return Boolean(payload && payload.eventId === eventId && payload.eventGroupId === eventGroupId &&
+    payload.groupRevision === groupRevision && payload.groupDigest === groupDigest);
 }
 
 export function decodeInkSignature(dataUrl) {
