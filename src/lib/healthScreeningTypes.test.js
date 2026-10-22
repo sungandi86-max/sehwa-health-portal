@@ -1,7 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
-import { SCREENING_TYPE_OPTIONS, HealthScreeningTypeError, canEditHealthScreeningYear, hasSelfScreeningConfirmation, isHealthScreeningTypeQaHost, screeningConfirmationLabel, screeningTypeLabel } from "./healthScreeningTypes.js";
+import { SCREENING_TYPE_OPTIONS, HealthScreeningTypeError, canEditHealthScreeningYear, hasScreeningConfirmation, hasSelfScreeningConfirmation, isHealthScreeningTypeQaHost, isHealthScreeningTypeEnabledHost, screeningConfirmationBasisLabel, screeningConfirmationLabel, screeningSelfChoiceLabel, screeningSelfConfirmationDateLabel, screeningTypeLabel } from "./healthScreeningTypes.js";
+
+test("production activation permits only exact production and fixed QA hosts", () => {
+  assert.equal(isHealthScreeningTypeEnabledHost("sehwa-health-portal.vercel.app"), true);
+  assert.equal(isHealthScreeningTypeEnabledHost("sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app"), true);
+  for (const host of ["sehwa-health-portal-unique123-sungandi86-maxs-projects.vercel.app", "sehwa-health-portal.vercel.app.evil.example", "https://sehwa-health-portal.vercel.app", "SEHWA-HEALTH-PORTAL.VERCEL.APP", "localhost", "", undefined]) {
+    assert.equal(isHealthScreeningTypeEnabledHost(host), false);
+  }
+});
+
+test("self confirmation date remains separate from latest admin modification", () => {
+  const selfDate = "2026-10-14T00:00:00Z";
+  const item = { source: "admin", confirmedAt: "2026-10-15T00:00:00Z", selfChoice: { screeningType: "nhis", confirmedAt: selfDate } };
+  assert.equal(screeningSelfConfirmationDateLabel(item), new Date(selfDate).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }));
+  assert.equal(screeningSelfConfirmationDateLabel({ confirmedAt: selfDate, selfChoice: null }), "—");
+  assert.equal(screeningSelfConfirmationDateLabel({ selfChoice: { confirmedAt: "invalid" } }), "—");
+  assert.equal(screeningSelfConfirmationDateLabel(null), "—");
+});
 
 test("editable year defaults to configured school year rather than calendar year", () => {
   assert.equal(canEditHealthScreeningYear(), true);
@@ -18,7 +35,7 @@ test("health screening type UI is allowed only on the exact fixed QA hostname", 
   }
 });
 
-test("annual type options retain stored values and include school group screening", () => {
+test("annual type options include school group screening", () => {
   assert.deepEqual(SCREENING_TYPE_OPTIONS.map(({ value }) => value), ["nhis", "employment", "individual", "group", "none", "other"]);
   assert.equal(screeningTypeLabel("none"), "해당 없음/예외");
   assert.equal(screeningTypeLabel("individual"), "개별 병·의원 검진");
@@ -42,8 +59,41 @@ test("admin override retains the original self confirmation", () => {
   assert.equal(screeningTypeLabel(item.selfChoice.screeningType), "공단검진");
 });
 
+test("all screens use the same projected confirmation basis labels", () => {
+  const cases = [
+    ["self_choice", "본인 선택 확인"],
+    ["self_submission", "본인 제출 확인"],
+    ["admin_evidence_confirmation", "관리자 증빙 확인 완료"],
+    ["none", "확인 근거 없음"],
+  ];
+  for (const [confirmationBasis, label] of cases) {
+    const item = { workflow: { confirmationBasis } };
+    assert.equal(screeningConfirmationBasisLabel(item), label);
+    assert.equal(hasScreeningConfirmation(item), confirmationBasis !== "none");
+    assert.equal(screeningConfirmationLabel(item), confirmationBasis === "none" ? "미확인" : "확인 완료");
+  }
+});
+
+test("missing self choice is described as no selection rather than another required confirmation", () => {
+  assert.equal(screeningSelfChoiceLabel({ selfChoice: null }), "선택 기록 없음");
+  assert.equal(screeningSelfChoiceLabel({ selfChoice: { screeningType: "nhis" } }), "공단검진");
+});
+
 test("conflict errors retain status for explicit reconciliation", () => {
   const error = new HealthScreeningTypeError("최신 내용 다시 확인", 409);
   assert.ok(error instanceof Error);
   assert.equal(error.status, 409);
+});
+
+test("feature Preview type panel requires explicit QA policy; hostname and unknown policy do not activate it", () => {
+  const old = globalThis.__FIREBASE_RUNTIME_POLICY__;
+  try {
+    globalThis.__FIREBASE_RUNTIME_POLICY__ = { environment: "unknown" };
+    assert.equal(isHealthScreeningTypeEnabledHost("feature-preview.example.invalid"), false);
+    globalThis.__FIREBASE_RUNTIME_POLICY__ = { environment: "qa", qaProjectId: "isolated-health-qa" };
+    assert.equal(isHealthScreeningTypeEnabledHost("feature-preview.example.invalid"), true);
+  } finally {
+    if (old === undefined) delete globalThis.__FIREBASE_RUNTIME_POLICY__;
+    else globalThis.__FIREBASE_RUNTIME_POLICY__ = old;
+  }
 });

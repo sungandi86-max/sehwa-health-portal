@@ -7,8 +7,6 @@ const IDENTITIES = Object.freeze({
   "qa-training-health-admin": Object.freeze({ staffId: "QA-TRAINING-HEALTH", name: "QA 보건관리자", department: "QA 보건실", position: "QA 테스트", roles: ["health_teacher"] }),
 });
 
-export const QA_TRAINING_SYNTHETIC_IDENTITIES = IDENTITIES;
-
 const TARGET_FIXTURES = Object.freeze([
   { staffId: "QA-TRAINING-TEACHER-1", name: "QA 교무부 교원", department: "교무교육과정부", position: "교사" },
   { staffId: "QA-TRAINING-TEACHER-2", name: "QA 연구부 교원", department: "연구정보부", position: "교사" },
@@ -21,7 +19,8 @@ export function qaTrainingSyntheticIdentity(uid) {
 }
 
 export function qaTrainingSyntheticDirectory() {
-  return [...Object.values(IDENTITIES), ...TARGET_FIXTURES].map((identity) => ({ ...identity, employmentStatus: "재직" }));
+  return [...Object.values(IDENTITIES), ...TARGET_FIXTURES]
+    .map((identity) => ({ ...identity, employmentStatus: "재직" }));
 }
 
 export function isQaTrainingSyntheticAssignment(uid, assignment, context = process.env, now = Date.now()) {

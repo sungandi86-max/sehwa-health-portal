@@ -144,3 +144,14 @@ test("PDF roster keeps the Excel template's yellow title and pale-yellow header 
   assert.ok(fills.some((fill) => matches(fill, color("A1"))), "Excel template uses a yellow title fill");
   assert.ok(fills.filter((fill) => matches(fill, color("A3"))).length >= 5, "all five headers use the pale-yellow template fill");
 });
+
+test("offline manual attendance export never claims a signature or absence", async () => {
+  const manual = model([{staffId:"OFFLINE-1",name:"합성 참석자",position:"교사",status:"관리자 등록",method:"admin_offline_cpr_2026",fileId:""}]);
+  let reads=0;
+  const bytes=await makeTrainingRosterXlsx(manual,{readSignature:async()=>{reads++;throw Error("must not read image");}});
+  const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(bytes);
+  assert.equal(workbook.worksheets[0].getCell("D4").value,"관리자 등록 (오프라인 명부 확인)");
+  assert.equal(workbook.worksheets[0].getImages().length,0);
+  const pdf=await PDFDocument.load(await makeTrainingRosterPdf(manual,{readSignature:async()=>{reads++;throw Error("must not read image");}}));
+  assert.equal(pdf.getPageCount(),1);assert.equal(reads,0);
+});

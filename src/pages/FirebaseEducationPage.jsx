@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
+import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseContentState, FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
 import { getActiveEducationResources } from "../lib/educationResources.js";
 
@@ -52,7 +52,7 @@ export default function FirebaseEducationPage() {
   }, []);
 
   return (
-    <FirebaseV2AccessGate>
+    <FirebaseStaffSubmissionAccessGate readOnly accessTitle="교육자료">
       {({ displayName }) => (
         <FirebaseV2PageShell
           label="교육자료"
@@ -115,6 +115,6 @@ export default function FirebaseEducationPage() {
           </section>
         </FirebaseV2PageShell>
       )}
-    </FirebaseV2AccessGate>
+    </FirebaseStaffSubmissionAccessGate>
   );
 }

@@ -1,3 +1,4 @@
+import { clientFirestoreResource } from "./firestoreResources.js";
 import {
   collection,
   getCountFromServer,
@@ -19,7 +20,6 @@ import {
 import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
 import { RECENT_SCAN_LIMIT, selectActionableRecentItems } from "./dashboardRecent.js";
 
-const STAFF_SUBMISSIONS = "staff_submissions";
 const STUDENT_HEALTH_SUBMISSIONS = "student_health_submissions";
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -183,7 +183,7 @@ export function getInfectionDashboardCounts(documents = []) {
 
 export async function getRecentSubmissions() {
   const [staffItems, infectionItems] = await Promise.all([
-    getActionableRecentItems(STAFF_SUBMISSIONS, normalizeStaffSubmission),
+    getActionableRecentItems(clientFirestoreResource(db, "submissions"), normalizeStaffSubmission),
     getActionableRecentItems(
       STUDENT_HEALTH_SUBMISSIONS,
       normalizeInfectionSubmission,
@@ -199,11 +199,11 @@ export async function getDashboardSummary(now = new Date()) {
   const sevenDaysAgo = Timestamp.fromMillis(now.getTime() - 7 * DAY_MS);
 
   const staffTodayQuery = query(
-    collection(db, STAFF_SUBMISSIONS),
+    collection(db, clientFirestoreResource(db, "submissions")),
     where("submittedAt", ">=", startAt),
     where("submittedAt", "<", endAt)
   );
-  const pendingStaffQuery = query(collection(db, STAFF_SUBMISSIONS), where("status", "==", "submitted"));
+  const pendingStaffQuery = query(collection(db, clientFirestoreResource(db, "submissions")), where("status", "==", "submitted"));
   const currentTermInfectionQuery = query(
     collection(db, STUDENT_HEALTH_SUBMISSIONS),
     where("type", "==", "infection"),
@@ -211,11 +211,11 @@ export async function getDashboardSummary(now = new Date()) {
     where("semester", "==", CURRENT_SEMESTER)
   );
   const recentStaffQuery = query(
-    collection(db, STAFF_SUBMISSIONS),
+    collection(db, clientFirestoreResource(db, "submissions")),
     where("submittedAt", ">=", sevenDaysAgo)
   );
   const recentStaffItemsQuery = query(
-    collection(db, STAFF_SUBMISSIONS),
+    collection(db, clientFirestoreResource(db, "submissions")),
     orderBy("submittedAt", "desc"),
     limit(RECENT_SCAN_LIMIT)
   );

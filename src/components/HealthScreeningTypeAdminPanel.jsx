@@ -1,8 +1,9 @@
+import { matchesTbReviewEvidence } from "../lib/submissionNavigation.js";
+import { isQaScreeningPreview } from "../lib/healthScreeningTypes.js";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
+import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasScreeningConfirmation, personalTbEvidenceRequired, screeningConfirmationBasisLabel, screeningConfirmationLabel, screeningSelfChoiceLabel, screeningSourceLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
 import { reviewTbScreeningEvidence, tbEvidenceLabel } from "../lib/tbScreeningWorkflowClient.js";
-import { joinTbScreeningWorkflow } from "../lib/tbScreeningWorkflowModel.js";
-import { SCREENING_TYPE_OPTIONS, canEditHealthScreeningYear, hasSelfScreeningConfirmation, personalTbEvidenceRequired, screeningConfirmationLabel, screeningSourceLabel, loadHealthScreeningTypes, saveHealthScreeningType, screeningTypeLabel } from "../lib/healthScreeningTypes.js";
 
 function auditLabel(value) {
   if (!value) return "—";
@@ -17,20 +18,18 @@ function dateLabel(value) {
 }
 
 function RecordDetails({ item }) {
-  const original = typeof item.selfChoice === "string" ? item.selfChoice : item.selfChoice?.screeningType;
   return <div className="text-xs text-[#627083] leading-5">
     <p>확인자료: {personalTbEvidenceRequired(item.screeningType) ? tbEvidenceLabel(item.workflow) : "개인 확인자료 제출 불필요"}</p>
-    {item.workflow?.evidence?.map((evidence) => <p key={evidence.submissionId}>{evidence.checkupDate || "검진일 확인 필요"} · {evidence.documentType || "자료 유형 확인 필요"} · {["admin_proxy", "proxy"].includes(evidence.submissionMode) ? "대리 접수" : "본인 접수"} · {evidence.reviewState === "invalid" ? "보완 필요" : evidence.reviewState === "confirmed" ? "확인 완료" : "확인 필요"}</p>)}
-    <p>검진 완료: {item.workflow?.completed ? "완료" : "미완료"}</p>
-    {item.workflow?.status?.confirmedAt && <p>완료 확인: {auditLabel(item.workflow.status.confirmedBy)} · {dateLabel(item.workflow.status.confirmedAt)} · 접수번호 {item.workflow.status.evidenceSubmissionId}</p>}
-    {item.workflow?.routeMismatch && <p className="text-[#3154A3]">검진 경로와 자료 유형이 다릅니다. 자료를 확인한 뒤 승인해주세요.</p>}
-    {item.workflow?.status?.discrepancy && <p className="text-[#B42318]">확인자료 보완 필요 · 기존 완료 확인 이력 유지</p>}
+    <p>결핵검진 상태: {item.workflow?.completed ? "완료" : "확인 필요"}</p>
+    <p>확인 근거: {screeningConfirmationBasisLabel(item)}</p>
+    {item.workflow?.routeMismatch && <p className="text-[#3154A3]">검진 경로와 자료 유형이 다릅니다.</p>}
+    {item.workflow?.status?.discrepancy && <p className="text-[#B42318]">확인자료 보완 필요 · 기존 완료 이력 유지</p>}
     <p>최근 변경: {screeningSourceLabel(item)}{item.source !== "legacy_firestore_backfill" && <> · {auditLabel(item.confirmedBy)} · {dateLabel(item.confirmedAt)}</>}</p>
-    <p>최근 본인 선택: {screeningTypeLabel(original)}{item.selfChoice?.confirmedAt && ` · ${dateLabel(item.selfChoice.confirmedAt)}`}</p>
+    <p>최근 본인 선택: {screeningSelfChoiceLabel(item)}{item.selfChoice?.confirmedAt && ` · ${dateLabel(item.selfChoice.confirmedAt)}`}</p>
   </div>;
 }
 
-export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURRENT_SCHOOL_YEAR, initialData, onChange }) {
+export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURRENT_SCHOOL_YEAR, reviewContext = null, focusedStaffId = "", onChange }) {
   const id = useId();
   const dialog = useRef(null);
   const opener = useRef(null);
@@ -48,34 +47,24 @@ export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURR
   const [saveError, setSaveError] = useState("");
   const [conflict, setConflict] = useState(false);
   const [notice, setNotice] = useState("");
-  const [datasets, setDatasets] = useState(null);
   const [reviewing, setReviewing] = useState("");
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true); setError(""); setItems([]); setNotice("");
-    const result = initialData && year === initialSchoolYear && refresh === 0 ? Promise.resolve(initialData)
-      : loadHealthScreeningTypes({ schoolYear: year, scope: "admin", signal: controller.signal });
-    result.then((data) => { setItems(data.items || []); setDatasets(data.datasets || null); })
+    setLoading(true); setError(""); setItems([]);
+    loadHealthScreeningTypes({ schoolYear: year, scope: "admin", signal: controller.signal }).then((data) => setItems(data.items || []))
       .catch((cause) => { if (!controller.signal.aborted) setError(cause.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [year, refresh, initialData, initialSchoolYear]);
-  async function review(item, evidence) {
-    setReviewing(evidence.submissionId); setError("");
-    try {
-      await reviewTbScreeningEvidence({ staffId: item.staffId, schoolYear: year, submissionId: evidence.submissionId, expectedRevision: item.workflow?.status?.revision || 0 });
-      setRefresh((value) => value + 1); onChange?.(item);
-    } catch (cause) { setError(cause.message); }
-    finally { setReviewing(""); }
-  }
+  }, [year, refresh]);
   useEffect(() => {
     if (editing && !dialog.current.open) dialog.current.showModal();
   }, [editing]);
   const visible = useMemo(() => items.filter((item) => {
-    const matches = filter === "all" || (filter === "unconfirmed" ? !hasSelfScreeningConfirmation(item) : item.screeningType === filter);
+    if ((reviewContext?.staffId || focusedStaffId) && item.staffId !== (reviewContext?.staffId || focusedStaffId)) return false;
+    const matches = filter === "all" || (filter === "unconfirmed" ? !hasScreeningConfirmation(item) : item.screeningType === filter);
     const query = search.trim().toLocaleLowerCase();
     return matches && `${item.name || ""} ${item.department || ""} ${item.position || ""}`.toLocaleLowerCase().includes(query);
-  }), [items, filter, search]);
+  }), [items, filter, search, reviewContext, focusedStaffId]);
   function open(item, event) {
     if (!canEdit) return;
     opener.current = event.currentTarget; setEditing(item); setChoice(item.screeningType || ""); setSaveError(""); setConflict(false);
@@ -90,32 +79,60 @@ export default function HealthScreeningTypeAdminPanel({ initialSchoolYear = CURR
     setSaving(true); setSaveError("");
     try {
       const data = await saveHealthScreeningType({ schoolYear: year, scope: "admin", staffId: editing.staffId, screeningType: choice, expectedRevision: editing.revision || 0 });
-      const updated = { ...editing, ...data.item, ...(editing.workflow ? { workflow: joinTbScreeningWorkflow({ ...editing.workflow, route: data.item }) } : {}) };
+      const updated = { ...editing, ...data.item };
       setItems((current) => current.map((item) => item.staffId === editing.staffId ? updated : item));
-      setNotice(`${editing.name || "교직원"}의 검진 경로를 저장했습니다.`); onChange?.(updated);
+      setNotice(`${editing.name || "교직원"}의 검진 유형을 저장했습니다.`); onChange?.(updated);
       dialog.current.close(); setEditing(null); opener.current?.focus();
     } catch (cause) { setSaveError(cause.message); setConflict(cause.status === 409); }
     finally { setSaving(false); }
   }
+  async function review(item, evidence, action) {
+    if (isQaScreeningPreview()) { setError("QA에서는 운영 검진 확인 API를 실행하지 않습니다."); return; }
+    if (action === "invalidate" && !window.confirm(`${item.name || "선택한 교직원"}의 확인자료를 무효 처리하시겠습니까?`)) return;
+    if (!matchesTbReviewEvidence(item,evidence,year,reviewContext)) {
+      setError("접수 연결 정보와 현재 확인자료가 다릅니다. 원본 자료를 다시 확인해 주세요."); return;
+    }
+    setReviewing(evidence.submissionId); setError("");
+    try {
+      await reviewTbScreeningEvidence({ staffId: item.staffId, schoolYear: year,
+        submissionId: evidence.submissionId, expectedRevision: item.workflow?.status?.revision || 0, action });
+      setNotice(action === "confirm" ? "증빙 확인 처리가 저장되었습니다. 최신 검진 완료 현황을 다시 조회합니다." : "자료 무효 처리가 저장되었습니다. 기존 완료 이력과 최신 상태를 다시 조회합니다.");
+      setRefresh((value) => value + 1); onChange?.(item);
+    } catch (cause) { setError(cause.message); }
+    finally { setReviewing(""); }
+  }
   const years = [...new Set([CURRENT_SCHOOL_YEAR, CURRENT_SCHOOL_YEAR + 1, initialSchoolYear])].sort();
-  const editButton = (item) => canEdit ? <div className="flex flex-wrap gap-2"><button type="button" onClick={(event) => open(item, event)} aria-label={`${item.name || "교직원"} 검진 경로 수정`} className="min-h-11 rounded-lg border border-[#DDEAE7] px-3 text-[#0D4EA6] hover:bg-[#EEF4FF] focus-visible:outline focus-visible:outline-2">수정</button>{item.workflow?.evidence?.filter((evidence) => evidence.reviewState === "pending" && evidence.status !== "rejected").map((evidence) => <button key={evidence.submissionId} type="button" disabled={Boolean(reviewing) || item.workflow.evidenceComplete === false} onClick={() => review(item, evidence)} aria-label={`${item.name || "교직원"} ${evidence.documentType || "자료"} 확인 완료`} className="min-h-11 rounded-lg bg-[#0D4EA6] px-3 text-white disabled:opacity-50">{reviewing === evidence.submissionId ? "확인 중…" : "확인 완료"}</button>)}</div> : <span className="text-xs text-[#627083]">조회 전용</span>;
+  const editButton = (item) => canEdit ? <div className="flex flex-wrap gap-2">
+    <button type="button" onClick={(event) => open(item, event)} aria-label={`${item.name || "교직원"} 검진 경로 수정`} className="min-h-11 rounded-lg border border-[#DDEAE7] px-3 text-[#0D4EA6] hover:bg-[#EEF4FF] focus-visible:outline focus-visible:outline-2">수정</button>
+    {item.workflow?.evidence?.filter((evidence) => (!reviewContext || evidence.submissionId === reviewContext.submissionId)).map((evidence) => <div key={evidence.submissionId} className="w-full rounded-lg border border-[#DDEAE7] p-2 text-xs sm:w-auto">
+      <p className="max-w-64 break-words text-[#627083]">{evidence.evidenceFiles?.[0]?.fileName || evidence.documentType || "확인자료"} · {evidence.checkupDate || "검진일 미상"} · {evidence.reviewState === "confirmed" ? "증빙 확인 완료" : evidence.reviewState === "invalid" ? "자료 무효" : "증빙 검토 대기"}</p>
+      {!matchesTbReviewEvidence(item,evidence,year,reviewContext) && <p role="alert">접수·교직원·학년도·자료유형이 일치하지 않아 처리할 수 없습니다.</p>}
+      <div className="mt-2 flex flex-wrap gap-2">{evidence.evidenceFiles?.[0]?.fileId && <a href={`https://drive.google.com/open?id=${encodeURIComponent(evidence.evidenceFiles[0].fileId)}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center rounded-lg border border-[#DDEAE7] px-3 text-[#0D4EA6]">자료 보기</a>}
+        {evidence.reviewState === "pending" && <button type="button" disabled={Boolean(reviewing) || isQaScreeningPreview() || !matchesTbReviewEvidence(item,evidence,year,reviewContext)} onClick={() => review(item, evidence, "confirm")} className="min-h-10 rounded-lg bg-[#0D4EA6] px-3 text-white disabled:opacity-50">확인 완료</button>}
+        {["pending","confirmed"].includes(evidence.reviewState) && <button type="button" disabled={Boolean(reviewing) || isQaScreeningPreview() || !matchesTbReviewEvidence(item,evidence,year,reviewContext)} onClick={() => review(item, evidence, "invalidate")} className="min-h-10 rounded-lg border border-[#F6D8D8] px-3 text-[#B42318] disabled:opacity-50">자료 무효</button>}</div>
+    </div>)}
+  </div> : <span className="text-xs text-[#627083]">조회 전용</span>;
   return <section className="bogunon-panel p-4 text-sm text-[#102047]" aria-labelledby={`${id}-heading`}>
-    <div className="flex flex-wrap items-center justify-between gap-2"><h3 id={`${id}-heading`} className="text-base font-semibold">연도별 결핵검진 경로 관리</h3><span className="text-xs text-[#627083]">본인확인 {items.filter(hasSelfScreeningConfirmation).length} / {items.length}명</span></div>
-    {datasets && Object.values(datasets.completeness || {}).some((value) => value === false) && <p role="status" className="mt-3 text-xs text-[#3154A3]">일부 확인자료 조회가 완료되지 않았습니다. 자료가 없는 것으로 판단하지 마세요.</p>}
+    {isQaScreeningPreview() && <p role="status" className="mb-3 text-sm">QA 검진 유형 화면입니다. 운영 증빙 조회·확인·무효 API는 활성화되지 않습니다.</p>}
+    {reviewContext && <p className="mb-3 text-sm">접수번호 {reviewContext.submissionId} · 교직원 {reviewContext.staffId} · {reviewContext.schoolYear}년 · 자료유형 {reviewContext.screeningType || "미지정"}. URL은 조회 위치만 지정하며 처리 권한과 자료 일치는 서버에서 검증합니다.</p>}
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 id={`${id}-heading`} className="text-base font-semibold">연도별 건강검진 유형 관리</h3><span className="text-xs text-[#627083]">전체 조회 대상 확인 근거 {items.filter(hasScreeningConfirmation).length} / {items.length}명</span></div>
+    <p className="mt-2 text-xs text-[#627083]">표시 {visible.length}명 · {(reviewContext?.staffId || focusedStaffId) ? `선택 교직원 ${reviewContext?.staffId || focusedStaffId}` : "전체 교직원"} · 현재 검색·유형 필터 기준</p>
     <div className="mt-3 flex flex-wrap gap-2">
-      <label className="flex items-center gap-2">연도<select value={year} onChange={(event) => setYear(Number(event.target.value))} className="min-h-11 rounded-lg border border-[#DDEAE7] px-2">{years.map((value) => <option key={value} value={value}>{value}년</option>)}</select></label>
-      <label className="flex items-center gap-2">검진 경로<select value={filter} onChange={(event) => setFilter(event.target.value)} className="min-h-11 rounded-lg border border-[#DDEAE7] px-2"><option value="all">전체</option><option value="unconfirmed">본인 미확인</option>{SCREENING_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <label className="flex items-center gap-2">연도<select value={year} disabled={Boolean(reviewing)} onChange={(event) => {setNotice("");setYear(Number(event.target.value));}} className="min-h-11 rounded-lg border border-[#DDEAE7] px-2">{years.map((value) => <option key={value} value={value}>{value}년</option>)}</select></label>
+      <label className="flex items-center gap-2">유형<select value={filter} onChange={(event) => setFilter(event.target.value)} className="min-h-11 rounded-lg border border-[#DDEAE7] px-2"><option value="all">전체</option><option value="unconfirmed">본인 미확인</option>{SCREENING_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <label className="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-0"><span className="shrink-0 whitespace-nowrap">검색</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="이름·부서·직위" className="min-h-11 w-full min-w-0 rounded-lg border border-[#DDEAE7] px-3" /></label>
       <button type="button" disabled={loading} onClick={() => setRefresh((value) => value + 1)} className="min-h-11 rounded-lg border border-[#DDEAE7] px-3 disabled:opacity-50">새로고침</button>
     </div>
+    <p className="mt-3 text-xs text-[#627083]">검진 유형 선택·단체검진 신청·결과서 접수는 검진 완료가 아닙니다. 증빙의 확인 완료 처리는 기존 검진 완료 반영 API를 사용하며, 자료 무효는 기존 감사·무효 계약을 따릅니다. 무효 자료는 이 화면에서 재확인하지 않습니다.</p>
+    {reviewContext && !loading && !error && !items.some(item=>item.staffId === reviewContext.staffId && item.workflow?.evidence?.some(evidence=>evidence.submissionId === reviewContext.submissionId)) && <p role="alert" className="mt-3 text-[#B42318]">접수번호에 일치하는 확인자료를 찾지 못했습니다. 다른 자료로 대신 처리하지 않습니다.</p>}
     {notice && <p role="status" className="mt-3 text-[#08754B]">{notice}</p>}
-    {loading ? <p role="status" className="mt-3">결핵검진 경로를 불러오는 중입니다.</p> : error ? <p role="alert" className="mt-3 text-[#B42318]">{error}</p> : !visible.length ? <p className="mt-3 text-[#627083]">{items.length ? "조건에 맞는 교직원이 없습니다." : "조회할 교직원이 없습니다."}</p> : <>
-      <div className="mt-3 hidden md:block"><table className="w-full text-left"><caption className="sr-only">{year}년 교직원 결핵검진 경로</caption><thead className="bg-[#F3F8F6] text-xs"><tr>{["이름 / 부서", "검진 경로", "본인확인", "변경 기록", "관리"].map((label) => <th key={label} scope="col" className="p-2 font-semibold">{label}</th>)}</tr></thead><tbody>{visible.map((item) => <tr key={item.staffId} className="border-b border-[#DDEAE7]"><td className="p-2"><span className="font-medium">{item.name || "이름 없음"}</span><p className="text-xs text-[#627083]">{[item.department, item.position].filter(Boolean).join(" · ") || "—"}</p></td><td className="p-2">{screeningTypeLabel(item.screeningType)}</td><td className="p-2">{screeningConfirmationLabel(item)}</td><td className="p-2"><RecordDetails item={item} /></td><td className="p-2">{editButton(item)}</td></tr>)}</tbody></table></div>
-      <ul className="mt-3 divide-y divide-[#DDEAE7] md:hidden">{visible.map((item) => <li key={item.staffId} className="py-3"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{item.name || "이름 없음"}</p><p className="text-xs text-[#627083]">{[item.department, item.position].filter(Boolean).join(" · ")}</p></div>{editButton(item)}</div><p className="my-2">검진 경로: {screeningTypeLabel(item.screeningType)} · 본인확인: {screeningConfirmationLabel(item)}</p><RecordDetails item={item} /></li>)}</ul>
+    {loading ? <p role="status" className="mt-3">건강검진 유형을 불러오는 중입니다.</p> : error ? <p role="alert" className="mt-3 text-[#B42318]">{error}</p> : !visible.length ? <p className="mt-3 text-[#627083]">{items.length ? "조건에 맞는 교직원이 없습니다." : "조회할 교직원이 없습니다."}</p> : <>
+      <div className="mt-3 hidden md:block"><table className="w-full text-left"><caption className="sr-only">{year}년 교직원 건강검진 유형</caption><thead className="bg-[#F3F8F6] text-xs"><tr>{["이름 / 부서", "검진 유형", "확인 상태", "변경 기록", "관리"].map((label) => <th key={label} scope="col" className="p-2 font-semibold">{label}</th>)}</tr></thead><tbody>{visible.map((item) => <tr key={item.staffId} className="border-b border-[#DDEAE7]"><td className="p-2"><span className="font-medium">{item.name || "이름 없음"}</span><p className="text-xs text-[#627083]">{[item.department, item.position].filter(Boolean).join(" · ") || "—"}</p></td><td className="p-2">{screeningTypeLabel(item.screeningType)}</td><td className="p-2">{screeningConfirmationLabel(item)}</td><td className="p-2"><RecordDetails item={item} /></td><td className="p-2">{editButton(item)}</td></tr>)}</tbody></table></div>
+      <ul className="mt-3 divide-y divide-[#DDEAE7] md:hidden">{visible.map((item) => <li key={item.staffId} className="py-3"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{item.name || "이름 없음"}</p><p className="text-xs text-[#627083]">{[item.department, item.position].filter(Boolean).join(" · ")}</p></div>{editButton(item)}</div><p className="my-2">유형: {screeningTypeLabel(item.screeningType)} · 확인 상태: {screeningConfirmationLabel(item)}</p><RecordDetails item={item} /></li>)}</ul>
     </>}
     <dialog ref={dialog} aria-labelledby={`${id}-dialog-title`} onCancel={(event) => { event.preventDefault(); close(); }} className="w-[calc(100%_-_32px)] max-w-md rounded-2xl border border-[#DDEAE7] p-4 text-[#102047] backdrop:bg-black/30">
-      {editing && <form onSubmit={save}><h4 id={`${id}-dialog-title`} className="text-base font-semibold">{editing.name || "교직원"} 검진 경로 수정</h4><p className="mt-1 text-xs text-[#627083]">{year}년 · 관리자 수정은 검진 완료 여부를 변경하지 않습니다.</p><div className="mt-3"><RecordDetails item={editing} /></div>
-        <label className="mt-3 block">검진 경로<select autoFocus required disabled={saving || conflict} value={choice} onChange={(event) => setChoice(event.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-[#DDEAE7] px-3"><option value="" disabled>경로를 선택해주세요</option>{SCREENING_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      {editing && <form onSubmit={save}><h4 id={`${id}-dialog-title`} className="text-base font-semibold">{editing.name || "교직원"} 검진 유형 수정</h4><p className="mt-1 text-xs text-[#627083]">{year}년 · 관리자 수정은 검진 완료 여부를 변경하지 않습니다.</p><div className="mt-3"><RecordDetails item={editing} /></div>
+        <label className="mt-3 block">검진 유형<select autoFocus required disabled={saving || conflict} value={choice} onChange={(event) => setChoice(event.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-[#DDEAE7] px-3"><option value="" disabled>유형을 선택해주세요</option>{SCREENING_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         {choice === "group" && <p className="mt-2 text-xs text-[#3154A3]">학교 단체검진 경로는 개인 확인자료 제출을 요구하지 않으며, 검진 완료 여부는 별도로 관리됩니다.</p>}
         {saveError && <p role="alert" className="mt-3 text-sm text-[#B42318]">{saveError}</p>}
         <div className="mt-4 flex justify-end gap-2"><button type="button" disabled={saving} onClick={close} className="min-h-11 rounded-lg border border-[#DDEAE7] px-3">닫기</button>{conflict ? <button type="button" onClick={() => { close(); setRefresh((value) => value + 1); }} className="min-h-11 rounded-lg bg-[#0D4EA6] px-3 text-white">최신 내용 다시 확인</button> : <button disabled={!choice || saving} className="min-h-11 rounded-lg bg-[#0D4EA6] px-3 text-white hover:bg-[#183B8F] disabled:opacity-50">{saving ? "저장 중…" : "저장"}</button>}</div>

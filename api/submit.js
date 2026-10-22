@@ -1,3 +1,8 @@
+import { FirebaseConfigurationError } from "../common/firebaseEnvironment.js";
+import { handleStaffFileSubmission } from "../server/lib/staffFileSubmission.js";
+import { ReceiptError } from "../server/lib/staffReceiptProtocol.js";
+import { serverFirestoreResource } from "../server/lib/firestoreResources.js";
+import { resourceEnvironment, gasResource, resourceSecret, driveFolderResource, ResourcePolicyError, sendResourceError } from "../server/lib/environmentResources.js";
 import fetch from "node-fetch";
 import { verifyCurrentStaffSubmissionIdentity, verifyTbSubmissionAllowed } from "../server/lib/tbSubmissionGuard.js";
 import { getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
@@ -6,25 +11,18 @@ import {
   buildTbRegistrationStatus,
   saveTbScreeningStatus,
 } from "../server/lib/tbScreeningStatus.js";
-import { buildCprExternalSubmissionStatus, saveCprTrainingStatus } from "../server/lib/cprTrainingStatus.js";
+import { saveCprTrainingStatus } from "../server/lib/cprTrainingStatus.js";
 import { buildScriptSubmission, resolveSubmissionWorkflow, validateSubmissionPayload } from "../server/lib/submissionWorkflows.js";
-import { buildSubmissionProxyEnvelope, qaStudentSubmissionIdentity, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
+import { buildSubmissionProxyEnvelope, studentSubmissionIdentity, submissionVisitor } from "../server/lib/submissionProxyEnvelope.js";
 import { assertRegistrationOpen, readSubmissionConfig, SubmissionConfigError } from "../server/lib/submissionConfig.js";
 import { inbodyRequestStore } from "../server/lib/inbodyRequestStore.js";
 import { tbRegistrationRequestStore } from "../server/lib/tbRegistrationRequestStore.js";
-import { cprCertificateSubmissionStore } from "../server/lib/cprCertificateSubmissionStore.js";
-import { tbCertificateSubmissionStore } from "../server/lib/tbCertificateSubmissionStore.js";
 import { studentSubmissionAuditStore } from "../server/lib/studentSubmissionAuditStore.js";
 import { trainingEnvironment } from "../server/lib/trainingDeployment.js";
-import { CURRENT_SCHOOL_YEAR } from "../src/config/school.js";
-import { validatedSchoolYear } from "../src/lib/tbScreeningWorkflowModel.js";
-import { QaTbSubmissionError, qaTbSubmissionIdentity, receiveQaTbSubmission } from "../server/lib/qaTbSubmission.js";
-import { recordQaTbReceipt } from "../server/lib/tbScreeningWorkflowStore.js";
-import { verifyQaTbProxyAdmin } from "../server/lib/qaTbSubmissionAuth.js";
-import { submissionScriptUrl } from "../server/lib/submissionScriptUrl.js";
-import { readStaffDirectory } from "../server/lib/staffDirectory.js";
-import { buildProxySubmissionRecord, createProxySubmission, findProxyDuplicates,
-  proxySubmissionCollection, resolveProxySubject } from "../server/lib/adminProxySubmission.js";
+import { recordProductionTbReceipt } from "../server/lib/tbScreeningWorkflowStore.js";
+import { createProxySubmission, findProxyDuplicates, resolveProxySubject } from "../server/lib/adminProxySubmission.js";
+import { readStaffDirectory, verifyDirectoryAdmin } from "../server/lib/staffDirectory.js";
+
 
 export const config = {
   api: { bodyParser: false }
@@ -46,6 +44,17 @@ function isSuccessfulResponse(payload) {
   return payload?.status === "success" || payload?.success === true || payload?.ok === true;
 }
 
+function isRecordedStudentSubmission(record, identity, environment, mimeType, fileId = null) {
+  const evidence = record?.evidenceFiles?.[0];
+  return record?.submissionId && record.environment === environment &&
+    record.source === `${environment}_signed_submission` && record.status === "recorded" &&
+    record.signedPath === true && record.manualReview === false &&
+    record.evidenceSha256 === identity.evidenceSha256 && evidence?.exists === true &&
+    evidence.fileId && evidence.mimeType?.toLowerCase() === mimeType.toLowerCase() &&
+    (!fileId || evidence.fileId === fileId) &&
+    (record.submissionId !== identity.submissionId || record.requestFingerprint === identity.requestFingerprint);
+}
+
 function buildTbStatusPayload(payload, staffId) {
   if (payload?.type === "tb") {
     return buildTbCertificateStatus({
@@ -60,20 +69,18 @@ function buildTbStatusPayload(payload, staffId) {
   });
 }
 
-export default async function handler(req, res, { context = process.env, postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, destinationUrl = submissionScriptUrl(context), proxySecret = process.env.SUBMISSION_PROXY_SECRET,
+export default async function handler(req, res, { postScript = fetch, verifyStaff = verifyCurrentStaffSubmissionIdentity, verifyTb = verifyTbSubmissionAllowed, context = process.env, destinationUrl, proxySecret,
   qaCprFolderId = process.env.QA_CPR_DRIVE_FOLDER_ID,
   qaTbCertificateFolderId = process.env.QA_TB_CERTIFICATE_DRIVE_FOLDER_ID,
   qaStudentReplyFolderId = process.env.QA_STUDENT_REPLY_DRIVE_FOLDER_ID,
   loadSubmissionConfig = () => readSubmissionConfig(getFirebaseAdminDb()), inbodyStore = inbodyRequestStore,
-  tbRegistrationStore = tbRegistrationRequestStore, cprCertificateStore = cprCertificateSubmissionStore,
-  tbCertificateStore = tbCertificateSubmissionStore,
+  tbRegistrationStore = tbRegistrationRequestStore, cprCertificateStore,
+  tbCertificateStore,
   studentAuditStore = studentSubmissionAuditStore,
   saveTbStatus = saveTbScreeningStatus, saveCprStatus = saveCprTrainingStatus,
-  verifyProxyAdmin = verifyQaTbProxyAdmin, readDirectory = readStaffDirectory,
-  findDuplicates = findProxyDuplicates, saveProxySubmission = createProxySubmission,
-  environment = () => trainingEnvironment(context),
-  recordTbReceipt = recordQaTbReceipt,
-  now = new Date() } = {}) {
+  environment = () => trainingEnvironment(context), recordTbReceipt = recordProductionTbReceipt,
+  verifyAdmin = verifyDirectoryAdmin, readDirectory = readStaffDirectory,
+  findProxyRecords = findProxyDuplicates, saveProxyRecord = createProxySubmission, now = new Date() } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).end();
   if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers?.["content-type"] || ""))) {
@@ -90,7 +97,6 @@ export default async function handler(req, res, { context = process.env, postScr
     }
     const rawBody = Buffer.concat(chunks).toString("utf-8");
     const payload = parseJsonBody(rawBody);
-    const isAdminProxyTb = payload?.action === "admin_proxy" && payload?.type === "tb";
 
     if (isLegacyInfectionSubmit(payload)) {
       return res.status(410).json({
@@ -102,77 +108,66 @@ export default async function handler(req, res, { context = process.env, postScr
     }
 
     const workflow = resolveSubmissionWorkflow(payload);
-    const validation = validateSubmissionPayload(workflow, payload);
+    const resume = payload?.resumeReceiptId !== undefined;
+    const validation = resume
+      ? { ok: ["cpr", "tb"].includes(workflow?.id) && typeof payload.resumeReceiptId === "string" &&
+          /^(cpr|tb)-[a-f0-9]{32}$/.test(payload.resumeReceiptId), status: 400, message: "접수 확인 요청을 확인해 주세요." }
+      : validateSubmissionPayload(workflow, payload);
     if (!validation.ok) return res.status(validation.status).json({ status: "error", success: false, message: validation.message });
-    const tbEnvironment = workflow.id === "tb" ? environment() : null;
-    let tbSchoolYear;
-    if (workflow.id === "tb" && !["qa", "production"].includes(tbEnvironment)) {
-      return res.status(403).json({ status: "error", success: false, message: "승인된 배포 환경에서만 제출할 수 있습니다." });
-    }
-    if (tbEnvironment === "qa") {
-      try { tbSchoolYear = validatedSchoolYear(payload.schoolYear); }
-      catch { return res.status(400).json({ status: "error", success: false, message: "학년도를 명시해 주세요." }); }
-      if (tbSchoolYear !== CURRENT_SCHOOL_YEAR) return res.status(400).json({ status: "error", success: false,
-        message: "현재 학년도 자료만 제출할 수 있습니다." });
+
+    const runtime = resourceEnvironment(context);
+    if (environment() !== runtime) throw new ResourcePolicyError("RESOURCE_ENV_MISMATCH");
+    if (workflow.acceptsFile) {
+      destinationUrl = gasResource("submission", context);
+      proxySecret = resourceSecret("submission", context);
+      const folder = driveFolderResource(workflow.id, context);
+      qaCprFolderId = workflow.id === "cpr" ? folder : "";
+      qaTbCertificateFolderId = workflow.id === "tb" ? folder : "";
+      qaStudentReplyFolderId = workflow.id === "student_tb_reply" ? folder : "";
     }
 
+    const proxyMode = workflow.id === "tb" && payload.action === "admin_proxy";
     let proxyAccess = null;
     let proxySubject = null;
     let proxyAdministrator = null;
-    let proxyFields = null;
-    let proxyCollectionName = "staff_submissions";
-    if (isAdminProxyTb) {
-      proxyAccess = await verifyProxyAdmin(req, tbEnvironment === "qa" ? { workflowEnvironment: "qa", schoolYear: tbSchoolYear } : undefined);
-      if (!proxyAccess.ok) {
-        return res.status(proxyAccess.status).json({ status: "error", success: false, message: proxyAccess.message });
+    if (proxyMode) {
+      if (environment() !== "production") return res.status(403).json({ status: "error", success: false, message: "운영 관리자 대리등록 경로가 아닙니다." });
+      proxyAccess = await verifyAdmin(req);
+      if (!proxyAccess.ok) return res.status(proxyAccess.status).json({ status: "error", success: false, message: proxyAccess.message });
+      const actor = proxyAccess.assignment;
+      if (actor?.uid !== proxyAccess.decodedToken?.uid || actor?.schoolYear !== 2026 || actor?.semester !== 2 || actor?.active !== true ||
+          !actor.roles?.some((role) => ["admin", "health_teacher"].includes(role))) {
+        return res.status(403).json({ status: "error", success: false, code: "ADMIN_ASSIGNMENT_MISMATCH", message: "현재 학기 관리자 권한이 필요합니다." });
       }
-      const { directory } = await readDirectory({ allowInvalidEmploymentStatus: true });
-      try {
-        proxySubject = resolveProxySubject(directory, payload?.subjectStaffId);
-        proxyAdministrator = resolveProxySubject(directory, proxyAccess.assignment?.staffId);
-      } catch (error) {
-        return res.status(409).json({ status: "error", success: false, message: error.message });
-      }
-      proxyFields = { ...payload.fields, name: proxySubject.name, dept: proxySubject.department,
-        staffType: proxySubject.position || "교직원" };
-      proxyCollectionName = proxySubmissionCollection(environment());
-      const duplicates = await findDuplicates(proxyAccess.db, proxySubject.staffId,
-        { collectionName: proxyCollectionName, ...(tbEnvironment === "qa" ? { schoolYear: tbSchoolYear } : {}) });
-      const repeatFingerprint = tbEnvironment === "qa" ? qaTbSubmissionIdentity({ ...payload, fields: proxyFields,
-        schoolYear: tbSchoolYear, staffId: proxySubject.staffId, actorStaffId: proxyAdministrator.staffId,
-        submissionMode: "admin_proxy" }, proxySecret).requestFingerprint : null;
-      if (duplicates.length && payload?.allowDuplicate !== true &&
-        !(repeatFingerprint && duplicates.some((item) => item.requestFingerprint === repeatFingerprint))) {
-        const latest = duplicates[0];
-        return res.status(409).json({ status: "duplicate", success: false,
-          message: "이미 제출 기록이 있습니다.", duplicate: {
-            checkupDate: latest.checkupDate || "", status: latest.status || "submitted",
-          } });
-      }
+      serverFirestoreResource(proxyAccess.db, "submissions", context);
+      const { directory } = await readDirectory({ allowInvalidEmploymentStatus: false });
+      try { proxySubject = resolveProxySubject(directory, payload.subjectStaffId); }
+      catch (error) { return res.status(400).json({ status: "error", success: false, message: error.message }); }
+      proxyAdministrator = { staffId: proxyAccess.assignment.staffId,
+        name: proxyAccess.assignment.displayName || proxyAccess.assignment.name || proxyAccess.decodedToken?.name || "관리자" };
     }
-
     let tbGuard = null;
     let cprIdentity = null;
-    if (workflow.authPolicy === "current_staff_tb_guard" && !isAdminProxyTb) {
-      tbGuard = await verifyTb(req, { allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa",
-        ...(tbEnvironment === "qa" ? { workflowEnvironment: "qa", schoolYear: tbSchoolYear,
-          allowCompletedReceiptRecovery: true } : {}) });
+    if (workflow.authPolicy === "current_staff_tb_guard" && !proxyMode) {
+      tbGuard = await verifyTb(req, { context, allowRecordedRetry: workflow.id === "tb", allowQaTbCertificateSynthetic: workflow.id === "tb" && environment() === "qa",
+        ...(workflow.id === "tb" ? { schoolYear: payload.schoolYear } : {}) });
       if (!tbGuard.ok) {
         return res.status(tbGuard.status).json({ status: "error", success: false, message: tbGuard.message });
       }
     }
     if (workflow.authPolicy === "current_staff") {
       cprIdentity = await verifyStaff(req, {
-        allowQaInbodySynthetic: workflow.id === "inbody" && trainingEnvironment() === "qa",
-        allowQaCprSynthetic: workflow.id === "cpr" && trainingEnvironment() === "qa",
+        context,
+        allowQaInbodySynthetic: workflow.id === "inbody" && trainingEnvironment(context) === "qa",
+        allowQaCprSynthetic: workflow.id === "cpr" && trainingEnvironment(context) === "qa",
       });
       if (!cprIdentity.ok) return res.status(cprIdentity.status).json({ status: "error", success: false, message: cprIdentity.message });
     }
-    const identity = tbGuard || cprIdentity;
+    const identity = proxyMode ? { staffId: proxySubject.staffId, roles: proxyAccess.assignment.roles || [] } : tbGuard || cprIdentity;
     const qaInbodyOnly = workflow.id === "inbody" && inbodyStore.backend === "firestore" && identity?.qaSynthetic === true;
     const qaCprOnly = workflow.id === "cpr" && environment() === "qa" && identity?.qaCprSynthetic === true;
     const qaTbCertificateOnly = workflow.id === "tb" && environment() === "qa" && identity?.qaTbCertificateSynthetic === true;
-    if (!isAdminProxyTb && workflow.requiresCanonicalStaffId && (!identity?.staffId ||
+    if (workflow.requiresCanonicalStaffId && (!identity?.staffId ||
       (!qaInbodyOnly && !qaCprOnly && !qaTbCertificateOnly
         && !identity.roles?.some((role) => workflow.allowedRoles.includes(role))))) {
       return res.status(403).json({ status: "error", success: false, message: "이 제출 유형을 이용할 권한이 없습니다." });
@@ -203,6 +198,7 @@ export default async function handler(req, res, { context = process.env, postScr
       });
       try {
         await saveTbStatus({
+          context,
           db: tbGuard.db || getFirebaseAdminDb(),
           payload: buildTbStatusPayload(payload, tbGuard.staffId),
           collectionName: tbRegistrationStore.environment === "qa" ? "staff_submission_status_qa" : undefined,
@@ -224,19 +220,27 @@ export default async function handler(req, res, { context = process.env, postScr
       });
     }
 
-    if (workflow.id === "student_tb_reply" && !["qa", "production"].includes(environment())) {
-      return res.status(403).json({ status: "error", success: false, message: "승인된 배포 환경에서만 제출할 수 있습니다." });
+    if (["cpr", "tb"].includes(workflow.id)) {
+      const result = await handleStaffFileSubmission({ payload, workflow, identity, context, runtime, postScript, destinationUrl, proxySecret,
+        folder: workflow.id === "cpr" ? qaCprFolderId : qaTbCertificateFolderId,
+        proxyAccess, proxySubject, proxyAdministrator, cprCertificateStore, tbCertificateStore,
+        saveTbStatus, saveCprStatus, saveProxyRecord, recordTbReceipt, readDirectory, findProxyRecords, now });
+      return res.status(result.status).json(result.body);
     }
-    if (!["qa", "production"].includes(environment()) ||
-      !/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {
+
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(destinationUrl)) {
       return res.status(503).json({ status: "error", success: false, message: "제출 저장소가 설정되지 않았습니다." });
     }
     const studentEnvironment = workflow.id === "student_tb_reply" ? environment() : null;
     const qaStudentAudit = studentEnvironment === "qa";
+    const studentAudit = ["qa", "production"].includes(studentEnvironment);
     const visitor = workflow.id === "student_tb_reply"
-      ? submissionVisitor(req, proxySecret, { trustedVercel: qaStudentAudit }) : "";
+      ? submissionVisitor(req, proxySecret, { trustedVercel: studentAudit }) : "";
     if (workflow.id === "student_tb_reply" && !visitor) {
       return res.status(503).json({ status: "error", success: false, message: "익명 제출 보호 설정을 확인해 주세요." });
+    }
+    if (workflow.id === "student_tb_reply" && !["qa", "production"].includes(studentEnvironment)) {
+      return res.status(403).json({ status: "error", success: false, message: "승인된 배포 환경에서만 제출할 수 있습니다." });
     }
     if (qaStudentAudit && !qaStudentReplyFolderId) {
       return res.status(503).json({ status: "error", success: false,
@@ -246,86 +250,38 @@ export default async function handler(req, res, { context = process.env, postScr
       !String(payload.fileName || "").includes("QA"))) {
       return res.status(403).json({ status: "error", success: false, message: "QA 합성 제출만 허용됩니다." });
     }
-    const qaIdentity = qaStudentAudit ? qaStudentSubmissionIdentity(payload, proxySecret) : null;
-    if (qaStudentAudit && !qaIdentity) return res.status(503).json({ status: "error", success: false,
-      message: "QA 접수 식별자를 생성할 수 없습니다." });
-    if (qaStudentAudit) {
-      const existing = await studentAuditStore.getQaRequest(qaIdentity.submissionId) ||
-        await studentAuditStore.getQaEvidenceMatch({ evidenceSha256: qaIdentity.evidenceSha256,
+    if (studentEnvironment === "production" &&
+      /\[QA(?:-|\])/.test(String(payload.fields?.studentName || ""))) {
+      return res.status(403).json({ status: "error", success: false, message: "QA 테스트 제출은 운영에서 허용되지 않습니다." });
+    }
+    const studentIdentity = studentAudit ? studentSubmissionIdentity(payload, proxySecret, studentEnvironment) : null;
+    if (studentAudit && !studentIdentity) return res.status(503).json({ status: "error", success: false,
+      message: "접수 식별자를 생성할 수 없습니다." });
+    if (studentAudit) {
+      if (studentAuditStore.environment !== studentEnvironment) throw new Error("감사 원장 환경이 일치하지 않습니다.");
+      const existing = await studentAuditStore.getRequest(studentIdentity.submissionId) ||
+        await studentAuditStore.getEvidenceMatch({ evidenceSha256: studentIdentity.evidenceSha256,
           fileMimeType: payload.fileMimeType, fields: payload.fields });
       if (existing) {
-        if (!existing.evidenceFiles?.[0]?.fileId || existing.evidenceFiles[0].exists !== true) {
+        if (!isRecordedStudentSubmission(existing, studentIdentity, studentEnvironment, payload.fileMimeType)) {
           return res.status(409).json({ status: "error", success: false,
-            message: "기존 QA 접수의 증빙 파일을 확인할 수 없습니다. 관리자에게 문의해 주세요." });
+            message: "기존 접수의 증빙 파일을 확인할 수 없습니다. 관리자에게 문의해 주세요." });
         }
-        return res.status(409).json({ status: "error", success: false,
-          submissionId: existing.submissionId, message: "이미 접수된 QA 제출입니다." });
+        return res.status(200).json({ status: "success", success: true, duplicate: true,
+          submissionId: existing.submissionId, submittedAt: existing.submittedAt });
       }
     }
-    const cprEnvironment = workflow.id === "cpr" ? environment() : null;
-    const cprAudit = workflow.id === "cpr" && ["qa", "production"].includes(cprEnvironment);
-    const qaCprAudit = cprAudit && cprEnvironment === "qa";
-    if (qaCprAudit && !qaCprFolderId) {
-      return res.status(503).json({ status: "error", success: false, message: "QA CPR 증빙 저장소가 설정되지 않았습니다." });
-    }
-    const tbCertificateEnvironment = workflow.id === "tb" ? environment() : null;
-    const tbCertificateAudit = workflow.id === "tb" &&
-      ["qa", "production"].includes(tbCertificateEnvironment);
-    const qaTbCertificateAudit = tbCertificateAudit && tbCertificateEnvironment === "qa";
-    if (qaTbCertificateAudit && !qaTbCertificateFolderId) {
-      return res.status(503).json({ status: "error", success: false,
-        message: "QA 결핵검진 확인증 증빙 저장소가 설정되지 않았습니다." });
-    }
-    const scriptPayload = isAdminProxyTb
-      ? { ...payload, fields: proxyFields }
-      : (qaCprOnly || qaTbCertificateOnly)
-      ? { ...payload, fields: { ...payload.fields, name: identity.identity.name, dept: identity.identity.department } }
-      : payload;
-    const scriptSubmission = buildScriptSubmission(workflow, scriptPayload, {
-      firestoreAudit: cprAudit || tbCertificateAudit || qaStudentAudit,
-      runtimeEnvironment: cprEnvironment || tbCertificateEnvironment || studentEnvironment || "",
-      qaEvidenceFolderId: qaCprAudit ? qaCprFolderId : qaTbCertificateAudit ? qaTbCertificateFolderId
-        : qaStudentAudit ? qaStudentReplyFolderId : "",
+    const scriptSubmission = buildScriptSubmission(workflow, payload, {
+      firestoreAudit: studentAudit, runtimeEnvironment: studentEnvironment || "",
+      qaEvidenceFolderId: qaStudentAudit ? qaStudentReplyFolderId : "",
     });
-    if (qaIdentity) {
-      scriptSubmission.qaSubmissionId = qaIdentity.submissionId;
-      scriptSubmission.qaRequestFingerprint = qaIdentity.requestFingerprint;
+    if (studentIdentity) {
+      scriptSubmission.qaSubmissionId = studentIdentity.submissionId;
+      scriptSubmission.qaRequestFingerprint = studentIdentity.requestFingerprint;
     }
     const envelope = buildSubmissionProxyEnvelope(scriptSubmission, proxySecret, { visitor });
     if (!envelope) {
       return res.status(503).json({ status: "error", success: false, message: "제출 보안 설정이 필요합니다." });
-    }
-    if (qaTbCertificateAudit) {
-      const probe = buildSubmissionProxyEnvelope({ type: "qa-tb-upload-capability", runtimeEnvironment: "qa",
-        recordMode: "firestore", qaEvidenceFolderId: qaTbCertificateFolderId }, proxySecret);
-      const probeResponse = await postScript(destinationUrl, { method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(probe) });
-      const capability = JSON.parse(await probeResponse.text());
-      if (capability.contract !== "qa-tb-idempotency-v1" || capability.folderId !== qaTbCertificateFolderId ||
-        capability.private !== true) throw new QaTbSubmissionError("QA 결핵검진 업로드 복구 계약이 준비되지 않았습니다.");
-      const qaTbUploadContract = capability.contract;
-      const subject = isAdminProxyTb ? proxySubject : identity.identity ? { ...identity.identity, staffId: identity.staffId } :
-        resolveProxySubject((await readDirectory({ allowInvalidEmploymentStatus: false })).directory, identity.staffId);
-      const actor = isAdminProxyTb ? proxyAdministrator : subject;
-      const receipt = await receiveQaTbSubmission({ ...scriptPayload, schoolYear: tbSchoolYear,
-        staffId: subject.staffId, actorStaffId: actor.staffId, subject, actor,
-        completedStatus: !isAdminProxyTb && identity.statusValue === "completed",
-        submissionMode: isAdminProxyTb ? "admin_proxy" : "self" }, {
-        db: isAdminProxyTb ? proxyAccess.db : identity.db, secret: proxySecret, folderId: qaTbCertificateFolderId,
-        uploadContract: qaTbUploadContract, certificateStore: tbCertificateStore, recordReceipt: recordTbReceipt, now,
-        upload: async (stableIdentity) => {
-          const stableSubmission = { ...scriptSubmission, qaSubmissionId: stableIdentity.submissionId,
-            qaRequestFingerprint: stableIdentity.requestFingerprint, schoolYear: tbSchoolYear,
-            qaUploadContract: qaTbUploadContract };
-          const signed = buildSubmissionProxyEnvelope(stableSubmission, proxySecret);
-          const response = await postScript(destinationUrl, { method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(signed) });
-          const result = JSON.parse(await response.text());
-          if (!isSuccessfulResponse(result)) throw new Error("QA upload failed");
-          return result;
-        },
-      });
-      return res.status(200).json(receipt);
     }
     const scriptRes = await postScript(destinationUrl, {
       method: "POST",
@@ -348,123 +304,46 @@ export default async function handler(req, res, { context = process.env, postScr
       if (qaStudentAudit && json.qaFailureStage) console.error("[STUDENT_REPLY_QA_SCRIPT]", json.qaFailureStage);
       return res.status(200).json({ status: "error", success: false, message: "제출을 처리하지 못했습니다. 보건실에 문의해 주세요." });
     }
-    if (qaStudentAudit) {
+    if (studentAudit) {
       if (!json.fileId) return res.status(502).json({ status: "error", success: false,
-        message: "QA 증빙 파일 ID를 확인할 수 없습니다." });
+        message: "증빙 파일 ID를 확인할 수 없습니다." });
       try {
-        await studentAuditStore.createQaRequest({ requestId: qaIdentity.submissionId,
-          requestFingerprint: qaIdentity.requestFingerprint, evidenceSha256: qaIdentity.evidenceSha256,
-          idempotencyVersion: qaIdentity.idempotencyVersion, fields: payload.fields,
+        await studentAuditStore.createRequest({ requestId: studentIdentity.submissionId,
+          requestFingerprint: studentIdentity.requestFingerprint, evidenceSha256: studentIdentity.evidenceSha256,
+          idempotencyVersion: studentIdentity.idempotencyVersion, fields: payload.fields,
           evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType }, now });
       } catch {
-        console.error("[STUDENT_REPLY_QA_AUDIT_WRITE] Partial failure", {
-          submissionId: qaIdentity.submissionId, fileId: json.fileId,
-          requestFingerprint: qaIdentity.requestFingerprint, status: "partial_failure" });
+        try {
+          const recorded = await studentAuditStore.getRequest(studentIdentity.submissionId);
+          if (isRecordedStudentSubmission(recorded, studentIdentity, studentEnvironment, payload.fileMimeType, json.fileId)) {
+            return res.status(200).json({ status: "success", success: true, duplicate: true,
+              submissionId: recorded.submissionId, submittedAt: recorded.submittedAt });
+          }
+          if (recorded) return res.status(409).json({ status: "error", success: false,
+            submissionId: studentIdentity.submissionId, message: "접수 기록과 증빙 파일이 일치하지 않습니다. 관리자에게 문의해 주세요." });
+        } catch (readError) {
+          console.error("[STUDENT_REPLY_AUDIT_READ] Unable to verify recorded submission", { environment: studentEnvironment,
+            submissionId: studentIdentity.submissionId, code: readError?.code || "unknown" });
+        }
+        console.error("[STUDENT_REPLY_AUDIT_WRITE] Partial failure", {
+          environment: studentEnvironment, submissionId: studentIdentity.submissionId, fileId: json.fileId,
+          requestFingerprint: studentIdentity.requestFingerprint, status: "partial_failure" });
         return res.status(503).json({ status: "error", success: false,
-          submissionId: qaIdentity.submissionId,
-          message: "증빙 파일은 저장되었지만 QA 접수 이력을 기록하지 못했습니다. 관리자에게 문의해 주세요." });
+          submissionId: studentIdentity.submissionId,
+          message: "증빙 파일은 저장되었지만 접수 이력을 기록하지 못했습니다. 관리자에게 문의해 주세요." });
       }
       return res.status(200).json({ status: "success", success: true, submittedAt: json.submittedAt,
-        submissionId: qaIdentity.submissionId });
+        submissionId: studentIdentity.submissionId });
     }
-    if (isAdminProxyTb) {
-      const evidenceFile = { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType };
-      try {
-        await tbCertificateStore.createRequest({ staffId: proxySubject.staffId, submittedAt: now,
-          checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType, evidenceFile,
-          submissionMode: "admin_proxy", subject: proxySubject, submittedBy: proxyAdministrator,
-          proxyNote: payload?.proxyNote });
-        const file = { driveFileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType,
-          driveUrl: json.fileUrl || json.fileLink || json.driveUrl || null };
-        const record = buildProxySubmissionRecord({ subject: proxySubject, administrator: proxyAdministrator,
-          checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
-          proxyNote: payload?.proxyNote, file, now });
-        const saved = await saveProxySubmission(proxyAccess.db, record,
-          { collectionName: proxyCollectionName });
-        await saveTbStatus({ db: proxyAccess.db,
-          payload: buildTbStatusPayload(payload, proxySubject.staffId),
-          collectionName: environment() === "qa" ? "staff_submission_status_qa" : undefined });
-        return res.status(200).json({ status: "success", success: true, submissionId: saved.id,
-          staffId: proxySubject.staffId });
-      } catch {
-        console.error("[ADMIN_PROXY_TB_WRITE] Partial failure");
-        return res.status(503).json({ status: "error", success: false,
-          message: "파일은 저장되었지만 대리등록 기록을 완료하지 못했습니다. 보건실 관리자에게 문의해 주세요." });
-      }
-    }
-    if (tbGuard) {
-      if (tbCertificateAudit) {
-        try {
-          await tbCertificateStore.createRequest({ staffId: tbGuard.staffId, submittedAt: now,
-            checkupDate: payload?.fields?.checkupDate, documentType: payload?.fields?.docType,
-            evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType } });
-        } catch {
-          console.error("[TB_CERTIFICATE_AUDIT_WRITE] Firestore audit write failed.");
-          return res.status(503).json({ status: "error", success: false,
-            message: "확인증 파일은 저장되었지만 접수 이력을 기록하지 못했습니다. 보건실에 문의해 주세요." });
-        }
-      }
-      try {
-        await saveTbStatus({
-          db: tbGuard.db || getFirebaseAdminDb(),
-          payload: buildTbStatusPayload(payload, tbGuard.staffId),
-          collectionName: qaTbCertificateAudit ? "staff_submission_status_qa" : undefined,
-        });
-      } catch {
-        console.error("[TB_STATUS_WRITE] Firestore status update failed.");
-        return res.status(503).json({
-          status: "error",
-          success: false,
-          message: "신청 자료는 접수되었지만 결핵검진 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요.",
-        });
-      }
-      json = tbCertificateAudit
-        ? { status: "success", success: true, staffId: tbGuard.staffId }
-        : { ...json, staffId: tbGuard.staffId };
-    }
-    if (workflow.id === "cpr" && cprIdentity) {
-      if (cprAudit) {
-        try {
-          await cprCertificateStore.createRequest({
-            staffId: cprIdentity.staffId,
-            submittedAt: now,
-            completionDate: payload?.fields?.completionDate,
-            institution: payload?.fields?.institution,
-            evidenceFile: { fileId: json.fileId, fileName: payload.fileName, mimeType: payload.fileMimeType },
-          });
-        } catch {
-          console.error("[CPR_AUDIT_WRITE] Firestore audit write failed.");
-          return res.status(503).json({ status: "error", success: false,
-            message: "이수증 파일은 저장되었지만 접수 이력을 기록하지 못했습니다. 보건실에 문의해 주세요." });
-        }
-      }
-      try {
-        await saveCprStatus({
-          db: cprIdentity.db,
-          payload: buildCprExternalSubmissionStatus({
-            staffId: cprIdentity.staffId,
-            trainingDate: payload?.fields?.completionDate,
-            submissionStatus: "submitted",
-          }),
-          collectionName: qaCprAudit ? "staff_submission_status_qa" : undefined,
-        });
-      } catch {
-        console.error("[CPR_STATUS_WRITE] Firestore status update failed.");
-        return res.status(503).json({ status: "error", success: false, message: "이수증은 접수되었지만 CPR 현황을 갱신하지 못했습니다. 보건실에 문의해 주세요." });
-      }
-      json = cprAudit
-        ? { status: "success", success: true, staffId: cprIdentity.staffId }
-        : { ...json, staffId: cprIdentity.staffId };
-    }
-    if (workflow.id === "inbody" && cprIdentity) json = { ...json, staffId: cprIdentity.staffId };
     if (workflow.id === "student_tb_reply") {
       const { folderId, fileUrl, ...safeJson } = json;
       json = safeJson;
     }
     return res.status(200).json(json);
   } catch (err) {
-    if (err instanceof QaTbSubmissionError) return res.status(err.status).json({ status: "error", success: false,
-      message: err.message, ...(err.identity ? { submissionId: err.identity.submissionId, fileId: err.identity.fileId } : {}) });
+    if (err instanceof FirebaseConfigurationError) return res.status(503).json({ status: "error", success: false, code: "FIREBASE_CONFIGURATION_REJECTED", message: "제출 저장소 설정을 확인해 주세요." });
+    if (err instanceof ReceiptError) return res.status(err.status).json({ status: "error", success: false, code: err.code, message: err.message });
+    if (err instanceof ResourcePolicyError) return sendResourceError(res, err);
     console.error("[SUBMISSION_PROXY_FAILED]", { name: err?.name || "Error" });
     return res.status(500).json({ status: "error", message: "제출을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." });
   }

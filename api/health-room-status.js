@@ -1,3 +1,4 @@
+import { resourceEnvironment, gasResource, resourceSecret, sendResourceError } from "../server/lib/environmentResources.js";
 import fetch from "node-fetch";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../server/lib/firebaseAdmin.js";
 import { readRoadmap } from "../server/lib/portalRoadmap.js";
@@ -9,10 +10,6 @@ const CURRENT_SEMESTER = 2;
 
 function getAssignmentId(uid, schoolYear = CURRENT_SCHOOL_YEAR, semester = CURRENT_SEMESTER) {
   return `${uid}_${schoolYear}_${semester}`;
-}
-
-function getScriptUrl() {
-  return process.env.GAS_URL || process.env.VITE_GAS_BASE_URL || "";
 }
 
 async function getRequestParams(req) {
@@ -49,8 +46,8 @@ function getBearerToken(req) {
   return header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
 }
 
-function getStudentCareProxySecret() {
-  return process.env.STUDENT_CARE_PROXY_SECRET || "";
+function getStudentCareProxySecret(context = process.env) {
+  return resourceSecret("studentCare", context);
 }
 
 function hasRole(assignment, role) {
@@ -107,18 +104,12 @@ function sanitizeForLog(params) {
   );
 }
 
-function sanitizeDebugMessage(message) {
-  return String(message || "")
-    .replace(/([?&](?:proxySecret|password|token)=)[^&\s]+/gi, "$1[hidden]")
-    .replace(/(Bearer\s+)[^\s]+/gi, "$1[hidden]");
-}
-
 function jsonError(res, status, message, debug) {
   return res.status(status).json({
     success: false,
     result: "error",
     message,
-    debug: sanitizeDebugMessage(debug),
+    // Never expose upstream body/URL diagnostics.
   });
 }
 
@@ -186,14 +177,14 @@ async function getVerifiedStudentCareAccess(req) {
   return { ok: true, decodedToken, assignment };
 }
 
-function buildAuthorizedLegacyAdminParams(params, assignment) {
+function buildAuthorizedLegacyAdminParams(params, assignment, context) {
   if (!isLegacyAdminAction(params)) {
     return { ok: false, status: 400, message: "지원하지 않는 관리자 요청입니다." };
   }
   if (!isAdminAssignment(assignment)) {
     return { ok: false, status: 403, message: "관리자 권한이 없습니다." };
   }
-  const proxySecret = getStudentCareProxySecret();
+  const proxySecret = getStudentCareProxySecret(context);
   if (!proxySecret) {
     return { ok: false, status: 500, message: "관리자 서버 보호 설정이 필요합니다." };
   }
@@ -206,13 +197,13 @@ function buildAuthorizedLegacyAdminParams(params, assignment) {
   return { ok: true, payload };
 }
 
-function buildAuthorizedStudentCareParams(params, assignment) {
+function buildAuthorizedStudentCareParams(params, assignment, context) {
   const action = String(params.action || "");
   const mode = String(params.mode || "");
   const accessType = String(params.accessType || "subject");
   const nextParams = new URLSearchParams();
 
-  const proxySecret = getStudentCareProxySecret();
+  const proxySecret = getStudentCareProxySecret(context);
   if (!proxySecret) {
     return { ok: false, status: 500, message: "보건실 학생 건강관리 서버 보호 설정이 필요합니다." };
   }
@@ -348,7 +339,7 @@ async function forwardToAppsScript(searchParams, scriptUrl, res) {
       const json = JSON.parse(text);
       return res.status(200).json(json);
     } catch (error) {
-      console.error("[health-room-status] JSON parse failed", error);
+      console.error("[health-room-status] JSON parse failed");
       return jsonError(
         res,
         502,
@@ -359,7 +350,7 @@ async function forwardToAppsScript(searchParams, scriptUrl, res) {
   } catch (error) {
     console.error("[health-room-status] proxy failed", {
       name: error?.name || "Error",
-      message: sanitizeDebugMessage(error?.message || "unknown"),
+      message: "upstream-request-failed",
     });
     return jsonError(
       res,
@@ -412,7 +403,7 @@ async function postToAppsScript(payload, scriptUrl, res, transform) {
     try {
       json = JSON.parse(text);
     } catch (error) {
-      console.error("[health-room-status] POST JSON parse failed", error);
+      console.error("[health-room-status] POST JSON parse failed");
       return jsonError(
         res,
         502,
@@ -435,7 +426,7 @@ async function postToAppsScript(payload, scriptUrl, res, transform) {
   }
 }
 
-export default async function handler(req, res, { verifyAccess = getVerifiedStudentCareAccess, inbodyStore = inbodyRequestStore } = {}) {
+export default async function handler(req, res, { context = process.env, verifyAccess = getVerifiedStudentCareAccess, inbodyStore = inbodyRequestStore } = {}) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
@@ -445,6 +436,8 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
     return jsonError(res, 405, "허용되지 않는 요청 방식입니다.", `method=${req.method}`);
   }
 
+  try { resourceEnvironment(context); }
+  catch (error) { return sendResourceError(res, error); }
   const params = await getRequestParams(req);
   const token = getBearerToken(req);
   if (params.action === "getInbodyRequests") {
@@ -466,24 +459,12 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
         "인바디 신청 원장을 확인할 수 없습니다.");
     }
   }
-  const scriptUrl = getScriptUrl();
-  if (!scriptUrl) {
-    return jsonError(
-      res,
-      500,
-      "보건실 소재 확인 Apps Script URL이 설정되지 않았습니다. Vercel의 GAS_URL 또는 VITE_GAS_BASE_URL 환경변수를 확인해 주세요.",
-      "missing GAS_URL and VITE_GAS_BASE_URL"
-    );
-  }
-
-  if (!/\/exec(?:\?|$)/.test(scriptUrl)) {
-    return jsonError(
-      res,
-      500,
-      "Apps Script 웹앱 URL은 /exec 배포 URL이어야 합니다.",
-      "GAS URL does not look like a web app /exec URL"
-    );
-  }
+  let scriptUrl;
+  try {
+    scriptUrl = gasResource("studentCare", context);
+    // Select the secret before authorization or any external I/O.
+    resourceSecret("studentCare", context);
+  } catch (error) { return sendResourceError(res, error); }
 
   if (token) {
     try {
@@ -495,7 +476,7 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
         try { inbodyBackend = inbodyStore.backend; }
         catch { return jsonError(res, 403, "승인되지 않은 배포 환경입니다."); }
         if (inbodyBackend !== "firestore") return jsonError(res, 403, "승인되지 않은 배포 환경입니다.");
-        const authorizedAdmin = buildAuthorizedLegacyAdminParams(params, access.assignment);
+        const authorizedAdmin = buildAuthorizedLegacyAdminParams(params, access.assignment, context);
         if (!authorizedAdmin.ok) {
           return jsonError(res, authorizedAdmin.status, authorizedAdmin.message);
         }
@@ -531,7 +512,7 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
           (summary) => replaceQaInbodySummary(summary, inbodyStore));
       }
 
-      const authorized = buildAuthorizedStudentCareParams(params, access.assignment);
+      const authorized = buildAuthorizedStudentCareParams(params, access.assignment, context);
       if (!authorized.ok) return jsonError(res, authorized.status, authorized.message);
 
       console.log("[health-room-status] firebase student care request", {
@@ -543,7 +524,7 @@ export default async function handler(req, res, { verifyAccess = getVerifiedStud
     } catch (error) {
       console.error("[health-room-status] firebase authorization failed", {
         code: error?.code || "",
-        message: error?.message || "unknown",
+        message: "authorization-failed",
       });
       return jsonError(res, 500, "학생 건강관리 권한 확인 중 오류가 발생했습니다.", error?.code || error?.message);
     }

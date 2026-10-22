@@ -1,12 +1,15 @@
+import { staffReceiptTestOptions } from "../../tests/fixtures/staffReceiptDb.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import submitHandler from "../../api/submit.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
 import { handleQaCprLogin } from "../../api/firebase/staff-directory.js";
 import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { isQaCprAssignment, QA_CPR_EMAIL, QA_CPR_ROLE, QA_CPR_STAFF_ID, QA_CPR_UID } from "./qaCprSynthetic.js";
 import fs from "node:fs";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", QA_FIREBASE_PROJECT_ID: "isolated-health-qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const assignment = { uid: QA_CPR_UID, staffId: QA_CPR_STAFF_ID, active: false, qaOnly: true,
   environment: "qa", roles: [QA_CPR_ROLE], schoolYear: 2026, semester: 2,
@@ -24,7 +27,7 @@ function request(payload) {
 }
 
 function database(data = assignment) {
-  return { collection(name) { assert.equal(name, "user_assignments_qa"); return {
+  return { app: { options: { projectId: "isolated-health-qa" } }, collection(name) { assert.equal(name, "user_assignments_qa"); return {
     doc() { return { get: async () => ({ exists: true, data: () => data }) }; },
   }; } };
 }
@@ -100,3 +103,9 @@ test("Apps Script isolates the QA CPR proxy secret from Production submissions",
   const source = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
   assert.match(source, /qaAuditRequest \? "QA_SUBMISSION_PROXY_SECRET" : "SUBMISSION_PROXY_SECRET"/);
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, staffReceiptTestOptions(options, context));
+}

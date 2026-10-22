@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { recordRosterPdfVerification } from "./trainingSignatureLifecycle.js";
 import { signatureKey } from "./trainingCenterPhase2.js";
 
+process.env.APP_ENV = "qa";
 process.env.VERCEL_ENV = "preview";
 process.env.VERCEL_GIT_COMMIT_REF = "qa";
 

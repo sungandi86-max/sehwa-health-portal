@@ -116,7 +116,7 @@ test("exception document IDs avoid names and QA and Production collections are i
   const id = exceptionDocumentId(2026, "과거 직원", "교사");
   assert.match(id, /^[a-f0-9]{64}$/);
   assert.equal(id.includes("과거"), false);
-  assert.equal(exceptionCollection({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }), "health_mandatory_training_exceptions_qa");
+  assert.equal(exceptionCollection({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }), "health_mandatory_training_exceptions_qa");
   assert.equal(exceptionCollection({ VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" }), "health_mandatory_training_exceptions_production");
   assert.throws(() => exceptionCollection({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "feature/x" }), /승인된 배포 환경/);
 });
@@ -158,7 +158,7 @@ test("admin add and release retain audit history without hard delete or cross-en
       };
     },
   };
-  const context = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+  const context = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
   const { id } = await saveSourceOnlyException({
     db, candidate, sourceRows: [sourceRow],
     directory: [], actorUid: "admin-uid", context,

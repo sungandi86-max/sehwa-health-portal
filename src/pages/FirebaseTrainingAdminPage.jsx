@@ -1,8 +1,10 @@
+import ManualCprBatchPanel from "../components/ManualCprBatchPanel.jsx";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { TrainingAdminLayout } from "../components/TrainingAdminLayout.jsx";
-import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining } from "../lib/trainingCenterPhase2.js";
+import { TrainingGroupManager } from "../components/TrainingGroupManager.jsx";
+import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining, transferTrainingOwner } from "../lib/trainingCenterPhase2.js";
 import { getTrainingStorageBootstrapUiState, performTrainingStorageBootstrap, summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
 import { trainingAttendanceCounts } from "../lib/trainingAttendancePresentation.js";
 import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
@@ -11,7 +13,7 @@ import { TrainingTargetPicker } from "./TrainingTargetPicker.jsx";
 const fieldClass = "mt-1 min-h-11 w-full min-w-0 rounded-[9px] border border-[#DDEAE7] bg-white px-3 py-2 text-sm text-[#102047] outline-none focus:border-[#0D4EA6] focus:ring-4 focus:ring-[#0D4EA6]/10";
 const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#0D4EA6] bg-[#0D4EA6] px-4 text-sm font-semibold text-white disabled:opacity-50";
 const secondaryClass = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6]";
-const blank = { eventId: "", eventGroupId: "", "교육연도": "2026", "사용여부": "미사용", "상태": "예정", "교육명": "", "담당부서": "", "담당자": "", "일자": "", "시작시간": "", "종료시간": "", "장소": "", "교육내용": "", "이수기준": "", signatureOpenAt: "", signatureCloseAt: "", "정렬순서": "0" };
+const blank = { completionTaskId: "none", eventId: "", eventGroupId: "", "교육연도": "2026", "사용여부": "미사용", "상태": "예정", "교육명": "", "담당부서": "", "담당자": "", "일자": "", "시작시간": "", "종료시간": "", "장소": "", "교육내용": "", "이수기준": "", signatureOpenAt: "", signatureCloseAt: "", "정렬순서": "0" };
 
 function localInputValue(value) {
   return value ? value.slice(0, 16) : "";
@@ -76,6 +78,7 @@ function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTr
     <p className="text-xs text-[#627083]">새 교육은 기본적으로 미사용으로 저장됩니다. 대상과 QR 준비를 확인한 뒤 사용으로 전환하세요.</p>
     <div className="grid gap-3 sm:grid-cols-2">
       <label className="text-sm font-semibold text-[#102047]">교육명<input className={fieldClass} value={form["교육명"]} onChange={set("교육명")} maxLength={150} required /></label>
+      <label className="text-sm font-semibold text-[#102047]">이수현황 연계<select className={fieldClass} value={form.completionTaskId || ""} onChange={set("completionTaskId")}><option value="">기존 교육명 판별 유지</option><option value="none">연계 없음</option><option value="cpr-training-2026">CPR 이수현황</option></select></label>
       <label className="text-sm font-semibold text-[#102047]">묶음 ID<input className={fieldClass} value={form.eventGroupId} onChange={set("eventGroupId")} placeholder="묶음 교육일 때만 입력" /></label>
       <label className="text-sm font-semibold text-[#102047]">상태<select className={fieldClass} value={form["상태"]} onChange={set("상태")}><option>예정</option><option>진행중</option><option>완료</option><option>비활성</option></select></label>
       <label className="text-sm font-semibold text-[#102047]">사용여부<select className={fieldClass} value={form["사용여부"]} onChange={set("사용여부")}><option>미사용</option><option>사용</option></select></label>
@@ -104,6 +107,35 @@ function TrainingForm({ initial, onSaved, onCancel, saveTraining = saveManagedTr
         {saving ? "저장 중" : initial.eventId ? "교육 저장" : step === "details" ? "대상자 설정" : step === "targets" ? "대상자 확인" : "교육 생성"}
       </button>
     </div>
+  </form>;
+}
+
+function TrainingOwnerTransfer({ item, onSaved, loadDirectory = listTrainingDirectory, transferOwner = transferTrainingOwner }) {
+  const [open, setOpen] = useState(false);
+  const [directory, setDirectory] = useState([]);
+  const [newOwnerStaffId, setNewOwnerStaffId] = useState("");
+  const [reason, setReason] = useState("");
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+  async function start() {
+    setOpen(true); setMessage("");
+    try { const result = await loadDirectory(); setDirectory(result.items.filter((person) => person.employmentStatus === "재직")); }
+    catch (error) { setMessage(error.message); }
+  }
+  async function submit(event) {
+    event.preventDefault(); setWorking(true); setMessage("");
+    try {
+      await transferOwner({ eventId: item.eventId, expectedOwnerStaffId: item.ownerStaffId || "", newOwnerStaffId, reason });
+      setOpen(false); setNewOwnerStaffId(""); setReason(""); onSaved();
+    } catch (error) { setMessage(error.message); }
+    finally { setWorking(false); }
+  }
+  if (!open) return <button className={secondaryClass} type="button" onClick={start}>담당자 이관</button>;
+  return <form className="w-full space-y-2 rounded-[9px] border border-[#DDEAE7] bg-[#F8FAFA] p-3 lg:max-w-xl" onSubmit={submit}>
+    <p className="text-xs font-semibold text-[#102047]">담당자 이관 · 현재 {item.ownerStaffId || "소유자 없음"}</p>
+    <div className="grid gap-2 sm:grid-cols-2"><select className={fieldClass} required value={newOwnerStaffId} onChange={(event) => setNewOwnerStaffId(event.target.value)}><option value="">새 담당자 선택</option>{directory.filter((person) => person.staffId !== item.ownerStaffId).map((person) => <option key={person.staffId} value={person.staffId}>{person.name} · {person.department} · {person.staffId}</option>)}</select><input className={fieldClass} required maxLength={200} placeholder="이관 사유" value={reason} onChange={(event) => setReason(event.target.value)} /></div>
+    {message && <p role="alert" className="text-xs text-[#B42318]">{message}</p>}
+    <div className="flex gap-2"><button className={buttonClass} disabled={working} type="submit">{working ? "이관 중" : "이관 확인"}</button><button className={secondaryClass} type="button" onClick={() => setOpen(false)}>취소</button></div>
   </form>;
 }
 
@@ -166,13 +198,16 @@ export function TrainingRuntimePreflight({
   </section>;
 }
 
-export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
+export function TrainingAdminContent({ actorUid = "", displayName, hasTopLevelAdminAccess = true, loadTrainings = listManagedTrainings, saveTraining = saveManagedTraining, runPreflight = getTrainingRuntimePreflight }) {
   const [items, setItems] = useState([]);
   const [summaries, setSummaries] = useState({});
   const [summaryFailures, setSummaryFailures] = useState(0);
   const [state, setState] = useState("loading");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(null);
+  const [params] = useSearchParams();
+  const groupView = params.get("view") === "groups";
+  const [manualCprOpen, setManualCprOpen] = useState(params.get("mode") === "manual-cpr-2026");
   async function reload() {
     setState("loading");
     try {
@@ -191,7 +226,11 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
     .sort((left, right) => left["일자"].localeCompare(right["일자"]))[0];
   const currentCounts = upcoming && summaries[upcoming.eventId];
   return <TrainingAdminLayout displayName={displayName} active="manage" title="교직원 교육 운영관리" description="교육 등록과 대상·QR·출석 업무를 한곳에서 관리합니다.">
-    <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><div className="flex flex-wrap gap-2"><Link className={groupView ? secondaryClass : buttonClass} to="/firebase-admin/trainings">내 교육</Link><Link className={groupView ? buttonClass : secondaryClass} to="/firebase-admin/trainings?view=groups">묶음 관리</Link>{!groupView && hasTopLevelAdminAccess && <button className={secondaryClass} type="button" onClick={()=>setManualCprOpen(old=>!old)}>2026 CPR 단체교육 일괄 등록</button>}{!groupView && <button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button>}</div></div>
+    {groupView && <TrainingGroupManager hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}
+    {!groupView && <>
+    {hasTopLevelAdminAccess && <p className="text-sm text-[#627083]">개별 CPR 이수증은 <Link className="text-[#0D4EA6] underline" to="/firebase-admin/submission-status?item=cpr">접수 현황</Link>에서 검토합니다. 학교 단체교육은 오프라인 명부 일괄 등록으로 구분하며 <Link className="text-[#0D4EA6] underline" to="/firebase-admin/staff-submission-status?task=cpr-training-2026">CPR 통합 이수현황</Link>에 반영됩니다.</p>}
+    {manualCprOpen && hasTopLevelAdminAccess && <ManualCprBatchPanel key={actorUid} uid={actorUid} onSaved={reload} />}
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     {state === "loading" && <p className="text-sm text-[#627083]">교육 목록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
@@ -208,15 +247,16 @@ export function TrainingAdminContent({ displayName, hasTopLevelAdminAccess = tru
         const counts = summaries[item.eventId];
         const path = `/firebase-admin/trainings/${encodeURIComponent(item.eventId)}`;
         return <article className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center" key={item.eventId}>
-          <div className="min-w-0"><h3 className="break-keep text-sm font-bold text-[#102047]">{item["교육명"]}</h3><p className="mt-1 text-xs text-[#627083]">{item["일자"]} {item["시작시간"]} · {item["장소"] || "장소 미정"} · {item["상태"]} · {item["사용여부"]}</p><p className="mt-1 text-xs tabular-nums text-[#627083]">대상 {counts ? counts.target : "—"} · 출석 {counts ? counts.signed : "—"} · 미출석 {counts ? counts.missing : "—"}</p></div>
-          <div className="flex flex-wrap gap-2"><button className={secondaryClass} type="button" onClick={() => setEditing(item)}>수정</button><Link className={secondaryClass} to={`${path}/targets`}>대상</Link><Link className={secondaryClass} to={`${path}/qr`}>QR</Link><Link className={secondaryClass} to={`${path}/attendance`}>출석</Link><Link className={secondaryClass} to={`${path}/final-sheet`}>등록부</Link></div>
+          <div className="min-w-0"><h3 className="break-keep text-sm font-bold text-[#102047]">{item["교육명"]}{item.registrationMode === "admin_offline_cpr_2026" && <span className="ml-2 text-xs">오프라인 명부 · 관리자 등록</span>}</h3><p className="mt-1 text-xs text-[#627083]">{item["일자"]} {item["시작시간"]} · {item["장소"] || "장소 미정"} · {item["상태"]} · {item["사용여부"]}</p><p className="mt-1 text-xs tabular-nums text-[#627083]">대상 {counts ? counts.target : "—"} · 출석 {counts ? counts.attended ?? counts.signed : "—"} · 미출석 {counts ? counts.missing : "—"}</p></div>
+          <div className="flex flex-wrap gap-2">{item.registrationMode !== "admin_offline_cpr_2026" && <><button className={secondaryClass} type="button" onClick={() => setEditing(item)}>수정</button><Link className={secondaryClass} to={`${path}/targets`}>대상</Link><Link className={secondaryClass} to={`${path}/qr`}>QR</Link></>}<Link className={secondaryClass} to={`${path}/attendance`}>출석</Link><Link className={secondaryClass} to={`${path}/final-sheet`}>등록부</Link>{hasTopLevelAdminAccess && <TrainingOwnerTransfer item={item} onSaved={reload} />}</div>
         </article>;
       })}</div>}
     </section>}
     {hasTopLevelAdminAccess && <TrainingRuntimePreflight runPreflight={runPreflight} />}
+    </>}
   </TrainingAdminLayout>;
 }
 
 export default function FirebaseTrainingAdminPage() {
-  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 관리자 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess }) => <TrainingAdminContent displayName={displayName} hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 관리자 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess, user }) => <TrainingAdminContent actorUid={user.uid} displayName={displayName} hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}</FirebaseAdminRoleAccessGate>;
 }

@@ -1,13 +1,16 @@
+import { staffReceiptTestOptions } from "../../tests/fixtures/staffReceiptDb.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import submitHandler from "../../api/submit.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
 import { handleQaTbCertificateLogin } from "../../api/firebase/staff-directory.js";
 import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { isQaTbCertificateAssignment, QA_TB_CERTIFICATE_ROLE,
   QA_TB_CERTIFICATE_EMAIL, QA_TB_CERTIFICATE_STAFF_ID, QA_TB_CERTIFICATE_UID } from "./qaTbCertificateSynthetic.js";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", QA_FIREBASE_PROJECT_ID: "isolated-health-qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const assignment = { uid: QA_TB_CERTIFICATE_UID, staffId: QA_TB_CERTIFICATE_STAFF_ID, active: false,
   qaOnly: true, environment: "qa", roles: [QA_TB_CERTIFICATE_ROLE], schoolYear: 2026, semester: 2,
@@ -16,7 +19,7 @@ const response = () => ({ statusCode: 200, headers: {}, setHeader() {}, status(c
   json(body) { this.body = body; return this; }, end() { return this; } });
 const request = (payload) => ({ method: "POST", headers: { "content-type": "application/json", authorization: "Bearer qa" },
   async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(payload)); } });
-const database = () => ({ collection(name) { assert.equal(name, "user_assignments_qa"); return {
+const database = () => ({ app: { options: { projectId: "isolated-health-qa" } }, collection(name) { assert.equal(name, "user_assignments_qa"); return {
   doc() { return { get: async () => ({ exists: true, data: () => assignment }) }; },
 }; } });
 
@@ -36,27 +39,19 @@ test("TB certificate synthetic identity is QA-only and workflow-specific", async
 
 test("QA TB certificate submit writes QA audit and QA status without Sheet append", async () => {
   let forwarded; let auditInput; let statusCollection;
-  const documents = new Map();
-  const db = { collection(name) { assert.equal(name, "tb_upload_requests_qa"); return { doc: (id) => ({ id }) }; },
-    runTransaction: async (fn) => fn({ get: async (ref) => ({ exists: documents.has(ref.id), data: () => documents.get(ref.id) }),
-      create: (ref, value) => documents.set(ref.id, value), set: (ref, value) => documents.set(ref.id, value) }) };
   const res = response();
-  const payload = { type: "tb", schoolYear: 2026, fields: { name: "spoof", dept: "spoof", staffType: "교직원",
+  const payload = { type: "tb", fields: { name: "spoof", dept: "spoof", staffType: "교직원",
     checkupDate: "2026-10-12", docType: "QA fixture" }, fileName: "qa-tb.pdf",
     fileMimeType: "application/pdf", fileBase64: "JVBERi0=" };
   await submitHandler(request(payload), res, {
     destinationUrl: "https://script.google.com/macros/s/qa-endpoint/exec", proxySecret: "x".repeat(48),
     environment: () => "qa", qaTbCertificateFolderId: "qa-tb-folder-id",
     verifyTb: async () => ({ ok: true, staffId: QA_TB_CERTIFICATE_STAFF_ID, roles: [QA_TB_CERTIFICATE_ROLE],
-      qaTbCertificateSynthetic: true, identity: { name: "[QA-TB-CERT-TEST]", department: "QA 전용" }, db }),
+      qaTbCertificateSynthetic: true, identity: { name: "[QA-TB-CERT-TEST]", department: "QA 전용" }, db: {} }),
     postScript: async (_url, init) => { forwarded = JSON.parse(JSON.parse(init.body).payloadJson);
-      if (forwarded.type === "qa-tb-upload-capability") return { text: async () => JSON.stringify({ contract: "qa-tb-idempotency-v1", folderId: "qa-tb-folder-id", private: true }) };
-      return { text: async () => JSON.stringify({ status: "success", fileId: "qa-tb-file-id",
-        submissionId: forwarded.qaSubmissionId, requestFingerprint: forwarded.qaRequestFingerprint,
-        folderId: "qa-tb-folder-id", private: true }) }; },
-    tbCertificateStore: { environment: "qa", createRequest: async (input) => { auditInput = input; } },
-    recordTbReceipt: async (_db, submission) => { assert.equal(submission.staffId, QA_TB_CERTIFICATE_STAFF_ID);
-      statusCollection = "staff_submission_status_qa"; },
+      return { text: async () => JSON.stringify({ status: "success", fileId: "qa-tb-file-id" }) }; },
+    tbCertificateStore: { createRequest: async (input) => { auditInput = input; } },
+    saveTbStatus: async ({ collectionName }) => { statusCollection = collectionName; },
   });
   assert.equal(res.statusCode, 200);
   assert.equal(forwarded.recordMode, "firestore");
@@ -65,12 +60,10 @@ test("QA TB certificate submit writes QA audit and QA status without Sheet appen
   assert.equal(forwarded.fields.name, "[QA-TB-CERT-TEST]");
   assert.equal(auditInput.evidenceFile.fileId, "qa-tb-file-id");
   assert.equal(statusCollection, "staff_submission_status_qa");
-  assert.equal(res.body.submissionId, auditInput.submissionId);
-  assert.equal(res.body.schoolYear, 2026);
 });
 
 test("Production TB certificate submit stores Drive evidence in the Production ledger without Sheet fallback", async () => {
-  let forwarded; let auditInput; let statusCollection = "default";
+  let forwarded; let auditInput; let mirrorRecord; let statusCollection = "default";
   const res = response();
   const payload = { type: "tb", fields: { name: "canonical", dept: "보건실", staffType: "교직원",
     checkupDate: "2026-10-12", docType: "확인증" }, fileName: "tb.pdf",
@@ -79,9 +72,14 @@ test("Production TB certificate submit stores Drive evidence in the Production l
     destinationUrl: "https://script.google.com/macros/s/production-endpoint/exec", proxySecret: "x".repeat(48),
     environment: () => "production",
     verifyTb: async () => ({ ok: true, staffId: "T054", roles: ["staff"], db: {} }),
+    readDirectory: async () => ({ directory: [{ staffId: "T054", name: "canonical", position: "교직원", employmentStatus: "재직" }] }),
+    saveProxyRecord: async (_db, record) => { mirrorRecord = record; },
     postScript: async (_url, init) => { forwarded = JSON.parse(JSON.parse(init.body).payloadJson);
       return { text: async () => JSON.stringify({ status: "success", fileId: "production-tb-file-id" }) }; },
-    tbCertificateStore: { createRequest: async (input) => { auditInput = input; } },
+    tbCertificateStore: { createRequest: async (input) => { auditInput = input; return { ...input, environment: "production",
+      subjectStaffId: input.staffId, evidenceFiles: [{ fileId: input.evidenceFile.fileId, fileName: input.evidenceFile.fileName,
+        mimeType: input.evidenceFile.mimeType }] }; } },
+    recordTbReceipt: async () => {},
     saveTbStatus: async ({ collectionName }) => { statusCollection = collectionName; },
   });
   assert.equal(res.statusCode, 200);
@@ -90,8 +88,14 @@ test("Production TB certificate submit stores Drive evidence in the Production l
   assert.equal(forwarded.qaEvidenceFolderId, "");
   assert.equal(auditInput.staffId, "T054");
   assert.equal(auditInput.evidenceFile.fileId, "production-tb-file-id");
-  assert.equal(statusCollection, undefined);
-  assert.deepEqual(res.body, { status: "success", success: true, staffId: "T054" });
+  assert.equal(mirrorRecord.staffId, "T054");
+  assert.equal(mirrorRecord.submissionMode, "self");
+  assert.equal(mirrorRecord.submissionId, res.body.submissionId);
+  assert.equal(statusCollection, "default");
+  assert.equal(res.body.status, "success");
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.staffId, "T054");
+  assert.match(res.body.submissionId, /^tb-[a-f0-9]{32}$/);
 });
 
 test("Apps Script routes QA TB audit to the QA secret and suppresses Sheet append", () => {
@@ -118,3 +122,9 @@ test("TB certificate synthetic login is admin-gated and unavailable in Productio
   assert.equal(accepted.body.customToken, "qa-token");
   assert.equal(authWrites, 1);
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, staffReceiptTestOptions(options, context));
+}

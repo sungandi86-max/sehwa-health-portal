@@ -1,3 +1,6 @@
+import { serverFirestoreResource } from "./firestoreResources.js";
+import { runManualCprBatch, ManualCprError } from "./cprManualBatch.js";
+import { trainingDriveConfig, resourceSecret, ResourcePolicyError, sendResourceError } from "./environmentResources.js";
 import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "./firebaseAdmin.js";
@@ -7,15 +10,16 @@ import { resolveTrainingAccess } from "./trainingCenterAccess.js";
 import { trainingCenterStore } from "./trainingCenterStore.js";
 import { AttendanceConflictError, assertCompletedAttendanceLock, attachAttendanceFile, cancelAttendanceLock, finishAttendance, markAttendanceAppendStarted, reserveAttendance } from "./trainingAttendanceCoordinator.js";
 import { applyAttendanceRecovery, inspectAttendanceRecovery, listAttendanceRecoveryCandidates, RecoveryConflictError } from "./trainingAttendanceRecovery.js";
-import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, resolveEvents, sheetRows, SIGNATURE_HEADERS, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
+import { activeSignature, attendanceEligibility, decodeInkSignature, finalSheetModel, issueQrChallenge, newSignatureId, parseTrainingSource, readQrChallenge, resolveEvents, resolveEventsByIds, sheetRows, SIGNATURE_HEADERS, truthy, validateTrainingInput, verifyQrChallenge } from "./trainingCenterPhase2.js";
 import { makeTrainingRosterXlsx, trainingRosterPdfFilename, trainingRosterXlsxFilename } from "./trainingFinalSheet.js";
 import { trainingRosterPdfRenderer } from "./trainingRosterPdf.js";
 import { signatureStorageYear, SignatureStorageError } from "./trainingSignatureStorage.js";
 import { recordRosterPdfVerification } from "./trainingSignatureLifecycle.js";
 import { TRAINING_PHASE2_RESOURCES } from "./trainingCenterPhase2Resources.js";
 import { requireTrainingEnvironment, TrainingDeploymentError } from "./trainingDeployment.js";
-import { reconcileCprTrainingStatus, saveCompletedCprGroupTraining } from "./cprTrainingStatus.js";
+import { readCprProjection, reconcileCprTrainingStatus, saveCompletedCprGroupTraining } from "./cprTrainingStatus.js";
 import { TrainingEventConflictError } from "./trainingEventStore.js";
+import { trainingEventGroupStore, TrainingEventGroupConflictError } from "./trainingEventGroupStore.js";
 import { TrainingSignatureConflictError } from "./trainingSignatureLedger.js";
 import { listTrainingAttendanceStatuses, saveTrainingAttendanceStatus, TRAINING_ABSENCE_REASONS } from "./trainingAbsenceStatus.js";
 import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
@@ -124,6 +128,27 @@ function qrScope(query) {
   return { eventId, eventGroupId };
 }
 
+async function loadAttendanceContext({ scope, challenge, qrSecret, timestamp, store, groups }) {
+  const payload = readQrChallenge(challenge, { secret: qrSecret, now: timestamp });
+  if (!payload || payload.eventId !== scope.eventId || payload.eventGroupId !== scope.eventGroupId) return null;
+  if (payload.groupRevision !== undefined || payload.groupDigest !== undefined) {
+    const group = await groups.getGroup(scope.eventGroupId);
+    if (!group || !verifyQrChallenge(challenge, { ...scope, groupRevision: group.revision, groupDigest: group.digest,
+      secret: qrSecret, now: timestamp })) throw new TrainingEventGroupConflictError("묶음 구성이 변경되었습니다. 새 QR을 사용해 주세요.");
+    if (!group.ready) throw new TrainingEventGroupConflictError("묶음 교육 참여 승인을 확인해 주세요.");
+    const source = parseTrainingSource(await store.readSourceForEvents(group.eventIds));
+    const events = resolveEventsByIds(source, group.eventIds);
+    if (events.length !== group.eventIds.length || (!group.lockedAt && events.some((event) =>
+      group.approvals.find((item) => item.eventId === event.eventId)?.ownerStaffId !== event.ownerStaffId))) {
+      throw new TrainingEventGroupConflictError("교육 담당자 또는 묶음 구성이 변경되었습니다.");
+    }
+    return { source, events, group };
+  }
+  if (!verifyQrChallenge(challenge, { ...scope, secret: qrSecret, now: timestamp })) return null;
+  const source = parseTrainingSource(await store.readSource(scope.eventId));
+  return { source, events: resolveEvents(source, scope), group: null };
+}
+
 function createSignatureRecord(event, staffId, { fileId = "", method = "qr", actor = "", reason = "", now = new Date() } = {}) {
   const iso = now.toISOString();
   return { signatureId: newSignatureId(), eventId: event.eventId, eventGroupId: event.eventGroupId,
@@ -133,10 +158,10 @@ function createSignatureRecord(event, staffId, { fileId = "", method = "qr", act
 }
 
 export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = getFirebaseAdminDb, directory = readStaffDirectory,
-  store = trainingCenterStore, rosterPdf = trainingRosterPdfRenderer,
+  store = trainingCenterStore, groups = trainingEventGroupStore, rosterPdf = trainingRosterPdfRenderer,
   saveCprGroupStatus = saveCompletedCprGroupTraining,
   reconcileCprStatus = reconcileCprTrainingStatus,
-  secret = () => process.env.TRAINING_QR_SECRET || "", now = () => new Date() } = {}) {
+  secret = () => resourceSecret("qr"), now = () => new Date() } = {}) {
   return async function handleTrainingPhase2(req, res) {
     sendCors(res, "GET, POST, OPTIONS");
     res.setHeader("Cache-Control", "private, no-store");
@@ -146,12 +171,19 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
     if (!TRAINING_PHASE2_RESOURCES.has(resource)) return bad(res, 400, "교육 요청 종류가 올바르지 않습니다.");
     try {
       getTrainingSpreadsheetId();
-      const access = await resolveTrainingAccess(req, { auth, db, directory });
+      if (store === trainingCenterStore) {
+        if (["training-qr", "training-group-qr", "training-attendance-check", "training-attendance-submit"].includes(resource)) secret();
+        if (["training-signature-storage-bootstrap", "training-attendance-submit", "training-attendance-recovery-apply"].includes(resource) ||
+            (resource === "training-final-sheet" && ["pdf", "xlsx"].includes(req.query?.download))) trainingDriveConfig();
+      }
+      const manualDb = resource.startsWith("training-manual-cpr-") ? db() : null;
+      if (manualDb) serverFirestoreResource(manualDb,"statuses");
+      const access = await resolveTrainingAccess(req, { auth, db: manualDb ? () => manualDb : db, directory });
       if (!access.ok) return bad(res, access.status, access.message);
       const adminOnly = !["training-attendance-check", "training-attendance-submit"].includes(resource);
       if (adminOnly && !access.isAdmin && !access.isTrainingAdmin) return bad(res, 403, "교육 관리자 권한이 없습니다.");
       const topLevelOnly = resource === "training-runtime-preflight" || resource === "training-signature-storage-bootstrap" ||
-        resource.startsWith("training-attendance-recovery-");
+        resource.startsWith("training-attendance-recovery-") || resource.startsWith("training-manual-cpr-");
       if (topLevelOnly && !access.isAdmin) return bad(res, 403, "보건교사 또는 최상위 관리자 권한이 필요합니다.");
       if (req.method === "POST" || resource.startsWith("training-attendance-recovery-") ||
         (resource === "training-final-sheet" && req.query?.download === "pdf")) requireTrainingEnvironment();
@@ -182,6 +214,64 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       const body = req.method === "POST" ? await readJsonBody(req, { maxBytes: 400000 }) : null;
       const eventId = param(req.query?.eventId || body?.eventId);
 
+      if (resource === "training-group-candidates" && req.method === "GET") {
+        const rows = sheetRows((await store.readBase()).trainings, TRAINING_RUNTIME_HEADERS)
+          .filter((row) => row.eventId && row.ownerStaffId && truthy(row["사용여부"]));
+        const names = new Map(access.directory.map((person) => [person.staffId, person.name]));
+        return res.status(200).json({ ok: true, items: rows.map((row) => ({ eventId: row.eventId, title: row["교육명"],
+          date: row["일자"], department: row["담당부서"], ownerStaffId: row.ownerStaffId,
+          ownerName: names.get(row.ownerStaffId) || row["담당자"] || "담당자 미확인" })) });
+      }
+
+      if (resource === "training-group-list" && req.method === "GET") {
+        const rows = sheetRows((await store.readBase()).trainings, TRAINING_RUNTIME_HEADERS).filter((row) => row.eventId);
+        const byId = new Map(rows.map((row) => [row.eventId, row]));
+        const names = new Map(access.directory.map((person) => [person.staffId, person.name]));
+        const ownedEventIds = rows.filter((row) => row.ownerStaffId === access.assignment.staffId).map((row) => row.eventId);
+        const visibleGroups = access.isAdmin ? await groups.listGroups() : await groups.listGroupsForActor(access.assignment.staffId, ownedEventIds);
+        const items = visibleGroups.map((group) => ({ ...group,
+          managerName: names.get(group.managerStaffId) || "담당자 미확인",
+          canEdit: access.isAdmin || group.managerStaffId === access.assignment.staffId,
+          canManageQr: access.isAdmin || group.managerStaffId === access.assignment.staffId,
+          events: group.eventIds.map((id) => { const event = byId.get(id); const approval = group.approvals.find((item) => item.eventId === id);
+            return { eventId: id, title: event?.["교육명"] || "교육 정보 없음", date: event?.["일자"] || "",
+              department: event?.["담당부서"] || "", ownerStaffId: event?.ownerStaffId || approval?.ownerStaffId || "",
+              ownerName: names.get(event?.ownerStaffId || approval?.ownerStaffId) || "담당자 미확인",
+              approved: approval?.approved === true, canApprove: event?.ownerStaffId === access.assignment.staffId && approval?.approved !== true };
+          }) }));
+        return res.status(200).json({ ok: true, actorStaffId: access.assignment.staffId, items });
+      }
+
+      if (resource === "training-group-save" && req.method === "POST") {
+        const rows = sheetRows((await store.readBase()).trainings, TRAINING_RUNTIME_HEADERS).filter((row) => row.eventId);
+        const current = body?.groupId ? await groups.getGroup(param(body.groupId)) : null;
+        const managerStaffId = access.isAdmin ? param(body?.managerStaffId) : access.assignment.staffId;
+        if (!access.isAdmin && ((current && current.managerStaffId !== access.assignment.staffId) ||
+          (!current && body?.managerStaffId && body.managerStaffId !== access.assignment.staffId))) return bad(res, 403, "지정된 묶음 관리자만 구성을 변경할 수 있습니다.");
+        if (!access.directory.some((person) => person.staffId === managerStaffId && person.employmentStatus === "재직")) throw new RangeError("묶음 관리자를 확인해 주세요.");
+        const input = { name: body?.name, eventIds: body?.eventIds, managerStaffId, actorUid: access.decoded.uid,
+          actorStaffId: access.assignment.staffId, events: rows };
+        const item = current
+          ? await groups.updateGroup(current.groupId, { ...input, expectedRevision: Number(body?.revision) })
+          : await groups.createGroup({ ...input, ...(body?.groupId ? { groupId: param(body.groupId) } : {}) });
+        return res.status(200).json({ ok: true, item });
+      }
+
+      if (resource === "training-group-approve" && req.method === "POST") {
+        const rows = sheetRows((await store.readBase()).trainings, TRAINING_RUNTIME_HEADERS).filter((row) => row.eventId);
+        const item = await groups.approveEvent(param(body?.groupId), eventId, { actorStaffId: access.assignment.staffId, events: rows });
+        return res.status(200).json({ ok: true, item });
+      }
+
+      if (resource === "training-owner-transfer" && req.method === "POST") {
+        if (!access.isAdmin) return bad(res, 403, "보건교사 또는 최상위 관리자만 교육 담당자를 이관할 수 있습니다.");
+        const nextOwner = param(body?.newOwnerStaffId);
+        if (access.directory.filter((person) => person.staffId === nextOwner && person.employmentStatus === "재직").length !== 1) throw new RangeError("새 담당자를 확인해 주세요.");
+        const item = await store.events.transferOwner(eventId, { expectedOwnerStaffId: param(body?.expectedOwnerStaffId), newOwnerStaffId: nextOwner,
+          actorUid: access.decoded.uid, actorStaffId: access.assignment.staffId, reason: body?.reason });
+        return res.status(200).json({ ok: true, item });
+      }
+
       if (resource === "training-attendance-recovery-candidates" && req.method === "GET") {
         return res.status(200).json({ ok: true, ...await listAttendanceRecoveryCandidates({ db: access.db, now: now().getTime() }) });
       }
@@ -201,6 +291,14 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           canReviewedRetry: result.canReviewedRetry === true, reviewedRelease: result.reviewedRelease === true });
       }
 
+      if (resource.startsWith("training-manual-cpr-")) {
+        if (req.method !== "POST") return bad(res,405,"지원하지 않는 요청입니다.");
+        const events = await store.events.listEvents();
+        const result = await runManualCprBatch({db:access.db, actor:access.assignment.staffId, directory:access.directory,
+          input:body, commit:resource === "training-manual-cpr-commit", now:now(), events});
+        return res.status(200).json(result);
+      }
+
       if (resource === "training-admin-list" && req.method === "GET") {
         const base = await store.readBase();
         const items = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS).filter((row) => row.eventId && canManageTraining(access, row))
@@ -218,6 +316,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const rows = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS);
         const existing = rows.find((row) => row.eventId === body?.eventId);
         if (body?.eventId && !existing) return bad(res, 404, "수정할 교육을 찾을 수 없습니다.");
+        if (existing?.registrationMode === "admin_offline_cpr_2026") return bad(res,409,"오프라인 일괄 등록 교육의 원본은 일반 교육 수정으로 변경할 수 없습니다.");
         if (existing) {
           const denied = denyUnownedTraining(res, access, existing);
           if (denied) return denied;
@@ -227,6 +326,10 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const input = !body?.eventId && store.events?.environment === "qa" ? { ...ownedInput, eventId: `QA-TR-${randomUUID()}` } : ownedInput;
         const values = validateTrainingInput(input, { existing });
         values.ownerStaffId = ownerStaffId;
+        if (existing && (values.completionTaskId || "") !== (existing.completionTaskId || "")) {
+          const recorded = parseTrainingSource(await store.readSource(existing.eventId));
+          if (recorded.signatures.some((record) => record.eventId === existing.eventId)) return bad(res, 409, "출석 기록이 있는 교육의 이수 연계는 변경할 수 없습니다.");
+        }
         if (!existing) {
           const targets = selectTrainingTargets(access.directory, body?.targetSelection);
           const reviewed = targets.members.map(({ staffId, name, position, department }) => ({ staffId, name, position, department }));
@@ -237,7 +340,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
             members: targets.members };
         }
         if (!existing && rows.some((row) => row.eventId === values.eventId)) return bad(res, 409, "교육 ID가 이미 존재합니다.");
-        await store.saveEvent(values, existing);
+        await store.saveEvent(values, existing, { uid: access.decoded.uid, staffId: access.assignment.staffId });
         return res.status(200).json({ ok: true, item: { ...values, targetSnapshot: undefined,
           ...(values.targetSnapshot ? { targetCount: values.targetSnapshot.members.length } : {}) } });
       }
@@ -264,6 +367,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const base = await store.readBase();
         const training = sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS).find((row) => row.eventId === eventId);
         if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        if (training.registrationMode === "admin_offline_cpr_2026") return bad(res,409,"오프라인 확정 명부는 일반 대상자 편집으로 변경할 수 없습니다.");
         const denied = denyUnownedTraining(res, access, training);
         if (denied) return denied;
         const currentRows = sheetRows(base.targets, TARGET_HEADERS).filter((row) => row.eventId === eventId);
@@ -285,6 +389,7 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const source = { trainings: sheetRows(base.trainings, TRAINING_RUNTIME_HEADERS), targets: sheetRows(base.targets, TARGET_HEADERS) };
         const training = source.trainings.find((row) => row.eventId === eventId);
         if (!training) return bad(res, 404, "교육을 찾을 수 없습니다.");
+        if (training.registrationMode === "admin_offline_cpr_2026") return bad(res,409,"오프라인 확정 명부는 일반 대상자 편집으로 변경할 수 없습니다.");
         const denied = denyUnownedTraining(res, access, training);
         if (denied) return denied;
         if (store.events?.environment === "qa") return bad(res, 409, "QA 교육 대상은 일괄 설정에서 변경해 주세요.");
@@ -296,6 +401,31 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           await store.saveSnapshotTarget(eventId, values, access.directory.find((person) => person.staffId === values["교직원ID"]));
         } else await store.saveRow(TRAINING_SHEETS.targets, TARGET_HEADERS, values, matches[0]?.rowNumber);
         return res.status(200).json({ ok: true, item: values });
+      }
+      if (resource === "training-group-qr" && req.method === "GET") {
+        if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
+        store.assertSignatureStorageConfigured();
+        const storage = await store.inspectSignatureStorage();
+        if (!storage.authReady || !storage.rootReady || !storage.rootPrivate || !storage.readReady) {
+          return res.status(503).json({ ok: false, code: "training-signature-storage-not-ready", message: "서명 저장소 준비 상태를 확인해 주세요." });
+        }
+        const group = await groups.getGroup(param(req.query?.groupId));
+        if (!group) return bad(res, 404, "묶음을 찾을 수 없습니다.");
+        if (!access.isAdmin && group.managerStaffId !== access.assignment.staffId) return bad(res, 403, "지정된 묶음 관리자만 QR을 생성할 수 있습니다.");
+        if (!group.ready) return bad(res, 409, "모든 교육 담당자의 참여 승인이 필요합니다.");
+        const source = parseTrainingSource({ ...(await store.readBase()), signatures: [SIGNATURE_HEADERS] });
+        const events = resolveEventsByIds(source, group.eventIds);
+        if (events.length !== group.eventIds.length || (!group.lockedAt && events.some((event) =>
+          group.approvals.find((item) => item.eventId === event.eventId)?.ownerStaffId !== event.ownerStaffId))) {
+          return bad(res, 409, "교육 담당자 또는 묶음 구성이 변경되었습니다.");
+        }
+        const challenge = issueQrChallenge({ eventGroupId: group.groupId, groupRevision: group.revision,
+          groupDigest: group.digest, secret: secret(), now: now().getTime() });
+        const path = `/training/attendance/group/${encodeURIComponent(group.groupId)}`;
+        return res.status(200).json({ ok: true, path: `${path}?challenge=${encodeURIComponent(challenge)}`,
+          expiresAt: new Date(now().getTime() + 15 * 60 * 1000).toISOString(), eventCount: events.length,
+          group: { groupId: group.groupId, name: group.name, revision: group.revision,
+            events: events.map((event) => ({ eventId: event.eventId, title: event["교육명"] })) } });
       }
       if (resource === "training-qr" && req.method === "GET") {
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
@@ -320,21 +450,24 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
       if (resource === "training-attendance-check" && req.method === "GET") {
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
         const scope = qrScope(req.query);
-        if (!verifyQrChallenge(req.query?.challenge, { ...scope, secret: secret(), now: now().getTime() })) return bad(res, 403, "QR 유효시간이 지났거나 링크가 올바르지 않습니다.");
-        const source = parseTrainingSource(await store.readSource(eventId));
-        const events = resolveEvents(source, scope);
+        const context = await loadAttendanceContext({ scope, challenge: req.query?.challenge, qrSecret: secret(),
+          timestamp: now().getTime(), store, groups });
+        if (!context) return bad(res, 403, "QR 유효시간이 지났거나 링크가 올바르지 않습니다.");
+        const { source, events } = context;
         if (!events.length) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const eligibility = attendanceEligibility(source, events, access.assignment.staffId, now());
-        return res.status(200).json({ ok: true, items: eligibility, canSubmit: eligibility.every((item) => item.eligible) });
+        return res.status(200).json({ ok: true, items: eligibility, canSubmit: eligibility.every((item) => item.eligible),
+          ...(context.group ? { group: { groupId: context.group.groupId, name: context.group.name, revision: context.group.revision } } : {}) });
       }
       if (resource === "training-attendance-submit" && req.method === "POST") {
         if (Buffer.byteLength(secret(), "utf8") < 32) throw new TrainingSourceNotReadyError();
         store.assertSignatureStorageConfigured();
         const scope = qrScope(body);
-        if (!verifyQrChallenge(body?.challenge, { ...scope, secret: secret(), now: now().getTime() })) return bad(res, 403, "QR 유효시간이 지났거나 링크가 올바르지 않습니다.");
+        const context = await loadAttendanceContext({ scope, challenge: body?.challenge, qrSecret: secret(),
+          timestamp: now().getTime(), store, groups });
+        if (!context) return bad(res, 403, "QR 유효시간이 지났거나 링크가 올바르지 않습니다.");
         const bytes = decodeInkSignature(body?.signature);
-        const source = parseTrainingSource(await store.readSource(eventId));
-        const events = resolveEvents(source, scope);
+        const { source, events } = context;
         if (!events.length) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const eligibility = attendanceEligibility(source, events, access.assignment.staffId, now());
         if (eligibility.some((item) => !item.eligible)) return bad(res, 409, eligibility.find((item) => !item.eligible).reason);
@@ -342,8 +475,16 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         let fileId = "";
         let records = [];
         let appendStarted = false;
+        let groupAttemptStarted = false;
+        let groupLockReconciled = !context.group;
         let stage = "SIGNATURE_STORAGE_READ";
         try {
+          if (context.group) {
+            stage = "GROUP_ATTENDANCE_BEGIN";
+            await groups.beginAttendance(context.group.groupId, { revision: context.group.revision,
+              digest: context.group.digest, requestId: reservation.requestId, actorStaffId: access.assignment.staffId });
+            groupAttemptStarted = true;
+          }
           let storageRequestId = reservation.originalRequestId;
           const priorFiles = [];
           for (const requestId of reservation.priorRequestIds) {
@@ -363,11 +504,19 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
           }
           stage = "LOCK_FINALIZE";
           await attachAttendanceFile(reservation, fileId, now().getTime(), storageRequestId);
-          records = events.map((event) => createSignatureRecord(event, access.assignment.staffId, { fileId, now: now() }));
+          records = events.map((event) => createSignatureRecord({ ...event,
+            eventGroupId: context.group?.groupId || event.eventGroupId }, access.assignment.staffId, { fileId, now: now() }));
           stage = store.usesFirestoreSignatureLedger ? "LEDGER_WRITE" : "SHEET_APPEND";
           await markAttendanceAppendStarted(reservation, now().getTime());
           appendStarted = true;
           await store.appendSignatures(records);
+          if (context.group) {
+            stage = "GROUP_ATTENDANCE_COMPLETE";
+            try {
+              await groups.completeAttendance(context.group.groupId, { requestId: reservation.requestId });
+              groupLockReconciled = true;
+            } catch (error) { logAttendanceFailure(error, stage, events.length); }
+          }
         } catch (error) {
           const failureCategory = logAttendanceFailure(error, stage, events.length);
           let committed = false;
@@ -386,20 +535,32 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
               logAttendanceFailure(lockError, "LOCK_FINALIZE", events.length);
               return bad(res, 503, "출석 저장 결과를 확인 중입니다. 관리자에게 문의해 주세요.");
             }
+            if (context.group && groupAttemptStarted) {
+              try { await groups.releaseAttendance(context.group.groupId, { requestId: reservation.requestId }); }
+              catch (releaseError) { logAttendanceFailure(releaseError, "GROUP_ATTENDANCE_RELEASE", events.length); }
+            }
           }
           if (!committed) return bad(res, 503, certain ? "출석 저장에 실패했습니다. 다시 시도해 주세요." : "출석 저장 결과를 확인 중입니다. 관리자에게 문의해 주세요.");
+          if (context.group && !groupLockReconciled) {
+            try {
+              await groups.completeAttendance(context.group.groupId, { requestId: reservation.requestId });
+              groupLockReconciled = true;
+            } catch (groupError) { logAttendanceFailure(groupError, "GROUP_ATTENDANCE_COMPLETE", events.length); }
+          }
         }
         let coordinationReconciled = true;
         try { await finishAttendance(reservation, "completed", { signatureIds: records.map((record) => record.signatureId) }); }
         catch (error) { coordinationReconciled = false; logAttendanceFailure(error, "LOCK_FINALIZE", events.length); }
-        try { await saveCprGroupStatus({ db: access.db, staffId: access.assignment.staffId, events }); }
-        catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: events.length })); }
+        let cprProjectionSynced = true;
+        try { await saveCprGroupStatus({ db: access.db, staffId: access.assignment.staffId, events, ...(store.assertCprAttendanceCurrent ? { verifySource: (transaction) => store.assertCprAttendanceCurrent(transaction, access.assignment.staffId, records) } : {}) }); }
+        catch { cprProjectionSynced = false; console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: events.length })); }
         try {
           await Promise.all(events.map((event) => saveTrainingAttendanceStatus(access.db, { eventId: event.eventId,
             staffId: access.assignment.staffId, attendanceStatus: "attended", actorStaffId: access.assignment.staffId,
             updatedAt: now().toISOString() })));
         } catch { console.error(JSON.stringify({ event: "training_attendance_status_reconciliation_failed", eventCount: events.length })); }
-        return res.status(200).json({ ok: true, eventIds: events.map((event) => event.eventId), signedAt: records[0]["서명일시"], coordinationReconciled });
+        return res.status(200).json({ ok: true, eventIds: events.map((event) => event.eventId), signedAt: records[0]["서명일시"], coordinationReconciled, cprProjectionSynced,
+          ...(context.group ? { groupLockReconciled } : {}) });
       }
       if (["training-attendance-summary", "training-final-sheet"].includes(resource) && req.method === "GET") {
         if (!eventId) return bad(res, 400, "교육 ID가 필요합니다.");
@@ -447,14 +608,24 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
         const staffId = param(body?.staffId);
         const reason = String(body?.reason || "").normalize("NFKC").trim();
         const action = body?.action;
-        if (!eventId || !staffId || !reason || reason.length > 200 || !["cancel", "mark-attended", "set-absence-reason"].includes(action)) throw new RangeError("정정 대상과 사유를 확인해 주세요.");
+        if (!eventId || !staffId || !reason || reason.length > 200 || !["cancel", "mark-attended", "set-absence-reason", "reconcile-cpr"].includes(action)) throw new RangeError("정정 대상과 사유를 확인해 주세요.");
         const source = parseTrainingSource(await store.readSource(eventId));
         const event = source.trainings.find((row) => row.eventId === eventId);
         if (!event) return bad(res, 404, "교육을 찾을 수 없습니다.");
         const denied = denyUnownedTraining(res, access, event);
         if (denied) return denied;
+        if (event.registrationMode === "admin_offline_cpr_2026" && (!access.isAdmin || !["cancel","reconcile-cpr"].includes(action))) return bad(res,403,"오프라인 원본은 관리자 취소·현황 복구만 가능합니다.");
         const target = source.targets.find((row) => row.eventId === eventId && row["교직원ID"] === staffId);
         if (!target || access.directory.filter((row) => row.staffId === staffId && row.employmentStatus === "재직").length !== 1) return bad(res, 404, "정정 대상을 찾을 수 없습니다.");
+        if (action === "reconcile-cpr") {
+          if (!access.isAdmin) return bad(res, 403, "전체 CPR 현황 재계산은 보건교사·관리자만 가능합니다.");
+          // Rebuild only derived CPR state, never append a signature or upload.
+          const expectedProjection = await readCprProjection(access.db, staffId);
+          const latest = parseTrainingSource(await (store.readCprSource ? store.readCprSource(staffId) : store.readSource()));
+          await reconcileCprStatus({ db: access.db, staffId, source: latest, expectedProjection, ...(store.assertCprSourceCurrent ? { verifySource: (transaction) => store.assertCprSourceCurrent(transaction, staffId, latest) } : {}) });
+          return res.status(200).json({ ok: true, cprProjectionSynced: true });
+        }
+        let cprProjectionSynced = true;
         const active = source.signatures.find((row) => row.eventId === eventId && row["교직원ID"] === staffId && activeSignature(row));
         if (action === "set-absence-reason") {
           if (active || truthy(target["제외여부"]) || !["대상", "교육 대상"].includes(target["대상상태"])) return bad(res, 409, "미참석 대상만 사유를 등록할 수 있습니다.");
@@ -472,14 +643,15 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
             return bad(res, 409, "취소할 출석 기록이 없습니다.");
           }
           await assertCompletedAttendanceLock(access.db, eventId, staffId);
+          const expectedProjection = await readCprProjection(access.db, staffId);
           const corrected = { ...active, "상태": "취소", "취소여부": "Y", "취소사유": reason, "정정자": access.assignment.staffId, "정정일시": now().toISOString() };
           await store.cancelSignature(active, corrected);
           await cancelAttendanceLock(access.db, eventId, staffId, access.assignment.staffId);
-          const nextSource = { ...source, signatures: source.signatures.map((row) => row.signatureId === active.signatureId ? corrected : row) };
-          try { await reconcileCprStatus({ db: access.db, staffId, source: nextSource }); }
-          catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
-          await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "absent", absenceReason: null,
-            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() });
+          try { const nextSource = parseTrainingSource(await (store.readCprSource ? store.readCprSource(staffId) : store.readSource())); await reconcileCprStatus({ db: access.db, staffId, source: nextSource, expectedProjection, ...(store.assertCprSourceCurrent ? { verifySource: (transaction) => store.assertCprSourceCurrent(transaction, staffId, nextSource) } : {}) }); }
+          catch { cprProjectionSynced = false; console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
+          try { await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "absent", absenceReason: null,
+            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() }); }
+          catch { console.error(JSON.stringify({ event: "training_attendance_status_reconciliation_failed", eventCount: 1 })); }
         } else {
           if (active || truthy(target["제외여부"]) || !["대상", "교육 대상"].includes(target["대상상태"])) return bad(res, 409, "이미 출석했거나 현재 교육 대상이 아닙니다.");
           const reservation = await reserveAttendance(access.db, [eventId], staffId, now().getTime());
@@ -498,19 +670,23 @@ export function createTrainingPhase2Handler({ auth = getFirebaseAdminAuth, db = 
             try { await finishAttendance(reservation, "completed", { signatureIds: [record.signatureId] }); }
             catch { console.warn("[training] correction coordination reconciliation needed"); }
           }
-          try { await saveCprGroupStatus({ db: access.db, staffId, events: [event] }); }
-          catch { console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
-          await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "attended",
-            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() });
+          try { await saveCprGroupStatus({ db: access.db, staffId, events: [event], ...(store.assertCprAttendanceCurrent ? { verifySource: (transaction) => store.assertCprAttendanceCurrent(transaction, staffId, [record]) } : {}) }); }
+          catch { cprProjectionSynced = false; console.error(JSON.stringify({ event: "cpr_status_reconciliation_failed", eventCount: 1 })); }
+          try { await saveTrainingAttendanceStatus(access.db, { eventId, staffId, attendanceStatus: "attended",
+            actorStaffId: access.assignment.staffId, updatedAt: now().toISOString() }); }
+          catch { console.error(JSON.stringify({ event: "training_attendance_status_reconciliation_failed", eventCount: 1 })); }
         }
-        return res.status(200).json({ ok: true });
+        return res.status(200).json({ ok: true, cprProjectionSynced });
       }
       return bad(res, 405, "지원하지 않는 요청입니다.");
     } catch (error) {
+      if (error instanceof ManualCprError) return bad(res,error.status,error.message,error.code);
+      if (error instanceof ResourcePolicyError) return sendResourceError(res, error);
       if (error instanceof TrainingDeploymentError) return bad(res, 503, error.message, error.code);
       if (error instanceof AttendanceConflictError) return bad(res, 409, error.message, error.code);
       if (error instanceof RecoveryConflictError) return bad(res, 409, error.message, "recovery-conflict");
       if (error instanceof TrainingEventConflictError) return bad(res, 409, error.message, "training-event-conflict");
+      if (error instanceof TrainingEventGroupConflictError) return bad(res, 409, error.message, "training-group-conflict");
       if (error instanceof TrainingSignatureConflictError) return bad(res, 409, error.message, "training-signature-conflict");
       if (error instanceof TrainingSourceNotReadyError) return bad(res, 503, "교육센터 Sheet 또는 저장소 설정을 확인해 주세요.", error.code);
       if (error instanceof RangeError || error instanceof SyntaxError) return bad(res, 400, error.message);

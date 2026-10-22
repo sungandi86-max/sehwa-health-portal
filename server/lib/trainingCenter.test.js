@@ -134,7 +134,7 @@ test("valid staff receives an empty list from header-only sheets", async () => {
 
 test("staff-directory dispatches training before admin gate and preserves admin gate", async () => {
   const training = handlerFor();
-  const router = (req, res) => staffDirectoryHandler(req, res, { trainingHandler: training });
+  const router = (req, res) => staffDirectoryHandler(req, res, { context: { APP_ENV: "production" }, trainingHandler: training });
   assert.equal((await call(router)).statusCode, 200);
   assert.equal((await call(router, { resource: "training-detail", eventId: "event-1" })).statusCode, 200);
   assert.equal((await call(router, { resource: "staff-identity" }, "")).statusCode, 401);
@@ -162,7 +162,7 @@ test("training list and detail reject unapproved Preview before authentication o
   for (const query of [{ resource: "training-list" }, { resource: "training-detail", eventId: "event-1" }]) {
     const result = await call(handler, query);
     assert.equal(result.statusCode, 503);
-    assert.equal(result.body.code, "training-environment-not-allowed");
+    assert.equal(result.body.code, "ENVIRONMENT_UNRESOLVED");
   }
   assert.deepEqual(calls, { auth: 0, directory: 0, sheets: 0 });
 });

@@ -1,3 +1,4 @@
+import { trainingEnvironment } from "./trainingDeployment.js";
 import { randomUUID } from "node:crypto";
 import { getTbRegistrationWindowState } from "../../src/lib/portalContent.js";
 
@@ -24,9 +25,9 @@ const date = (value) => {
 };
 
 export function submissionEnvironment(context = process.env) {
-  if (context.VERCEL_ENV === "production" && context.VERCEL_GIT_COMMIT_REF === "main") return "production";
-  if (context.VERCEL_ENV === "preview" && context.VERCEL_GIT_COMMIT_REF === "qa") return "qa";
-  throw new SubmissionConfigError("승인된 배포 환경에서만 제출 설정을 사용할 수 있습니다.");
+  const environment = trainingEnvironment(context);
+  if (environment) return environment;
+  throw new SubmissionConfigError("승인된 배포 환경에서만 이용할 수 있습니다.");
 }
 
 export function submissionCollections(context = process.env) {

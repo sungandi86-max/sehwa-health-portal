@@ -23,7 +23,7 @@ const legacy = (sourceRow, overrides = {}) => ({ sourceRow, staffId: "T022", com
 test("QA CPR certificate ledger stores fileId evidence without profile or public URL projection", async () => {
   const fixture = databaseFixture();
   const store = new CprCertificateSubmissionStore({ database: fixture.database,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }), submissionId: () => "qa-cpr-1" });
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }), submissionId: () => "qa-cpr-1" });
   const saved = await store.createRequest({ staffId: "T022", submittedAt: new Date("2026-10-12T01:02:03Z"),
     completionDate: "2026-01-01", institution: "fixture",
     evidenceFile: { fileId: "drive-file", fileName: "fixture.pdf", mimeType: "application/pdf" } });

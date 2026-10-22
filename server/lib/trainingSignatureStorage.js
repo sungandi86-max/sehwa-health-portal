@@ -1,3 +1,4 @@
+import { resourceEnvironment, ResourcePolicyError, trainingDriveConfig } from "./environmentResources.js";
 import {
   createDriveFolder, createDriveOAuthRequester, deleteDriveFile, downloadDriveFile,
   DRIVE_FOLDER_MIME, DRIVE_OAUTH_SCOPE, getDriveFile, getDrivePermissions, listDriveFiles, uploadDrivePng,
@@ -34,13 +35,6 @@ export class SignatureStorage {
   async deleteSignature() { throw new Error("SignatureStorage.deleteSignature must be implemented."); }
 }
 
-function envConfig() {
-  return {
-    clientId: String(process.env.TRAINING_DRIVE_OAUTH_CLIENT_ID || "").trim(),
-    clientSecret: String(process.env.TRAINING_DRIVE_OAUTH_CLIENT_SECRET || "").trim(),
-    refreshToken: String(process.env.TRAINING_DRIVE_OAUTH_REFRESH_TOKEN || "").trim(),
-  };
-}
 
 function validConfig(config) {
   return Boolean(config.clientId && config.clientSecret && config.refreshToken);
@@ -101,19 +95,28 @@ export function signatureStorageYear(value = new Date()) {
 }
 
 export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
-  constructor({ config = envConfig(), request = null, environment = () => requireTrainingEnvironment() } = {}) {
+  constructor({ config = null, request = null, environment = () => requireTrainingEnvironment() } = {}) {
     super();
+    this.managedConfig = config === null;
     this.config = config;
     this.request = request;
     this.environment = environment;
   }
 
   get configured() {
-    return validConfig(this.config);
+    try { return validConfig(this.managedConfig ? trainingDriveConfig() : this.config); } catch { return false; }
   }
 
   requester() {
+    if (this.managedConfig) {
+      const environment = resourceEnvironment();
+      const config = trainingDriveConfig();
+      if (this.requestEnvironment && this.requestEnvironment !== environment) throw new ResourcePolicyError("RESOURCE_ENV_MISMATCH");
+      this.requestEnvironment = environment;
+      this.config = config;
+    }
     if (this.request) return this.request;
+    if (!this.config) this.config = trainingDriveConfig();
     if (!this.configured) throw new SignatureStorageError("SIGNATURE_STORAGE_CONFIG", { code: "CONFIG_REQUIRED" });
     this.request = createDriveOAuthRequester(this.config);
     return this.request;
@@ -157,6 +160,7 @@ export class GoogleDriveOAuthSignatureStorage extends SignatureStorage {
 
   async bootstrap() {
     const environment = this.environment();
+    if (!this.config) this.config = trainingDriveConfig();
     if (!this.configured) throw new SignatureStorageError("SIGNATURE_STORAGE_CONFIG", { code: "CONFIG_REQUIRED" });
     try {
       const existing = await this.rootFolder();

@@ -1,3 +1,4 @@
+import { assertSheetResource } from "./environmentResources.js";
 import { JWT } from "google-auth-library";
 import { getFirebaseServiceAccount } from "./firebaseAdmin.js";
 import { getTrainingSpreadsheetId, readTrainingSheets, TRAINING_SHEETS, TrainingSourceNotReadyError } from "./trainingCenter.js";
@@ -74,6 +75,21 @@ export class TrainingCenterStore {
     try { return await this.ledger.isReady(); } catch { return false; }
   }
 
+  async readCprSource(staffId) {
+    const base = await this.readBase();
+    if (!await this.ledger.isReady()) throw new TrainingSourceNotReadyError();
+    const records = await this.ledger.listStaffSignatures(staffId);
+    return { ...base, signatures: [SIGNATURE_HEADERS, ...records.map((record) => SIGNATURE_HEADERS.map((header) => record[header] || ""))] };
+  }
+
+  async assertCprAttendanceCurrent(transaction, staffId, records) {
+    return this.ledger.assertRecordsActive(transaction, staffId, records);
+  }
+
+  async assertCprSourceCurrent(transaction, staffId, source) {
+    return this.ledger.assertStaffSourceCurrent(transaction, staffId, source.signatures);
+  }
+
   async readSource(eventId = "") {
     const source = await readTrainingSheets({ events: this.events });
     if (!await this.ledger.isReady()) throw new TrainingSourceNotReadyError();
@@ -92,8 +108,8 @@ export class TrainingCenterStore {
     return readTrainingSheets({ events: this.events });
   }
 
-  async saveEvent(values, existing = null) {
-    return this.events.saveEvent(values, existing);
+  async saveEvent(values, existing = null, actor = null) {
+    return this.events.saveEvent(values, existing, actor);
   }
 
   async saveSnapshotTarget(eventId, values, person) {
@@ -106,6 +122,7 @@ export class TrainingCenterStore {
 
   async sheetId(name) {
     if (this.sheetIdCache.has(name)) return this.sheetIdCache.get(name);
+    assertSheetResource(this.spreadsheetId);
     const auth = googleAuth(["https://www.googleapis.com/auth/spreadsheets.readonly"]);
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}?fields=sheets(properties(sheetId,title))`;
     const result = await auth.request({ url });
@@ -116,6 +133,7 @@ export class TrainingCenterStore {
   }
 
   async batchUpdate(requests) {
+    assertSheetResource(this.spreadsheetId, process.env, "write");
     const auth = googleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
     await auth.request({
       url: `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}:batchUpdate`,
@@ -125,6 +143,7 @@ export class TrainingCenterStore {
   }
 
   async saveRow(name, headers, values, rowNumber = null) {
+    assertSheetResource(this.spreadsheetId, process.env, "write");
     const sheetId = await this.sheetId(name);
     const first = await readGoogleSheetValues({ spreadsheetId: this.spreadsheetId, range: `'${name}'!A1:Z1` });
     const actual = (first[0] || []).map((header) => String(header ?? "").normalize("NFKC").trim());

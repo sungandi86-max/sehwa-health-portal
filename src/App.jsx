@@ -9,7 +9,6 @@ import {
 } from "./data/fallbackData.js";
 
 const PORTAL_API_URL = "/api/portal";
-const DEV_PORTAL_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/portal";
 
 const AdminAuthGate = lazy(() => import("./components/AdminAuthGate.jsx"));
 const FirebaseStaffSubmissionAccessGate = lazy(() => import("./components/FirebaseStaffSubmissionAccessGate.jsx"));
@@ -75,13 +74,6 @@ async function fetchPortalData(signal, scope = "") {
     return response.json();
   }
 
-  if (import.meta.env.DEV) {
-    const separator = scope ? "&" : "?";
-    const fallbackUrl = `${DEV_PORTAL_API_FALLBACK}${scope ? `?scope=${encodeURIComponent(scope)}` : ""}${separator}preview=local`;
-    const fallbackResponse = await fetch(fallbackUrl, { signal, cache: "no-store" });
-    if (!fallbackResponse.ok) throw new Error(`fallback HTTP ${fallbackResponse.status}`);
-    return fallbackResponse.json();
-  }
 
   throw new Error("Portal API did not return JSON");
 }

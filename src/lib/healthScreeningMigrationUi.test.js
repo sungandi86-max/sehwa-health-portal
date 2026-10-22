@@ -1,13 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { personalTbEvidenceRequired, SCREENING_TYPE_OPTIONS, screeningSourceLabel, screeningTypeLabel } from "./healthScreeningTypes.js";
+import { personalTbEvidenceRequired, SCREENING_TYPE_OPTIONS, screeningSourceLabel, screeningConfirmationLabel, screeningSelfConfirmationDateLabel, screeningTypeLabel } from "./healthScreeningTypes.js";
 
 test("migrated routes have a distinct user-safe source label", () => {
   assert.equal(screeningSourceLabel({ source: "legacy_firestore_backfill" }), "기존 자료 이관");
   assert.equal(screeningSourceLabel({ source: "self" }), "본인 선택");
   assert.equal(screeningSourceLabel({ source: "admin", selfChoice: null }), "관리자 입력");
   assert.equal(screeningSourceLabel({ source: "admin", selfChoice: { screeningType: "nhis" } }), "관리자 수정");
+  const migrated = { source: "legacy_firestore_backfill", selfChoice: null, confirmedBy: null, confirmedAt: null };
+  assert.equal(screeningConfirmationLabel(migrated), "미확인");
+  assert.equal(screeningSelfConfirmationDateLabel(migrated), "—");
+  assert.equal(screeningSourceLabel(null), "기록 없음");
 });
 test("school group screening has a distinct label and does not require personal evidence", () => {
   assert.deepEqual(SCREENING_TYPE_OPTIONS.map((item) => item.value), ["nhis", "employment", "individual", "group", "none", "other"]);

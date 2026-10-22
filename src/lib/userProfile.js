@@ -85,6 +85,14 @@ export async function getUserAssignmentResult(uid, schoolYear, semester) {
       };
     }
 
+    // A document at the current path is not sufficient authority by itself.
+    if (assignment.uid !== uid || assignment.schoolYear !== schoolYear || assignment.semester !== semester ||
+        typeof assignment.active !== "boolean" || !Array.isArray(assignment.roles) ||
+        !assignment.roles.some((role) => ["staff", "homeroom", "training_admin", "admin", "health_teacher"].includes(role)) ||
+        typeof assignment.staffId !== "string" || !assignment.staffId.trim()) {
+      return { status: "error", assignment: null, assignmentId, errorCode: "assignment-integrity",
+        message: "현재 학기 교직원 권한 정보를 확인해 주세요." };
+    }
     return {
       status: "found",
       assignment,

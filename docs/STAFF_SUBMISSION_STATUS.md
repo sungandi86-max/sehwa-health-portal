@@ -1,14 +1,13 @@
 # Staff Submission And Training Status Model
 
-## 2026-10-14 Legacy screening-type dependency audit (QA cleanup)
+## 2026-10-15 Legacy screening-type dependency audit and minimal UI cleanup
 
-Production annual confirmation is active independently on main `dddd62fbf1d9f1809a14438d19998c8839abfb0b`, using `staff_health_screening_types`. This cleanup starts from QA `66057286249ccb0ce571dc47e7c423c8e5d9c1eb`; its existing QA-only API guard and `_qa` collection remain unchanged. Do not merge the whole QA branch into main. The earlier QA implementation section below is a historical phase record, not a statement that Production activation is still pending.
+Production annual confirmation remains active from main `dddd62fbf1d9f1809a14438d19998c8839abfb0b`, using `staff_health_screening_types`. Only the approved UI/documentation/tests from QA `db5c011` are selectively integrated. Production host activation and environment isolation remain unchanged; no QA-only display guard or runtime fixture is introduced. The existing Production activation description below remains authoritative.
 
 | Path / consumer | Classification | Action / reason |
 | --- | --- | --- |
 | `HealthScreeningTypePanel` → `healthScreeningTypes` → staff-directory resource router → annual store | A: annual Firestore only | Keep; own staffId/year lookup, missing record means confirmation required. No Sheet type fallback. |
 | `HealthScreeningTypeAdminPanel` → annual admin API | A | Keep; one year query joined with canonical roster, not N+1 lookups. |
-| `adminProxySubmissionApi.attachAnnualScreeningTypes` → administrator submission list | A | Keep QA annual enrichment for distinct identities in the bounded list; never infer annual type from certificates. |
 | `tbRegistrationRequestStore.sourceSheetName`, TB migration documentation | B: original/audit metadata | Preserve original row fingerprints and historical references. These strings are not runtime Sheet reads. |
 | `staffDirectory` → `교직원명단` | C: canonical identity | Preserve staffId/name/department/position/active-status source. It does not map an annual nhis/employment column. |
 | `trainingCenter.readTrainingSheets` → `교직원교육대상` | C: education targets | Preserve existing education targets and snapshot compatibility; unrelated to health-screening type. |
@@ -26,21 +25,21 @@ Source-of-truth separation:
 
 The administrator page now has native section anchors for annual type, research-source check, legal-training exceptions and completion status, retaining panel order, workspace and API calls. Its old TB filter and national summary explicitly say **신청 경로**, preventing confusion with annual 공단검진 confirmation. No new state, query, role, writer or fallback was introduced.
 
-This is a code/caller audit, not a fresh live workbook or historical-row audit. No Sheet/Firestore/Drive data, Rules or Production deployment is changed. Past annual records remain readable; past-year writes remain denied. Existing registration, completion, certificate and proxy contracts remain separate.
+This is a code/caller audit, not a fresh live workbook or historical-row audit. The release changes UI only: no Sheet/Firestore/Drive data, schema or Rules changes. Past annual records remain readable; past-year writes remain denied. Existing registration, completion, certificate and proxy contracts remain separate.
 
-## 2026-10-14 Initial QA annual health-screening type confirmation (historical phase)
+## Annual health-screening type Production activation
 
-Annual **health-screening type** is independent from the existing TB application path and completion projection. Canonical staff data is read-only `교직원명단`; the current reader maps staffId, name, department, position and employment status, not an annual nhis/employment column. Existing `staff_submission_status.screening.screeningType` (`group/individual/national/...`) describes the TB application path, `status` describes completion, and `note` describes guidance. These fields are not repurposed. Historical Sheet/type logs are not migrated, changed or deleted. No legacy value is guessed as a new annual confirmation.
+The annual health-screening type is independent of the legacy TB application path and completion projection. The canonical read-only `교직원명단` supplies staffId, name, department, position and employment status. Existing `staff_submission_status.screening.screeningType` remains the TB application path, `status` remains completion, and `screening.note` remains guidance. No historical Sheet value is inferred, copied, migrated, modified or deleted by this feature.
 
-QA uses `staff_health_screening_types_qa/{staffId}_{schoolYear}` with staffId, schoolYear, screeningType (`nhis/employment/none/other`), screeningTypeConfirmed, confirmedAt, confirmedBy (actor canonical staffId), source (`self/admin`), selfChoice, revision, environment=qa, schemaVersion=1 and createdAt/updatedAt. A transaction writes the current record and creates immutable `history/{revision}`. Admin edits preserve the latest actual selfChoice; an admin-only initial entry is not labelled as a completed self-confirmation. Reconfirmation by the member is allowed and every revision remains in history. `screeningTypeConfirmed` means the type record is confirmed; the UI derives **본인확인** only from selfChoice. None of these fields denotes completion.
+Approved QA code from `2723eba` and `6605728` is selectively integrated. The QA-only administrator proxy read implementation and runtime synthetic fixture are not included. The existing staff-directory resource router exposes `resource=health-screening-types`, retaining 12 API functions. No Rules change, environment change, data migration or bulk document creation is needed.
 
-The existing staff-directory resource router serves `resource=health-screening-types`; no extra Function is added. Own GET reads one annual document after verified current assignment; admin GET reads the requested year and canonical roster once, then filters in the client. Submission lists enrich only distinct identities in the bounded returned list via getAll. No screen scans an entire staff Firestore collection for this feature. A missing annual record is unconfirmed; 2027 does not copy 2026. Writes are restricted to the configured current school year (CURRENT_SCHOOL_YEAR), and no write occurs on opening a panel or changing a filter. A stale revision returns 409 and requires a refresh.
+Collection selection uses the strict deployment environment contract: preview/qa selects `staff_health_screening_types_qa`; production/main selects `staff_health_screening_types`; unknown environments fail with 503 before database access. Requests cannot select an environment or collection. QA synthetic identities are rejected and excluded from Production administration.
 
-Only health_teacher/admin can list or edit all staff, with current canonical active-roster validation for the target. Self requests are bound to the verified assignment staffId; another member's id is denied. training_admin cannot use the management API. Browser requests cannot select an environment or collection. Production/unknown deployment gates return 503 before auth/database access; there is no Production collection fallback. This QA implementation needs an explicit reviewed Production activation before release.
+Current documents are `{staffId}_{schoolYear}` with staffId, schoolYear, screeningType (`nhis`, `employment`, `none`, `other`), screeningTypeConfirmed, confirmedAt, confirmedBy (verified actor staffId), source (`self` or `admin`), selfChoice, revision, environment, schemaVersion=1 and createdAt/updatedAt. Each save atomically updates the current record and creates immutable `history/{revision}`. Administrator changes preserve the most recent selfChoice. An administrator-only entry does not claim that the staff member personally confirmed it. Self reconfirmation remains allowed. Stale expectedRevision returns 409.
 
-Personal UI is on `/my-submission-status`; management is inside the existing staff submission/status workspace. The annual type, self-confirmation and existing completion are separate labels. Existing registration, certificate and administrator proxy workflows never update the annual ledger. Guidance notes remain in the old status projection. Production data, historical records, Sheet schemas, Rules and workspace layouts are unchanged.
+Missing documents mean “확인 필요”; no staff records are pre-created. The next school year does not copy the previous selection. Writes are restricted to the configured current school year. Self GET reads one document; administrator GET queries the requested school year once and joins the canonical roster in memory. Filters/search are local; missing records do not cause N+1 reads. Opening screens and changing filters never writes.
 
-The existing completion overview still reads its established `staff_submission_status` projection; this phase does not isolate or migrate that unrelated legacy reader. In fixed QA the old TB state editor is hidden and its writer rejects before setDoc, so annual testing cannot accidentally alter the existing Production completion projection. The new annual UI is shown only on fixed QA, while the server independently enforces the QA deployment gate. No production-isolation claim is made for every legacy reader on this shared status page.
+Self access is bound to the verified current assignment. Foreign staffId requests return 403. Only health_teacher/admin may list and edit all staff; training_admin management requests return 403 and unauthenticated requests return 401. The self panel on `/my-submission-status` shows annual type, personal confirmation/date and existing completion separately. The administrator panel is in `/firebase-admin/staff-submission-status`. Legacy TB editing keeps its existing behavior and is labelled “기존 결핵검진 신청 경로”. Registration, certificate, proxy submission and completion updates do not overwrite the annual ledger. The new feature does not read a Sheet screening-type value.
 
 ## 2026-10-08 Legal-training exception Sheet reduction
 
@@ -105,11 +104,10 @@ Relevant tabs:
 - CPR 운영 상태는 Firestore `staff_submission_status/{staffId}_cpr-training-2026`를 사용한다. 과거 `교직원 심폐소생술 연수 이수` 탭은 migration 승인 전 legacy 대조 자료로만 유지한다.
 - `교직원명단`
 - `제출항목관리`
-- `제출기록`
+- `제출기록` (과거 3행 이관 원본만 유지; 신규 학생 진료회신은 `student_submission_audit_{environment}` Firestore 원장)
 - `제출현황`
 
-These tabs are managed by the health office and remain operational source
-records. Do not replace or delete them during the first implementation phases.
+This list records the original Sheet dependencies from the first implementation phase. Current runtime sources have since moved to Firestore where noted; do not treat the historical list as a backup-required or runtime-read list.
 
 ### External Research Department Sheet
 
@@ -740,36 +738,6 @@ different privacy boundary.
 - Keep each phase rollbackable.
 
 ## Implementation Safety Lines
-
-### QA 연도별 결핵검진 확인 흐름
-
-QA 고정 주소에서는 `staffId + schoolYear`로 검진 경로, 본인확인,
-확인자료 접수, 관리자 완료를 각각 조회한다. 새 확인자료는 현재 설정 학년도에
-접수되며 관리자 확인 전에는 완료로 표시하지 않는다. 연도가 없는 기존 자료는
-과거 자료로 보존하고 현재 학년도에 연결하지 않는다.
-
-연도별 `health-screening-types` 응답의 `workflow`는 QA 경로 원장,
-`staff_submissions_qa` 확인자료, `staff_submission_status_qa` 완료 원장을
-연결한다. 자료 조회가 일부이면 자료 없음으로 단정하지 않는다.
-관리자는 `tb-screening-workflow`에 확인자료 ID와 현재 revision을 보내
-확인 완료 또는 자료 무효 처리를 수행한다. 보건교사·관리자만 완료를 확인하며
-확인자, 확인일시, 확인자료 참조가 남는다. 자료 무효는 기존 완료와 승인 이력을
-자동 취소하지 않고 불일치 경고를 표시한다.
-
-나의 현황과 관리자 현황은 기존 연도별 응답을 재사용한다. QA 확인서 제출의
-완료 확인은 서버 조회로 처리하며 운영 결핵검진 조회·쓰기 경로로 대체하지 않는다.
-운영 주소의 기존 제출자료 선택과 완료 처리 방식은 그대로 유지한다.
-
-Preview의 `qa` 브랜치에서 본인·대리 결핵검진, CPR·학생 자료 제출과 관리자
-승인용 증빙 메타데이터 조회는 서버 전용 `QA_SUBMISSION_GAS_URL`을 필수로 사용한다.
-설정이 없으면 제출을 503으로 차단하고 승인용 파일 확인도 실패하며,
-`GAS_URL`로 대체하지 않는다. Production은 QA 변수를 무시하고 기존
-`GAS_URL` → `VITE_GAS_BASE_URL` 우선순위를 유지한다. 포털·보건실의 공용 주소는 변경하지 않는다.
-
-독립 QA 제출 Script 웹앱의 계약은 배포자 권한 실행이며, 외부 HTTP 호출을 받더라도
-제출·증빙 확인에는 유효한 QA HMAC 서명이 필요하다. 폴더는 서명된 서버 요청으로 전달하며
-비공개·휴지통 제외 상태와 증빙의 정확한 QA 폴더 소속을 확인한다.
-실제 QA 접수부터 관리자 승인·완료 조회까지의 라이브 E2E는 검증이 끝날 때까지 미완료로 남긴다.
 
 - Do not change the health-office Sheet workflow.
 - Do not write to the research department Sheet.

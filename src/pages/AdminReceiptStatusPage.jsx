@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { AppCard, Badge, SectionTitle } from "../components/ui.jsx";
 
 const ADMIN_API = "/api/health-room-status";
-const DEV_ADMIN_API_FALLBACK = "https://sehwa-health-portal.vercel.app/api/health-room-status";
 
 async function requestReceiptSummary(firebaseUser) {
   const idToken = await firebaseUser.getIdToken();
@@ -22,17 +21,6 @@ async function requestReceiptSummary(firebaseUser) {
     return response.json();
   }
 
-  if (import.meta.env.DEV) {
-    const fallbackResponse = await fetch(DEV_ADMIN_API_FALLBACK, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${idToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    return fallbackResponse.json();
-  }
 
   throw new Error(`HTTP ${response.status}`);
 }
@@ -47,6 +35,15 @@ async function requestQaInbody(firebaseUser) {
   if (response.status === 409) return null;
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
+}
+
+async function requestStudentAudit(firebaseUser) {
+  const idToken = await firebaseUser.getIdToken();
+  const response = await fetch("/api/firebase/staff-directory?resource=student-submission-audit", {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return { ...await response.json(), httpStatus: response.status };
 }
 
 function numberText(value) {
@@ -134,6 +131,8 @@ export default function AdminReceiptStatusPage({ adminUser }) {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [qaInbody, setQaInbody] = useState(null);
+  const [studentAudit, setStudentAudit] = useState(null);
+  const [auditMessage, setAuditMessage] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -166,11 +165,25 @@ export default function AdminReceiptStatusPage({ adminUser }) {
     }
   };
 
+  const fetchAudit = async () => {
+    if (!adminUser) return;
+    try {
+      setStudentAudit(await requestStudentAudit(adminUser));
+      setAuditMessage("");
+    } catch (error) {
+      setStudentAudit(null);
+      setAuditMessage(`학생 진료회신 감사원장을 불러오지 못했습니다. ${error.message}`);
+    }
+  };
+
   useEffect(() => {
     fetchSummary();
+    fetchAudit();
   }, [adminUser]);
 
   const sections = Array.isArray(summary?.sections) ? summary.sections : [];
+  const auditItems = Array.isArray(studentAudit?.items) ? studentAudit.items : [];
+  const evidenceParity = auditItems.filter((item) => item.hasOriginalRowFingerprint && item.evidence?.some((file) => file.fileId)).length;
 
   return (
     <section className="mx-auto max-w-7xl px-3 py-5 sm:px-4 md:py-8">
@@ -199,7 +212,7 @@ export default function AdminReceiptStatusPage({ adminUser }) {
             </div>
             <button
               type="button"
-              onClick={fetchSummary}
+              onClick={() => { fetchSummary(); fetchAudit(); }}
               disabled={loading}
               className={`min-h-11 rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition ${
                 loading ? "cursor-not-allowed bg-slate-300" : "bg-[#1A3B8B] hover:-translate-y-[1px] hover:shadow-md"
@@ -228,6 +241,23 @@ export default function AdminReceiptStatusPage({ adminUser }) {
                 QA 신청 {qaInbody.qaSyntheticRequest.requestId} · {qaInbody.qaSyntheticRequest.preferredDate} · {qaInbody.qaSyntheticRequest.preferredTime}
               </p>
             )}
+          </AppCard>
+        )}
+
+        {(studentAudit || auditMessage) && (
+          <AppCard className="mt-5 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-[#1A3B8B]">학생 진료회신 감사원장</h2>
+              <Badge type="blue">Firestore</Badge>
+            </div>
+            {studentAudit ? (
+              <div className="mt-3 space-y-1 text-sm text-slate-600">
+                <p>전체 {numberText(studentAudit.summary.total)} · 수동 검토 {numberText(studentAudit.summary.manualReview)}</p>
+                <p>원본 행 {auditItems.map((item) => item.originalRowNumber).filter(Boolean).sort((a, b) => a - b).join(", ") || "없음"}</p>
+                <p>원본 지문·증빙 연결 {evidenceParity}/{auditItems.length} · 학생 신원 자동 연결 {numberText(auditItems.filter((item) => item.hasCanonicalStudentKey).length)}</p>
+                <p className="text-xs text-slate-500">{studentAudit.environment} · HTTP {studentAudit.httpStatus} · 학생 개인정보와 파일 링크는 표시하지 않습니다.</p>
+              </div>
+            ) : <p className="mt-3 text-sm text-[#B42318]">{auditMessage}</p>}
           </AppCard>
         )}
 

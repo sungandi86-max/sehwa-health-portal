@@ -1,3 +1,4 @@
+import { assertSheetResource } from "./environmentResources.js";
 import { JWT } from "google-auth-library";
 import { getFirebaseAdminAuth, getFirebaseAdminDb, getFirebaseServiceAccount } from "./firebaseAdmin.js";
 import { trainingSpreadsheetId } from "./trainingDeployment.js";
@@ -165,6 +166,7 @@ export function normalizeDirectory(values, { allowInvalidEmploymentStatus = fals
 }
 
 export async function readGoogleSheetValues({ spreadsheetId, range }) {
+  assertSheetResource(spreadsheetId);
   const serviceAccount = getFirebaseServiceAccount();
   if (!serviceAccount?.client_email || !serviceAccount?.private_key) {
     throw new Error("Google Sheets 읽기에 사용할 서비스 계정 환경변수가 필요합니다.");

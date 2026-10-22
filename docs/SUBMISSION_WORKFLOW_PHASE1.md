@@ -1,6 +1,6 @@
 # Submission workflow boundary, Phase 1
 
-> 이 문서는 Phase 1 당시의 설계·검증 이력이다. 현재 Production 계약은 구현 코드와 후속 migration 문서를 기준으로 하며, 아래 release blocker와 "not deployed" 표기는 당시 상태를 설명한다.
+> Historical Phase 1 checkpoint. Current Production student TB replies use the signed Vercel → Apps Script private Drive → `student_submission_audit_production` path. The `제출기록` tab is retained only as the three-row migration source and has no runtime read/write dependency. Production Apps Script v112 is strict-signed; see [student audit migration](STUDENT_SUBMISSION_AUDIT_PHASE1.md).
 
 This checkpoint fixes the code contract before any Sheet-to-Firestore configuration migration. No source Sheet, Firestore document, environment variable, or deployed Apps Script version is changed by this branch.
 
@@ -17,8 +17,8 @@ The public upload-card projection contains only `title`, `titleLines`, `descript
 | `cpr` | `/firebase-submit/cpr` → `/api/submit` | Firebase + current canonical staffId; staff/homeroom/health_teacher/admin | PDF/JPEG/PNG, ≤3 MiB after optional image compression | server-owned CPR Drive folder + `cpr_certificate_submissions_{environment}` audit ledger + `staff_submission_status` | `/firebase-admin/submissions` |
 | `tb` | `/firebase-submit/tb` → `/api/submit` | Same, plus TB completion guard | Same | server-owned TB Drive folder + `tb_certificate_submissions_*`; `staff_submission_status` | 관리자 TB certificate audit resource |
 | `tb_registration` | `/upload` modal → `/api/submit` | Same TB guard; Firestore registration period gate | None | `tb_registration_requests_{environment}` audit ledger + `staff_submission_status`; legacy Sheet runtime 사용 안 함 | TB status/admin audit views |
-| `student_tb_reply` (`student-file`) | `/upload?mode=public&type=tbreply` → `/api/submit` | Anonymous student/guardian route explicitly present in UI; no staffId | PDF/JPEG/PNG, ≤3 MiB after optional image compression | Fixed student reply Drive folder + `제출기록`; no Firestore status | Existing raw receipt review |
-| `inbody` | CMS health-event action → `/api/submit` | Firebase + current canonical staffId; staff/homeroom/health_teacher/admin | None | `응답_인바디측정신청`; no Firestore status | Existing Apps Script receipt summary |
+| `student_tb_reply` (`student-file`) | `/upload?mode=public&type=tbreply` → `/api/submit` | Anonymous student/guardian route explicitly present in UI; no staffId | PDF/JPEG/PNG, ≤3 MiB after optional image compression | Fixed private Drive folder + `student_submission_audit_{environment}`; no Sheet fallback | Admin-only student audit resource |
+| `inbody` | CMS health-event action → `/api/submit` | Firebase + current canonical staffId; staff/homeroom/health_teacher/admin | None | `inbody_requests_{environment}` Firestore 원장 | Firestore 관리자 조회 |
 | `infection` | `/firebase-submit/infection` | Firebase + homeroom/health_teacher/admin via Firestore rules | No `/api/submit` file | `student_health_submissions`; legacy `/api/submit` remains 410 | Infection admin view |
 | `recruit` | `/firebase-submit/recruit` | Firebase current staff through Firestore rules | No legacy upload | `staff_submissions`; legacy `/api/submit` disabled | `/firebase-admin/submissions` |
 | `other` | No active upload card | Policy not confirmed | Legacy file form disabled at `/api/submit` | No allowed destination | None |
@@ -51,7 +51,7 @@ The effective file maximum is 3 MiB. The client may resize/re-encode JPEG or PNG
 
 ## Phase 1.6 student reply audit contract (feature code only)
 
-The operating `제출기록` tab has 26 existing columns, not the former student-only 13-column fixture. A read-only audit found two populated legacy rows, both using only `제출일시`, `파일명`, and `파일URL`. No other repository submission type writes this tab. Do not add columns or create a new Sheet to make the student reply path work.
+At the Phase 1.6 checkpoint, `제출기록` was observed with 26 populated header positions and two legacy rows; that observation is historical. The later full-source audit identified 35 columns and three data rows, all since migrated to Firestore for manual review. No new Sheet columns were added, and current student replies do not append to this tab.
 
 | Student reply value | Existing `제출기록` column |
 | --- | --- |

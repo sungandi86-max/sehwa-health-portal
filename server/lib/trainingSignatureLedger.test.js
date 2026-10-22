@@ -69,7 +69,7 @@ function record(id, eventId, staffId, extra = {}) {
 }
 
 const table = (...rows) => [SIGNATURE_HEADERS, ...rows.map((row) => SIGNATURE_HEADERS.map((header) => row[header] || ""))];
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 
 test("QA signature ledger imports Sheet history once and preserves active selection", async () => {

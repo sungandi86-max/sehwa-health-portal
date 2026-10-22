@@ -62,20 +62,29 @@ export class CprCertificateSubmissionStore {
   }
   get environment() { return submissionEnvironment(this.context()); }
   get collectionName() { return COLLECTIONS[this.environment]; }
-  async createRequest({ staffId, submittedAt = new Date(), completionDate, institution, evidenceFile }) {
+  async createRequest({ staffId, submittedAt = new Date(), completionDate, institution, evidenceFile, submissionId, requestFingerprint }) {
     const canonicalStaffId = text(staffId);
     const file = normalizeEvidenceFile({ ...evidenceFile, exists: true });
     if (!canonicalStaffId || !text(completionDate) || !file.fileId || !file.fileName || !file.mimeType) {
       throw new Error("CPR 이수증 감사 원장 필수값이 없습니다.");
     }
-    const id = this.submissionId();
+    const id = submissionId || this.submissionId();
     const timestamp = submittedAt instanceof Date ? submittedAt.toISOString() : text(submittedAt);
     const request = { submissionId: id, staffId: canonicalStaffId, submittedAt: timestamp,
       completionDate: text(completionDate), institution: text(institution), source: "portal", environment: this.environment,
+      ...(requestFingerprint ? { requestFingerprint } : {}),
       originalRowNumber: null, originalRowFingerprint: fingerprint([canonicalStaffId, timestamp, completionDate, file.fileId]),
       evidenceFiles: [file], evidenceMissing: false, manualReview: false, status: "received",
       migration: { imported: false }, schemaVersion: 1, createdAt: timestamp, updatedAt: timestamp };
-    await this.database().collection(this.collectionName).doc(id).create(request);
+    const ref = this.database().collection(this.collectionName).doc(id);
+    try { await ref.create(request); }
+    catch (error) {
+      if (![6, "already-exists"].includes(error.code) || !requestFingerprint) throw error;
+      const existing = this.readDocument(await ref.get());
+      if (existing.staffId !== canonicalStaffId || existing.requestFingerprint !== requestFingerprint ||
+          existing.evidenceFiles?.[0]?.fileId !== file.fileId) throw new Error("CPR 접수 재시도 내용이 일치하지 않습니다.");
+      return existing;
+    }
     return request;
   }
   async getRequest(submissionId) {

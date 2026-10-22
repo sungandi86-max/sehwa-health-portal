@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildLegacyStudentSubmissionRecord, planLegacyStudentSubmissionMigration,
   StudentSubmissionAuditStore, studentEvidenceIdFromUrl } from "./studentSubmissionAuditStore.js";
-import submitHandler from "../../api/submit.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
 import { buildScriptSubmission, SUBMISSION_WORKFLOWS } from "./submissionWorkflows.js";
 import { buildSubmissionProxyEnvelope, qaStudentSubmissionIdentity, submissionVisitor } from "./submissionProxyEnvelope.js";
 import { createHash, createHmac } from "node:crypto";
@@ -88,7 +90,7 @@ test("QA signed and legacy fixtures read back in QA only without a Drive or Shee
   const db = database();
   let sequence = 0;
   const store = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }),
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }),
     id: () => `QA-STUDENT-AUDIT-${++sequence}` });
   await store.createQaFixture({ pattern: "signed", evidenceFile: { fileId: "QA-EVIDENCE-001", fileName: "QA.pdf" } });
   await store.createQaFixture({ pattern: "legacy_manual_review", evidenceFile: { fileId: "QA-EVIDENCE-002", fileName: "QA.pdf" } });
@@ -105,7 +107,7 @@ test("QA signed and legacy fixtures read back in QA only without a Drive or Shee
 test("QA request create is isolated, create-only and rejects non-synthetic names", async () => {
   const db = database();
   const qa = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
   const input = { requestId: "QA-REQUEST-001", evidenceSha256: "a".repeat(64),
     fields: { grade: "2", classNumber: "1", studentNumber: "99",
     studentName: "[QA] synthetic" }, evidenceFile: { fileId: "QA-FILE-001", fileName: "QA-test.pdf",
@@ -130,7 +132,7 @@ test("QA evidence lookup recognizes additive v1 tag without copying or changing 
     evidenceFiles: [{ fileId: "QA-DRIVE-V1", mimeType: "image/png", exists: true }] };
   db.collections.set("student_submission_audit_qa", new Map([[v1.submissionId, v1]]));
   const store = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
   const matched = await store.getQaEvidenceMatch({ evidenceSha256: digest, fileMimeType: "image/png",
     fields: { grade: "1", classNumber: "1", studentNumber: "99", studentName: "[QA] synthetic" } });
   assert.equal(matched.submissionId, v1.submissionId);
@@ -186,8 +188,8 @@ test("QA anonymous submit signs a QA-only Drive payload, writes ledger, and neve
   await submitHandler(request(payload), res, { destinationUrl: "https://script.google.com/macros/s/test/exec",
     proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
     qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001", now: new Date("2026-10-12T00:00:00Z"),
-    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
-      createQaRequest: async (record) => writes.push(record) },
+    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
+      createRequest: async (record) => writes.push(record) },
     postScript: async (_url, init) => {
       const envelope = JSON.parse(init.body);
       const forwarded = JSON.parse(envelope.payloadJson);
@@ -211,23 +213,98 @@ test("QA anonymous submit signs a QA-only Drive payload, writes ledger, and neve
   assert.equal(prodPayload.recordMode, undefined);
 });
 
-test("same QA evidence across midnight rejects before a second Drive upload", async () => {
+test("same QA evidence across midnight returns success without a second Drive upload", async () => {
   const payload = { type: "student_tb_reply", fields: { grade: "1", classNumber: "1", studentNumber: "99",
     studentName: "[QA] synthetic" }, fileName: "QA-20261012.png", fileMimeType: "image/png",
     fileBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl9mN8AAAAASUVORK5CYII=" };
-  const existing = { submissionId: "QA-STUDENT-TB-v1", evidenceFiles: [{ fileId: "QA-DRIVE-V1", exists: true }] };
+  const existing = { submissionId: "QA-STUDENT-TB-v1", environment: "qa", source: "qa_signed_submission",
+    status: "recorded", signedPath: true, manualReview: false,
+    evidenceSha256: qaStudentSubmissionIdentity(payload, "fixture-only-submission-secret-32bytes-minimum").evidenceSha256,
+    evidenceFiles: [{ fileId: "QA-DRIVE-V1", exists: true, mimeType: "image/png" }] };
   let uploads = 0;
   const res = response();
   await submitHandler(request({ ...payload, fileName: "QA-20261013.png" }), res, {
     destinationUrl: "https://script.google.com/macros/s/test/exec",
     proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
     qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
-    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => existing },
+    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => existing },
     postScript: async () => { uploads++; throw new Error("duplicate must not upload"); },
   });
-  assert.equal(res.statusCode, 409);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.duplicate, true);
   assert.equal(res.body.submissionId, existing.submissionId);
   assert.equal(uploads, 0);
+});
+
+test("recorded submissionId replay succeeds without calling Drive again", async () => {
+  const secret = "fixture-only-submission-secret-32bytes-minimum";
+  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "004",
+    studentName: "[QA] synthetic" }, fileName: "QA-recorded.png", fileMimeType: "image/png",
+    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
+  const identity = qaStudentSubmissionIdentity(payload, secret);
+  let driveCalls = 0;
+  const result = response();
+  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
+    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
+    studentAuditStore: { environment: "qa", getRequest: async () => ({
+      submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
+      evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
+      status: "recorded", signedPath: true, manualReview: false,
+      evidenceFiles: [{ fileId: "QA-RECORDED-FILE", exists: true, mimeType: "image/png" }] }),
+      getEvidenceMatch: async () => null },
+    postScript: async () => { driveCalls++; throw new Error("recorded replay must not upload"); } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.duplicate, true);
+  assert.equal(result.body.submissionId, identity.submissionId);
+  assert.equal(driveCalls, 0);
+});
+
+test("concurrent identical create resolves to the recorded request, not a partial failure", async () => {
+  const secret = "fixture-only-submission-secret-32bytes-minimum";
+  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "002",
+    studentName: "[QA] synthetic" }, fileName: "QA-race.png", fileMimeType: "image/png",
+    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
+  const identity = qaStudentSubmissionIdentity(payload, secret);
+  const recorded = { submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
+    evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
+    status: "recorded", signedPath: true, manualReview: false,
+    evidenceFiles: [{ fileId: "QA-RACE-FILE", exists: true, mimeType: "image/png" }] };
+  let reads = 0;
+  const result = response();
+  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
+    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
+    studentAuditStore: { environment: "qa", getRequest: async () => (++reads === 1 ? null : recorded),
+      getEvidenceMatch: async () => null, createRequest: async () => { throw new Error("ALREADY_EXISTS"); } },
+    postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-RACE-FILE" }) }) });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.success, true);
+  assert.equal(result.body.duplicate, true);
+  assert.equal(result.body.submissionId, identity.submissionId);
+  assert.equal(result.body.fileId, undefined);
+  assert.equal(reads, 2);
+});
+
+test("conflicting evidence after create race stays a conflict", async () => {
+  const secret = "fixture-only-submission-secret-32bytes-minimum";
+  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "003",
+    studentName: "[QA] synthetic" }, fileName: "QA-conflict.png", fileMimeType: "image/png",
+    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
+  const identity = qaStudentSubmissionIdentity(payload, secret);
+  let reads = 0;
+  const result = response();
+  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
+    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
+    studentAuditStore: { environment: "qa", getRequest: async () => (++reads === 1 ? null : {
+      submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
+      evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
+      status: "recorded", signedPath: true, manualReview: false,
+      evidenceFiles: [{ fileId: "DIFFERENT-FILE", exists: true, mimeType: "image/png" }] }),
+      getEvidenceMatch: async () => null, createRequest: async () => { throw new Error("ALREADY_EXISTS"); } },
+    postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-RACE-FILE" }) }) });
+  assert.equal(result.statusCode, 409);
+  assert.equal(result.body.success, false);
+  assert.equal(result.body.fileId, undefined);
 });
 
 test("QA missing evidence destination and arbitrary Preview fail before Apps Script", async () => {
@@ -243,7 +320,8 @@ test("QA missing evidence destination and arbitrary Preview fail before Apps Scr
   assert.equal(missing.statusCode, 503);
   const arbitrary = response();
   await submitHandler(request(payload), arbitrary, { ...options, environment: () => null });
-  assert.equal(arbitrary.statusCode, 403);
+  assert.equal(arbitrary.statusCode, 503);
+  assert.equal(arbitrary.body.code, "ENVIRONMENT_UNRESOLVED");
   assert.equal(calls, 0);
 });
 
@@ -257,8 +335,8 @@ test("QA Drive failure does not write audit; Firestore failure reports recoverab
   let auditWrites = 0;
   const driveFailed = response();
   await submitHandler(request(payload), driveFailed, { ...options,
-    studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
-      createQaRequest: async () => { auditWrites++; } },
+    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
+      createRequest: async () => { auditWrites++; } },
     postScript: async () => ({ text: async () => JSON.stringify({ status: "error" }) }) });
   assert.equal(driveFailed.body.success, false);
   assert.equal(auditWrites, 0);
@@ -267,8 +345,8 @@ test("QA Drive failure does not write audit; Firestore failure reports recoverab
   console.error = () => {};
   try {
     await submitHandler(request(payload), auditFailed, { ...options,
-      studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null,
-        createQaRequest: async () => { throw new Error("QA Firestore unavailable"); } },
+      studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
+        createRequest: async () => { throw new Error("QA Firestore unavailable"); } },
       postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-DRIVE-FILE-001" }) }) });
   } finally { console.error = originalError; }
   assert.equal(auditFailed.statusCode, 503);
@@ -354,7 +432,7 @@ test("QA evidence reuse survives audit failure without duplicate Drive upload or
   assert.equal(uploads, 1);
   const db = database();
   const store = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
+    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
   await store.createQaRequest({ requestId: id.submissionId, requestFingerprint: id.requestFingerprint,
     evidenceSha256: id.evidenceSha256,
     fields: payload.fields, evidenceFile: { fileId: uploaded.fileId, fileName: payload.fileName,
@@ -394,3 +472,9 @@ test("Vercel QA student envelope verifies with QA key but not Production key", (
   assert.throws(() => context.verify(buildSubmissionProxyEnvelope(payload, productionSecret, options)), /인증/);
   assert.deepEqual(selected, ["QA_SUBMISSION_PROXY_SECRET", "QA_SUBMISSION_PROXY_SECRET"]);
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, { ...options, context });
+}

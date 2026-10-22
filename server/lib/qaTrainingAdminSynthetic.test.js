@@ -3,9 +3,9 @@ import test from "node:test";
 import { isQaTrainingSyntheticAssignment, qaTrainingSyntheticDirectory,
   qaTrainingSyntheticIdentity } from "./qaTrainingAdminSynthetic.js";
 
-const context = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const context = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 
-test("training ownership synthetic identities are fixed QA-only roles", () => {
+test("training ownership synthetic identities remain isolated to QA", () => {
   const identity = qaTrainingSyntheticIdentity("qa-training-admin-a");
   const assignment = { uid: "qa-training-admin-a", active: false, qaOnly: true, environment: "qa",
     staffId: identity.staffId, schoolYear: 2026, semester: 2, roles: ["training_admin"], qaExpiresAt: "2027-01-01T00:00:00.000Z" };

@@ -1,7 +1,9 @@
-import { STAFF_STATUS_LABELS, formatSubmissionDateTime, getAdminProxySubmissions } from "./adminSubmissions.js";
+import { clientFirestoreResource } from "./firestoreResources.js";
+import { collection, doc, getDoc, getCountFromServer, getDocs, limit, orderBy, startAfter, documentId, query, where } from "firebase/firestore";
+import { STAFF_STATUS_LABELS, formatSubmissionDateTime } from "./adminSubmissions.js";
 import { applyIndividualHealthCheckupDisplay } from "../data/individualHealthCheckupSubmission.js";
+import { db } from "./firebase.js";
 import { getActiveSubmissionItems } from "./submissionItems.js";
-import { getUsersWithAssignments } from "./userAssignmentsAdmin.js";
 
 export const STATUS_ITEM_IDS = ["cpr", "tb", "recruit"];
 export const STATUS_FILTERS = ["all", "missing", "submitted", "reviewing", "completed", "rejected"];
@@ -15,6 +17,7 @@ export const STATUS_FILTER_LABELS = {
   rejected: "보완 필요",
 };
 
+export const ROSTER_PAGE_SIZE = 25;
 const STATUS_RANK = {
   missing: 0,
   rejected: 1,
@@ -28,7 +31,6 @@ function getTimestampMillis(value) {
   if (typeof value.toMillis === "function") return value.toMillis();
   if (typeof value.seconds === "number") return value.seconds * 1000;
   if (value instanceof Date) return value.getTime();
-  if (typeof value === "string") return Date.parse(value) || 0;
   return 0;
 }
 
@@ -53,28 +55,38 @@ function normalizeItem(itemId, items) {
   return itemId === "tb" ? applyIndividualHealthCheckupDisplay(normalizedItem) : normalizedItem;
 }
 
-function normalizeSubmission(data) {
+function normalizeSubmission(documentSnapshot) {
+  const data = documentSnapshot.data();
   return {
     ...data,
+    id: documentSnapshot.id,
     submittedAtMillis: getTimestampMillis(data.submittedAt),
     submittedAtLabel: formatSubmissionDateTime(data.submittedAt),
   };
 }
 
-function getLatestSubmissionByIdentity(submissions) {
-  const latestByIdentity = new Map();
+export function compareSubmissionRecency(a, b) {
+  const parts = (item) => item.submittedAt && Number.isInteger(item.submittedAt.seconds)
+    ? [item.submittedAt.seconds, item.submittedAt.nanoseconds || 0]
+    : [Math.floor((item.submittedAtMillis || 0) / 1000), ((item.submittedAtMillis || 0) % 1000) * 1e6];
+  const [as, an] = parts(a), [bs, bn] = parts(b);
+  return bs - as || bn - an || (String(a.id) === String(b.id) ? 0 : String(a.id) < String(b.id) ? 1 : -1);
+}
+
+function getLatestSubmissionByUid(submissions) {
+  const latestByUid = new Map();
 
   submissions.forEach((submission) => {
-    const identityKey = submission.subjectStaffId || submission.staffId || submission.submitter?.uid || "";
-    if (!identityKey) return;
+    const uid = submission.submitter?.uid || "";
+    if (!uid) return;
 
-    const current = latestByIdentity.get(identityKey);
-    if (!current || submission.submittedAtMillis > current.submittedAtMillis) {
-      latestByIdentity.set(identityKey, submission);
+    const current = latestByUid.get(uid);
+    if (!current || compareSubmissionRecency(submission, current) < 0) {
+      latestByUid.set(uid, submission);
     }
   });
 
-  return latestByIdentity;
+  return latestByUid;
 }
 
 function getRosterStatus(submission) {
@@ -92,12 +104,14 @@ function sortRoster(left, right) {
 }
 
 export function buildSubmissionRoster(users, submissions) {
-  const latestByIdentity = getLatestSubmissionByIdentity(submissions);
+  const latestByUid = getLatestSubmissionByUid(submissions);
 
   return users
     .filter(isActiveStaff)
     .map((user) => {
-      const latestSubmission = latestByIdentity.get(user.assignment?.staffId) || latestByIdentity.get(user.uid) || null;
+      const staffMatches = user.assignment?.staffId ? submissions.filter((item) => item.staffId === user.assignment.staffId) : [];
+      const latestSubmission = [latestByUid.get(user.uid), ...staffMatches].filter(Boolean)
+        .sort(compareSubmissionRecency)[0] || null;
       const status = getRosterStatus(latestSubmission);
       return {
         uid: user.uid,
@@ -138,19 +152,37 @@ export function filterSubmissionRoster(roster, statusFilter, searchTerm) {
   });
 }
 
-export async function getSubmissionStatusOverview(itemId, schoolYear, semester) {
-  const [items, users, submissionItems] = await Promise.all([
+export async function getSubmissionStatusOverview(itemId, schoolYear, semester, { page = 0, cursor = null } = {}) {
+  if (!STATUS_ITEM_IDS.includes(itemId) || !Number.isInteger(page) || page < 0) throw new Error("조회 범위를 확인해 주세요.");
+  const ref = collection(db, clientFirestoreResource(db, "submissions"));
+  const assignmentRef = collection(db, clientFirestoreResource(db, "assignments"));
+  const conditions = [where("schoolYear", "==", schoolYear), where("semester", "==", semester), where("active", "==", true), where("roles", "array-contains", "staff")];
+  const [items, assignmentSnapshot, targetCount, count] = await Promise.all([
     getActiveSubmissionItems(),
-    getUsersWithAssignments(schoolYear, semester),
-    getAdminProxySubmissions({ itemId }),
+    getDocs(query(assignmentRef, ...conditions, orderBy(documentId()), ...(cursor ? [startAfter(cursor)] : []), limit(ROSTER_PAGE_SIZE + 1))),
+    getCountFromServer(query(assignmentRef, ...conditions)), getCountFromServer(query(ref, where("itemId", "==", itemId))),
   ]);
-
-  const submissions = submissionItems.map(normalizeSubmission);
-  const roster = buildSubmissionRoster(users, submissions);
-
-  return {
-    item: normalizeItem(itemId, items),
-    roster,
-    summary: summarizeRoster(roster),
-  };
+  const assignmentDocs = assignmentSnapshot.docs.slice(0, ROSTER_PAGE_SIZE);
+  const selected = await Promise.all(assignmentDocs.map(async (snapshot) => {
+    const assignment = snapshot.data();
+    if (!assignment.uid || assignment.schoolYear !== schoolYear || assignment.semester !== semester || snapshot.id !== `${assignment.uid}_${schoolYear}_${semester}`) throw new Error("대상자 권한 자료의 일치를 확인해 주세요.");
+    const user = await getDoc(doc(db, "users", assignment.uid));
+    const profile = user.exists() ? user.data() : {};
+    const displayName = String(profile.displayNameOverride || profile.displayName || profile.email?.split("@")[0] || "").trim();
+    return { ...profile, displayName, uid: assignment.uid, assignment };
+  }));
+  const submissions = [];
+  // Bounded concurrency; at most two one-document reads per displayed person.
+  for (let offset = 0; offset < selected.length; offset += 5) {
+    const results = await Promise.all(selected.slice(offset, offset + 5).map(async (user) => {
+      const identities = [["submitter.uid", user.uid], ...(user.assignment?.staffId ? [["staffId", user.assignment.staffId]] : [])];
+      const snapshots = await Promise.all(identities.map(([field, value]) => getDocs(query(ref,
+        where("itemId", "==", itemId), where(field, "==", value), orderBy("submittedAt", "desc"), orderBy(documentId(), "desc"), limit(1)))));
+      return snapshots.flatMap((snapshot) => snapshot.docs.map(normalizeSubmission));
+    }));
+    submissions.push(...results.flat());
+  }
+  const roster = buildSubmissionRoster(selected, submissions);
+  return { item: normalizeItem(itemId, items), roster, summary: summarizeRoster(roster),
+    totalTargets: targetCount.data().count, receiptCount: count.data().count, page, hasNext: assignmentSnapshot.docs.length > ROSTER_PAGE_SIZE, nextCursor: assignmentDocs.at(-1) || null };
 }

@@ -31,8 +31,12 @@ export function buildLegacyStudentSubmissionRecord({ rowNumber, headers, values,
   const signedPath = original["구분"] === "student_tb_reply" && Boolean(original["제출ID"]);
   const hasStudentFields = ["학년", "반", "번호", "학생명"].every((header) => Boolean(original[header]));
   const matchStatus = hasStudentFields ? "unmatched" : "incomplete";
-  const reasons = ["canonical_student_identity_unavailable"];
+  const reasons = ["canonical_student_identity_unavailable",
+    hasStudentFields ? "identity_unmatched" : "identity_incomplete"];
   if (!hasStudentFields) reasons.push("student_fields_incomplete");
+  if (!signedPath) reasons.push("legacy_record");
+  if (signedPath && [original["성명"], original["비고"], original["파일명"]]
+    .some((value) => value.includes("[QA-SECURITY-TEST]"))) reasons.push("historical_security_test");
   if (!fileId || evidence.exists !== true) reasons.push("evidence_unverified");
   if (explicitFileId && urlFileId && explicitFileId !== urlFileId) reasons.push("evidence_id_mismatch");
   const createdAt = now.toISOString();
@@ -42,6 +46,7 @@ export function buildLegacyStudentSubmissionRecord({ rowNumber, headers, values,
     studentIdentity: { grade: original["학년"], classNumber: original["반"],
       studentNumber: original["번호"], name: original["학생명"] || original["성명"] },
     submissionType: signedPath ? "student_tb_reply" : original["제출유형"] || "student-file",
+    signedPath, legacy: !signedPath,
     submittedAt: original["제출일시"], source: signedPath ? "signed_sheet_migration" : "legacy_sheet_migration",
     environment, originalRowNumber: rowNumber, originalRowFingerprint,
     originalSubmissionId: original["제출ID"] || null,
@@ -88,39 +93,45 @@ export class StudentSubmissionAuditStore {
   }
   get environment() { return submissionEnvironment(this.context()); }
   get collectionName() { return STUDENT_SUBMISSION_AUDIT_COLLECTIONS[this.environment]; }
+  assertEnvironment() { if (!this.collectionName) throw new Error("승인된 감사 원장 환경이 아닙니다."); }
   assertQa() { if (this.environment !== "qa") throw new Error("QA 감사 원장에만 기록할 수 있습니다."); }
-  async getQaRequest(requestId) {
-    this.assertQa();
+  async getRequest(requestId) {
+    this.assertEnvironment();
     const snapshot = await this.database().collection(this.collectionName).doc(requestId).get();
     if (!snapshot.exists) return null;
     const record = snapshot.data();
-    if (record.environment !== "qa" || record.submissionId !== requestId) throw new Error("QA 감사 원장 출처가 올바르지 않습니다.");
+    if (record.environment !== this.environment || record.submissionId !== requestId) throw new Error("감사 원장 출처가 올바르지 않습니다.");
     return record;
   }
-  async getQaEvidenceMatch({ evidenceSha256, fileMimeType, fields }) {
-    this.assertQa();
-    if (!/^[a-f0-9]{64}$/.test(text(evidenceSha256))) throw new Error("QA 증빙 지문이 올바르지 않습니다.");
+  async getQaRequest(requestId) { this.assertQa(); return this.getRequest(requestId); }
+  async getEvidenceMatch({ evidenceSha256, fileMimeType, fields }) {
+    this.assertEnvironment();
+    if (!/^[a-f0-9]{64}$/.test(text(evidenceSha256))) throw new Error("증빙 지문이 올바르지 않습니다.");
     const snapshot = await this.database().collection(this.collectionName)
       .where("evidenceSha256", "==", evidenceSha256).get();
     const normalize = (value) => text(value).normalize("NFKC");
     const matches = snapshot.docs.map((doc) => doc.data()).filter((record) =>
-      record.submissionId && record.environment === "qa" && record.source === "qa_signed_submission" &&
+      record.submissionId && record.environment === this.environment &&
+      record.source === `${this.environment}_signed_submission` &&
       record.submissionType === "student_tb_reply" && record.evidenceSha256 === evidenceSha256 &&
       text(record.evidenceFiles?.[0]?.mimeType).toLowerCase() === text(fileMimeType).toLowerCase() &&
       [["grade", "grade"], ["classNumber", "classNumber"], ["studentNumber", "studentNumber"],
         ["name", "studentName"]].every(([saved, incoming]) =>
         normalize(record.studentIdentity?.[saved]) === normalize(fields?.[incoming])));
-    if (matches.length > 1) throw new Error("QA 증빙 중복 원장을 확인해야 합니다.");
+    if (matches.length > 1) throw new Error("증빙 중복 원장을 확인해야 합니다.");
     return matches[0] || null;
   }
-  async createQaRequest({ requestId, requestFingerprint, evidenceSha256, idempotencyVersion = 2,
+  async getQaEvidenceMatch(input) { this.assertQa(); return this.getEvidenceMatch(input); }
+  async createRequest({ requestId, requestFingerprint, evidenceSha256, idempotencyVersion = 2,
     fields, evidenceFile, now = new Date() }) {
-    this.assertQa();
+    this.assertEnvironment();
     const studentName = text(fields?.studentName);
-    if (studentName !== "[QA] synthetic" || !["grade", "classNumber", "studentNumber"].every((key) => text(fields?.[key])) ||
+    if ((this.environment === "qa" && studentName !== "[QA] synthetic") ||
+      (this.environment === "production" && /\[QA(?:-|\])/.test(studentName)) ||
+      !studentName || !["grade", "classNumber", "studentNumber"].every((key) => text(fields?.[key])) ||
       !text(requestId) || !/^[a-f0-9]{64}$/.test(text(evidenceSha256)) ||
-      !text(evidenceFile?.fileId) || !text(evidenceFile?.fileName).includes("QA")) {
-      throw new Error("QA 합성 제출 필수값이 없습니다.");
+      !text(evidenceFile?.fileId) || (this.environment === "qa" && !text(evidenceFile?.fileName).includes("QA"))) {
+      throw new Error(this.environment === "qa" ? "QA 합성 제출 필수값이 없습니다." : "감사 원장 제출 필수값이 없습니다.");
     }
     const submittedAt = now.toISOString();
     const record = { submissionId: requestId, requestFingerprint: text(requestFingerprint),
@@ -128,15 +139,18 @@ export class StudentSubmissionAuditStore {
       signedPath: true, legacy: false, canonicalStudentKey: null,
       studentIdentity: { grade: text(fields.grade), classNumber: text(fields.classNumber),
         studentNumber: text(fields.studentNumber), name: studentName },
-      submissionType: "student_tb_reply", submittedAt, source: "qa_signed_submission", environment: "qa",
+      submissionType: "student_tb_reply", submittedAt,
+      source: `${this.environment}_signed_submission`, environment: this.environment,
       originalRowNumber: null, originalRowFingerprint: null, originalSubmissionId: null, originalFields: {},
       evidenceFiles: [{ fileId: text(evidenceFile.fileId), originalUrl: "", fileName: text(evidenceFile.fileName),
         mimeType: text(evidenceFile.mimeType), exists: true, lookupStatus: "uploaded_private" }],
-      matchStatus: "synthetic", manualReview: false, manualReviewReasons: [], status: "recorded", schemaVersion: 1,
+      matchStatus: this.environment === "qa" ? "synthetic" : "not_required",
+      manualReview: false, manualReviewReasons: [], status: "recorded", schemaVersion: 1,
       migration: { imported: false }, createdAt: submittedAt, updatedAt: submittedAt };
     await this.database().collection(this.collectionName).doc(requestId).create(record);
     return record;
   }
+  async createQaRequest(input) { this.assertQa(); return this.createRequest(input); }
   async createQaFixture({ pattern, evidenceFile, now = new Date() }) {
     this.assertQa();
     if (!["signed", "legacy_manual_review"].includes(pattern) ||
@@ -158,15 +172,16 @@ export class StudentSubmissionAuditStore {
     await this.database().collection(this.collectionName).doc(submissionId).create(record);
     return record;
   }
-  async listQaRequests() {
-    this.assertQa();
+  async listRequests() {
+    this.assertEnvironment();
     const snapshot = await this.database().collection(this.collectionName).get();
     return snapshot.docs.map((doc) => {
       const record = doc.data();
-      if (record.submissionId !== doc.id || record.environment !== "qa") throw new Error("QA 감사 원장 출처가 올바르지 않습니다.");
+      if (record.submissionId !== doc.id || record.environment !== this.environment) throw new Error("감사 원장 출처가 올바르지 않습니다.");
       return record;
     });
   }
+  async listQaRequests() { this.assertQa(); return this.listRequests(); }
 }
 
 export const studentSubmissionAuditStore = new StudentSubmissionAuditStore();

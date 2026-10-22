@@ -1,3 +1,4 @@
+import { trainingEnvironment } from "./trainingDeployment.js";
 import { createHash, randomUUID } from "node:crypto";
 
 const COLLECTION_PREFIX = "portal_roadmap";
@@ -16,8 +17,8 @@ export const ROADMAP_HEADERS = [
 export class RoadmapInputError extends Error {}
 
 export function roadmapEnvironment(context = process.env) {
-  if (context.VERCEL_ENV === "preview" && context.VERCEL_GIT_COMMIT_REF === "qa") return "qa";
-  if (context.VERCEL_ENV === "production" && context.VERCEL_GIT_COMMIT_REF === "main") return "production";
+  const environment = trainingEnvironment(context);
+  if (environment) return environment;
   throw new RoadmapInputError("승인된 배포 환경에서만 업무 로드맵을 사용할 수 있습니다.");
 }
 

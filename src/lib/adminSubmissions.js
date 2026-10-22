@@ -1,6 +1,8 @@
-import { collection, getDoc, getDocs, limit, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
+import { mergeCprProjection } from "../../common/cprProjection.js";
+import { clientFirestoreResource } from "./firestoreResources.js";
+import { collection, getCountFromServer, getDoc, getDocs, limit, orderBy, startAfter, documentId, runTransaction, query, serverTimestamp, updateDoc, doc, where, writeBatch } from "firebase/firestore";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
-import { auth, db } from "./firebase.js";
+import { db } from "./firebase.js";
 import {
   INFECTION_LEGACY_STATUS_OPTIONS,
   INFECTION_CASE_STATUS,
@@ -12,11 +14,9 @@ import {
   getInfectionSubmissionStatus,
 } from "./infectionStatus.js";
 import { INDIVIDUAL_HEALTH_CHECKUP_TITLE } from "../data/individualHealthCheckupSubmission.js";
-import { isHealthScreeningTypeQaHost } from "./healthScreeningTypes.js";
-import { reviewTbScreeningEvidence } from "./tbScreeningWorkflowClient.js";
+import { normalizeSubmissionEvidenceFiles } from "../../common/submissionEvidenceFiles.js";
 export { INFECTION_STATUS_LABELS } from "./infectionStatus.js";
 
-const STAFF_COLLECTION = "staff_submissions";
 const STUDENT_HEALTH_COLLECTION = "student_health_submissions";
 const LIST_LIMIT = 50;
 
@@ -41,22 +41,7 @@ function getTimestampMillis(value) {
   if (typeof value.toMillis === "function") return value.toMillis();
   if (typeof value.seconds === "number") return value.seconds * 1000;
   if (value instanceof Date) return value.getTime();
-  if (typeof value === "string") return Date.parse(value) || 0;
   return 0;
-}
-
-function normalizeStaffSubmissionData(data) {
-  const submittedAtMillis = getTimestampMillis(data.submittedAt);
-  const itemId = data.itemId || "unknown";
-  return {
-    ...data,
-    itemId,
-    typeLabel: STAFF_TYPE_LABELS[itemId] || "교직원 제출",
-    status: data.status || "submitted",
-    statusLabel: STAFF_STATUS_LABELS[data.status] || data.status || STAFF_STATUS_LABELS.submitted,
-    submittedAtMillis,
-    submittedAtLabel: formatSubmissionDateTime(data.submittedAt),
-  };
 }
 
 export function formatSubmissionDateTime(value) {
@@ -77,6 +62,24 @@ export function formatSubmissionDateTime(value) {
     .replace(".", "");
 }
 
+function normalizeStaffSubmission(documentSnapshot) {
+  const data = documentSnapshot.data();
+  const submittedAtMillis = getTimestampMillis(data.submittedAt);
+  const itemId = data.itemId || "unknown";
+
+  return {
+    ...data,
+    id: documentSnapshot.id,
+    itemId,
+    typeLabel: STAFF_TYPE_LABELS[itemId] || "교직원 제출",
+    status: data.status || "submitted",
+    statusLabel: STAFF_STATUS_LABELS[data.status] || data.status || STAFF_STATUS_LABELS.submitted,
+    submittedAtMillis,
+    submittedAtLabel: formatSubmissionDateTime(data.submittedAt),
+    evidenceFiles: normalizeSubmissionEvidenceFiles(data),
+  };
+}
+
 function normalizeInfectionReport(documentSnapshot) {
   const data = documentSnapshot.data();
   const submittedAtMillis = getTimestampMillis(data.submittedAt);
@@ -86,8 +89,8 @@ function normalizeInfectionReport(documentSnapshot) {
   const statusLabels = getInfectionStatusLabels(data);
 
   return {
-    id: documentSnapshot.id,
     ...data,
+    id: documentSnapshot.id,
     status,
     submissionStatus,
     caseStatus,
@@ -103,42 +106,23 @@ function filterByStatus(items, status) {
   return status ? items.filter((item) => item.status === status) : items;
 }
 
-export async function getStaffSubmissions({ status = "", schoolYear } = {}) {
-  if (schoolYear !== undefined && isHealthScreeningTypeQaHost(globalThis.location?.hostname)) {
-    const [tbItems, legacyItems] = await Promise.all([
-      getAdminProxySubmissions({ itemId: "tb", schoolYear }),
-      getAdminProxySubmissions(),
-    ]);
-    const items = filterByStatus([
-      ...tbItems,
-      ...legacyItems.filter((item) => item.itemId !== "tb" || !item.schoolYear),
-    ].map(normalizeStaffSubmissionData), status)
-      .sort((left, right) => right.submittedAtMillis - left.submittedAtMillis);
-    items.evidenceComplete = tbItems.evidenceComplete;
-    return items;
+export async function getStaffSubmissionPage({ status = "", cursor = null, submissionId = "" } = {}) {
+  const ref = collection(db, clientFirestoreResource(db, "submissions"));
+  if (submissionId) {
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(submissionId)) throw new Error("접수번호를 확인해 주세요.");
+    const snapshot = await getDoc(doc(ref, submissionId));
+    return { items: snapshot.exists() ? [normalizeStaffSubmission(snapshot)] : [], nextCursor: null, total: snapshot.exists() ? 1 : 0, direct: true };
   }
-  const items = await getAdminProxySubmissions();
-  return filterByStatus(items.map(normalizeStaffSubmissionData), status)
-    .sort((left, right) => right.submittedAtMillis - left.submittedAtMillis)
-    .slice(0, LIST_LIMIT);
+  if (status && !STAFF_STATUS_OPTIONS.includes(status)) throw new Error("지원하지 않는 제출 상태입니다.");
+  const conditions = status ? [where("status", "==", status)] : [];
+  const [snapshot, count] = await Promise.all([
+    getDocs(query(ref, ...conditions, orderBy("submittedAt", "desc"), orderBy(documentId(), "desc"), ...(cursor ? [startAfter(cursor)] : []), limit(LIST_LIMIT + 1))),
+    getCountFromServer(query(ref, ...conditions)),
+  ]);
+  const docs = snapshot.docs.slice(0, LIST_LIMIT);
+  return { items: docs.map(normalizeStaffSubmission), nextCursor: snapshot.docs.length > LIST_LIMIT ? docs.at(-1) : null, total: count.data().count };
 }
-
-export async function getAdminProxySubmissions({ itemId = "", schoolYear } = {}) {
-  const user = auth.currentUser;
-  if (!user) throw Object.assign(new Error("로그인이 필요합니다."), { status: 401 });
-  const token = await user.getIdToken();
-  const suffix = (itemId ? `&itemId=${encodeURIComponent(itemId)}` : "") + (schoolYear !== undefined ? `&schoolYear=${encodeURIComponent(schoolYear)}` : "");
-  const response = await fetch(`/api/firebase/staff-directory?resource=admin-proxy-submissions${suffix}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(payload.message || "제출 내역을 불러오지 못했습니다."), {
-    status: response.status,
-  });
-  if (payload.ok !== true || !Array.isArray(payload.items)) throw new Error("제출 조회 응답을 확인할 수 없습니다.");
-  if (schoolYear !== undefined) payload.items.evidenceComplete = payload.datasets?.completeness?.evidence === true;
-  return payload.items;
-}
+export async function getStaffSubmissions(options = {}) { return (await getStaffSubmissionPage(options)).items; }
 
 export async function getInfectionReports({ status = "" } = {}) {
   const snapshot = await getDocs(
@@ -166,25 +150,12 @@ export async function getInfectionReports({ status = "" } = {}) {
 
 export async function updateStaffSubmissionStatus(submission, status) {
   if (!STAFF_STATUS_OPTIONS.includes(status)) throw new Error("지원하지 않는 제출 상태입니다.");
-  if (submission?.sourceEnvironment === "qa") {
-    if (submission.itemId === "tb" && isHealthScreeningTypeQaHost(globalThis.location?.hostname)) {
-      if (!["completed", "rejected"].includes(status)) throw new Error("확인 완료 또는 자료 무효 처리를 선택해 주세요.");
-      return reviewTbScreeningEvidence({
-        staffId: submission.staffId,
-        schoolYear: submission.schoolYear,
-        submissionId: submission.id,
-        expectedRevision: submission.workflow?.status?.revision || 0,
-        action: status === "completed" ? "confirm" : "invalidate",
-      });
-    }
-    throw new Error("QA 제출 상태 변경은 운영 원장에 적용할 수 없습니다.");
-  }
 
   const submissionId = typeof submission === "string" ? submission : submission?.id;
   if (!submissionId) throw new Error("제출 기록을 확인할 수 없습니다.");
   const statusTaskId = submission?.itemId === "tb" ? "tb-screening-2026" : submission?.itemId === "cpr" ? "cpr-training-2026" : "";
   if (typeof submission === "string" || !statusTaskId || !submission?.staffId) {
-    await updateDoc(doc(db, STAFF_COLLECTION, submissionId), {
+    await updateDoc(doc(db, clientFirestoreResource(db, "submissions"), submissionId), {
       status,
       updatedAt: serverTimestamp(),
     });
@@ -192,15 +163,32 @@ export async function updateStaffSubmissionStatus(submission, status) {
   }
 
   const mappedStatus = status === "completed" ? "completed" : status === "rejected" ? "incomplete" : "pending";
-  if (submission.itemId === "cpr" && status !== "completed") {
-    const current = await getDoc(doc(db, "staff_submission_status", `${submission.staffId}_${statusTaskId}`));
-    if (current.exists() && current.data()?.status === "completed" && current.data()?.training?.completionMethod === "group") {
-      await updateDoc(doc(db, STAFF_COLLECTION, submissionId), { status, updatedAt: serverTimestamp() });
-      return;
-    }
+  if (submission.itemId === "cpr") {
+    const submissionRef = doc(db, clientFirestoreResource(db, "submissions"), submissionId);
+    const statusRef = doc(db, clientFirestoreResource(db, "statuses"), `${submission.staffId}_${statusTaskId}`);
+    const completed = await getDocs(query(collection(db, clientFirestoreResource(db, "submissions")), where("staffId", "==", submission.staffId), where("itemId", "==", "cpr"), where("status", "==", "completed"), orderBy("submittedAt", "desc"), orderBy(documentId(), "desc"), limit(2)));
+    const otherRef = completed.docs.find((item) => item.id !== submissionId)?.ref;
+    await runTransaction(db, async (transaction) => {
+      const [original, previous] = await Promise.all([transaction.get(submissionRef), transaction.get(statusRef)]);
+      const other = otherRef ? await transaction.get(otherRef) : null;
+      if (!original.exists() || original.data().status !== submission.status || original.data().staffId !== submission.staffId || original.data().itemId !== "cpr") throw new Error("접수 자료가 변경되었습니다.");
+      const current = previous.exists() ? previous.data() : {};
+      let incoming = { staffId: submission.staffId, taskId: statusTaskId, status: mappedStatus,
+        evidenceSubmissionId: submissionId, sourceType: "portal_certificate_review",
+        training: { completionMethod: "individual", completionDate: status === "completed" ? original.data().trainingDate || "" : "",
+          eventId: "", evidenceStatus: status, note: status === "completed" ? "외부·개별 이수 확인" : "이수증 확인 중" } };
+      if (status !== "completed" && other?.exists() && other.data().status === "completed" && other.data().staffId === submission.staffId && other.data().itemId === "cpr") {
+        incoming = { ...incoming, status: "completed", evidenceSubmissionId: other.id,
+          training: { completionMethod: "individual", completionDate: other.data().trainingDate || "", eventId: "", evidenceStatus: "completed", note: "다른 유효한 개별 이수 확인" } };
+      }
+      const next = mergeCprProjection(current, incoming);
+      transaction.update(submissionRef, { status, updatedAt: serverTimestamp() });
+      transaction.set(statusRef, { ...next, cprProjectionRevision: (current.cprProjectionRevision || 0) + 1, syncedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    });
+    return;
   }
   const batch = writeBatch(db);
-  batch.update(doc(db, STAFF_COLLECTION, submissionId), {
+  batch.update(doc(db, clientFirestoreResource(db, "submissions"), submissionId), {
     status,
     updatedAt: serverTimestamp(),
   });
@@ -223,7 +211,7 @@ export async function updateStaffSubmissionStatus(submission, status) {
       note: status === "completed" ? "외부·개별 이수 확인" : status === "rejected" ? "이수증 보완 필요" : "이수증 확인 중",
     },
   };
-  batch.set(doc(db, "staff_submission_status", `${submission.staffId}_${statusTaskId}`), {
+  batch.set(doc(db, clientFirestoreResource(db, "statuses"), `${submission.staffId}_${statusTaskId}`), {
     ...statusPayload,
     syncedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

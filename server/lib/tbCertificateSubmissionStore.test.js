@@ -3,7 +3,7 @@ import test from "node:test";
 import { buildLegacyTbCertificateRecord, planLegacyTbCertificateMigration,
   TbCertificateSubmissionStore } from "./tbCertificateSubmissionStore.js";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const original = { submittedAt: "2026-03-02 09:00:00", name: "Legacy", department: "QA",
   staffType: "교직원", checkupDate: "2026-03-01", documentType: "검진확인증",
   fileName: "evidence.pdf", fileUrl: "https://drive.google.com/file/d/example/view" };
@@ -55,18 +55,10 @@ test("QA portal request writes only the QA ledger and stores no public URL", asy
       create: async (value) => { saved = value; },
     }; } }; } }) });
   const record = await store.createRequest({ staffId: "QA-TB-CERT-TEST-001", checkupDate: "2026-10-12",
-    schoolYear: 2026, submissionId: `QA-STAFF-TB-${"a".repeat(32)}`, requestFingerprint: "a".repeat(64),
     documentType: "QA fixture", evidenceFile: { fileId: "qa-file", fileName: "qa.pdf", mimeType: "application/pdf" } });
   assert.equal(collectionName, "tb_certificate_submissions_qa");
   assert.equal(record.manualReview, false);
   assert.equal(record.evidenceFiles[0].fileId, "qa-file");
   assert.equal("originalUrl" in saved.evidenceFiles[0], true);
   assert.equal(saved.evidenceFiles[0].originalUrl, "");
-  assert.equal(saved.schoolYear, 2026);
-});
-
-test("QA certificate requires explicit year before accessing the database", async () => {
-  const store = new TbCertificateSubmissionStore({ context: () => qa, database: () => { throw new Error("unexpected database"); } });
-  await assert.rejects(store.createRequest({ staffId: "QA", checkupDate: "2026-10-14",
-    evidenceFile: { fileId: "qa-file", fileName: "qa.pdf", mimeType: "application/pdf" } }), /학년도/);
 });

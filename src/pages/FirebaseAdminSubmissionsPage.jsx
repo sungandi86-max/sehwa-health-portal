@@ -1,21 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { tbReviewHref, tbReviewContext, staffWorkHref, withAdminReturn, adminReturnHref } from "../lib/submissionNavigation.js";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
+import HealthScreeningTypeAdminPanel from "../components/HealthScreeningTypeAdminPanel.jsx";
+import { isHealthScreeningTypeEnabledHost } from "../lib/healthScreeningTypes.js";
 import AdminProxySubmissionDialog from "../components/AdminProxySubmissionDialog.jsx";
-import { screeningTypeLabel, isHealthScreeningTypeQaHost } from "../lib/healthScreeningTypes.js";
-import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
-import { tbEvidenceLabel } from "../lib/tbScreeningWorkflowClient.js";
+import { getAdminSubmissionFileUrl } from "../lib/adminSubmissionFiles.js";
 import {
   INFECTION_STATUS_LABELS,
   INFECTION_STATUS_OPTIONS,
   STAFF_STATUS_LABELS,
   STAFF_STATUS_OPTIONS,
   getInfectionReports,
-  getStaffSubmissions,
+  getStaffSubmissionPage,
   updateInfectionReportStatus,
   updateStaffSubmissionStatus,
-  formatSubmissionDateTime,
 } from "../lib/adminSubmissions.js";
 
 const VALID_TABS = new Set(["staff", "infection"]);
@@ -101,12 +101,38 @@ function DetailRow({ label, value }) {
   );
 }
 
-function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
-  const isQaTb = item.sourceEnvironment === "qa" && item.itemId === "tb";
-  const isProxy = item.submissionMode === "admin_proxy";
-  const submitterName = item.subjectName || item.submitter?.displayName || "제출자";
+function StaffSubmissionCard({ item, pendingId, onStatusChange, onRefresh }) {
+  const [inlineReview, setInlineReview] = useState(false);
+  const [fileState, setFileState] = useState({ pending: -1, message: "" });
+  const reviewHref = tbReviewHref(item);
+  const reviewContext = reviewHref ? tbReviewContext(new URL(reviewHref, "https://navigation.invalid").searchParams) : null;
+  const workHref = staffWorkHref(item);
+  const [params] = useSearchParams();
+  const returnTo = adminReturnHref(params.get("returnTo"));
+  const submitterName = item.submitter?.displayName || "제출자";
   const submitterEmail = item.submitter?.email || "";
   const isUpdating = pendingId === item.id;
+  const evidenceFiles = item.evidenceFiles || [];
+
+  const openFile = async (fileIndex) => {
+    const preview = window.open("", "_blank");
+    if (!preview) {
+      setFileState({ pending: -1, message: "팝업이 차단되었습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해 주세요." });
+      return;
+    }
+    preview.opener = null;
+    preview.document.title = "첨부파일 여는 중";
+    preview.document.body.textContent = "첨부파일을 확인하고 있습니다.";
+    setFileState({ pending: fileIndex, message: "" });
+    try {
+      const file = await getAdminSubmissionFileUrl(item.id, fileIndex);
+      preview.location.replace(file.url);
+      setFileState({ pending: -1, message: "" });
+    } catch (error) {
+      preview.close();
+      setFileState({ pending: -1, message: error?.message || "첨부파일을 열지 못했습니다." });
+    }
+  };
 
   return (
     <article className="rounded-[28px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.06)]">
@@ -119,32 +145,32 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
             <StatusPill status={item.status} labels={STAFF_STATUS_LABELS} />
           </div>
           <h2 className="mt-4 text-lg font-semibold text-[#102047]">{submitterName}</h2>
+          {item.submissionMode === "admin_proxy" && <p className="mt-1 text-sm font-semibold text-[#3154A3]">관리자 대리등록 · 등록자 {item.submittedByName || "관리자"}</p>}
           {submitterEmail && <p className="mt-1 break-all text-sm font-bold text-[#627083]">{submitterEmail}</p>}
           <p className="mt-2 text-xs font-bold text-[#8A96A8]">제출일시 {item.submittedAtLabel}</p>
-          <p className="mt-1 text-xs font-semibold text-[#627083]">제출 방식: {isProxy ? "관리자 대리등록" : "본인 제출"}</p>
-          {isProxy && <p className="mt-1 text-xs font-semibold text-[#627083]">등록자: {item.submittedByName || "관리자"}</p>}
-          {item.annualHealthScreeningType && <p className="mt-1 text-xs text-[#627083]">{item.annualHealthScreeningType.schoolYear}학년도 검진 경로: {screeningTypeLabel(item.annualHealthScreeningType.screeningType)} · 본인 확인: {item.annualHealthScreeningType.selfChoice ? "완료" : "미확인"}</p>}
-          {isQaTb && <p className="mt-1 text-xs text-[#627083]">{item.schoolYear ? `${item.schoolYear}학년도` : "과거 자료 · 연도 미연결"} · 검진 경로: {screeningTypeLabel(item.workflow?.route?.screeningType)} · 본인확인: {item.workflow?.route?.selfChoice ? "확인 완료" : "미확인"}</p>}
-          {isQaTb && <p className="mt-1 text-xs text-[#627083]">확인자료: {tbEvidenceLabel(item.workflow)} · 완료: {item.workflow?.completed ? "완료" : "확인 필요"}</p>}
-          {isQaTb && item.workflow?.routeMismatch && <p role="status" className="mt-2 text-xs text-[#B42318]">검진 경로와 확인자료 유형이 다릅니다. 자료를 확인한 뒤 처리해 주세요.</p>}
-          {isQaTb && item.workflow?.status?.confirmedAt && <p className="mt-1 break-all text-xs text-[#627083]">확인자: {typeof item.workflow.status.confirmedBy === "string" ? item.workflow.status.confirmedBy : item.workflow.status.confirmedBy?.displayName || item.workflow.status.confirmedBy?.email || "관리자"} · 확인일시: {formatSubmissionDateTime(item.workflow.status.confirmedAt)} · 확인자료: {item.workflow.status.evidenceSubmissionId}</p>}
-          {isQaTb && item.workflow?.status?.discrepancy && <p role="status" className="mt-2 text-xs text-[#B42318]">확인자료가 무효 처리되었습니다. 기존 검진 완료와 관리자 확인 이력은 유지되므로 보건실 확인이 필요합니다.</p>}
         </div>
-        {item.file?.driveUrl ? (
-          <a
-            href={item.file.driveUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-2xl bg-[#20A982] px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
-          >
-            제출 파일 보기
-          </a>
+        {evidenceFiles.length ? (
+          <div className="flex max-w-full shrink-0 flex-wrap justify-end gap-2 sm:max-w-[50%]">
+            {evidenceFiles.map((file, index) => (
+              <button
+                key={file.fileId}
+                type="button"
+                disabled={fileState.pending >= 0}
+                onClick={() => openFile(index)}
+                title={file.fileName}
+                className="inline-flex min-h-10 max-w-full items-center justify-center rounded-2xl bg-[#20A982] px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 disabled:cursor-wait disabled:opacity-60"
+              >
+                <span className="max-w-48 truncate">{evidenceFiles.length > 1 ? `파일 ${index + 1} 보기` : "파일 보기"}</span>
+              </button>
+            ))}
+          </div>
         ) : (
           <span className="inline-flex min-h-10 shrink-0 items-center rounded-2xl bg-[#F7FBF9] px-4 py-2 text-xs font-semibold text-[#8A96A8]">
-            {item.itemId === "recruit" ? "파일 없음" : "파일 링크 없음"}
+            첨부파일 없음
           </span>
         )}
       </div>
+      {fileState.message && <p role="alert" className="mt-3 rounded-2xl bg-[#FFF7F7] px-4 py-3 text-sm font-semibold text-[#B42318]">{fileState.message}</p>}
 
       <dl className="mt-5 grid gap-4 rounded-[24px] bg-[#F7FBF9] p-4 sm:grid-cols-3">
         {item.itemId === "cpr" && (
@@ -166,19 +192,30 @@ function StaffSubmissionCard({ item, pendingId, onStatusChange }) {
           />
         )}
         <DetailRow label="교직원 구분" value={item.staffType} />
+        {item.submissionMode === "admin_proxy" && <DetailRow label="등록 메모" value={item.proxyNote} />}
       </dl>
 
+      <nav aria-label="접수자료 업무 연결" className="mt-4 flex flex-wrap gap-3 text-sm text-[#0D4EA6]">
+        {returnTo && <Link className="min-h-11 py-3" to={returnTo}>이전 현황으로 돌아가기</Link>}
+        {workHref && <Link className="min-h-11 py-3" to={withAdminReturn(workHref, `/firebase-admin/submissions?tab=staff&submissionId=${encodeURIComponent(item.id)}`)}>이 교직원 업무현황</Link>}
+        {item.itemId === "cpr" && <Link className="min-h-11 py-3" to="/firebase-admin/trainings?mode=manual-cpr-2026">학교 단체교육 일괄 등록</Link>}
+        {reviewContext && isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <button type="button" aria-expanded={inlineReview} className="min-h-11 rounded-lg border px-3" onClick={()=>setInlineReview(value=>!value)}>이 화면에서 검진 확인</button>}
+      </nav>
+      {inlineReview && reviewContext && <HealthScreeningTypeAdminPanel initialSchoolYear={reviewContext.schoolYear} reviewContext={reviewContext} onChange={()=>onRefresh(item.id)} />}
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-bold text-[#8A96A8]">
-          {isUpdating ? "상태를 저장하는 중입니다." : "처리 상태 변경"}
+          {item.itemId === "tb" && item.schoolYear
+            ? "결핵검진 완료 처리는 연도별 검진 확인에서 진행합니다."
+            : isUpdating ? "상태를 저장하는 중입니다." : "처리 상태 변경"}
         </p>
-        <StatusButtons
+        {item.itemId === "tb" && tbReviewHref(item) && <Link className="min-h-10 rounded-lg border px-3 py-2 text-sm text-[#0D4EA6]" to={tbReviewHref(item)}>이 접수의 검진 확인</Link>}
+        {!(item.itemId === "tb" && item.schoolYear) && <StatusButtons
           currentStatus={item.status}
-          labels={isQaTb ? { completed: "확인 완료", rejected: "자료 무효 처리" } : STAFF_STATUS_LABELS}
-          options={isQaTb ? ["completed", "rejected"] : STAFF_STATUS_OPTIONS}
-          pending={isUpdating || (isQaTb && (!item.schoolYear || item.schoolYear !== CURRENT_SCHOOL_YEAR || !item.workflow))}
+          labels={STAFF_STATUS_LABELS}
+          options={STAFF_STATUS_OPTIONS}
+          pending={isUpdating}
           onChange={(status) => onStatusChange(item.id, status)}
-        />
+        />}
       </div>
     </article>
   );
@@ -259,6 +296,9 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
   const [actionState, setActionState] = useState({ status: "idle", message: "" });
   const [pendingId, setPendingId] = useState("");
   const [proxyOpen, setProxyOpen] = useState(false);
+  const [pageInfo, setPageInfo] = useState({ total: 0, nextCursor: null });
+  const loadVersion = useRef(0);
+  const submissionId = searchParams.get("submissionId") || "";
 
   const visibleStatusOptions = useMemo(() => {
     return activeTab === "staff" ? STAFF_STATUS_OPTIONS : INFECTION_STATUS_OPTIONS;
@@ -271,20 +311,23 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
     setStatusFilter(nextStatus && (nextTab === "staff" || nextStatus !== "rejected") ? nextStatus : "");
   }, [searchParams]);
 
-  useEffect(() => {
-    const params = {};
-    if (activeTab !== "staff") params.tab = activeTab;
-    if (statusFilter) params.status = statusFilter;
+  const changeStatusFilter = (status) => {
+    const params = new URLSearchParams(searchParams);
+    if (status) params.set("status", status); else params.delete("status");
     setSearchParams(params, { replace: true });
-  }, [activeTab, statusFilter, setSearchParams]);
+  };
 
-  const loadItems = async () => {
+  const loadItems = async (cursor = null) => {
+    const version = ++loadVersion.current;
     setLoadState({ status: "loading", message: "" });
     setActionState({ status: "idle", message: "" });
 
     try {
       if (activeTab === "staff") {
-        const nextStaffItems = await getStaffSubmissions({ status: statusFilter, ...(isHealthScreeningTypeQaHost(globalThis.location?.hostname) ? { schoolYear: CURRENT_SCHOOL_YEAR } : {}) });
+        const result = await getStaffSubmissionPage({ status: statusFilter, cursor, submissionId });
+        if (version !== loadVersion.current) return;
+        const nextStaffItems = result.items;
+        setPageInfo(result);
         setStaffItems(nextStaffItems);
         setInfectionReports([]);
         setLoadState({ status: nextStaffItems.length ? "success" : "empty", message: "" });
@@ -292,10 +335,12 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
       }
 
       const nextReports = await getInfectionReports({ status: statusFilter });
+      if (version !== loadVersion.current) return;
       setInfectionReports(nextReports);
       setStaffItems([]);
       setLoadState({ status: nextReports.length ? "success" : "empty", message: "" });
     } catch (error) {
+      if (version !== loadVersion.current) return;
       const isPermissionDenied = error?.code === "permission-denied";
       const needsIndex = error?.message?.includes("requires an index");
       setStaffItems([]);
@@ -313,11 +358,28 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
 
   useEffect(() => {
     loadItems();
-  }, [activeTab, statusFilter]);
+    return () => { loadVersion.current++; };
+  }, [activeTab, statusFilter, submissionId]);
 
   const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    if (tab === "infection" && statusFilter === "rejected") setStatusFilter("");
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", tab);
+    params.delete("submissionId");
+    if (tab === "infection" && statusFilter === "rejected") params.delete("status");
+    setSearchParams(params);
+  };
+
+  const refreshStaffReceipt = async (receiptId) => {
+    const version = loadVersion.current;
+    try {
+      const result = await getStaffSubmissionPage({submissionId:receiptId});
+      if (version !== loadVersion.current) return;
+      const updated = result.items?.find(item=>item.id === receiptId);
+      if (updated) setStaffItems(current=>current.map(item=>item.id === receiptId ? updated : item));
+      else setActionState({status:"error",message:"검진 처리는 저장됐으나 접수자료를 다시 확인하지 못했습니다. 새로고침해 주세요."});
+    } catch {
+      if (version === loadVersion.current) setActionState({status:"error",message:"검진 처리는 저장됐으나 접수 상태 조회가 실패했습니다. 다시 확인해 주세요."});
+    }
   };
 
   const handleStaffStatusChange = async (submissionId, status) => {
@@ -364,7 +426,6 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
       description="교직원 제출과 감염병 보고를 탭으로 구분해 확인하고 처리 상태를 관리합니다."
       displayName={displayName}
     >
-      {activeTab === "staff" && staffItems.evidenceComplete === false && <p role="status" className="rounded-[12px] border border-[#DDEAE7] bg-[#EEF4FF] p-3 text-sm text-[#3154A3]">확인자료 조회가 일부입니다. 자료 없음으로 판단하지 마세요. 연도별 검진 경로 관리에서 다음 자료를 조회할 수 있습니다.</p>}
       <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex rounded-[22px] bg-[#F7FBF9] p-1">
@@ -388,16 +449,13 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {activeTab === "staff" && <button type="button" onClick={() => setProxyOpen(true)}
-              className="min-h-10 rounded-[8px] bg-[#0D4EA6] px-4 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/20">
-              대리등록
-            </button>}
-            <FilterButton active={!statusFilter} onClick={() => setStatusFilter("")}>
+          <div className="flex flex-wrap gap-2">
+            {activeTab === "staff" && <button type="button" onClick={() => setProxyOpen(true)} className="min-h-10 rounded-2xl bg-[#0D4EA6] px-4 py-2 text-xs font-semibold text-white">대리등록</button>}
+            <FilterButton active={!statusFilter} onClick={() => changeStatusFilter("")}>
               전체
             </FilterButton>
             {visibleStatusOptions.map((status) => (
-              <FilterButton key={status} active={statusFilter === status} onClick={() => setStatusFilter(status)}>
+              <FilterButton key={status} active={statusFilter === status} onClick={() => changeStatusFilter(status)}>
                 {(activeTab === "staff" ? STAFF_STATUS_LABELS : INFECTION_STATUS_LABELS)[status]}
               </FilterButton>
             ))}
@@ -419,6 +477,11 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
         )}
       </section>
 
+      {activeTab === "staff" ? <div className="flex flex-wrap gap-3 text-sm">
+        <p>{submissionId ? "접수번호 직접 조회" : `선택 조건 접수 총 ${pageInfo.total}건 · 현재 페이지 ${staffItems.length}건 · 페이지당 50건`}</p>
+        {submissionId && <Link to="/firebase-admin/submissions">목록으로</Link>}
+        {!submissionId && <><button disabled={loadState.status === "loading"} onClick={() => loadItems()}>처음 페이지</button><button disabled={!pageInfo.nextCursor || loadState.status === "loading"} onClick={() => loadItems(pageInfo.nextCursor)}>다음 50건</button></>}
+      </div> : <p className="text-sm">감염병 탭은 최대 50건 범위의 조회입니다. 전체 사례는 감염병 사례관리를 이용하세요.</p>}
       <AdminProxySubmissionDialog open={proxyOpen} onClose={() => setProxyOpen(false)} onSaved={loadItems} />
 
       <section className="space-y-4">
@@ -430,6 +493,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
                 item={item}
                 pendingId={pendingId}
                 onStatusChange={handleStaffStatusChange}
+                onRefresh={refreshStaffReceipt}
               />
             ))}
           </>

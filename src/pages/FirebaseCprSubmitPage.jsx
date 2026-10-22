@@ -1,3 +1,4 @@
+import { staffReceiptMessage } from "../lib/staffReceiptClient.js";
 import { useEffect, useState } from "react";
 import FirebaseStaffSubmissionAccessGate from "../components/FirebaseStaffSubmissionAccessGate.jsx";
 import { FirebaseV2PageShell } from "../components/FirebaseV2PageShell.jsx";
@@ -90,13 +91,15 @@ export default function FirebaseCprSubmitPage() {
         staffType,
         file,
       });
-      setTrainingDate("");
-      setInstitution("");
-      setFile(null);
-      formElement.reset();
+      if (!result.syncPending) {
+        setTrainingDate("");
+        setInstitution("");
+        setFile(null);
+        formElement.reset();
+      }
       setSubmitState({
         status: "success",
-        message: `심폐소생술 이수증 제출이 완료되었습니다. 접수번호: ${result.id}`,
+        message: staffReceiptMessage(result, "심폐소생술 이수증"),
       });
     } catch (error) {
       setSubmitState({

@@ -100,7 +100,7 @@ export async function makeTrainingRosterXlsx(model, { readSignature, templateByt
     row.getCell(3).value = person.name || "";
     row.getCell(5).value = dateLabel;
     if (images.has(index)) placeSignature(workbook, sheet, rowNumber, images.get(index));
-    else row.getCell(4).value = person.absenceLabel || "미참석";
+    else row.getCell(4).value = person.method === "admin_offline_cpr_2026" ? "관리자 등록 (오프라인 명부 확인)" : person.absenceLabel || "미참석";
   });
   const lastRow = Math.max(FIRST_DATA_ROW, FIRST_DATA_ROW + rows.length - 1);
   for (const rowNumber of PAGE_BREAK_ROWS) {

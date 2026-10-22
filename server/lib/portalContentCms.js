@@ -1,3 +1,4 @@
+import { trainingEnvironment } from "./trainingDeployment.js";
 import { randomUUID } from "node:crypto";
 import { isCurrentPortalItem } from "../../src/lib/portalSchedule.js";
 
@@ -17,9 +18,9 @@ export class CmsInputError extends Error {}
 const text = (value) => String(value ?? "").normalize("NFKC").trim();
 
 export function cmsEnvironment(context = process.env) {
-  if (context.VERCEL_ENV === "production" && context.VERCEL_GIT_COMMIT_REF === "main") return "production";
-  if (context.VERCEL_ENV === "preview" && context.VERCEL_GIT_COMMIT_REF === "qa") return "qa";
-  throw new CmsInputError("승인된 배포 환경에서만 콘텐츠를 사용할 수 있습니다.");
+  const environment = trainingEnvironment(context);
+  if (environment) return environment;
+  throw new CmsInputError("승인된 배포 환경에서만 이용할 수 있습니다.");
 }
 
 export function cmsCollection(context = process.env) {

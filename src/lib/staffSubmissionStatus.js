@@ -1,11 +1,8 @@
+import { clientFirestoreResource } from "./firestoreResources.js";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { auth, db } from "./firebase.js";
-import { isQaTbSyntheticOptIn, isQaTbSyntheticUser, qaTbSyntheticOverview } from "./qaTbSyntheticAccess.js";
+import { db } from "./firebase.js";
 import { normalizeTbScreening } from "./tbScreeningStatusModel.js";
 import { CPR_TRAINING_TASK_ID, normalizeCprTraining } from "./cprTrainingStatusModel.js";
-import { CURRENT_SCHOOL_YEAR } from "../config/school.js";
-import { isHealthScreeningTypeQaHost, loadHealthScreeningTypes } from "./healthScreeningTypes.js";
-import { tbWorkflowTaskId, validatedSchoolYear } from "./tbScreeningWorkflowModel.js";
 
 export const STAFF_STATUS_TASK_IDS = ["tb-screening-2026", "cpr-training-2026", "health-mandatory-training-2026"];
 export const HEALTH_MANDATORY_TRAINING_TASK_ID = "health-mandatory-training-2026";
@@ -92,18 +89,10 @@ export function isHealthMandatoryTrainingTask(taskId) {
   return taskId === HEALTH_MANDATORY_TRAINING_TASK_ID;
 }
 
-export async function getStaffSubmissionTaskStatus(staffId, taskId, { schoolYear } = {}) {
+export async function getStaffSubmissionTaskStatus(staffId, taskId) {
   if (!staffId || !taskId) return "unknown";
-  if (isHealthScreeningTypeQaHost(globalThis.location?.hostname) && taskId.startsWith("tb-screening-")) {
-    const year = validatedSchoolYear(schoolYear);
-    if (taskId !== tbWorkflowTaskId(year)) throw new Error("검진 학년도가 일치하지 않습니다.");
-    const data = await loadHealthScreeningTypes({ schoolYear: year });
-    const workflow = data.item?.workflow;
-    if (workflow?.staffId !== staffId) throw new Error("교직원 정보를 확인하지 못했습니다.");
-    return workflow.status?.status || "unknown";
-  }
 
-  const statusSnapshot = await getDoc(doc(db, "staff_submission_status", `${staffId}_${taskId}`));
+  const statusSnapshot = await getDoc(doc(db, clientFirestoreResource(db, "statuses"), `${staffId}_${taskId}`));
   if (!statusSnapshot.exists()) return "unknown";
 
   const statusItem = normalizeStatus(statusSnapshot);
@@ -119,23 +108,12 @@ export function getStaffStatusLabel(status, taskId = "") {
   return STAFF_STATUS_LABELS[status] || STAFF_STATUS_LABELS.unknown;
 }
 
-export async function getMyStaffSubmissionStatus(staffId, { schoolYear, qaSyntheticAccess = false } = {}) {
-  const qa = isHealthScreeningTypeQaHost(globalThis.location?.hostname);
-  const year = qa ? validatedSchoolYear(schoolYear) : CURRENT_SCHOOL_YEAR;
-  if (qaSyntheticAccess || isQaTbSyntheticUser(auth.currentUser)) {
-    if (!qaSyntheticAccess || !isQaTbSyntheticOptIn() || !isQaTbSyntheticUser(auth.currentUser)) throw new Error("QA 결핵검진 전용 경로를 확인해주세요.");
-    const data = await loadHealthScreeningTypes({ schoolYear: year });
-    return qaTbSyntheticOverview(data.item?.workflow, staffId, year);
-  }
+export async function getMyStaffSubmissionStatus(staffId) {
   const taskIdSet = new Set(STAFF_STATUS_TASK_IDS);
-  const [taskSnapshot, statusSnapshot, annualData] = await Promise.all([
-    getDocs(collection(db, "staff_submission_tasks")),
-    qa ? getDocs(query(collection(db, "staff_submission_status"), where("staffId", "==", staffId), where("taskId", "in", STAFF_STATUS_TASK_IDS.filter((id) => id !== TB_SCREENING_TASK_ID))))
-      : getDocs(query(collection(db, "staff_submission_status"), where("staffId", "==", staffId))),
-    qa ? loadHealthScreeningTypes({ schoolYear: year }) : Promise.resolve(null),
+  const [taskSnapshot, statusSnapshot] = await Promise.all([
+    getDocs(collection(db, clientFirestoreResource(db, "tasks"))),
+    getDocs(query(collection(db, clientFirestoreResource(db, "statuses")), where("staffId", "==", staffId))),
   ]);
-  const tbWorkflow = annualData?.item?.workflow;
-  if (qa && (!tbWorkflow || tbWorkflow.staffId !== staffId)) throw new Error("결핵검진 현황을 확인하지 못했습니다.");
 
   const tasks = taskSnapshot.docs
     .map(normalizeTask)
@@ -154,11 +132,10 @@ export async function getMyStaffSubmissionStatus(staffId, { schoolYear, qaSynthe
 
   const items = tasks
     .map((task) => {
-      const statusItem = qa && task.taskId === TB_SCREENING_TASK_ID ? tbWorkflow.status : statusByTaskId.get(task.taskId);
+      const statusItem = statusByTaskId.get(task.taskId);
       const status = statusItem?.status || "unknown";
       return {
         ...task,
-        ...(qa && task.taskId === TB_SCREENING_TASK_ID ? { taskId: tbWorkflowTaskId(year), workflow: tbWorkflow } : {}),
         status,
         statusLabel: getStaffStatusLabel(status, task.taskId),
         action: TASK_ACTIONS[task.taskId] || null,
@@ -177,7 +154,6 @@ export async function getMyStaffSubmissionStatus(staffId, { schoolYear, qaSynthe
 
   return {
     items,
-    ...(qa ? { tbWorkflow } : {}),
     summary: {
       incomplete: items.filter((item) => item.status === "incomplete").length,
       pending: items.filter((item) => item.status === "pending").length,

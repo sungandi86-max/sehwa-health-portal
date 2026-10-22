@@ -23,7 +23,8 @@
     "seed:staff-submission-tasks": "node scripts/seedStaffSubmissionTasks.mjs",
     "map:staff-ids": "node scripts/mapStaffIdsToUsers.mjs",
     "seed:firebase-content": "node scripts/seedFirebaseContent.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:rules": "node tools/firestore-rules/run.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/noto-sans-kr": "0.4.4",
@@ -42,6 +43,7 @@
     "react-router-dom": "^7.15.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.0",
     "@vitejs/plugin-react": "^4.3.1",
     "@xmldom/xmldom": "^0.9.12",
     "autoprefixer": "^10.4.20",

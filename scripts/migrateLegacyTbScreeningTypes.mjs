@@ -1,6 +1,6 @@
 import process from "node:process";
 import { getFirestore } from "firebase-admin/firestore";
-import { initializeFirebaseAdmin, loadLocalEnv } from "./lib/firebaseAdminCli.mjs";
+import { getProjectId, initializeFirebaseAdmin, loadLocalEnv } from "./lib/firebaseAdminCli.mjs";
 import { readStaffDirectory } from "../server/lib/staffDirectory.js";
 import {
   ANNUAL_SCREENING_COLLECTION,
@@ -14,6 +14,7 @@ const TASK_ID = `tb-screening-${SCHOOL_YEAR}`;
 const write = process.argv.includes("--write");
 
 loadLocalEnv();
+if (getProjectId() !== "sehwa-health-portal-v2") throw new Error("Unexpected Firebase project; migration stopped before reads");
 process.env.VERCEL_ENV = "production";
 process.env.VERCEL_GIT_COMMIT_REF = "main";
 initializeFirebaseAdmin();
@@ -24,8 +25,8 @@ const [{ directory }, legacySnapshot, annualSnapshot] = await Promise.all([
   db.collection(LEGACY_SCREENING_COLLECTION).where("taskId", "==", TASK_ID).get(),
   db.collection(ANNUAL_SCREENING_COLLECTION).where("schoolYear", "==", SCHOOL_YEAR).get(),
 ]);
-const legacyRecords = legacySnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
-const annualRecords = annualSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
+const legacyRecords = legacySnapshot.docs.map((snapshot) => ({ ...snapshot.data(), id: snapshot.id }));
+const annualRecords = annualSnapshot.docs.map((snapshot) => ({ ...snapshot.data(), id: snapshot.id }));
 const plan = buildHealthScreeningTypeBackfillPlan({
   schoolYear: SCHOOL_YEAR,
   roster: directory,

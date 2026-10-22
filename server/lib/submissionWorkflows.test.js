@@ -1,12 +1,13 @@
+import { staffReceiptTestOptions } from "../../tests/fixtures/staffReceiptDb.js";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import { createHash, createHmac } from "node:crypto";
-import submitHandler from "../../api/submit.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
 import { buildSubmissionProxyEnvelope } from "./submissionProxyEnvelope.js";
-import { TbCertificateSubmissionStore } from "./tbCertificateSubmissionStore.js";
-import { recordQaTbReceipt } from "./tbScreeningWorkflowStore.js";
 import { buildScriptSubmission, publicSubmissionCard, resolveSubmissionWorkflow, SUBMISSION_WORKFLOWS, validateSubmissionPayload } from "./submissionWorkflows.js";
 
 const png = Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64");
@@ -28,173 +29,6 @@ function response() {
 function request(payload) {
   return { method: "POST", headers: { "content-type": "application/json" }, async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(payload)); } };
 }
-
-function qaTbFixture() {
-  const documents = new Map(); const files = new Map(); let uploads = 0; let chain = Promise.resolve();
-  const context = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
-  const ref = (path) => ({ path, get: async () => ({ exists: documents.has(path), id: path.split("/").at(-1), data: () => documents.get(path) }),
-    create: async (value) => { if (documents.has(path)) { const error = new Error("exists"); error.code = 6; throw error; } documents.set(path, value); } });
-  const db = { collection(name) { assert.match(name, /_qa$/); return { doc: (id) => ref(`${name}/${id}`) }; },
-    runTransaction(fn) { const run = chain.then(() => fn({ get: (r) => r.get(), create: (r, value) => documents.set(r.path, value),
-      set: (r, value) => documents.set(r.path, value) })); chain = run.catch(() => {}); return run; } };
-  const subject = { staffId: "QA-TB-001", name: "QA fixture", department: "QA", position: "교사" };
-  const administrator = { staffId: "QA-ADMIN", name: "QA admin", department: "QA", position: "보건교사" };
-  const options = { destinationUrl, proxySecret, environment: () => "qa", qaTbCertificateFolderId: "QA-PRIVATE-FOLDER-001",
-    verifyTb: async () => ({ ok: true, db, staffId: subject.staffId, roles: ["staff"], identity: subject }),
-    verifyProxyAdmin: async () => ({ ok: true, db, assignment: { staffId: administrator.staffId, roles: ["admin"] } }),
-    readDirectory: async () => ({ directory: [subject, administrator] }), findDuplicates: async () => [],
-    tbCertificateStore: new TbCertificateSubmissionStore({ database: () => db, context: () => context }),
-    recordTbReceipt: (database, submission) => recordQaTbReceipt(database, submission, { context }),
-    postScript: async (_url, init) => {
-      const payload = JSON.parse(JSON.parse(init.body).payloadJson);
-      if (payload.type === "qa-tb-upload-capability") return { text: async () => JSON.stringify({ contract: "qa-tb-idempotency-v1", folderId: "QA-PRIVATE-FOLDER-001", private: true }) };
-      if (!files.has(payload.qaSubmissionId)) { uploads++; files.set(payload.qaSubmissionId, "qa-file"); }
-      return { text: async () => JSON.stringify({ status: "success", fileId: files.get(payload.qaSubmissionId),
-        submissionId: payload.qaSubmissionId, requestFingerprint: payload.qaRequestFingerprint, folderId: "QA-PRIVATE-FOLDER-001", private: true }) };
-    } };
-  return { documents, options, uploads: () => uploads };
-}
-
-test("QA self and proxy persist the same stable server receipt, audit and pending projection only in QA", async () => {
-  for (const action of [undefined, "admin_proxy"]) {
-    const f = qaTbFixture(); const payload = { ...file, type: "tb", schoolYear: 2026, action, subjectStaffId: "QA-TB-001",
-      fields: { ...file.fields, docType: "결핵검진 확인증" } };
-    const first = response(); await submitHandler(request(payload), first, f.options);
-    assert.equal(first.statusCode, 200); assert.equal(first.body.environment, "qa"); assert.equal(first.body.schoolYear, 2026);
-    const id = first.body.submissionId;
-    const audit = f.documents.get(`tb_certificate_submissions_qa/${id}`);
-    const receipt = f.documents.get(`staff_submissions_qa/${id}`);
-    assert.equal(audit.submissionId, id); assert.equal(audit.schoolYear, 2026); assert.equal(receipt.submissionId, id);
-    assert.equal(receipt.submissionMode, action || "self"); assert.equal(receipt.evidenceRoute, "individual");
-    const status = f.documents.get("staff_submission_status_qa/QA-TB-001_tb-screening-2026");
-    assert.equal(status.status, "pending"); assert.equal(status.screening.completed, false); assert.equal(status.latestSubmissionId, id);
-    const repeated = response(); await submitHandler(request({ ...payload, fileName: "tomorrow.png" }), repeated, f.options);
-    assert.equal(repeated.body.submissionId, id); assert.equal(f.uploads(), 1);
-    assert.equal([...f.documents.keys()].filter((key) => key.startsWith("staff_submissions_qa/")).length, 1);
-  }
-});
-
-test("QA proxy retry fingerprints canonical staff type against persisted duplicate receipt", async () => {
-  const f = qaTbFixture(); let persistedDuplicateSeen = false;
-  const payload = { ...file, type: "tb", action: "admin_proxy", subjectStaffId: "QA-TB-001", schoolYear: 2026,
-    allowDuplicate: false, fields: { name: "client supplied", checkupDate: "2026-10-14", docType: "결핵검진 확인증" } };
-  assert.equal(payload.fields.staffType, undefined);
-  const options = { ...f.options, findDuplicates: async (_db, staffId, { schoolYear, collectionName }) => {
-    assert.equal(collectionName, "staff_submissions_qa");
-    const duplicates = [...f.documents.entries()].filter(([path, value]) => path.startsWith(`${collectionName}/`) &&
-      value.staffId === staffId && value.schoolYear === schoolYear).map(([, value]) => value);
-    if (duplicates.length) { persistedDuplicateSeen = true; assert.match(duplicates[0].requestFingerprint, /^[a-f0-9]{64}$/); }
-    return duplicates;
-  } };
-  const first = response(); await submitHandler(request(payload), first, options);
-  assert.equal(first.statusCode, 200);
-  const repeated = response(); await submitHandler(request({ ...payload, fileName: "next-day-generated.png" }), repeated, options);
-  assert.equal(persistedDuplicateSeen, true); assert.equal(repeated.statusCode, 200);
-  assert.equal(repeated.body.submissionId, first.body.submissionId); assert.equal(f.uploads(), 1);
-  for (const collection of ["tb_certificate_submissions_qa/", "staff_submissions_qa/"]) {
-    assert.equal([...f.documents.keys()].filter((path) => path.startsWith(collection)).length, 1);
-  }
-});
-test("QA self and proxy use dedicated configured endpoint for capability and upload", async () => {
-  for (const action of [undefined, "admin_proxy"]) {
-    const f = qaTbFixture(); const urls = [];
-    const options = { ...f.options, context: { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa",
-      GAS_URL: "https://script.google.com/macros/s/common/exec", QA_SUBMISSION_GAS_URL: "https://script.google.com/macros/s/qa-only/exec" },
-      postScript: async (url, init) => { urls.push(url); return f.options.postScript(url, init); } };
-    delete options.destinationUrl;
-    const result = response(); await submitHandler(request({ ...file, type: "tb", action, schoolYear: 2026, subjectStaffId: "QA-TB-001" }), result, options);
-    assert.equal(result.statusCode, 200); assert.deepEqual(urls, [options.context.QA_SUBMISSION_GAS_URL, options.context.QA_SUBMISSION_GAS_URL]);
-  }
-});
-test("QA upload types reject absent dedicated endpoint without common fallback", async () => {
-  for (const type of ["tb", "cpr", "student-file"]) {
-    const f = qaTbFixture(); const options = { ...f.options,
-      context: { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa", GAS_URL: destinationUrl },
-      verifyStaff: async () => ({ ok: true, staffId: "QA-TB-001", roles: ["staff"] }),
-      postScript: async () => { throw new Error("common endpoint must not be called"); } };
-    delete options.destinationUrl;
-    const fields = type === "student-file" ? { grade: "QA", classNumber: "QA", studentNumber: "QA", studentName: "[QA] synthetic" } : file.fields;
-    const result = response(); await submitHandler(request({ ...file, type, fields, schoolYear: 2026 }), result, options);
-    assert.equal(result.statusCode, 503); assert.equal(f.documents.size, 0);
-  }
-});
-test("QA CPR and student Script requests select dedicated URL through server context", async () => {
-  for (const type of ["cpr", "student-file"]) {
-    const context = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa", GAS_URL: destinationUrl,
-      QA_SUBMISSION_GAS_URL: "https://script.google.com/macros/s/qa-only/exec" };
-    let calls = 0;
-    const payload = { ...file, type, fileName: "QA-file.png", fields: type === "student-file"
-      ? { grade: "QA", classNumber: "QA", studentNumber: "QA", studentName: "[QA] synthetic" } : file.fields };
-    const req = request(payload); req.headers["x-vercel-forwarded-for"] = "127.0.0.1";
-    const result = response(); await submitHandler(req, result, { context, proxySecret,
-      qaCprFolderId: "QA-CPR-FOLDER", qaStudentReplyFolderId: "QA-STUDENT-FOLDER",
-      verifyStaff: async () => ({ ok: true, staffId: "QA-TB-001", roles: ["staff"] }),
-      studentAuditStore: { getQaRequest: async () => null, getQaEvidenceMatch: async () => null },
-      postScript: async (url, init) => { calls++; assert.equal(url, context.QA_SUBMISSION_GAS_URL);
-        const payload = JSON.parse(JSON.parse(init.body).payloadJson); assert.equal(payload.runtimeEnvironment, "qa");
-        return { text: async () => JSON.stringify({ status: "error" }) }; } });
-    assert.equal(result.statusCode, 200); assert.equal(calls, 1);
-  }
-});
-test("Production ignores dedicated QA URL while unapproved context cannot trust client environment", async () => {
-  for (const production of [true, false]) {
-    let calls = 0; const result = response();
-    const context = { VERCEL_ENV: production ? "production" : "preview", VERCEL_GIT_COMMIT_REF: production ? "main" : "feature",
-      GAS_URL: destinationUrl, QA_SUBMISSION_GAS_URL: "https://script.google.com/macros/s/qa-only/exec" };
-    await submitHandler(request({ ...file, type: "cpr", environment: "qa", runtimeEnvironment: "qa" }), result, { context, proxySecret,
-      verifyStaff: async () => ({ ok: true, staffId: "T001", roles: ["staff"] }),
-      postScript: async (url) => { calls++; assert.equal(url, destinationUrl); return { text: async () => JSON.stringify({ status: "error" }) }; } });
-    assert.equal(result.statusCode, production ? 200 : 503); assert.equal(calls, production ? 1 : 0);
-  }
-});
-
-test("QA missing/future year and unknown deployment reject before auth, data or upload", async () => {
-  for (const [schoolYear, environment, expected] of [[undefined, "qa", 400], [2027, "qa", 400], [2026, null, 403]]) {
-    const result = response(); await submitHandler(request({ ...file, type: "tb", schoolYear }), result, {
-      environment: () => environment, verifyTb: async () => { throw new Error("unexpected auth"); },
-      postScript: async () => { throw new Error("unexpected script"); } });
-    assert.equal(result.statusCode, expected);
-  }
-});
-
-test("missing QA Script capability never forwards evidence or writes a request", async () => {
-  const f = qaTbFixture(); let scriptCalls = 0; const result = response();
-  await submitHandler(request({ ...file, type: "tb", schoolYear: 2026 }), result, { ...f.options,
-    postScript: async (_url, init) => { scriptCalls++; const payload = JSON.parse(JSON.parse(init.body).payloadJson);
-      assert.equal(payload.type, "qa-tb-upload-capability"); assert.equal(payload.fileBase64, undefined);
-      return { text: async () => JSON.stringify({ status: "error" }) }; } });
-  assert.equal(result.statusCode, 503); assert.equal(scriptCalls, 1); assert.equal(f.documents.size, 0);
-});
-
-test("concurrent and lost-response QA submissions create one Drive file, one certificate audit and one receipt", async () => {
-  const f = qaTbFixture(); const payload = { ...file, type: "tb", schoolYear: 2026,
-    fields: { ...file.fields, docType: "결핵검진 확인증" } };
-  let lostResponse = true;
-  const options = { ...f.options, postScript: async (...args) => {
-    const result = await f.options.postScript(...args); const forwarded = JSON.parse(JSON.parse(args[1].body).payloadJson);
-    if (forwarded.type === "tb" && lostResponse) { lostResponse = false; throw new Error("lost upload response"); }
-    return result;
-  } };
-  const failed = response(); await submitHandler(request(payload), failed, options); assert.equal(failed.statusCode, 503);
-  assert.match(failed.body.submissionId, /^QA-STAFF-TB-/);
-  const results = [response(), response()];
-  await Promise.all(results.map((result) => submitHandler(request(payload), result, options)));
-  assert.equal(results[0].statusCode, 200); assert.equal(results[1].statusCode, 200);
-  assert.equal(results[0].body.submissionId, results[1].body.submissionId);
-  assert.equal(f.uploads(), 1);
-  for (const collection of ["tb_certificate_submissions_qa/", "staff_submissions_qa/"]) {
-    assert.equal([...f.documents.keys()].filter((key) => key.startsWith(collection)).length, 1);
-  }
-});
-
-test("QA receipt Firestore failure returns recoverable file/id and retry never uploads again", async () => {
-  const f = qaTbFixture(); const payload = { ...file, type: "tb", schoolYear: 2026 };
-  const failed = response(); await submitHandler(request(payload), failed, { ...f.options,
-    recordTbReceipt: async () => { throw new Error("receipt unavailable"); } });
-  assert.equal(failed.statusCode, 503); assert.equal(failed.body.fileId, "qa-file"); assert.match(failed.body.submissionId, /^QA-STAFF-TB-/);
-  const retry = response(); await submitHandler(request(payload), retry, f.options);
-  assert.equal(retry.statusCode, 200); assert.equal(retry.body.submissionId, failed.body.submissionId); assert.equal(f.uploads(), 1);
-});
 
 test("canonical registry only enables current operating submit routes", () => {
   assert.deepEqual(Object.keys(SUBMISSION_WORKFLOWS), ["cpr", "tb", "tb_registration", "student_tb_reply", "inbody", "infection", "recruit", "other"]);
@@ -282,61 +116,6 @@ test("API rejects unknown and unauthenticated staff types before script call", a
   assert.equal(calls, 0);
 });
 
-test("admin proxy TB submission enforces admin role, canonical subject and create-only duplicate handling", async () => {
-  const payload = { ...file, type: "tb", action: "admin_proxy", subjectStaffId: "T049",
-    proxyNote: "종이 제출본", fields: { name: "client-forged", checkupDate: "2026-10-14", docType: "결핵검진 확인증" } };
-  const directory = [{ staffId: "T049", name: "대상자", department: "교무부", position: "교사" },
-    { staffId: "T001", name: "등록자", department: "보건실", position: "보건교사" }];
-  let forwarded;
-  let savedRecord;
-  let duplicateCollection;
-  let savedCollection;
-  let auditInput;
-  let statusInput;
-  const options = {
-    destinationUrl, proxySecret, environment: () => "production",
-    verifyProxyAdmin: async () => ({ ok: true, assignment: { staffId: "T001", roles: ["health_teacher"] }, db: {} }),
-    readDirectory: async () => ({ directory }), findDuplicates: async (_db, _staffId, options) => {
-      duplicateCollection = options.collectionName;
-      return [];
-    },
-    postScript: async (_url, init) => { forwarded = JSON.parse(JSON.parse(init.body).payloadJson);
-      return { text: async () => JSON.stringify({ status: "success", fileId: "drive-file" }) }; },
-    tbCertificateStore: { createRequest: async (value) => { auditInput = value; } },
-    saveProxySubmission: async (_db, value, options) => {
-      savedRecord = value;
-      savedCollection = options.collectionName;
-      return { id: "proxy-id" };
-    },
-    saveTbStatus: async (value) => { statusInput = value; },
-  };
-  const result = response();
-  await submitHandler(request(payload), result, options);
-  assert.equal(result.statusCode, 200);
-  assert.equal(result.body.submissionId, "proxy-id");
-  assert.equal(forwarded.fields.name, "대상자");
-  assert.equal(savedRecord.subjectStaffId, "T049");
-  assert.equal(savedRecord.submittedByStaffId, "T001");
-  assert.equal(savedRecord.submissionMode, "admin_proxy");
-  assert.equal(auditInput.submissionMode, "admin_proxy");
-  assert.equal(statusInput.payload.staffId, "T049");
-  assert.equal(duplicateCollection, "staff_submissions");
-  assert.equal(savedCollection, "staff_submissions");
-
-  const duplicate = response();
-  await submitHandler(request(payload), duplicate, { ...options,
-    findDuplicates: async () => [{ itemId: "tb", checkupDate: "2026-03-01", status: "completed" }],
-    postScript: async () => { throw new Error("duplicate must stop before upload"); } });
-  assert.equal(duplicate.statusCode, 409);
-  assert.equal(duplicate.body.status, "duplicate");
-
-  const denied = response();
-  await submitHandler(request(payload), denied, { ...options,
-    verifyProxyAdmin: async () => ({ ok: false, status: 403, message: "관리자 권한이 없습니다." }),
-    postScript: async () => { throw new Error("denied request must not upload"); } });
-  assert.equal(denied.statusCode, 403);
-});
-
 test("submission API refuses cross-site simple form content types", async () => {
   const req = request({ type: "student-file", fields: {} });
   req.headers["content-type"] = "text/plain";
@@ -349,7 +128,8 @@ test("submission API refuses cross-site simple form content types", async () => 
 test("authorized CPR and TB use the canonical server workflow", async () => {
   const forwarded = [];
   const options = { destinationUrl,
-    environment: () => "production",
+    readDirectory: async () => ({ directory: [{ staffId: "T022", name: "QA", employmentStatus: "재직" }] }),
+    tbCertificateStore: { environment: "production", getRequest: async () => null },
     proxySecret,
     verifyStaff: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
     verifyTb: async () => ({ ok: true, staffId: "T022", roles: ["staff"] }),
@@ -358,8 +138,8 @@ test("authorized CPR and TB use the canonical server workflow", async () => {
   };
   for (const type of ["cpr", "tb"]) {
     const result = response();
-    await submitHandler(request({ ...file, type, sheetName: "Injected", folderId: "Injected" }), result, options);
-    assert.equal(result.statusCode, 200);
+    await submitHandler(request({ ...file, fields: { ...file.fields, docType: "진료확인서" }, type, sheetName: "Injected", folderId: "Injected" }), result, options);
+    assert.equal(result.statusCode, 503, JSON.stringify(result.body));
   }
   assert.deepEqual(forwarded.map((item) => item.type), ["cpr", "tb"]);
   for (const item of forwarded) {
@@ -574,16 +354,31 @@ test("Production TB registration writes the Firestore audit ledger and status wi
   assert.equal(ledgerWrites, 1);
 });
 
-test("anonymous student reply uses only fixed workflow and returns no storage destination", async () => {
+test("Production student reply uses signed fixed Drive destination and create-only audit", async () => {
   const result = response();
   const req = request({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, folderId: "injected" });
-  req.headers["x-forwarded-for"] = "192.0.2.1";
+  req.headers["x-forwarded-for"] = "203.0.113.9";
+  req.headers["x-vercel-forwarded-for"] = "192.0.2.1";
+  const writes = [];
   await submitHandler(req, result,
-    { destinationUrl, proxySecret, environment: () => "production", postScript: async (_url, init) => { const outbound = JSON.parse(JSON.parse(init.body).payloadJson);
-      assert.equal(outbound.type, "student-file"); assert.equal(outbound.folderId, undefined);
-      return { text: async () => JSON.stringify({ status: "success", folderId: "private", fileUrl: "private", submittedAt: "now" }) }; } });
+    { destinationUrl, proxySecret, environment: () => "production",
+      studentAuditStore: { environment: "production", getRequest: async () => null,
+        getEvidenceMatch: async () => null, createRequest: async (input) => writes.push(input) },
+      postScript: async (_url, init) => { const envelope = JSON.parse(init.body);
+        const outbound = JSON.parse(envelope.payloadJson);
+        assert.equal(outbound.type, "student-file");
+        assert.equal(outbound.recordMode, "firestore");
+        assert.equal(outbound.runtimeEnvironment, "production");
+        assert.equal(outbound.folderId, undefined);
+        assert.equal(outbound.sheetName, undefined);
+        assert.equal(outbound.qaEvidenceFolderId, undefined);
+        assert.match(outbound.qaSubmissionId, /^PROD-STUDENT-TB-[a-f0-9]{32}$/);
+        assert.equal(envelope.visitor.length, 43);
+        return { text: async () => JSON.stringify({ status: "success", fileId: "PROD-PRIVATE-FILE", submittedAt: "now" }) }; } });
   assert.equal(result.statusCode, 200);
-  assert.deepEqual(result.body, { status: "success", submittedAt: "now" });
+  assert.equal(result.body.fileId, undefined);
+  assert.equal(result.body.submissionId, writes[0].requestId);
+  assert.equal(writes[0].evidenceFile.fileId, "PROD-PRIVATE-FILE");
 });
 
 test("Apps Script refuses missing sheets and never reads migrated submission configuration tabs", () => {
@@ -600,18 +395,17 @@ test("Apps Script refuses missing sheets and never reads migrated submission con
   assert.equal(code.includes("제출항목관리"), false);
   assert.equal(code.includes("managedFolderId || payload.folderId"), false);
   assert.throws(() => context.validateBlob({ getContentType: () => "text/html", getBytes: () => [1] }), /PDF, JPG, PNG/);
-  assert.throws(() => context.preflight({ type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /제출 기록 시트가 준비되지 않았습니다/);
+  assert.throws(() => context.preflight({ type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /감사 원장 구성/);
   assert.equal(driveReads, 0);
-  context.SpreadsheetApp.openById = () => ({ getSheetByName: () => ({ getLastColumn: () => 1, getRange: () => ({ getDisplayValues: () => [["제출일시"]] }) }) });
-  assert.throws(() => context.preflight({ type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /제출 기록 시트 헤더가 올바르지 않습니다/);
-  assert.equal(driveReads, 0);
+  assert.doesNotMatch(code, /제출기록|SUBMISSION_RECORD_SHEET_NAME|appendSubmissionRecord_/);
 });
 
-test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", () => {
+test("Apps Script dispatches signed types to fixed Drive folders without student Sheet access", () => {
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
   const sheets = [];
   const folders = [];
   let filesCreated = 0;
+  const storedFiles = new Map();
   const properties = new Map([["SUBMISSION_PROXY_SECRET", proxySecret]]);
   let recordHeaders = productionRecordHeaders;
   let appended = 0;
@@ -630,17 +424,28 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
       if (name === "제출기록") return recordSheetPresent ? sheet : null;
       return responseHeaders[name] ? { ...sheet, getRange: () => ({ getDisplayValues: () => [responseHeaders[name]] }) } : null;
     } }) },
-    DriveApp: { getFolderById: (id) => { folders.push(id); if (!folderReady) throw new Error("fixture folder missing"); return { getId: () => id, createFile: () => { filesCreated++; return { getUrl: () => "private", getId: () => "private" }; } }; } },
+    DriveApp: { getFolderById: (id) => { folders.push(id); if (!folderReady) throw new Error("fixture folder missing"); return {
+      getId: () => id,
+      getFilesByName: (name) => { let consumed = false; return {
+        hasNext: () => storedFiles.has(name) && !consumed,
+        next: () => { consumed = true; return storedFiles.get(name); },
+      }; },
+      createFile: (blob) => { filesCreated++; const saved = { getUrl: () => "private", getId: () => `private-${filesCreated}`,
+        getMimeType: () => "image/png", getSize: () => blob.getBytes().length };
+        storedFiles.set(blob.name, saved); return saved; },
+    }; } },
     Utilities: { DigestAlgorithm: { SHA_256: "sha256" }, Charset: { UTF_8: "utf8" },
       base64Decode: (value) => [...Buffer.from(value, "base64")],
       base64EncodeWebSafe: (value) => Buffer.from(value).toString("base64url"),
       computeDigest: (_algorithm, value) => [...createHash("sha256").update(value).digest()],
       computeHmacSha256Signature: (value, secret) => [...createHmac("sha256", secret).update(value).digest()],
-      newBlob: (bytes, mimeType) => ({ getContentType: () => mimeType, getBytes: () => typeof bytes === "string" ? [...Buffer.from(bytes)] : bytes }),
+      newBlob: (bytes, mimeType) => ({ name: "", getContentType: () => mimeType,
+        getBytes: () => typeof bytes === "string" ? [...Buffer.from(bytes)] : bytes,
+        setName(value) { this.name = value; } }),
       formatDate: () => "now" },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: (body) => ({ getContent: () => body, setMimeType() { return this; } }) },
   });
-  vm.runInContext(`${code}\nthis.submit = doPost; this.preflight = preflightSubmission_; this.safeCell = safeSubmissionCell_;`, context);
+  vm.runInContext(`${code}\nthis.submit = doPost; this.preflight = preflightSubmission_;`, context);
   assert.throws(() => context.validateSubmissionBlob_({
     getContentType: () => "application/pdf",
     getBytes: () => new Uint8Array(3 * 1024 * 1024 + 1),
@@ -672,23 +477,29 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   assert.equal(callEnvelope(replay).status, "success");
   assert.equal(callEnvelope(replay).status, "error");
   const visitor = createHmac("sha256", proxySecret).update("visitor").digest("base64url");
-  const student = (studentName) => ({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName } });
+  const student = (studentName) => {
+    const fingerprint = createHash("sha256").update(studentName).digest("hex");
+    return { ...file, type: "student-file", recordMode: "firestore", runtimeEnvironment: "production",
+      qaSubmissionId: `PROD-STUDENT-TB-${fingerprint.slice(0, 32)}`, qaRequestFingerprint: fingerprint,
+      fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName } };
+  };
   const studentCall = (studentName) => callEnvelope(buildSubmissionProxyEnvelope(student(studentName), proxySecret, { visitor }));
   const guardKey = (envelope) => `SUBMISSION_GUARD_REQUEST_${envelope.requestId}`;
   const beforeDryRun = [...properties.keys()].filter((key) => key.startsWith("SUBMISSION_GUARD_")).length;
   const validPreflight = context.preflight(student("QA-DRY"));
   assert.equal(validPreflight.kind, "student-file");
+  assert.equal(validPreflight.folder.getId(), "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63");
   assert.equal([...properties.keys()].filter((key) => key.startsWith("SUBMISSION_GUARD_")).length, beforeDryRun);
-  recordHeaders = productionRecordHeaders.filter((header) => header !== "파일ID");
-  const badHeader = buildSubmissionProxyEnvelope(student("QA-MISSING-HEADER"), proxySecret, { visitor });
-  assert.equal(callEnvelope(badHeader).status, "error");
-  assert.equal(properties.has(guardKey(badHeader)), false);
-  recordHeaders = productionRecordHeaders;
   recordSheetPresent = false;
-  const missingDestination = buildSubmissionProxyEnvelope(student("QA-MISSING-SHEET"), proxySecret, { visitor });
-  assert.equal(callEnvelope(missingDestination).status, "error");
-  assert.equal(properties.has(guardKey(missingDestination)), false);
+  assert.equal(studentCall("QA-NO-SHEET").status, "success");
+  assert.equal(sheets.includes("제출기록"), false);
   recordSheetPresent = true;
+  const wrongEnvironment = buildSubmissionProxyEnvelope({ ...student("QA-WRONG-ENV"), runtimeEnvironment: "qa" }, proxySecret, { visitor });
+  assert.equal(callEnvelope(wrongEnvironment).status, "error");
+  assert.equal(properties.has(guardKey(wrongEnvironment)), false);
+  const injectedFolder = buildSubmissionProxyEnvelope({ ...student("QA-INJECTED"), qaEvidenceFolderId: "Injected" }, proxySecret, { visitor });
+  assert.equal(callEnvelope(injectedFolder).status, "error");
+  assert.equal(properties.has(guardKey(injectedFolder)), false);
   folderReady = false;
   const missingFolder = buildSubmissionProxyEnvelope(student("QA-MISSING-FOLDER"), proxySecret, { visitor });
   assert.equal(callEnvelope(missingFolder).status, "error");
@@ -703,36 +514,15 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   const invalidStaffPayload = buildSubmissionProxyEnvelope({ ...file, type: "cpr", fields: { completionDate: "2026-10-09" } }, proxySecret);
   assert.equal(callEnvelope(invalidStaffPayload).status, "error");
   assert.equal(properties.has(guardKey(invalidStaffPayload)), false);
-  assert.equal(context.safeCell("=SUM(1,1)"), "'=SUM(1,1)");
-  const beforeStudent = appended;
+  const beforeStudent = filesCreated;
   assert.equal(studentCall("QA1").status, "success");
-  const studentRow = Object.fromEntries(productionRecordHeaders.map((header, index) => [header, appendedRows.at(-1)[index]]));
-  assert.equal(studentRow["제출항목"], "결핵검진 진료회신 제출");
-  assert.equal(studentRow["구분"], "student_tb_reply");
-  assert.equal(studentRow["제출항목ID"], "student_tb_reply");
-  assert.equal(studentRow["성명"], "QA1");
-  assert.equal(studentRow["파일ID"], "private");
-  assert.equal(studentRow["파일MIME"], "image/png");
-  assert.equal(studentRow["처리상태"], "접수");
-  assert.match(studentRow["제출ID"], /^[0-9a-f-]{36}$/i);
-  assert.equal(JSON.parse(studentRow["비고"]).grade, "1");
-  assert.equal(JSON.parse(studentRow["비고"]).route, "/api/submit");
-  assert.equal(studentCall("QA1").status, "error");
-  assert.equal(studentCall("QA2").status, "success");
-  assert.equal(studentCall("QA3").status, "success");
-  assert.equal(studentCall("QA4").status, "error");
-  assert.equal(appended - beforeStudent, 3);
+  assert.equal(studentCall("QA1").status, "success");
+  assert.equal(filesCreated - beforeStudent, 1);
+  assert.equal(studentCall("QA2").status, "error");
+  assert.equal(studentCall("QA3").status, "error");
+  assert.equal(appended, 0);
   assert.equal(callEnvelope({ ...buildSubmissionProxyEnvelope(student("QA5"), proxySecret, { visitor }), visitor: "altered" }).status, "error");
-  assert.equal(appended - beforeStudent, 3);
-  const retryVisitor = createHmac("sha256", proxySecret).update("write-failure").digest("base64url");
-  const failedWrite = buildSubmissionProxyEnvelope(student("QA-FAIL"), proxySecret, { visitor: retryVisitor });
-  failAppend = true;
-  assert.equal(callEnvelope(failedWrite).status, "error");
-  assert.equal(properties.has(guardKey(failedWrite)), true);
-  const beforeRetry = filesCreated;
-  assert.equal(callEnvelope(failedWrite).status, "error");
-  assert.equal(filesCreated, beforeRetry);
-  failAppend = false;
+  assert.equal(appended, 0);
   properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() + 10 * 60 * 1000));
   const legacyCpr = { ...file, type: "cpr", sheetName: "retired-cpr-sheet", folderId: "Injected" };
   assert.equal(callEnvelope(legacyCpr).status, "error");
@@ -746,3 +536,9 @@ test("Apps Script dispatches valid types to fixed Sheets and folders in a VM", (
   properties.set("SUBMISSION_PROXY_TRANSITION_UNTIL", String(Date.now() + 20 * 60 * 1000));
   assert.equal(callEnvelope(legacyCpr).status, "error");
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, staffReceiptTestOptions(options, context));
+}

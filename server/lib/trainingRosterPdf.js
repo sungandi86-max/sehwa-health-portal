@@ -150,7 +150,7 @@ export async function makeTrainingRosterPdf(model, { readSignature, fontBytes } 
         const imageHeight = signature.height * scale;
         page.drawImage(signature.image, { x: geometry.starts[3] + (geometry.widths[3] - imageWidth) / 2,
           y: y + (ROW_HEIGHT - imageHeight) / 2, width: imageWidth, height: imageHeight });
-      } else centeredText(page, font, person.absenceLabel || "미참석", 10,
+      } else centeredText(page, font, person.method === "admin_offline_cpr_2026" ? "관리자 등록 (오프라인 명부 확인)" : person.absenceLabel || "미참석", 10,
         geometry.starts[3], y, geometry.widths[3], ROW_HEIGHT);
     });
   }

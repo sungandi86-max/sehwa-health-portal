@@ -1,0 +1,10 @@
+{
+  "indexes": [
+    {"collectionGroup":"staff_submissions","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"submittedAt","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"staff_submissions","queryScope":"COLLECTION","fields":[{"fieldPath":"itemId","order":"ASCENDING"},{"fieldPath":"submitter.uid","order":"ASCENDING"},{"fieldPath":"submittedAt","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"staff_submissions","queryScope":"COLLECTION","fields":[{"fieldPath":"itemId","order":"ASCENDING"},{"fieldPath":"staffId","order":"ASCENDING"},{"fieldPath":"submittedAt","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"staff_submissions","queryScope":"COLLECTION","fields":[{"fieldPath":"itemId","order":"ASCENDING"},{"fieldPath":"staffId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"submittedAt","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"user_assignments","queryScope":"COLLECTION","fields":[{"fieldPath":"schoolYear","order":"ASCENDING"},{"fieldPath":"semester","order":"ASCENDING"},{"fieldPath":"active","order":"ASCENDING"},{"fieldPath":"roles","arrayConfig":"CONTAINS"},{"fieldPath":"__name__","order":"ASCENDING"}]}
+  ],
+  "fieldOverrides": []
+}

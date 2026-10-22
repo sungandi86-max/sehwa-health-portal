@@ -1,3 +1,4 @@
+import { sheetResource, ResourcePolicyError, sendResourceError } from "../../server/lib/environmentResources.js";
 import {
   applyHealthMandatoryTrainingSnapshot,
   getResearchTrainingSummary,
@@ -13,7 +14,7 @@ import {
   saveSourceOnlyException,
 } from "../../server/healthMandatoryTrainingExceptions.js";
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "../../server/lib/firebaseAdmin.js";
-import { CURRENT_SCHOOL_YEAR, getAssignmentId, getBearerToken, readJsonBody, readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../../server/lib/staffDirectory.js";
+import { getAssignmentId, getBearerToken, readJsonBody, readStaffDirectory, sendCors, verifyDirectoryAdmin } from "../../server/lib/staffDirectory.js";
 import { handleTrainingResource } from "../../server/lib/trainingCenterApi.js";
 import { handlePortalRoadmapResource } from "../../server/lib/portalRoadmapApi.js";
 import { handlePortalCmsResource } from "../../server/lib/portalContentCmsApi.js";
@@ -29,10 +30,9 @@ import { handleTbRegistrationAuditResource } from "../../server/lib/tbRegistrati
 import { handleCprCertificateAuditResource } from "../../server/lib/cprCertificateAuditApi.js";
 import { handleTbCertificateAuditResource } from "../../server/lib/tbCertificateAuditApi.js";
 import { handleStudentSubmissionAuditResource } from "../../server/lib/studentSubmissionAuditApi.js";
-import { handleAdminProxySubmissionsResource } from "../../server/lib/adminProxySubmissionApi.js";
 import { handleHealthScreeningTypeRequest } from "../../server/lib/healthScreeningTypeApi.js";
 import { handleTbScreeningWorkflowRequest } from "../../server/lib/tbScreeningWorkflowApi.js";
-import { verifyQaTbProxyAdmin } from "../../server/lib/qaTbSubmissionAuth.js";
+import { handleSubmissionFileAccessResource } from "../../server/lib/submissionFileAccessApi.js";
 
 const STAFF_ROLES = ["staff", "homeroom", "training_admin", "health_teacher", "admin"];
 
@@ -176,11 +176,11 @@ export async function handleQaCprLogin(req, res, { environment = trainingEnviron
 }
 
 export async function handleQaTbCertificateLogin(req, res, { environment = trainingEnvironment,
-  verifyAdmin = verifyQaTbProxyAdmin, getAuth = getFirebaseAdminAuth, context = process.env } = {}) {
+  verifyAdmin = verifyDirectoryAdmin, getAuth = getFirebaseAdminAuth, context = process.env } = {}) {
   res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "POST") return res.status(405).json({ ok: false, message: "지원하지 않는 요청입니다." });
   if (environment(context) !== "qa") return res.status(403).json({ ok: false, message: "QA 전용 경로입니다." });
-  const access = await verifyAdmin(req, { context, workflowEnvironment: "qa", schoolYear: CURRENT_SCHOOL_YEAR });
+  const access = await verifyAdmin(req);
   if (!access.ok) return res.status(access.status).json({ ok: false, message: access.message });
   const snapshot = await access.db.collection("user_assignments_qa")
     .doc(getAssignmentId(QA_TB_CERTIFICATE_UID)).get();
@@ -192,7 +192,8 @@ export async function handleQaTbCertificateLogin(req, res, { environment = train
   try { user = await auth.getUser(QA_TB_CERTIFICATE_UID); }
   catch (error) {
     if (error?.code !== "auth/user-not-found") throw error;
-    return res.status(409).json({ ok: false, message: "QA 합성 계정이 준비되지 않았습니다." });
+    user = await auth.createUser({ uid: QA_TB_CERTIFICATE_UID, email: QA_TB_CERTIFICATE_EMAIL,
+      displayName: "[QA-TB-CERT-TEST]" });
   }
   if (user.email !== QA_TB_CERTIFICATE_EMAIL || user.disabled) {
     return res.status(409).json({ ok: false, message: "QA 결핵검진 확인증 합성 계정 상태가 예상과 다릅니다." });
@@ -200,7 +201,7 @@ export async function handleQaTbCertificateLogin(req, res, { environment = train
   return res.status(200).json({ ok: true, customToken: await auth.createCustomToken(QA_TB_CERTIFICATE_UID) });
 }
 
-export async function staffDirectoryHandler(req, res, { trainingHandler = handleTrainingResource, trainingPhase2Handler = null } = {}) {
+export async function staffDirectoryHandler(req, res, { context = process.env, trainingHandler = handleTrainingResource, trainingPhase2Handler = null } = {}) {
   sendCors(res, "GET, POST, OPTIONS");
 
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -242,14 +243,14 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
     if (req.query?.resource === "student-submission-audit") {
       return await handleStudentSubmissionAuditResource(req, res);
     }
-    if (req.query?.resource === "admin-proxy-submissions") {
-      return await handleAdminProxySubmissionsResource(req, res);
-    }
     if (req.query?.resource === "health-screening-types") {
       return await handleHealthScreeningTypeRequest(req, res);
     }
     if (req.query?.resource === "tb-screening-workflow") {
       return await handleTbScreeningWorkflowRequest(req, res);
+    }
+    if (req.query?.resource === "submission-file") {
+      return await handleSubmissionFileAccessResource(req, res);
     }
 
     if (["training-list", "training-detail"].includes(req.query?.resource)) {
@@ -261,6 +262,8 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
       return await handler(req, res);
     }
 
+    sheetResource("staff", context);
+    if (["health-mandatory-training-sync", "health-mandatory-training-current-targets"].includes(req.query?.resource)) sheetResource("research", context);
     const access = await verifyDirectoryAdmin(req);
     if (!access.ok) return res.status(access.status).json({ ok: false, message: access.message });
 
@@ -325,6 +328,7 @@ export async function staffDirectoryHandler(req, res, { trainingHandler = handle
     const { directory, stats } = await readStaffDirectory();
     return res.status(200).json({ ok: true, directory, stats });
   } catch (error) {
+    if (error instanceof ResourcePolicyError) return sendResourceError(res, error);
     if (req.query?.resource === "health-mandatory-training-exceptions") {
       return res.status(500).json({ ok: false, message: "법정의무연수 예외 목록을 처리하지 못했습니다." });
     }

@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import submitHandler from "../../api/submit.js";
+import rawSubmitHandler from "../../api/submit.js";
+import { submissionResourceContext } from "../../tests/fixtures/submissionResourceContext.js";
+
 import { handleQaInbodyLogin } from "../../api/firebase/staff-directory.js";
-import adminHandler, { replaceQaInbodySummary } from "../../api/health-room-status.js";
+import rawAdminHandler, { replaceQaInbodySummary } from "../../api/health-room-status.js";
 import { InbodyRequestStore } from "./inbodyRequestStore.js";
 import { verifyCurrentStaffSubmissionIdentity } from "./tbSubmissionGuard.js";
 import { SUBMISSION_WORKFLOWS } from "./submissionWorkflows.js";
 import { isQaInbodyAssignment, isQaInbodyUid, QA_INBODY_EMAIL,
   QA_INBODY_ROLE, QA_INBODY_STAFF_ID, QA_INBODY_UID } from "./qaInbodySynthetic.js";
 
-const qa = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
+const qa = { APP_ENV: "qa", QA_FIREBASE_PROJECT_ID: "isolated-health-qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" };
 const production = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" };
 const assignment = { uid: QA_INBODY_UID, staffId: QA_INBODY_STAFF_ID, active: false,
   qaOnly: true, environment: "qa", roles: [QA_INBODY_ROLE], schoolYear: 2026, semester: 2,
@@ -24,7 +26,7 @@ function response() {
 }
 
 function database(data = assignment) {
-  return { collection(name) { assert.equal(name, "user_assignments"); return {
+  return { app: { options: { projectId: "isolated-health-qa" } }, collection(name) { assert.equal(name, "user_assignments"); return {
     doc() { return { get: async () => ({ exists: true, data: () => data }) }; },
   }; } };
 }
@@ -33,7 +35,9 @@ function guard(context, data = assignment, allowQaInbodySynthetic = true, uid = 
   return verifyCurrentStaffSubmissionIdentity({ headers: { authorization: "Bearer synthetic" } }, {
     allowQaInbodySynthetic, context,
     auth: () => ({ verifyIdToken: async () => ({ uid }) }),
-    database: () => database(data), directory: async () => ({ directory: roster }),
+    database: () => { const db = database(data);
+      if (context.VERCEL_ENV === "production") db.app.options.projectId = "sehwa-health-portal-v2";
+      return db; }, directory: async () => ({ directory: roster }),
   });
 }
 
@@ -140,3 +144,13 @@ test("successful QA receipt summary keeps synthetic request detail on its Inbody
   assert.deepEqual(item.qaSyntheticRequest, { requestId: "QA-UI-001",
     preferredDate: "2026-10-15", preferredTime: "오후1 (12:00~14:00)" });
 });
+
+function submitHandler(req, res, options = {}) {
+  const environment = options.environment ? options.environment() : (process.env.APP_ENV || "production");
+  const context = options.context || submissionResourceContext(environment, options);
+  return rawSubmitHandler(req, res, { ...options, context });
+}
+
+function adminHandler(req, res, options = {}) {
+  return rawAdminHandler(req, res, { ...options, context: options.context || { APP_ENV: options.inbodyStore?.environment || "production" } });
+}

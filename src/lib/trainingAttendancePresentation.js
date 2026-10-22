@@ -2,7 +2,8 @@ export function trainingAttendanceCounts(counts = {}) {
   const target = Number(counts.target) || 0;
   const signed = Number(counts.signed) || 0;
   const excluded = Number(counts.excluded) || 0;
-  return { target, signed, missing: Math.max(0, target - signed), excluded };
+  const manual = Number(counts.manual) || 0;
+  return { target, signed, missing: Math.max(0, target - signed - manual), excluded, ...(counts.manual !== undefined ? {manual,attended:signed+manual} : {}) };
 }
 
 export function recentTrainingAttendance(rows = [], limit = 5) {

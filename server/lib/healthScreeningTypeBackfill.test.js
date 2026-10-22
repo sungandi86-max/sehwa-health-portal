@@ -20,6 +20,8 @@ const legacy = (staffId, screeningType) => ({
   id: `${staffId}_tb-screening-2026`, staffId, taskId: "tb-screening-2026",
   status: "completed", screening: { screeningType, completed: true },
 });
+const annual = (staffId, screeningType) => ({ staffId, schoolYear: 2026, screeningType,
+  screeningTypeConfirmed: true, environment: "production", schemaVersion: 1, revision: 1, source: "self" });
 test("dry-run classifies only unambiguous legacy routes as create candidates", () => {
   const plan = buildHealthScreeningTypeBackfillPlan({
     schoolYear: 2026,
@@ -51,8 +53,8 @@ test("dry-run skips matching annual records and reports mismatches as conflicts"
     roster: roster.slice(0, 2),
     legacyRecords: [legacy("T001", "national"), legacy("T002", "individual")],
     annualRecords: [
-      { staffId: "T001", schoolYear: 2026, screeningType: "nhis" },
-      { staffId: "T002", schoolYear: 2026, screeningType: "employment" },
+      annual("T001", "nhis"),
+      annual("T002", "employment"),
     ],
   });
 
@@ -99,6 +101,77 @@ function transactionDb(existing = new Map()) {
     },
   };
 }
+
+test("planner refuses a non-2026 or malformed canonical roster", () => {
+  const input = { schoolYear: 2026, roster: roster.slice(0, 1), legacyRecords: [legacy("T001", "national")], annualRecords: [] };
+  assert.throws(() => buildHealthScreeningTypeBackfillPlan({ ...input, schoolYear: 2027 }));
+  for (const invalid of [[...input.roster, ...input.roster], [{ staffId: "", employmentStatus: "재직" }], [{ staffId: "QA-STAFF", employmentStatus: "재직" }]]) {
+    assert.throws(() => buildHealthScreeningTypeBackfillPlan({ ...input, roster: invalid }));
+  }
+});
+
+test("planner blocks inconsistent legacy identity and duplicate annual records", () => {
+  const input = { schoolYear: 2026, roster: roster.slice(0, 1), legacyRecords: [legacy("T001", "national")], annualRecords: [] };
+  for (const override of [{ id: "other_tb-screening-2026" }, { id: "" }, { taskId: "tb-screening-2027" }, { schoolYear: 2027 }]) {
+    const plan = buildHealthScreeningTypeBackfillPlan({ ...input, legacyRecords: [{ ...input.legacyRecords[0], ...override }] });
+    assert.equal(plan.summary.create, 0);
+    assert.equal(plan.summary.unmatched, 1);
+  }
+  const missing = buildHealthScreeningTypeBackfillPlan({ ...input, legacyRecords: [...input.legacyRecords, { id: "missing", taskId: "tb-screening-2026" }] });
+  assert.equal(missing.summary.unmatched, 1);
+  const annual = { staffId: "T001", schoolYear: 2026, screeningType: "nhis" };
+  for (const annualRecords of [[annual, annual], [{ ...annual, schoolYear: 2027 }], [{ ...annual, id: "other_2026" }]]) {
+    const plan = buildHealthScreeningTypeBackfillPlan({ ...input, annualRecords });
+    assert.equal(plan.summary.create, 0);
+    assert.equal(plan.summary.conflict, 1);
+  }
+});
+
+test("manifest is stable when canonical source input order changes", () => {
+  const input = { schoolYear: 2026, roster: roster.slice(0, 2), legacyRecords: [legacy("T001", "national"), legacy("T002", "individual")], annualRecords: [] };
+  assert.equal(buildHealthScreeningTypeBackfillPlan(input).manifestHash, buildHealthScreeningTypeBackfillPlan({ ...input, roster: [...input.roster].reverse(), legacyRecords: [...input.legacyRecords].reverse() }).manifestHash);
+});
+
+test("writer rejects unresolved plans before any database operation", async () => {
+  const input = { schoolYear: 2026, roster: roster.slice(0, 1), legacyRecords: [legacy("T001", "national")], annualRecords: [] };
+  const db = { collection() { assert.fail("unsafe plan must not access database"); } };
+  const plan = buildHealthScreeningTypeBackfillPlan(input);
+  for (const unsafe of [{ ...plan, schoolYear: 2027 }, { ...plan, summary: { ...plan.summary, conflict: 1 } }, { ...plan, summary: { ...plan.summary, unmatched: 1 } }]) {
+    await assert.rejects(applyHealthScreeningTypeBackfill({ db, plan: unsafe, importedAt: "2026-10-15T00:00:00.000Z" }), /Unresolved or non-2026/);
+  }
+});
+
+test("orphan history blocks create and a concurrently existing target is never overwritten", async () => {
+  const plan = buildHealthScreeningTypeBackfillPlan({ schoolYear: 2026, roster: roster.slice(0, 1), legacyRecords: [legacy("T001", "national")], annualRecords: [] });
+  for (const [path, original, expected] of [
+    ["staff_health_screening_types/T001_2026/history/1", { screeningType: "employment" }, { created: 0, skipped: 0, conflicts: 1 }],
+    ["staff_health_screening_types/T001_2026", annual("T001", "nhis"), { created: 0, skipped: 1, conflicts: 0 }],
+  ]) {
+    const db = transactionDb(new Map([[path, original]]));
+    assert.deepEqual(await applyHealthScreeningTypeBackfill({ db, plan, importedAt: "2026-10-15T00:00:00.000Z" }), expected);
+    assert.deepEqual(db.writes, []);
+    assert.deepEqual(db.records.get(path), original);
+  }
+});
+
+test("malformed existing annual record is a conflict rather than confirmed skip", () => {
+  const plan = buildHealthScreeningTypeBackfillPlan({ schoolYear: 2026, roster: roster.slice(0, 1), legacyRecords: [legacy("T001", "national")],
+    annualRecords: [{ staffId: "T001", schoolYear: 2026, screeningType: "nhis" }] });
+  assert.equal(plan.summary.conflict, 1);
+  assert.equal(plan.summary.existingSkip, 0);
+  assert.equal(plan.summary.create, 0);
+});
+
+test("divergent or malformed concurrent target is conflict without overwrite", async () => {
+  const plan = buildHealthScreeningTypeBackfillPlan({ schoolYear: 2026, roster: roster.slice(0, 1), legacyRecords: [legacy("T001", "national")], annualRecords: [] });
+  const path = "staff_health_screening_types/T001_2026";
+  for (const original of [annual("T001", "employment"), { screeningType: "nhis" }]) {
+    const db = transactionDb(new Map([[path, original]]));
+    assert.deepEqual(await applyHealthScreeningTypeBackfill({ db, plan, importedAt: "2026-10-15T00:00:00.000Z" }), { created: 0, skipped: 0, conflicts: 1 });
+    assert.deepEqual(db.writes, []);
+    assert.deepEqual(db.records.get(path), original);
+  }
+});
 
 test("create-only writer is idempotent and creates record plus history atomically", async () => {
   const plan = buildHealthScreeningTypeBackfillPlan({

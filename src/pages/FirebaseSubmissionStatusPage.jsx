@@ -1,5 +1,6 @@
+import { submissionReviewHref, withAdminReturn } from "../lib/submissionNavigation.js";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import FirebaseV2AccessGate from "../components/FirebaseV2AccessGate.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
@@ -79,8 +80,8 @@ function SummaryCard({ label, value, tone = "text-[#102047]" }) {
 }
 
 function RosterRow({ row, selectedItem }) {
-  const adminStatus = row.status === "missing" ? "submitted" : row.status;
-  const adminHref = `/firebase-admin/submissions?tab=staff&status=${adminStatus}`;
+  const location = useLocation();
+  const adminHref = withAdminReturn(submissionReviewHref(row.submission), location.pathname + location.search);
 
   return (
     <article
@@ -113,7 +114,7 @@ function RosterRow({ row, selectedItem }) {
             <dd className="mt-1 font-bold text-[#102047]">{row.status === "missing" ? "-" : row.statusLabel}</dd>
           </div>
         </dl>
-        {row.status !== "missing" && (
+        {row.status !== "missing" && adminHref && (
           <Link
             to={adminHref}
             className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-2xl border border-[#DDEAE7] bg-[#F7FBF9] px-4 py-2 text-xs font-semibold text-[#102047] transition hover:-translate-y-[1px] focus:outline-none focus:ring-4 focus:ring-[#20A982]/20"
@@ -128,32 +129,28 @@ function RosterRow({ row, selectedItem }) {
 
 function FirebaseSubmissionStatusContent({ displayName }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedItem, setSelectedItem] = useState(() => getInitialItem(searchParams.get("item")));
-  const [statusFilter, setStatusFilter] = useState(() => getInitialFilter(searchParams.get("status")));
-  const [searchTerm, setSearchTerm] = useState("");
+  const selectedItem = getInitialItem(searchParams.get("item"));
+  const statusFilter = getInitialFilter(searchParams.get("status"));
+  const searchTerm = searchParams.get("search") || "";
+  function changeQuery(key,value) {
+    setSearchParams(current=>{const next=new URLSearchParams(current);if(value)next.set(key,value);else next.delete(key);return next;},{replace:true});
+  }
+  const setSelectedItem = value => changeQuery("item",value);
+  const setStatusFilter = value => changeQuery("status",value);
+  const setSearchTerm = value => changeQuery("search",value);
+  const [page, setPage] = useState(0);
+  const [cursors, setCursors] = useState([null]);
   const [overview, setOverview] = useState(null);
   const [state, setState] = useState({ status: "idle", message: "" });
-
-  useEffect(() => {
-    const nextItem = getInitialItem(searchParams.get("item"));
-    const nextStatus = getInitialFilter(searchParams.get("status"));
-    setSelectedItem(nextItem);
-    setStatusFilter(nextStatus);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const params = { item: selectedItem };
-    if (statusFilter !== "all") params.status = statusFilter;
-    setSearchParams(params, { replace: true });
-  }, [selectedItem, setSearchParams, statusFilter]);
 
   useEffect(() => {
     let shouldIgnore = false;
 
     async function loadOverview() {
+      setOverview(null);
       setState({ status: "loading", message: "" });
       try {
-        const nextOverview = await getSubmissionStatusOverview(selectedItem, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER);
+        const nextOverview = await getSubmissionStatusOverview(selectedItem, CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER, { page, cursor: cursors[page] });
         if (shouldIgnore) return;
         setOverview(nextOverview);
         setState({ status: nextOverview.roster.length ? "success" : "empty", message: "" });
@@ -176,7 +173,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
     return () => {
       shouldIgnore = true;
     };
-  }, [selectedItem]);
+  }, [selectedItem, page]);
 
   const visibleRoster = useMemo(() => {
     return overview ? filterSubmissionRoster(overview.roster, statusFilter, searchTerm) : [];
@@ -185,8 +182,8 @@ function FirebaseSubmissionStatusContent({ displayName }) {
   return (
     <AdminWorkspaceLayout
       label="관리자"
-      title="교직원 제출 현황"
-      description="현재 학기 대상자 명단과 실제 제출 기록을 비교해 미제출자를 확인합니다."
+      title="제출 현황"
+      description="개별 제출자료의 접수·검토 상태를 대상 계정과 비교합니다. 업무별 완료 인원은 교직원 제출·이수 현황에서 확인합니다."
       displayName={displayName}
     >
       <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
@@ -196,7 +193,7 @@ function FirebaseSubmissionStatusContent({ displayName }) {
               <button
                 key={itemId}
                 type="button"
-                onClick={() => setSelectedItem(itemId)}
+                onClick={() => { setSelectedItem(itemId); setPage(0); setCursors([null]); }}
                 className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#20A982]/20 ${
                   selectedItem === itemId
                     ? "bg-[#20A982] text-white shadow-[0_12px_28px_rgba(32,169,130,0.18)]"
@@ -229,12 +226,12 @@ function FirebaseSubmissionStatusContent({ displayName }) {
 
         {overview?.summary && (
           <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <SummaryCard label="전체 대상자" value={overview.summary.total} />
-            <SummaryCard label="제출 완료" value={overview.summary.submitted} tone="text-[#20A982]" />
-            <SummaryCard label="미제출" value={overview.summary.missing} tone="text-[#9A5B00]" />
-            <SummaryCard label="보완 필요" value={overview.summary.rejected} tone="text-[#B42318]" />
-            <SummaryCard label="확인 중" value={overview.summary.reviewing} tone="text-[#3154A3]" />
-            <SummaryCard label="처리 완료" value={overview.summary.completed} tone="text-[#08754B]" />
+            <SummaryCard label="전체 대상 계정" value={overview.totalTargets} />
+            <SummaryCard label="현재 페이지 제출 계정" value={overview.summary.submitted} tone="text-[#20A982]" />
+            <SummaryCard label="현재 페이지 미제출" value={overview.summary.missing} tone="text-[#9A5B00]" />
+            <SummaryCard label="현재 페이지 보완 필요" value={overview.summary.rejected} tone="text-[#B42318]" />
+            <SummaryCard label="현재 페이지 확인 중" value={overview.summary.reviewing} tone="text-[#3154A3]" />
+            <SummaryCard label="현재 페이지 처리 완료" value={overview.summary.completed} tone="text-[#08754B]" />
           </div>
         )}
 
@@ -254,13 +251,15 @@ function FirebaseSubmissionStatusContent({ displayName }) {
         </div>
       </section>
 
+      <p className="text-sm">항목별 접수 총 {overview?.receiptCount ?? "-"}건(대리등록·미연결 계정 포함) · 대상 계정 {overview?.totalTargets ?? "-"}개와 별도입니다. 현재 학기 활성 staff assignment 기준이며 동일 staffId의 복수 계정은 각각 표시합니다. 페이지당 25계정, 필터·검색·상태 집계는 현재 페이지 기준입니다.</p>
+      <div className="flex gap-4"><button disabled={!page || state.status === "loading"} onClick={() => setPage(page - 1)}>이전 대상자</button><span>{page + 1}페이지</span><button disabled={!overview?.hasNext || state.status === "loading"} onClick={() => { setCursors((old) => [...old.slice(0, page + 1), overview.nextCursor]); setPage(page + 1); }}>다음 대상자</button></div>
       <section className="space-y-3">
         {state.status === "success" &&
           visibleRoster.map((row) => <RosterRow key={row.uid} row={row} selectedItem={selectedItem} />)}
 
         {state.status === "success" && visibleRoster.length === 0 && (
           <p className="rounded-[26px] border border-[#DDEAE7] bg-white/95 p-5 text-sm font-semibold text-[#627083]">
-            {statusFilter === "missing" ? "모든 대상자가 제출했습니다." : "조건에 맞는 교직원이 없습니다."}
+            {statusFilter === "missing" ? "현재 페이지에 미제출 대상자가 없습니다." : "조건에 맞는 교직원이 없습니다."}
           </p>
         )}
 

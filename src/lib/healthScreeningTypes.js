@@ -18,6 +18,10 @@ export function isHealthScreeningTypeQaHost(hostname) {
   return hostname === "sehwa-health-portal-git-qa-sungandi86-maxs-projects.vercel.app";
 }
 
+export function isHealthScreeningTypeEnabledHost(hostname) {
+  return isHealthScreeningTypeQaHost(hostname) || hostname === "sehwa-health-portal.vercel.app" || isQaScreeningPreview();
+}
+
 export function screeningTypeLabel(value) {
   return SCREENING_TYPE_OPTIONS.find((option) => option.value === value)?.label || "확인 필요";
 }
@@ -30,8 +34,30 @@ export function hasSelfScreeningConfirmation(item) {
   return Boolean(item?.selfChoice);
 }
 
+export function screeningConfirmationBasis(item) {
+  return item?.workflow?.confirmationBasis || (hasSelfScreeningConfirmation(item) ? "self_choice" : "none");
+}
+
+export function hasScreeningConfirmation(item) {
+  return screeningConfirmationBasis(item) !== "none";
+}
+
 export function screeningConfirmationLabel(item) {
-  return hasSelfScreeningConfirmation(item) ? "확인 완료" : "미확인";
+  return hasScreeningConfirmation(item) ? "확인 완료" : "미확인";
+}
+
+export function screeningConfirmationBasisLabel(item) {
+  return {
+    self_choice: "본인 선택 확인",
+    self_submission: "본인 제출 확인",
+    admin_evidence_confirmation: "관리자 증빙 확인 완료",
+    none: "확인 근거 없음",
+  }[screeningConfirmationBasis(item)];
+}
+
+export function screeningSelfChoiceLabel(item) {
+  const value = typeof item?.selfChoice === "string" ? item.selfChoice : item?.selfChoice?.screeningType;
+  return value ? screeningTypeLabel(value) : "선택 기록 없음";
 }
 
 export function screeningSourceLabel(item) {
@@ -39,6 +65,13 @@ export function screeningSourceLabel(item) {
   if (item?.source === "self") return "본인 선택";
   if (item?.source === "admin") return hasSelfScreeningConfirmation(item) ? "관리자 수정" : "관리자 입력";
   return "기록 없음";
+}
+
+export function screeningSelfConfirmationDateLabel(item) {
+  const value = item?.selfChoice?.confirmedAt;
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
 }
 
 export class HealthScreeningTypeError extends Error {
@@ -55,7 +88,7 @@ async function request({ schoolYear, scope = "self", signal, body, evidenceCurso
   let token;
   try { token = await auth.currentUser.getIdToken(); }
   catch { throw new HealthScreeningTypeError("로그인 상태를 확인하지 못했습니다. 다시 로그인해주세요.", 401); }
-  const query = new URLSearchParams({ resource: "health-screening-types", schoolYear: String(schoolYear) });
+  const query = new URLSearchParams({ resource: "health-screening-types", schoolYear: String(schoolYear), includeWorkflow: "true" });
   if (scope === "admin") query.set("scope", "admin");
   if (evidenceCursor) query.set("evidenceCursor", evidenceCursor);
   if (statusCursor) query.set("statusCursor", statusCursor);
@@ -85,11 +118,11 @@ export async function loadHealthScreeningTypes({ schoolYear = CURRENT_SCHOOL_YEA
   const seen = new Set();
   while (data.datasets && Object.values(data.datasets.completeness || {}).some((value) => value === false)) {
     const { evidence: evidenceCursor, statuses: statusCursor } = data.datasets.cursors || {};
-    const cursorKey = JSON.stringify([evidenceCursor, statusCursor]);
-    if ((!evidenceCursor && !statusCursor) || seen.has(cursorKey) || seen.size >= 100) {
+    const key = JSON.stringify([evidenceCursor, statusCursor]);
+    if ((!evidenceCursor && !statusCursor) || seen.has(key) || seen.size >= 100) {
       throw new HealthScreeningTypeError("전체 확인자료 조회가 완료되지 않았습니다. 다시 시도해주세요.", 0);
     }
-    seen.add(cursorKey);
+    seen.add(key);
     data = mergeTbWorkflowPages(data, await request({ schoolYear, scope, signal, evidenceCursor, statusCursor }));
   }
   return data;
@@ -100,4 +133,8 @@ export function saveHealthScreeningType({ schoolYear, scope = "self", screeningT
     scope, schoolYear, screeningType, expectedRevision,
     ...(scope === "admin" ? { staffId } : {}),
   } });
+}
+
+export function isQaScreeningPreview() {
+  return typeof __FIREBASE_RUNTIME_POLICY__ !== "undefined" && __FIREBASE_RUNTIME_POLICY__.environment === "qa";
 }

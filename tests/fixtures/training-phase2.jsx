@@ -33,7 +33,7 @@ createRoot(document.getElementById("root")).render(<MemoryRouter>
   {view === "admin" && <TrainingAdminContent displayName="테스트 관리자" loadTrainings={loadTrainings} runPreflight={runPreflight} />}
   {view === "targets" && <TrainingTargetsContent displayName="테스트 관리자" eventId={eventId} loadDirectory={loadDirectory} loadTargets={loadTargets} saveTargets={async () => ({ ok: true })} />}
   {view === "qr" && <TrainingQrContent displayName="테스트 관리자" eventId={eventId} loadTrainings={loadTrainings} createQr={createQr} />}
-  {view === "attendance" && <TrainingAttendanceContent displayName="테스트 교직원" id={eventId} challenge="fixture" checkAttendance={checkAttendance} submitAttendance={async () => ({ ok: true })} />}
+  {view === "attendance" && <TrainingAttendanceContent displayName="테스트 교직원" id={eventId} challenge="fixture" checkAttendance={checkAttendance} submitAttendance={async () => ({ ok: true, eventIds: [eventId], signedAt: "2026-10-10T06:02:00.000Z" })} />}
   {view === "summary" && <TrainingAttendanceAdminContent displayName="테스트 관리자" eventId={eventId} loadSummary={loadModel} />}
   {view === "final" && <TrainingAttendanceAdminContent displayName="테스트 관리자" eventId={eventId} finalSheet loadFinal={loadModel} downloadSheet={async () => {}} />}
 </MemoryRouter>);

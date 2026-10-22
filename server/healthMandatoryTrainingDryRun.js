@@ -1,3 +1,5 @@
+import { serverFirestoreResource } from "./lib/firestoreResources.js";
+import { sheetResource, resourceEnvironment, PRODUCTION_SHEETS, ResourcePolicyError } from "./lib/environmentResources.js";
 import { FieldValue } from "firebase-admin/firestore";
 import {
   buildSnapshotPlan,
@@ -8,7 +10,6 @@ import {
 import { readStoredExceptions, summarizeStoredExceptions } from "./healthMandatoryTrainingExceptions.js";
 import { readGoogleSheetValues, readStaffDirectory } from "./lib/staffDirectory.js";
 
-const RESEARCH_SPREADSHEET_ID = "1rn4CVt41lq2f_o8Uiodij4h_R4Q9lVbpPMNFJjy6-IM";
 const RESEARCH_SHEET_NAME = "법정의무연수 묶음과정";
 const RESEARCH_RANGE = `${RESEARCH_SHEET_NAME}!A1:Z1000`;
 const TASK_ID = "health-mandatory-training-2026";
@@ -108,12 +109,26 @@ function buildSummary(source, exceptions, plan, snapshotPlan, taskEnabled) {
   };
 }
 
+// This workflow requires dedicated non-production sources even when another
+// read-only workflow explicitly permits shared canonical Sheets.
+export function healthTrainingSheetResources(context = process.env) {
+  const staff = sheetResource("staff", context);
+  const research = sheetResource("research", context);
+  if (resourceEnvironment(context) !== "production" &&
+      [staff, research].some((id) => Object.values(PRODUCTION_SHEETS).includes(id))) {
+    throw new ResourcePolicyError("RESOURCE_ENV_MISMATCH");
+  }
+  return { staff, research };
+}
+
 export async function getResearchTrainingSummary({ db } = {}) {
+  if (db) serverFirestoreResource(db, "tasks");
+  const { research: researchId } = healthTrainingSheetResources();
   const [directoryResult, researchValues, exceptionRecords, taskSnapshot] = await Promise.all([
     readStaffDirectory({ allowInvalidEmploymentStatus: true }),
-    readGoogleSheetValues({ spreadsheetId: RESEARCH_SPREADSHEET_ID, range: RESEARCH_RANGE }),
+    readGoogleSheetValues({ spreadsheetId: researchId, range: RESEARCH_RANGE }),
     readStoredExceptions(db),
-    db ? db.collection("staff_submission_tasks").doc(TASK_ID).get() : Promise.resolve(null),
+    db ? db.collection(serverFirestoreResource(db, "tasks")).doc(TASK_ID).get() : Promise.resolve(null),
   ]);
   const source = summarizeResearchRows(researchValues);
   const exceptions = summarizeStoredExceptions(exceptionRecords, TASK_YEAR);
@@ -173,10 +188,11 @@ export async function getHealthMandatoryTrainingCurrentTargets({ db }) {
   };
 }
 
-export async function writeSnapshotPlan({ db, docs }) {
+export async function writeSnapshotPlan({ db, docs, context = process.env }) {
+  const collectionName = serverFirestoreResource(db, "statuses", context);
   const batch = db.batch();
   docs.forEach((item) => {
-    batch.set(db.collection("staff_submission_status").doc(item.id), {
+    batch.set(db.collection(collectionName).doc(item.id), {
       ...item.data,
       syncedAt: FieldValue.serverTimestamp(),
     });
@@ -192,7 +208,7 @@ export async function applyHealthMandatoryTrainingSnapshot({ db }) {
   if (!taskSnapshot.exists) throw new Error("보건 관련 법정의무연수 task 정의가 없습니다.");
   if (taskSnapshot.data()?.enabled !== true) throw new Error("보건 관련 법정의무연수 task가 활성화되어 있지 않습니다.");
 
-  const existingSnapshot = await db.collection("staff_submission_status").where("taskId", "==", TASK_ID).get();
+  const existingSnapshot = await db.collection(serverFirestoreResource(db, "statuses")).where("taskId", "==", TASK_ID).get();
   const sourceStaffIds = new Set(snapshotPlan.docs.map((item) => item.data.staffId));
   const orphanSnapshots = existingSnapshot.docs.filter((doc) => !sourceStaffIds.has(doc.data()?.staffId)).length;
   const syncedAt = new Date().toISOString();
