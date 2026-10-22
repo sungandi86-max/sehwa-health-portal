@@ -425,6 +425,7 @@ function FirebaseAdminSubmissionsContent({ displayName }) {
       title="제출·보고 관리"
       description="교직원 제출과 감염병 보고를 탭으로 구분해 확인하고 처리 상태를 관리합니다."
       displayName={displayName}
+      guide="healthAdminSubmissions"
     >
       <section className="rounded-[30px] border border-[#DDEAE7] bg-white/95 p-5 shadow-[0_18px_48px_rgba(16,32,71,0.07)] sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

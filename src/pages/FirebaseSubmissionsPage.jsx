@@ -415,6 +415,7 @@ export default function FirebaseSubmissionsPage() {
         label="제출·보고 센터"
         title="제출·보고 센터"
         description="교직원 제출 및 학생 관련 보고 업무를 확인할 수 있습니다."
+        guide="staffSubmissions"
         identity={(
           <>
               <p className="text-sm font-semibold text-[#102047]">{displayName} 선생님</p>

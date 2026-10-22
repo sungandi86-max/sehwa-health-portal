@@ -297,6 +297,7 @@ function AdminStatusContent({ displayName }) {
       title="교직원 제출·이수 현황"
       description="대상 교직원의 업무별 완료 상태입니다. 접수 건수·대상 계정 수와 완료 인원 수는 서로 다릅니다. 개인 이수증과 학교 단체교육 근거를 구분합니다."
       displayName={displayName}
+      guide="healthAdminStatus"
     >
       <p className="text-sm text-[#627083]">상단 집계는 해당 업무의 전체 조회 대상 기준이며 접수 건수가 아닙니다. 아래 명단은 선택 교직원·검색·상태 필터 기준입니다.</p>
       <nav aria-label="업무현황 연결" className="flex flex-wrap gap-3 text-sm text-[#0D4EA6]">

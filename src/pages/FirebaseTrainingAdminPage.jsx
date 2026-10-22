@@ -225,7 +225,7 @@ export function TrainingAdminContent({ actorUid = "", displayName, hasTopLevelAd
   const upcoming = items.filter((item) => item["사용여부"] === "사용" && item["일자"] >= today)
     .sort((left, right) => left["일자"].localeCompare(right["일자"]))[0];
   const currentCounts = upcoming && summaries[upcoming.eventId];
-  return <TrainingAdminLayout displayName={displayName} active="manage" title="교직원 교육 운영관리" description="교육 등록과 대상·QR·출석 업무를 한곳에서 관리합니다.">
+  return <TrainingAdminLayout displayName={displayName} active="manage" guide={groupView ? "trainingBundles" : "trainingManager"} title="교직원 교육 운영관리" description="교육 등록과 대상·QR·출석 업무를 한곳에서 관리합니다.">
     <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><div className="flex flex-wrap gap-2"><Link className={groupView ? secondaryClass : buttonClass} to="/firebase-admin/trainings">내 교육</Link><Link className={groupView ? buttonClass : secondaryClass} to="/firebase-admin/trainings?view=groups">묶음 관리</Link>{!groupView && hasTopLevelAdminAccess && <button className={secondaryClass} type="button" onClick={()=>setManualCprOpen(old=>!old)}>2026 CPR 단체교육 일괄 등록</button>}{!groupView && <button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button>}</div></div>
     {groupView && <TrainingGroupManager hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}
     {!groupView && <>

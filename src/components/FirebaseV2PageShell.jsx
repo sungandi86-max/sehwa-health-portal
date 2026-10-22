@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { CURRENT_SCHOOL_YEAR, CURRENT_SEMESTER } from "../config/school.js";
+import { ContextHelp } from "./ContextHelp.jsx";
 
-export function FirebaseV2PageShell({ label, title, description, displayName, className = "", showDashboardLink = true, children }) {
+export function FirebaseV2PageShell({ label, title, description, displayName, guide, className = "", showDashboardLink = true, children }) {
   return (
     <section className={`firebase-v2-surface min-h-full bg-[#F8FAFA] px-3 py-4 text-[#102047] sm:px-4 sm:py-5 ${className}`}>
       <div className="mx-auto w-full max-w-[1280px] space-y-3">
@@ -28,6 +29,7 @@ export function FirebaseV2PageShell({ label, title, description, displayName, cl
                   대시보드로
                 </Link>
               ) : null}
+              {guide ? <ContextHelp guide={guide} /> : null}
             </div>
           </div>
         </header>

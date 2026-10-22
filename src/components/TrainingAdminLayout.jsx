@@ -2,7 +2,7 @@ import { WorkspaceShell } from "./WorkspaceShell.jsx";
 
 const root = "/firebase-admin/trainings";
 
-export function TrainingAdminLayout({ displayName, title, description, active, eventId, children }) {
+export function TrainingAdminLayout({ displayName, title, description, active, eventId, guide, children }) {
   const eventRoot = eventId ? `${root}/${encodeURIComponent(eventId)}` : null;
   const links = [
     { id: "manage", label: "교직원 교육 관리", to: root },
@@ -14,6 +14,7 @@ export function TrainingAdminLayout({ displayName, title, description, active, e
     ] : []),
   ];
 
-  return <WorkspaceShell className="training-admin-surface" label="교직원 교육센터" title={title} description={description} displayName={displayName}
+  const contextualGuide = guide || (active === "qr" ? "trainingQr" : ["attendance", "final-sheet"].includes(active) ? "trainingAttendance" : "trainingManager");
+  return <WorkspaceShell className="training-admin-surface" label="교직원 교육센터" title={title} description={description} displayName={displayName} guide={contextualGuide}
     sidebarLabel="교육연수" items={links} active={active} backTo="/training" backLabel="교육센터로 돌아가기">{children}</WorkspaceShell>;
 }

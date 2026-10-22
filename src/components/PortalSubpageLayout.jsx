@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import { ContextHelp } from "./ContextHelp.jsx";
 
 const badgeStyles = {
   audience: "border-[#BFEBDC] bg-[#F0FBF7] text-[#08754B]",
@@ -32,7 +33,7 @@ export function PortalBackToHome() {
   );
 }
 
-export function PortalPageHeader({ label, title, description, identity }) {
+export function PortalPageHeader({ label, title, description, identity, guide }) {
   return (
     <header className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -47,11 +48,10 @@ export function PortalPageHeader({ label, title, description, identity }) {
             </p>
           )}
         </div>
-        {identity && (
-          <div className="shrink-0 rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5 md:min-w-64">
-            {identity}
-          </div>
-        )}
+        {(identity || guide) && <div className="flex shrink-0 flex-col items-stretch gap-2 md:min-w-64">
+          {identity && <div className="rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5">{identity}</div>}
+          {guide && <ContextHelp guide={guide} />}
+        </div>}
       </div>
     </header>
   );

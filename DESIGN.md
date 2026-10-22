@@ -365,3 +365,12 @@ The home page, training landing page, and Firebase administrator dashboard remai
 The education target page keeps the existing training workspace shell and local sidebar. Its work area starts with the same preset, administrative-staff, hourly-instructor, and department controls used when creating an education event. The saved roster is the initial truth; opening the page never recalculates or saves it. The current count and proposed count appear together only after a deliberate change.
 
 The staff list is collapsed initially. Opening it reveals compact searchable rows with one inclusion checkbox per staff member. Required participation and exclusion reasons remain available in a per-person exception area, not as repeated full-width controls. One school-blue save action commits the reviewed target snapshot. On mobile, the controls and count precede the collapsed list and a single save action; the shared 44px touch target and restrained border-first surfaces still apply.
+
+## 21. Contextual Usage Guides
+
+- Use the shared `ContextHelp` trigger for screen-specific help instead of adding persistent explanatory panels to work surfaces.
+- Place the trigger in the page header and keep its label `이용 안내` unless the surrounding UI requires a more specific accessible label.
+- Guide content must use button and screen names that exist in the current product. Do not advertise planned features.
+- Staff-facing guides must not expose administrator commands. Administrator guides inherit the page's existing route and server authorization guards.
+- On mobile, present the guide as a bottom sheet; on wider screens, use a centered dialog with restrained overlay styling.
+- Every guide includes short ordered steps and a compact troubleshooting section. Internal IDs and migration details are not user-facing help content.

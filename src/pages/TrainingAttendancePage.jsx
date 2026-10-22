@@ -86,7 +86,7 @@ export function TrainingAttendanceContent({ displayName, group = false, id, chal
     finally { setWorking(false); }
   }
 
-  return <FirebaseV2PageShell showDashboardLink={false} className="training-phase2-surface" label="교직원 교육" title="QR 출석·전자서명" description="본인 계정으로 대상 여부와 서명 시간을 확인합니다." displayName={displayName}>
+  return <FirebaseV2PageShell showDashboardLink={false} guide="attendanceSignature" className="training-phase2-surface" label="교직원 교육" title="QR 출석·전자서명" description="본인 계정으로 대상 여부와 서명 시간을 확인합니다." displayName={displayName}>
     <Link to="/training" className="inline-flex min-h-11 items-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6]">교육 목록으로</Link>
     {state.status === "loading" && <p className="text-sm text-[#627083]">출석 가능 여부를 확인하는 중입니다.</p>}
     {state.status === "error" && <p role="alert" className="rounded-[10px] border border-[#F6D8D8] bg-[#FFF7F7] p-3 text-sm text-[#B42318]">{state.message}</p>}
