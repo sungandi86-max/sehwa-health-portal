@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { TrainingAdminLayout } from "../components/TrainingAdminLayout.jsx";
 import { TrainingGroupManager } from "../components/TrainingGroupManager.jsx";
+import { TrainingManagerGuideCard } from "../components/TrainingManagerGuideCard.jsx";
 import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining, transferTrainingOwner } from "../lib/trainingCenterPhase2.js";
 import { getTrainingStorageBootstrapUiState, performTrainingStorageBootstrap, summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
 import { trainingAttendanceCounts } from "../lib/trainingAttendancePresentation.js";
@@ -229,6 +230,7 @@ export function TrainingAdminContent({ actorUid = "", displayName, hasTopLevelAd
     <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><div className="flex flex-wrap gap-2"><Link className={groupView ? secondaryClass : buttonClass} to="/firebase-admin/trainings">내 교육</Link><Link className={groupView ? buttonClass : secondaryClass} to="/firebase-admin/trainings?view=groups">묶음 관리</Link>{!groupView && hasTopLevelAdminAccess && <button className={secondaryClass} type="button" onClick={()=>setManualCprOpen(old=>!old)}>2026 CPR 단체교육 일괄 등록</button>}{!groupView && <button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button>}</div></div>
     {groupView && <TrainingGroupManager hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}
     {!groupView && <>
+    <TrainingManagerGuideCard />
     {hasTopLevelAdminAccess && <p className="text-sm text-[#627083]">개별 CPR 이수증은 <Link className="text-[#0D4EA6] underline" to="/firebase-admin/submission-status?item=cpr">접수 현황</Link>에서 검토합니다. 학교 단체교육은 오프라인 명부 일괄 등록으로 구분하며 <Link className="text-[#0D4EA6] underline" to="/firebase-admin/staff-submission-status?task=cpr-training-2026">CPR 통합 이수현황</Link>에 반영됩니다.</p>}
     {manualCprOpen && hasTopLevelAdminAccess && <ManualCprBatchPanel key={actorUid} uid={actorUid} onSaved={reload} />}
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}

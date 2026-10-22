@@ -369,7 +369,8 @@ The staff list is collapsed initially. Opening it reveals compact searchable row
 ## 21. Contextual Usage Guides
 
 - Use the shared `ContextHelp` trigger for screen-specific help instead of adding persistent explanatory panels to work surfaces.
-- Place the trigger in the page header and keep its label `이용 안내` unless the surrounding UI requires a more specific accessible label.
+- Place the `이용 방법` trigger beside the page title, visually separate from account identity and term metadata.
+- Education manager pages may add one compact guide entry card below the primary toolbar. The card opens the shared contextual guide and never grants or implies additional authority.
 - Guide content must use button and screen names that exist in the current product. Do not advertise planned features.
 - Staff-facing guides must not expose administrator commands. Administrator guides inherit the page's existing route and server authorization guards.
 - On mobile, present the guide as a bottom sheet; on wider screens, use a centered dialog with restrained overlay styling.

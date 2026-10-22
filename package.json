@@ -34,6 +34,7 @@
     "firebase": "^12.18.0",
     "firebase-admin": "13.10.0",
     "google-auth-library": "^11.0.2",
+    "lucide-react": "0.468.0",
     "node-fetch": "^3.3.2",
     "pdf-lib": "1.17.1",
     "pngjs": "7.0.0",

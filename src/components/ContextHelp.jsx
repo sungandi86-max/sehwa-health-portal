@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { ArrowRight, BookOpen, GraduationCap } from "lucide-react";
 import { getUsageGuide } from "../data/usageGuides.js";
 
-export function ContextHelp({ guide: guideKey, label = "이용 안내" }) {
+export function ContextHelp({ guide: guideKey, label = "이용 방법", icon = "book-open", showArrow = false, className = "" }) {
   const guide = typeof guideKey === "string" ? getUsageGuide(guideKey) : guideKey;
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -37,6 +38,7 @@ export function ContextHelp({ guide: guideKey, label = "이용 안내" }) {
   }, [open]);
 
   if (!guide) return null;
+  const GuideIcon = icon === "graduation-cap" ? GraduationCap : BookOpen;
 
   function close() {
     setOpen(false);
@@ -49,11 +51,12 @@ export function ContextHelp({ guide: guideKey, label = "이용 안내" }) {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] border border-[#C8D8FF] bg-white px-3 py-2 text-xs font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] hover:bg-[#F8FAFF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10"
+        className={`inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] border border-[#C8D8FF] bg-[#F8FAFF] px-3 py-2 text-xs font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] hover:bg-[#EEF4FF] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10 ${className}`}
         aria-haspopup="dialog"
       >
-        <span aria-hidden="true" className="text-base leading-none">?</span>
+        <GuideIcon aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
         {label}
+        {showArrow ? <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2} /> : null}
       </button>
       {open && (
         <div className="fixed inset-0 z-[100] flex items-end bg-[#102047]/35 p-0 sm:items-center sm:justify-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
@@ -70,7 +73,7 @@ export function ContextHelp({ guide: guideKey, label = "이용 안내" }) {
                 <h2 id={titleId} className="mt-1 text-lg font-bold text-[#102047]">{guide.title}</h2>
                 <p className="mt-1 break-keep text-sm leading-6 text-[#627083]">{guide.intro}</p>
               </div>
-              <button ref={closeRef} type="button" onClick={close} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white text-lg text-[#102047] hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10" aria-label="이용 안내 닫기">×</button>
+              <button ref={closeRef} type="button" onClick={close} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white text-lg text-[#102047] hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10" aria-label="이용 안내 닫기">×</button>
             </header>
             <div className="space-y-5 p-4 sm:p-5">
               <ol className="divide-y divide-[#DDEAE7] border-y border-[#DDEAE7]">

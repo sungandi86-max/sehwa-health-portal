@@ -37,20 +37,20 @@ export function PortalPageHeader({ label, title, description, identity, guide })
   return (
     <header className="rounded-[16px] border border-[#DDEAE7] bg-white p-4 shadow-[0_8px_24px_rgba(16,32,71,0.04)] sm:p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold text-[#0D4EA6]">{label}</p>
-          <h1 className="mt-1 text-[22px] font-bold leading-tight text-[#102047] sm:text-2xl">
-            {title}
-          </h1>
+          <div className="mt-1 flex min-w-0 items-start justify-between gap-3">
+            <h1 className="min-w-0 break-keep text-[22px] font-bold leading-tight text-[#102047] sm:text-2xl">{title}</h1>
+            {guide ? <ContextHelp guide={guide} /> : null}
+          </div>
           {description && (
             <p className="mt-2 max-w-3xl text-sm font-normal leading-6 text-[#627083]" style={{ wordBreak: "keep-all" }}>
               {description}
             </p>
           )}
         </div>
-        {(identity || guide) && <div className="flex shrink-0 flex-col items-stretch gap-2 md:min-w-64">
+        {identity && <div className="flex shrink-0 flex-col items-stretch gap-2 md:min-w-64">
           {identity && <div className="rounded-[12px] border border-[#DDEAE7] bg-[#F8FAFA] px-3 py-2.5">{identity}</div>}
-          {guide && <ContextHelp guide={guide} />}
         </div>}
       </div>
     </header>
