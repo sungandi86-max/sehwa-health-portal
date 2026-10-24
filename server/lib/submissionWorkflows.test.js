@@ -35,9 +35,19 @@ test("canonical registry only enables current operating submit routes", () => {
   assert.equal(resolveSubmissionWorkflow({ type: "student-file" }).id, "student_tb_reply");
   assert.equal(resolveSubmissionWorkflow({ type: "tb-registration" }).id, "tb_registration");
   assert.equal(resolveSubmissionWorkflow({ type: "unknown", sheetName: SUBMISSION_WORKFLOWS.cpr.auditSheet }), null);
-  for (const id of ["infection", "recruit", "other"]) assert.equal(SUBMISSION_WORKFLOWS[id].enabled, false);
+  for (const id of ["student_tb_reply", "infection", "recruit", "other"]) assert.equal(SUBMISSION_WORKFLOWS[id].enabled, false);
   assert.equal(SUBMISSION_WORKFLOWS.inbody.auditSheet, null);
   assert.equal(SUBMISSION_WORKFLOWS.inbody.firestoreWritePolicy, "inbody_requests");
+});
+
+test("retired student validation is explicit even for incomplete or invalid uploads", () => {
+  for (const payload of [{}, { ...file, fields: {} }, { type: "student-file", fileBase64: "bad" }]) {
+    const result = validateSubmissionPayload(SUBMISSION_WORKFLOWS.student_tb_reply, payload);
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 410);
+    assert.equal(result.code, "STUDENT_TB_REPLY_RETIRED");
+    assert.match(result.message, /운영이 종료/);
+  }
 });
 
 test("legacy TB registration modal sends an explicit canonical type", () => {
@@ -354,31 +364,18 @@ test("Production TB registration writes the Firestore audit ledger and status wi
   assert.equal(ledgerWrites, 1);
 });
 
-test("Production student reply uses signed fixed Drive destination and create-only audit", async () => {
+test("Production student reply rejects before Apps Script and create-only audit", async () => {
+  const calls = [];
   const result = response();
-  const req = request({ ...file, type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, folderId: "injected" });
-  req.headers["x-forwarded-for"] = "203.0.113.9";
-  req.headers["x-vercel-forwarded-for"] = "192.0.2.1";
-  const writes = [];
-  await submitHandler(req, result,
-    { destinationUrl, proxySecret, environment: () => "production",
-      studentAuditStore: { environment: "production", getRequest: async () => null,
-        getEvidenceMatch: async () => null, createRequest: async (input) => writes.push(input) },
-      postScript: async (_url, init) => { const envelope = JSON.parse(init.body);
-        const outbound = JSON.parse(envelope.payloadJson);
-        assert.equal(outbound.type, "student-file");
-        assert.equal(outbound.recordMode, "firestore");
-        assert.equal(outbound.runtimeEnvironment, "production");
-        assert.equal(outbound.folderId, undefined);
-        assert.equal(outbound.sheetName, undefined);
-        assert.equal(outbound.qaEvidenceFolderId, undefined);
-        assert.match(outbound.qaSubmissionId, /^PROD-STUDENT-TB-[a-f0-9]{32}$/);
-        assert.equal(envelope.visitor.length, 43);
-        return { text: async () => JSON.stringify({ status: "success", fileId: "PROD-PRIVATE-FILE", submittedAt: "now" }) }; } });
-  assert.equal(result.statusCode, 200);
-  assert.equal(result.body.fileId, undefined);
-  assert.equal(result.body.submissionId, writes[0].requestId);
-  assert.equal(writes[0].evidenceFile.fileId, "PROD-PRIVATE-FILE");
+  await submitHandler(request({ ...file, type: "student-file", fields: { studentName: "QA" } }), result, {
+    destinationUrl, proxySecret, environment: () => "production",
+    studentAuditStore: { environment: "production", getRequest: async () => calls.push("read"),
+      getEvidenceMatch: async () => calls.push("lookup"), createRequest: async () => calls.push("write") },
+    postScript: async () => { calls.push("script"); throw new Error("unexpected script"); },
+  });
+  assert.equal(result.statusCode, 410);
+  assert.equal(result.body.code, "STUDENT_TB_REPLY_RETIRED");
+  assert.deepEqual(calls, []);
 });
 
 test("Apps Script refuses missing sheets and never reads migrated submission configuration tabs", () => {
@@ -395,7 +392,7 @@ test("Apps Script refuses missing sheets and never reads migrated submission con
   assert.equal(code.includes("제출항목관리"), false);
   assert.equal(code.includes("managedFolderId || payload.folderId"), false);
   assert.throws(() => context.validateBlob({ getContentType: () => "text/html", getBytes: () => [1] }), /PDF, JPG, PNG/);
-  assert.throws(() => context.preflight({ type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /감사 원장 구성/);
+  assert.throws(() => context.preflight({ type: "student-file", fields: { grade: "1", classNumber: "1", studentNumber: "1", studentName: "QA" }, fileName: "qa.png", fileBase64: png, fileMimeType: "image/png" }), /STUDENT_TB_REPLY_RETIRED/);
   assert.equal(driveReads, 0);
   assert.doesNotMatch(code, /제출기록|SUBMISSION_RECORD_SHEET_NAME|appendSubmissionRecord_/);
 });
@@ -486,12 +483,10 @@ test("Apps Script dispatches signed types to fixed Drive folders without student
   const studentCall = (studentName) => callEnvelope(buildSubmissionProxyEnvelope(student(studentName), proxySecret, { visitor }));
   const guardKey = (envelope) => `SUBMISSION_GUARD_REQUEST_${envelope.requestId}`;
   const beforeDryRun = [...properties.keys()].filter((key) => key.startsWith("SUBMISSION_GUARD_")).length;
-  const validPreflight = context.preflight(student("QA-DRY"));
-  assert.equal(validPreflight.kind, "student-file");
-  assert.equal(validPreflight.folder.getId(), "1hUmRQ8kK0OYx_h4IxzFy8GXv9Ilm1w63");
+  assert.throws(() => context.preflight(student("QA-DRY")), /STUDENT_TB_REPLY_RETIRED/);
   assert.equal([...properties.keys()].filter((key) => key.startsWith("SUBMISSION_GUARD_")).length, beforeDryRun);
   recordSheetPresent = false;
-  assert.equal(studentCall("QA-NO-SHEET").status, "success");
+  assert.equal(studentCall("QA-NO-SHEET").status, "error");
   assert.equal(sheets.includes("제출기록"), false);
   recordSheetPresent = true;
   const wrongEnvironment = buildSubmissionProxyEnvelope({ ...student("QA-WRONG-ENV"), runtimeEnvironment: "qa" }, proxySecret, { visitor });
@@ -515,9 +510,9 @@ test("Apps Script dispatches signed types to fixed Drive folders without student
   assert.equal(callEnvelope(invalidStaffPayload).status, "error");
   assert.equal(properties.has(guardKey(invalidStaffPayload)), false);
   const beforeStudent = filesCreated;
-  assert.equal(studentCall("QA1").status, "success");
-  assert.equal(studentCall("QA1").status, "success");
-  assert.equal(filesCreated - beforeStudent, 1);
+  assert.equal(studentCall("QA1").status, "error");
+  assert.equal(studentCall("QA1").status, "error");
+  assert.equal(filesCreated - beforeStudent, 0);
   assert.equal(studentCall("QA2").status, "error");
   assert.equal(studentCall("QA3").status, "error");
   assert.equal(appended, 0);

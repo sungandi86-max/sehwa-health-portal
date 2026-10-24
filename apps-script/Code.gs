@@ -265,7 +265,24 @@ function doGet(e) {
 // doPost
 // ════════════════════════════════════════════════════════════════
 
+function isRetiredStudentReply_(type) {
+  return typeof type === "string" && ["student-file", "student_tb_reply", "student_file", "studentfile", "tbreply"]
+    .indexOf(type.trim().toLowerCase()) !== -1;
+}
+
+function retiredStudentReplyResponse_() {
+  return { status: "error", success: false, code: "STUDENT_TB_REPLY_RETIRED",
+    message: "해당 제출 기능은 운영이 종료되었습니다. 관련 문의는 학교 보건실로 해주시기 바랍니다." };
+}
+
 function doPost(e) {
+  try {
+    const retirementRequest = JSON.parse(e.postData.contents);
+    const claimed = retirementRequest.version === 1 ? JSON.parse(retirementRequest.payloadJson) : retirementRequest;
+    if (isRetiredStudentReply_(claimed && claimed.type)) return jsonOutput_(retiredStudentReplyResponse_());
+  } catch (ignored) {
+    // Invalid envelopes continue through the existing validation path.
+  }
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) return jsonOutput_({ status: "error", message: "잠시 후 다시 시도해 주세요." });
   let qaStudentRequest = false;
@@ -403,6 +420,7 @@ function reserveSubmissionProxy_(request, payload, prepared) {
 }
 
 function preflightSubmission_(payload) {
+  if (payload && isRetiredStudentReply_(payload.type)) throw new Error("STUDENT_TB_REPLY_RETIRED");
   const destinations = {
     cpr: { folderId: FOLDER_IDS.cpr },
     tb: { folderId: FOLDER_IDS.tb }
@@ -502,6 +520,7 @@ function preflightSubmission_(payload) {
 }
 
 function appendStudentFileSubmission_(payload, prepared, requestId) {
+  throw new Error("STUDENT_TB_REPLY_RETIRED");
   if (!prepared.existingEvidence) prepared.blob.setName(prepared.evidenceName);
   const driveFile = prepared.existingEvidence || prepared.folder.createFile(prepared.blob);
   const fileId = driveFile.getId();

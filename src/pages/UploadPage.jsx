@@ -2,9 +2,17 @@ import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { PortalBackToHome } from "../components/PortalSubpageLayout.jsx";
 import UploadCenter from "../components/UploadCenter.jsx";
+import StudentReplyRetiredNotice from "../components/StudentReplyRetiredNotice.jsx";
+import { isRetiredStudentReply } from "../../common/studentReplyRetirement.js";
 import { fetchPortalUploads, getCachedPortalUploads } from "../lib/portalContent.js";
 
 export default function UploadPage() {
+  const [searchParams] = useSearchParams();
+  if (isRetiredStudentReply(searchParams.get("type"))) return <StudentReplyRetiredNotice />;
+  return <ActiveUploadPage />;
+}
+
+function ActiveUploadPage() {
   const [searchParams] = useSearchParams();
   const cachedPortal = getCachedPortalUploads();
   const [portal, setPortal] = useState(cachedPortal);

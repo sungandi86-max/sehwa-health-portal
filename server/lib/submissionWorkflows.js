@@ -1,3 +1,5 @@
+import { isRetiredStudentReply, STUDENT_REPLY_RETIRED_CODE, STUDENT_REPLY_RETIRED_MESSAGE } from "../../common/studentReplyRetirement.js";
+
 const FILE_MIME_TYPES = Object.freeze(["application/pdf", "image/jpeg", "image/png"]);
 const MAX_FILE_SIZE = 3 * 1024 * 1024;
 const REQUIRED_FIELDS = Object.freeze({
@@ -13,7 +15,7 @@ export const SUBMISSION_WORKFLOWS = Object.freeze({
   cpr: Object.freeze({ id: "cpr", enabled: true, authPolicy: "current_staff", allowedRoles: ["staff", "homeroom", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: true, allowedMimeTypes: FILE_MIME_TYPES, maxFileSize: MAX_FILE_SIZE, destinationPolicy: "cpr_certificate", auditSheet: null, firestoreWritePolicy: "cpr_certificate_submissions+staff_submission_status", publicCardId: "cpr" }),
   tb: Object.freeze({ id: "tb", enabled: true, authPolicy: "current_staff_tb_guard", allowedRoles: ["staff", "homeroom", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: true, allowedMimeTypes: FILE_MIME_TYPES, maxFileSize: MAX_FILE_SIZE, destinationPolicy: "tb_certificate", auditSheet: null, firestoreWritePolicy: "tb_certificate_submissions+staff_submission_status", publicCardId: "tb" }),
   tb_registration: Object.freeze({ id: "tb_registration", enabled: true, authPolicy: "current_staff_tb_guard", allowedRoles: ["staff", "homeroom", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: false, allowedMimeTypes: [], maxFileSize: 0, destinationPolicy: "tb_registration_firestore", auditSheet: null, firestoreWritePolicy: "tb_registration_requests+staff_submission_status", publicCardId: "tb_registration" }),
-  student_tb_reply: Object.freeze({ id: "student_tb_reply", enabled: true, authPolicy: "public_student_reply", allowedRoles: ["student_or_guardian"], requiresCanonicalStaffId: false, acceptsFile: true, allowedMimeTypes: FILE_MIME_TYPES, maxFileSize: MAX_FILE_SIZE, destinationPolicy: "student_tb_reply", auditSheet: null, firestoreWritePolicy: "student_submission_audit", publicCardId: "student_tb_reply" }),
+  student_tb_reply: Object.freeze({ id: "student_tb_reply", enabled: false, authPolicy: "public_student_reply", allowedRoles: ["student_or_guardian"], requiresCanonicalStaffId: false, acceptsFile: true, allowedMimeTypes: FILE_MIME_TYPES, maxFileSize: MAX_FILE_SIZE, destinationPolicy: "student_tb_reply", auditSheet: null, firestoreWritePolicy: "student_submission_audit", publicCardId: "student_tb_reply" }),
   inbody: Object.freeze({ id: "inbody", enabled: true, authPolicy: "current_staff", allowedRoles: ["staff", "homeroom", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: false, allowedMimeTypes: [], maxFileSize: 0, destinationPolicy: "inbody_firestore", auditSheet: null, firestoreWritePolicy: "inbody_requests", publicCardId: "inbody" }),
   infection: Object.freeze({ id: "infection", enabled: false, authPolicy: "firestore_route_only", allowedRoles: ["homeroom_teacher", "health_teacher", "admin"], requiresCanonicalStaffId: false, acceptsFile: false, allowedMimeTypes: [], maxFileSize: 0, destinationPolicy: "none", auditSheet: null, firestoreWritePolicy: "student_health_submissions", publicCardId: "infection" }),
   recruit: Object.freeze({ id: "recruit", enabled: false, authPolicy: "firestore_route_only", allowedRoles: ["staff", "health_teacher", "admin"], requiresCanonicalStaffId: true, acceptsFile: false, allowedMimeTypes: [], maxFileSize: 0, destinationPolicy: "none", auditSheet: null, firestoreWritePolicy: "staff_submissions", publicCardId: "recruit" }),
@@ -29,6 +31,9 @@ export function resolveSubmissionWorkflow(payload) {
 }
 
 export function validateSubmissionPayload(workflow, payload) {
+  if (isRetiredStudentReply(payload?.type) || workflow?.id === "student_tb_reply") {
+    return { ok: false, status: 410, code: STUDENT_REPLY_RETIRED_CODE, message: STUDENT_REPLY_RETIRED_MESSAGE };
+  }
   if (!workflow?.enabled) return { ok: false, status: 422, message: "지원하지 않는 제출 유형입니다." };
   if (!payload || typeof payload !== "object" || Array.isArray(payload) || !payload.fields || typeof payload.fields !== "object" || Array.isArray(payload.fields)) {
     return { ok: false, status: 400, message: "제출 형식이 올바르지 않습니다." };

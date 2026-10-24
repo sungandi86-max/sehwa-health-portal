@@ -1,5 +1,6 @@
 import { trainingEnvironment } from "./trainingDeployment.js";
 import { randomUUID } from "node:crypto";
+import { isRetiredStudentReply } from "../../common/studentReplyRetirement.js";
 import { getTbRegistrationWindowState } from "../../src/lib/portalContent.js";
 
 const PUBLIC_PREFIX = "submission_public_config";
@@ -101,7 +102,7 @@ export function publicSubmissionConfig(config, now = new Date()) {
     startDate: config.registration.startAt || "", endDate: config.registration.endAt || "",
     closedButton: config.registration.closedButton || "", closedMessage: config.registration.closedMessage || "",
   };
-  const uploads = config.cards.filter((card) => card.active && card.visible
+  const uploads = config.cards.filter((card) => !isRetiredStudentReply(card.canonicalType) && card.active && card.visible
     && (!card.startAt || card.startAt <= today) && (!card.endAt || card.endAt >= today)
     && (card.canonicalType !== "tb_registration" || getTbRegistrationWindowState(tbConfig, now) === "open"))
     .map((card) => ({

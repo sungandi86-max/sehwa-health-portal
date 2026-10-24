@@ -164,7 +164,7 @@ export default function UploadCenter({
   const navigate = useNavigate();
   const [modalType, setModalType] = useState(null);
   const [viewer, setViewer] = useState({ status: publicMode ? "hidden" : "loading", name: "", role: "" });
-  const allItems = items;
+  const allItems = items.filter((item) => resolveSubmitCardType(item) !== "student_tb_reply");
   const publicItems = allItems.filter((item) => resolveSubmitCardType(item) === "student_tb_reply");
   const uploadItems = publicMode && publicType === "tbreply"
     ? publicItems

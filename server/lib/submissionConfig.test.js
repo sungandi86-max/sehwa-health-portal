@@ -53,11 +53,11 @@ test("migration rejects schema drift and existing mismatched records", () => {
   assert.equal(planSubmissionConfigMigration(result, existing).actions.conflict, 1);
 });
 
-test("public projection keeps four current cards and server-only registration", () => {
+test("public projection keeps three staff cards and excludes retired student cards", () => {
   const expected = submissionConfigMigrationRecords(uploadRows, itemRows);
   const config = { cards: expected.public.slice(1), registration: expected.admin[1] };
   const result = publicSubmissionConfig(config, new Date("2026-10-09T03:00:00Z"));
-  assert.deepEqual(result.uploads.map((item) => item.canonicalType), ["cpr", "tb", "infection", "student_tb_reply"]);
+  assert.deepEqual(result.uploads.map((item) => item.canonicalType), ["cpr", "tb", "infection"]);
   assert.equal(result.tbConfig.enabled, "TRUE");
   assert.equal(JSON.stringify(result).includes("private-folder-id"), false);
   assert.throws(() => assertRegistrationOpen(config, new Date("2026-10-09T03:00:00Z")));

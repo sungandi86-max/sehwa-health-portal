@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { isRetiredStudentReply } from "../../common/studentReplyRetirement.js";
+import StudentReplyRetiredNotice from "./StudentReplyRetiredNotice.jsx";
 import { onAuthStateChanged, signInWithCustomToken } from "firebase/auth";
 import FirebaseSignInActions from "./FirebaseSignInActions.jsx";
 import { auth } from "../lib/firebase.js";
@@ -1341,7 +1343,12 @@ function isSubmitSuccess(json, payload) {
 }
 
 // ───────── 메인 모달 컴포넌트 ─────────
-export default function SubmitModal({ type, onClose, tbConfig, publicMode = false }) {
+export default function SubmitModal(props) {
+  if (isRetiredStudentReply(props.type)) return <StudentReplyRetiredNotice />;
+  return <ActiveSubmitModal {...props} />;
+}
+
+function ActiveSubmitModal({ type, onClose, tbConfig, publicMode = false }) {
   const [status, setStatus] = useState("idle"); // idle | submitting | success
   const [submitError, setSubmitError] = useState("");
   const [successInfo, setSuccessInfo] = useState(null);

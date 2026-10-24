@@ -100,9 +100,16 @@ function qaPrepareSubmission_(payload, folderId) {
 function doPost(e) {
   let lock, locked = false;
   try {
+    const retirementRequest = JSON.parse(e.postData.contents);
+    const retirementPayload = typeof retirementRequest.payloadJson === "string" ? JSON.parse(retirementRequest.payloadJson) : retirementRequest;
+    if (retirementPayload && typeof retirementPayload.type === "string" &&
+        ["student-file", "student_tb_reply", "student_file", "studentfile", "tbreply"].indexOf(retirementPayload.type.trim().toLowerCase()) !== -1) {
+      return qaOutput_({ status: "error", result: "error", success: false, code: "STUDENT_TB_REPLY_RETIRED",
+        message: "해당 제출 기능은 운영이 종료되었습니다. 관련 문의는 학교 보건실로 해주시기 바랍니다." });
+    }
     qaEnvironment_("submission"); qaWorkbook_(); qaSecret_("submission");
-    const request = JSON.parse(e.postData.contents);
-    const claimed = JSON.parse(request.payloadJson);
+    const request = retirementRequest;
+    const claimed = retirementPayload;
     if (claimed.runtimeEnvironment !== "qa" || claimed.recordMode !== "firestore" || ["cpr", "tb", "student-file"].indexOf(claimed.type) < 0) qaReject_("RESOURCE_ENV_MISMATCH");
     const folderId = qaId_({ cpr: "QA_CPR_DRIVE_FOLDER_ID", tb: "QA_TB_CERTIFICATE_DRIVE_FOLDER_ID", "student-file": "QA_STUDENT_REPLY_DRIVE_FOLDER_ID" }[claimed.type]);
     if (claimed.qaEvidenceFolderId !== folderId) qaReject_("RESOURCE_ENV_MISMATCH");

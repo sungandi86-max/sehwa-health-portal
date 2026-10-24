@@ -74,9 +74,16 @@ test('ambiguous staff upload retains replay reservation and never automatically 
  assert.equal(f.post(payload(),{requestId}).success,false);f.setFailCreate(false);
  assert.equal(f.post(payload(),{requestId}).success,false);assert.equal(f.files.length,1);
 });
-test('student evidence reuses existing stable file on retry with a new transport ID',()=>{
- const f=fixture(),p=payload('student-file');const a=f.post(p),b=f.post(p);
- assert.equal(a.success,true);assert.equal(b.success,true);assert.equal(a.fileId,b.fileId);assert.equal(f.files.length,1);
+test('retired student aliases reject raw and signed requests before configuration or side effects',()=>{
+ for(const type of ['student-file','student_tb_reply','student_file','studentfile','tbreply',' STUDENT-FILE ']){
+  for(const signed of [false,true]){
+   const f=fixture({APP_ENV:''}),body=payload(type);
+   const request=signed?buildSubmissionProxyEnvelope(body,secret):body;
+   const result=JSON.parse(f.ctx.doPost({postData:{contents:JSON.stringify(request)}}).body);
+   assert.equal(result.code,'STUDENT_TB_REPLY_RETIRED');assert.equal(result.success,false);
+   assert.equal(f.propertyReads.length,0);assert.equal(f.calls.length,0);assert.equal(f.files.length,0);
+  }
+ }
 });
 test('portal read requires only reviewed QA workbook, never Drive/callback/secrets',()=>{
  const f=fixture({QA_GAS_ROLE:'portal',QA_CPR_DRIVE_FOLDER_ID:'',QA_STUDENT_CARE_SYNC_ENDPOINT:'',QA_SUBMISSION_PROXY_SECRET:'',QA_STUDENT_CARE_PROXY_SECRET:''});

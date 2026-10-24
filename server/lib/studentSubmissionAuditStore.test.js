@@ -178,271 +178,76 @@ test("QA student identity stays stable across generated date and display-name ch
     fields: { ...payload.fields, studentNumber: "100" } }, secret).submissionId);
 });
 
-test("QA anonymous submit signs a QA-only Drive payload, writes ledger, and never requests Sheet append", async () => {
-  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "QA",
-    studentName: "[QA] synthetic" }, fileName: "QA-reply.png", fileMimeType: "image/png",
-    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64"),
-    sheetName: "Injected", folderId: "Injected" };
-  const writes = [];
-  const res = response();
-  await submitHandler(request(payload), res, { destinationUrl: "https://script.google.com/macros/s/test/exec",
-    proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
-    qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001", now: new Date("2026-10-12T00:00:00Z"),
-    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
-      createRequest: async (record) => writes.push(record) },
-    postScript: async (_url, init) => {
-      const envelope = JSON.parse(init.body);
-      const forwarded = JSON.parse(envelope.payloadJson);
-      assert.equal(forwarded.type, "student-file");
-      assert.equal(forwarded.recordMode, "firestore");
-      assert.equal(forwarded.runtimeEnvironment, "qa");
-      assert.equal(forwarded.qaEvidenceFolderId, "QA-PRIVATE-FOLDER-001");
-      assert.match(forwarded.qaSubmissionId, /^QA-STUDENT-TB-[a-f0-9]{32}$/);
-      assert.match(forwarded.qaRequestFingerprint, /^[a-f0-9]{64}$/);
-      assert.equal(JSON.stringify(forwarded).includes("Injected"), false);
-      return { text: async () => JSON.stringify({ status: "success", fileId: "QA-DRIVE-FILE-001", submittedAt: "now" }) };
-    } });
-  assert.equal(res.statusCode, 200);
-  assert.equal(writes.length, 1);
-  assert.equal(writes[0].evidenceFile.fileId, "QA-DRIVE-FILE-001");
-  assert.match(writes[0].evidenceSha256, /^[a-f0-9]{64}$/);
-  assert.equal(writes[0].idempotencyVersion, 2);
-  assert.equal(res.body.fileId, undefined);
-  assert.equal(res.body.submissionId, writes[0].requestId);
-  const prodPayload = buildScriptSubmission(SUBMISSION_WORKFLOWS.student_tb_reply, payload);
-  assert.equal(prodPayload.recordMode, undefined);
+test("retired student API rejects new, replayed and malformed submissions before any storage access", async (t) => {
+  const logs = [];
+  for (const method of ["error", "warn", "log"]) t.mock.method(console, method, (...args) => logs.push(args));
+  for (const environment of ["qa", "production"]) {
+    for (const type of ["student_tb_reply", "student-file", "student_file"]) {
+      for (const variant of [
+        { fields: {}, fileBase64: "invalid" },
+        { fields: { grade: "QA", classNumber: "QA", studentNumber: "QA", studentName: "[QA] synthetic" },
+          fileName: "QA-reply.png", fileMimeType: "image/png", fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") },
+        { resumeReceiptId: "cpr-" + "a".repeat(32) },
+      ]) {
+        const calls = [];
+        const touched = (name) => async () => { calls.push(name); throw new Error("unexpected side effect"); };
+        const res = response();
+        await submitHandler(request({ ...variant, type, submissionId: "legacy-replay" }), res, {
+          environment: () => environment,
+          studentAuditStore: { environment, getRequest: touched("read"), getEvidenceMatch: touched("lookup"), createRequest: touched("write") },
+          postScript: touched("Apps Script"),
+        });
+        assert.equal(res.statusCode, 410);
+        assert.equal(res.body.code, "STUDENT_TB_REPLY_RETIRED");
+        assert.equal(res.body.success, false);
+        assert.deepEqual(calls, []);
+        assert.equal(JSON.stringify(res.body).includes("synthetic"), false);
+      }
+    }
+  }
+  assert.deepEqual(logs, []);
 });
 
-test("same QA evidence across midnight returns success without a second Drive upload", async () => {
-  const payload = { type: "student_tb_reply", fields: { grade: "1", classNumber: "1", studentNumber: "99",
-    studentName: "[QA] synthetic" }, fileName: "QA-20261012.png", fileMimeType: "image/png",
-    fileBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl9mN8AAAAASUVORK5CYII=" };
-  const existing = { submissionId: "QA-STUDENT-TB-v1", environment: "qa", source: "qa_signed_submission",
-    status: "recorded", signedPath: true, manualReview: false,
-    evidenceSha256: qaStudentSubmissionIdentity(payload, "fixture-only-submission-secret-32bytes-minimum").evidenceSha256,
-    evidenceFiles: [{ fileId: "QA-DRIVE-V1", exists: true, mimeType: "image/png" }] };
-  let uploads = 0;
-  const res = response();
-  await submitHandler(request({ ...payload, fileName: "QA-20261013.png" }), res, {
-    destinationUrl: "https://script.google.com/macros/s/test/exec",
-    proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
-    qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
-    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => existing },
-    postScript: async () => { uploads++; throw new Error("duplicate must not upload"); },
-  });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.success, true);
-  assert.equal(res.body.duplicate, true);
-  assert.equal(res.body.submissionId, existing.submissionId);
-  assert.equal(uploads, 0);
-});
-
-test("recorded submissionId replay succeeds without calling Drive again", async () => {
-  const secret = "fixture-only-submission-secret-32bytes-minimum";
-  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "004",
-    studentName: "[QA] synthetic" }, fileName: "QA-recorded.png", fileMimeType: "image/png",
-    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
-  const identity = qaStudentSubmissionIdentity(payload, secret);
-  let driveCalls = 0;
-  const result = response();
-  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
-    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
-    studentAuditStore: { environment: "qa", getRequest: async () => ({
-      submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
-      evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
-      status: "recorded", signedPath: true, manualReview: false,
-      evidenceFiles: [{ fileId: "QA-RECORDED-FILE", exists: true, mimeType: "image/png" }] }),
-      getEvidenceMatch: async () => null },
-    postScript: async () => { driveCalls++; throw new Error("recorded replay must not upload"); } });
-  assert.equal(result.statusCode, 200);
-  assert.equal(result.body.duplicate, true);
-  assert.equal(result.body.submissionId, identity.submissionId);
-  assert.equal(driveCalls, 0);
-});
-
-test("concurrent identical create resolves to the recorded request, not a partial failure", async () => {
-  const secret = "fixture-only-submission-secret-32bytes-minimum";
-  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "002",
-    studentName: "[QA] synthetic" }, fileName: "QA-race.png", fileMimeType: "image/png",
-    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
-  const identity = qaStudentSubmissionIdentity(payload, secret);
-  const recorded = { submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
-    evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
-    status: "recorded", signedPath: true, manualReview: false,
-    evidenceFiles: [{ fileId: "QA-RACE-FILE", exists: true, mimeType: "image/png" }] };
-  let reads = 0;
-  const result = response();
-  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
-    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
-    studentAuditStore: { environment: "qa", getRequest: async () => (++reads === 1 ? null : recorded),
-      getEvidenceMatch: async () => null, createRequest: async () => { throw new Error("ALREADY_EXISTS"); } },
-    postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-RACE-FILE" }) }) });
-  assert.equal(result.statusCode, 200);
-  assert.equal(result.body.success, true);
-  assert.equal(result.body.duplicate, true);
-  assert.equal(result.body.submissionId, identity.submissionId);
-  assert.equal(result.body.fileId, undefined);
-  assert.equal(reads, 2);
-});
-
-test("conflicting evidence after create race stays a conflict", async () => {
-  const secret = "fixture-only-submission-secret-32bytes-minimum";
-  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "003",
-    studentName: "[QA] synthetic" }, fileName: "QA-conflict.png", fileMimeType: "image/png",
-    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
-  const identity = qaStudentSubmissionIdentity(payload, secret);
-  let reads = 0;
-  const result = response();
-  await submitHandler(request(payload), result, { destinationUrl: "https://script.google.com/macros/s/test/exec",
-    proxySecret: secret, environment: () => "qa", qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001",
-    studentAuditStore: { environment: "qa", getRequest: async () => (++reads === 1 ? null : {
-      submissionId: identity.submissionId, requestFingerprint: identity.requestFingerprint,
-      evidenceSha256: identity.evidenceSha256, environment: "qa", source: "qa_signed_submission",
-      status: "recorded", signedPath: true, manualReview: false,
-      evidenceFiles: [{ fileId: "DIFFERENT-FILE", exists: true, mimeType: "image/png" }] }),
-      getEvidenceMatch: async () => null, createRequest: async () => { throw new Error("ALREADY_EXISTS"); } },
-    postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-RACE-FILE" }) }) });
-  assert.equal(result.statusCode, 409);
-  assert.equal(result.body.success, false);
-  assert.equal(result.body.fileId, undefined);
-});
-
-test("QA missing evidence destination and arbitrary Preview fail before Apps Script", async () => {
-  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "QA",
-    studentName: "[QA] synthetic" }, fileName: "QA-reply.png", fileMimeType: "image/png",
-    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
-  let calls = 0;
-  const options = { destinationUrl: "https://script.google.com/macros/s/test/exec",
-    proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
-    postScript: async () => { calls++; throw new Error("Apps Script must not be called"); } };
-  const missing = response();
-  await submitHandler(request(payload), missing, options);
-  assert.equal(missing.statusCode, 503);
-  const arbitrary = response();
-  await submitHandler(request(payload), arbitrary, { ...options, environment: () => null });
-  assert.equal(arbitrary.statusCode, 503);
-  assert.equal(arbitrary.body.code, "ENVIRONMENT_UNRESOLVED");
-  assert.equal(calls, 0);
-});
-
-test("QA Drive failure does not write audit; Firestore failure reports recoverable submission ID", async () => {
-  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "001",
-    studentName: "[QA] synthetic" }, fileName: "QA-reply.png", fileMimeType: "image/png",
-    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
-  const options = { destinationUrl: "https://script.google.com/macros/s/test/exec",
-    proxySecret: "fixture-only-submission-secret-32bytes-minimum", environment: () => "qa",
-    qaStudentReplyFolderId: "QA-PRIVATE-FOLDER-001", now: new Date("2026-10-12T00:00:00Z") };
-  let auditWrites = 0;
-  const driveFailed = response();
-  await submitHandler(request(payload), driveFailed, { ...options,
-    studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
-      createRequest: async () => { auditWrites++; } },
-    postScript: async () => ({ text: async () => JSON.stringify({ status: "error" }) }) });
-  assert.equal(driveFailed.body.success, false);
-  assert.equal(auditWrites, 0);
-  const auditFailed = response();
-  const originalError = console.error;
-  console.error = () => {};
-  try {
-    await submitHandler(request(payload), auditFailed, { ...options,
-      studentAuditStore: { environment: "qa", getRequest: async () => null, getEvidenceMatch: async () => null,
-        createRequest: async () => { throw new Error("QA Firestore unavailable"); } },
-      postScript: async () => ({ text: async () => JSON.stringify({ status: "success", fileId: "QA-DRIVE-FILE-001" }) }) });
-  } finally { console.error = originalError; }
-  assert.equal(auditFailed.statusCode, 503);
-  assert.match(auditFailed.body.submissionId, /^QA-STUDENT-TB-[a-f0-9]{32}$/);
-  assert.equal(auditFailed.body.fileId, undefined);
-});
-
-test("Apps Script QA student preflight uses only QA folder, skips Sheet, and returns fileId", () => {
+test("Apps Script rejects retired student preflight before Drive, Sheets or guard writes", () => {
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
-  let sheetReads = 0;
-  let folderId = "";
-  let appends = 0;
-  const file = { getUrl: () => "https://drive.google.com/file/d/QA-DRIVE-FILE-001/view",
-    getId: () => "QA-DRIVE-FILE-001" };
+  const calls = [];
   const context = vm.createContext({
-    SpreadsheetApp: { openById: () => { sheetReads++; throw new Error("Workbook access"); } },
-    DriveApp: { getFolderById(id) { folderId = id; return { getId: () => id,
-      getFilesByName: () => ({ hasNext: () => false }), createFile: () => file }; } },
-    Utilities: { base64Decode: () => [137, 80, 78, 71, 13, 10, 26, 10],
-      newBlob: () => ({ getContentType: () => "image/png", getBytes: () => [137, 80, 78, 71, 13, 10, 26, 10],
-        setName() {} }),
-      formatDate: () => "2026-10-12 10:00:00" },
+    SpreadsheetApp: { openById: () => { calls.push("Sheet"); throw new Error("unexpected Sheet"); } },
+    DriveApp: { getFolderById: () => { calls.push("Drive"); throw new Error("unexpected Drive"); } },
+    PropertiesService: { getScriptProperties: () => { calls.push("properties"); throw new Error("unexpected properties"); } },
   });
-  vm.runInContext(`${code}\nthis.preflight = preflightSubmission_; this.append = appendStudentFileSubmission_;`, context);
-  const prepared = context.preflight({ type: "student-file", recordMode: "firestore", runtimeEnvironment: "qa",
-    qaEvidenceFolderId: "QA-PRIVATE-FOLDER-001", qaSubmissionId: `QA-STUDENT-TB-${"a".repeat(32)}`,
-    qaRequestFingerprint: "a".repeat(64), fields: { grade: "QA", classNumber: "QA", studentNumber: "QA",
-      studentName: "[QA] synthetic" }, fileName: "QA-reply.png", fileBase64: "fixture", fileMimeType: "image/png" });
-  context.appendSubmissionRecord_ = () => { appends++; };
-  const result = context.append({ fields: { studentName: "[QA] synthetic" }, fileName: "QA-reply.png",
-    fileMimeType: "image/png" }, prepared, "QA-REQUEST-001");
-  assert.equal(sheetReads, 0);
-  assert.equal(appends, 0);
-  assert.equal(folderId, "QA-PRIVATE-FOLDER-001");
-  assert.equal(result.fileId, "QA-DRIVE-FILE-001");
+  vm.runInContext(code + String.fromCharCode(10) + "this.preflight = preflightSubmission_;", context);
+  for (const runtimeEnvironment of ["qa", "production"]) {
+    assert.throws(() => context.preflight({ type: "student-file", recordMode: "firestore", runtimeEnvironment,
+      fields: { studentName: "[QA] synthetic" }, fileBase64: "fixture", fileMimeType: "image/png" }), /STUDENT_TB_REPLY_RETIRED/);
+  }
+  assert.deepEqual(calls, []);
 });
 
-test("QA evidence reuse survives audit failure without duplicate Drive upload or ledger record", async () => {
+test("Apps Script rejects raw and signed retired aliases before locks, secrets and storage", () => {
   const code = fs.readFileSync(new URL("../../apps-script/Code.gs", import.meta.url), "utf8");
-  const secret = "fixture-only-submission-secret-32bytes-minimum";
-  const payload = { type: "student_tb_reply", fields: { grade: "QA", classNumber: "QA", studentNumber: "001",
-    studentName: "[QA] synthetic" }, fileName: "QA-reply.png", fileMimeType: "image/png",
-    fileBase64: Buffer.from("89504e470d0a1a0a00000000", "hex").toString("base64") };
-  const id = qaStudentSubmissionIdentity(payload, secret);
-  const properties = new Map();
-  let file = null;
-  let uploads = 0;
-  let ledgerWrites = 0;
+  const calls = [];
+  const unexpected = (name) => () => { calls.push(name); throw new Error("unexpected " + name); };
   const context = vm.createContext({
-    STUDENT_FILE_DEFAULT_FOLDER_ID: "PRODUCTION-FOLDER",
-    PropertiesService: { getScriptProperties: () => ({ getKeys: () => [...properties.keys()],
-      getProperty: (key) => properties.get(key) ?? null, setProperty: (key, value) => properties.set(key, value),
-      deleteProperty: (key) => properties.delete(key) }) },
-    DriveApp: { getFolderById(folderId) { assert.equal(folderId, "QA-PRIVATE-FOLDER-001"); return {
-      getId: () => folderId, getFilesByName: () => { let consumed = false; return {
-        hasNext: () => Boolean(file) && !consumed, next: () => { consumed = true; return file; } }; },
-      createFile(blob) { uploads++; file = { getId: () => "QA-DRIVE-FILE-001", getUrl: () => "private-url",
-        getMimeType: () => "image/png", getSize: () => 12 }; return file; } }; } },
-    Utilities: { base64Decode: (value) => [...Buffer.from(value, "base64")],
-      newBlob: (bytes) => ({ getContentType: () => "image/png", getBytes: () => bytes,
-        setName() {} }), formatDate: () => "2026-10-12 10:00:00" },
+    LockService: { getScriptLock: unexpected("lock") },
+    PropertiesService: { getScriptProperties: unexpected("properties") },
+    DriveApp: { getFolderById: unexpected("Drive") },
+    SpreadsheetApp: { openById: unexpected("Sheet") },
+    ContentService: { MimeType: { JSON: "json" }, createTextOutput: (body) => ({
+      getContent: () => body, setMimeType() { return this; },
+    }) },
   });
-  vm.runInContext(`${code}\nthis.preflight = preflightSubmission_; this.reserve = reserveSubmissionProxy_;
-    this.append = appendStudentFileSubmission_;`, context);
-  const scriptPayload = { type: "student-file", recordMode: "firestore", runtimeEnvironment: "qa",
-    qaEvidenceFolderId: "QA-PRIVATE-FOLDER-001", qaSubmissionId: id.submissionId,
-    qaRequestFingerprint: id.requestFingerprint, fields: payload.fields, fileName: payload.fileName,
-    fileMimeType: payload.fileMimeType, fileBase64: payload.fileBase64 };
-  const first = context.preflight(scriptPayload);
-  const signed1 = buildSubmissionProxyEnvelope(scriptPayload, secret, { requestId: "QA-REQUEST-ONE", visitor: "visitor" });
-  context.reserve(signed1, scriptPayload, first);
-  const uploaded = context.append(scriptPayload, first, signed1.requestId);
-  assert.equal(uploaded.fileId, "QA-DRIVE-FILE-001");
-  assert.equal(uploads, 1);
-  const nextDayPayload = { ...payload, fileName: "QA-reply-20261013.png" };
-  assert.equal(qaStudentSubmissionIdentity(nextDayPayload, secret).submissionId, id.submissionId);
-  const nextDayScriptPayload = { ...scriptPayload, fileName: nextDayPayload.fileName };
-  const second = context.preflight(nextDayScriptPayload);
-  assert.equal(second.existingEvidence.getId(), uploaded.fileId);
-  const signed2 = buildSubmissionProxyEnvelope(nextDayScriptPayload, secret, { requestId: "QA-REQUEST-TWO", visitor: "visitor" });
-  context.reserve(signed2, nextDayScriptPayload, second);
-  context.append(nextDayScriptPayload, second, signed2.requestId);
-  assert.equal(uploads, 1);
-  const db = database();
-  const store = new StudentSubmissionAuditStore({ database: () => db,
-    context: () => ({ APP_ENV: "qa", VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }) });
-  await store.createQaRequest({ requestId: id.submissionId, requestFingerprint: id.requestFingerprint,
-    evidenceSha256: id.evidenceSha256,
-    fields: payload.fields, evidenceFile: { fileId: uploaded.fileId, fileName: payload.fileName,
-      mimeType: payload.fileMimeType } });
-  ledgerWrites++;
-  await assert.rejects(store.createQaRequest({ requestId: id.submissionId, evidenceSha256: id.evidenceSha256,
-    fields: payload.fields,
-    evidenceFile: { fileId: uploaded.fileId, fileName: payload.fileName } }), /duplicate/);
-  assert.equal(ledgerWrites, 1);
-  assert.throws(() => context.reserve(signed1, scriptPayload, second), /중복 제출/);
+  vm.runInContext(code + String.fromCharCode(10) + "this.submit = doPost;", context);
+  for (const type of ["student-file", "student_tb_reply", "student_file"]) {
+    const payload = { type, fields: { studentName: "[QA] synthetic" }, fileBase64: "fixture" };
+    for (const body of [payload, buildSubmissionProxyEnvelope(payload, "fixture-only-signing-secret-32bytes")]) {
+      const result = JSON.parse(context.submit({ postData: { contents: JSON.stringify(body) } }).getContent());
+      assert.equal(result.status, "error");
+      assert.equal(result.code, "STUDENT_TB_REPLY_RETIRED");
+      assert.equal(JSON.stringify(result).includes("synthetic"), false);
+      assert.deepEqual(calls, []);
+    }
+  }
 });
 
 test("Vercel QA student envelope verifies with QA key but not Production key", () => {

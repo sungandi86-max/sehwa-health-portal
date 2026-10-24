@@ -1,4 +1,5 @@
 import { FirebaseConfigurationError } from "../common/firebaseEnvironment.js";
+import { isRetiredStudentReply, STUDENT_REPLY_RETIRED_CODE, STUDENT_REPLY_RETIRED_MESSAGE } from "../common/studentReplyRetirement.js";
 import { handleStaffFileSubmission } from "../server/lib/staffFileSubmission.js";
 import { ReceiptError } from "../server/lib/staffReceiptProtocol.js";
 import { serverFirestoreResource } from "../server/lib/firestoreResources.js";
@@ -107,6 +108,10 @@ export default async function handler(req, res, { postScript = fetch, verifyStaf
       });
     }
 
+    if (isRetiredStudentReply(payload?.type)) {
+      return res.status(410).json({ status: "error", success: false,
+        code: STUDENT_REPLY_RETIRED_CODE, message: STUDENT_REPLY_RETIRED_MESSAGE });
+    }
     const workflow = resolveSubmissionWorkflow(payload);
     const resume = payload?.resumeReceiptId !== undefined;
     const validation = resume
