@@ -9,7 +9,7 @@ test("dashboard prioritizes six work tasks and compact quick navigation", () => 
   assert.match(page, /오늘 확인할 업무/);
   assert.match(page, /buildDashboardTaskCards/);
   assert.match(page, /QUICK_ACTIONS/);
-  assert.equal((page.match(/label: "(제출 관리|교직원 제출·이수 현황|교직원 교육 관리|권한 관리|감염병 사례관리)"/g) || []).length, 5);
+  assert.equal((page.match(/label: "(접수자료 검토|대상자별 제출 현황|건강검진 확인|연구부 연수 원본 점검|CPR 교육 관리|법정의무연수 보고서)"/g) || []).length, 6);
   assert.doesNotMatch(page, /MENU_GROUPS/);
   assert.doesNotMatch(page, /관리 메뉴/);
 });

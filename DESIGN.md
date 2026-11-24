@@ -375,3 +375,17 @@ The staff list is collapsed initially. Opening it reveals compact searchable row
 - Staff-facing guides must not expose administrator commands. Administrator guides inherit the page's existing route and server authorization guards.
 - On mobile, present the guide as a bottom sheet; on wider screens, use a centered dialog with restrained overlay styling.
 - Every guide includes short ordered steps and a compact troubleshooting section. Internal IDs and migration details are not user-facing help content.
+
+## 22. Administrator Navigation
+
+The administrator workspace uses one stable information architecture without changing existing routes, role gates, APIs, or data scopes.
+
+- `관리자 홈` is always the first destination for `health_teacher` and `admin` workspaces.
+- Remaining destinations are grouped by task: `제출·검토`, `검진·검사`, `교육·연수`, `계정·권한`, and `감염병`.
+- Group headings are disclosure buttons, not destinations. The group containing the current route opens automatically and retains its state while navigating.
+- A child destination has one clear operational label. Where three submission views share similar data, supporting copy distinguishes submitted documents, target-account coverage, and final task completion.
+- Planned integrations are rendered as non-interactive status rows. They must never look enabled or receive a route before the feature exists.
+- Breadcrumbs show `관리자 홈 > 업무 그룹 > 현재 업무`. Training event pages preserve their local event navigation and add the administrator context only for users who already have top-level administrator access.
+- Existing deep links use query strings or section hashes. A deferred section-navigation helper scrolls only after the target is rendered, and `:target` styling identifies the destination without changing its behavior.
+- Desktop uses the existing 230px rail. Mobile keeps the drawer pattern, uses 48px minimum touch targets, names the current group and screen in the closed state, and closes after navigation.
+- Sidebar visibility never grants authority. `training_admin` keeps the existing training-only navigation and does not receive administrator-home links or broader menu exposure.

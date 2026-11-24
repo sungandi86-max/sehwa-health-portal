@@ -8,6 +8,7 @@ import { TrainingManagerGuideCard } from "../components/TrainingManagerGuideCard
 import { bootstrapTrainingSignatureStorage, getTrainingRuntimePreflight, listManagedTrainings, listTrainingDirectory, saveManagedTraining, transferTrainingOwner } from "../lib/trainingCenterPhase2.js";
 import { getTrainingStorageBootstrapUiState, performTrainingStorageBootstrap, summarizeTrainingRuntimePreflight } from "../lib/trainingRuntimePreflight.js";
 import { trainingAttendanceCounts } from "../lib/trainingAttendancePresentation.js";
+import { useDeferredHashNavigation } from "../lib/useDeferredHashNavigation.js";
 import { selectTrainingTargets } from "../../common/trainingTargetSelection.js";
 import { TrainingTargetPicker } from "./TrainingTargetPicker.jsx";
 
@@ -209,6 +210,10 @@ export function TrainingAdminContent({ actorUid = "", displayName, hasTopLevelAd
   const [params] = useSearchParams();
   const groupView = params.get("view") === "groups";
   const [manualCprOpen, setManualCprOpen] = useState(params.get("mode") === "manual-cpr-2026");
+  useEffect(() => {
+    if (params.get("mode") === "manual-cpr-2026") setManualCprOpen(true);
+  }, [params]);
+  useDeferredHashNavigation(manualCprOpen ? "manual-cpr-open" : "manual-cpr-closed");
   async function reload() {
     setState("loading");
     try {
@@ -226,13 +231,13 @@ export function TrainingAdminContent({ actorUid = "", displayName, hasTopLevelAd
   const upcoming = items.filter((item) => item["사용여부"] === "사용" && item["일자"] >= today)
     .sort((left, right) => left["일자"].localeCompare(right["일자"]))[0];
   const currentCounts = upcoming && summaries[upcoming.eventId];
-  return <TrainingAdminLayout displayName={displayName} active="manage" guide={groupView ? "trainingBundles" : "trainingManager"} title="교직원 교육 운영관리" description="교육 등록과 대상·QR·출석 업무를 한곳에서 관리합니다.">
+  return <TrainingAdminLayout displayName={displayName} active="manage" hasTopLevelAdminAccess={hasTopLevelAdminAccess} guide={groupView ? "trainingBundles" : "trainingManager"} title="교직원 교육 운영관리" description="교육 등록과 대상·QR·출석 업무를 한곳에서 관리합니다.">
     <div className="flex flex-wrap items-center justify-between gap-2"><Link className={secondaryClass} to={hasTopLevelAdminAccess ? "/firebase-dashboard" : "/training"}>{hasTopLevelAdminAccess ? "관리자 화면으로" : "교육센터로"}</Link><div className="flex flex-wrap gap-2"><Link className={groupView ? secondaryClass : buttonClass} to="/firebase-admin/trainings">내 교육</Link><Link className={groupView ? buttonClass : secondaryClass} to="/firebase-admin/trainings?view=groups">묶음 관리</Link>{!groupView && hasTopLevelAdminAccess && <button className={secondaryClass} type="button" onClick={()=>setManualCprOpen(old=>!old)}>2026 CPR 단체교육 일괄 등록</button>}{!groupView && <button className={buttonClass} type="button" onClick={() => setEditing({ ...blank })}>교육 등록</button>}</div></div>
     {groupView && <TrainingGroupManager hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}
     {!groupView && <>
     <TrainingManagerGuideCard />
     {hasTopLevelAdminAccess && <p className="text-sm text-[#627083]">개별 CPR 이수증은 <Link className="text-[#0D4EA6] underline" to="/firebase-admin/submission-status?item=cpr">접수 현황</Link>에서 검토합니다. 학교 단체교육은 오프라인 명부 일괄 등록으로 구분하며 <Link className="text-[#0D4EA6] underline" to="/firebase-admin/staff-submission-status?task=cpr-training-2026">CPR 통합 이수현황</Link>에 반영됩니다.</p>}
-    {manualCprOpen && hasTopLevelAdminAccess && <ManualCprBatchPanel key={actorUid} uid={actorUid} onSaved={reload} />}
+    {manualCprOpen && hasTopLevelAdminAccess && <section id="manual-cpr-batch" tabIndex={-1} className="admin-section-target scroll-mt-6"><ManualCprBatchPanel key={actorUid} uid={actorUid} onSaved={reload} /></section>}
     {editing && <TrainingForm initial={editing} saveTraining={saveTraining} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     {state === "loading" && <p className="text-sm text-[#627083]">교육 목록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}

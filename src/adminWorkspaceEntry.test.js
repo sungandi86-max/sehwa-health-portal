@@ -15,23 +15,22 @@ test("admin entry opens the shared workspace dashboard", () => {
   assert.match(dashboardSource, /title="관리자 대시보드"/);
 });
 
-test("dashboard workspace keeps the admin menu and returns to the portal", () => {
+test("dashboard workspace keeps grouped administrator navigation and returns to the portal", () => {
   const layoutSource = readSource("./components/AdminWorkspaceLayout.jsx");
+  const navigationSource = readSource("./data/adminNavigation.js");
 
   for (const label of [
-    "제출·보고 관리",
-    "제출 현황",
-    "교직원 제출·이수 현황",
-    "법정의무연수 보고서",
-    "교직원 교육 관리",
-    "권한 신청",
-    "교직원 권한 관리",
-    "감염병 사례관리",
+    "관리자 홈",
+    "제출·검토",
+    "검진·검사",
+    "교육·연수",
+    "계정·권한",
+    "감염병",
   ]) {
-    assert.match(layoutSource, new RegExp(label));
+    assert.match(navigationSource, new RegExp(label));
   }
 
-  assert.match(layoutSource, /pathname === "\/firebase-dashboard"/);
+  assert.match(layoutSource, /location\.pathname === "\/firebase-dashboard"/);
   assert.match(layoutSource, /backTo=\{isDashboard \? "\/" : "\/firebase-dashboard"\}/);
   assert.match(layoutSource, /showDashboardLink=\{!isDashboard\}/);
 });

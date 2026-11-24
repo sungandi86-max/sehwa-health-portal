@@ -29,7 +29,7 @@ function statusMeta({ person, selected, detail, previous }) {
   return { statusLabel: previous || person ? "비대상" : "미확인", tone: "neutral" };
 }
 
-export function TrainingTargetsContent({ displayName, eventId, loadDirectory = listTrainingDirectory,
+export function TrainingTargetsContent({ displayName, eventId, hasTopLevelAdminAccess = false, loadDirectory = listTrainingDirectory,
   loadTargets = listTrainingTargets, saveTargets = saveTrainingTargetsBatch }) {
   const [directory, setDirectory] = useState([]);
   const [targets, setTargets] = useState([]);
@@ -116,7 +116,7 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
       }
     } finally { setSaving(false); }
   }
-  return <TrainingAdminLayout displayName={displayName} eventId={eventId} active="targets" title="교육 대상 관리" description="그룹을 선택하고 예외만 조정한 뒤 한 번에 저장합니다.">
+  return <TrainingAdminLayout displayName={displayName} eventId={eventId} hasTopLevelAdminAccess={hasTopLevelAdminAccess} active="targets" title="교육 대상 관리" description="그룹을 선택하고 예외만 조정한 뒤 한 번에 저장합니다.">
     {state === "loading" && <p className="text-sm text-[var(--shh-muted)]">대상 정보를 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[var(--shh-danger)]">{message}</p>}
     {state === "ready" && selection && <section className="training-target-manager">
@@ -163,5 +163,5 @@ export function TrainingTargetsContent({ displayName, eventId, loadDirectory = l
 
 export default function FirebaseTrainingTargetsPage() {
   const { eventId } = useParams();
-  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 대상 관리 권한이 없습니다.">{({ displayName }) => <TrainingTargetsContent displayName={displayName} eventId={eventId} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 대상 관리 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess }) => <TrainingTargetsContent displayName={displayName} eventId={eventId} hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}</FirebaseAdminRoleAccessGate>;
 }

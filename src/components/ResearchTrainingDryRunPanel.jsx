@@ -176,6 +176,7 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
+            id="training-source-check-action"
             type="button"
             onClick={handleCheck}
             disabled={isWorking}
@@ -184,6 +185,7 @@ export default function ResearchTrainingDryRunPanel({ onApplied }) {
             {result.status === "loading" ? "확인 중..." : "연구부 연수 현황 점검"}
           </button>
           <button
+            id="training-source-refresh"
             type="button"
             onClick={handleApply}
             disabled={isWorking || applyBlocked}

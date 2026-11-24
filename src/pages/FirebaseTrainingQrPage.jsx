@@ -8,7 +8,7 @@ import { formatTrainingDateTime, recentTrainingAttendance, trainingAttendanceCou
 
 const secondary = "inline-flex min-h-11 items-center justify-center rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-sm font-semibold text-[#0D4EA6] transition hover:border-[#0D4EA6] focus:outline-none focus:ring-4 focus:ring-[#0D4EA6]/10";
 
-export function TrainingQrContent({ displayName, eventId, loadTrainings = listManagedTrainings, loadSummary = getTrainingAttendanceSummary, createQr = createTrainingQr }) {
+export function TrainingQrContent({ displayName, eventId, hasTopLevelAdminAccess = false, loadTrainings = listManagedTrainings, loadSummary = getTrainingAttendanceSummary, createQr = createTrainingQr }) {
   const [event, setEvent] = useState(null);
   const [summary, setSummary] = useState(null);
   const [qr, setQr] = useState(null);
@@ -44,7 +44,7 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
   const counts = trainingAttendanceCounts(summary?.counts);
   const recent = recentTrainingAttendance(summary?.rows);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  return <TrainingAdminLayout displayName={displayName} eventId={eventId} active="qr" title="교직원 교육 QR 출석체크" description="교직원 연수의 출석을 QR코드와 전자서명으로 관리할 수 있습니다.">
+  return <TrainingAdminLayout displayName={displayName} eventId={eventId} hasTopLevelAdminAccess={hasTopLevelAdminAccess} active="qr" title="교직원 교육 QR 출석체크" description="교직원 연수의 출석을 QR코드와 전자서명으로 관리할 수 있습니다.">
     {!loaded && !message && <p className="text-sm text-[#627083]">교육 정보를 불러오는 중입니다.</p>}
     {loaded && !event && !message && <p role="status" className="text-sm text-[#627083]">교육을 찾을 수 없습니다.</p>}
     {event && summary && <div className="training-qr-dashboard">
@@ -86,5 +86,5 @@ export function TrainingQrContent({ displayName, eventId, loadTrainings = listMa
 
 export default function FirebaseTrainingQrPage() {
   const { eventId } = useParams();
-  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 QR 관리 권한이 없습니다.">{({ displayName }) => <TrainingQrContent displayName={displayName} eventId={eventId} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 QR 관리 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess }) => <TrainingQrContent displayName={displayName} eventId={eventId} hasTopLevelAdminAccess={hasTopLevelAdminAccess} />}</FirebaseAdminRoleAccessGate>;
 }

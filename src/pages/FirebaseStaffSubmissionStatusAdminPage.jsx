@@ -12,6 +12,7 @@ import { getAdminStaffSubmissionStatusOverview, updateAdminTbScreeningStatus } f
 import { CPR_TRAINING_TASK_ID, isHealthMandatoryTrainingTask, TB_SCREENING_TASK_ID } from "../lib/staffSubmissionStatus.js";
 import { CPR_METHOD_LABELS } from "../lib/cprTrainingStatusModel.js";
 import { TB_LATENT_STATUS_LABELS, TB_SCREENING_TYPE_LABELS, TB_TARGET_STATUS_LABELS } from "../lib/tbScreeningStatusModel.js";
+import { useDeferredHashNavigation } from "../lib/useDeferredHashNavigation.js";
 
 const STATUS_FILTERS = [
   { value: "incomplete", label: "미완료" },
@@ -290,6 +291,7 @@ function AdminStatusContent({ displayName }) {
   const selectedTask = params.has("schoolYear") && !selectedTaskId.endsWith(`-${params.get("schoolYear")}`) ? null : overview?.tasks.find((task) => task.taskId === selectedTaskId) || (!params.has("task") ? overview?.tasks[0] : null) || null;
   const filterOptions = useMemo(() => buildFilterOptions(selectedTask?.items || []), [selectedTask]);
   const filteredItems = useMemo(() => filterItems(selectedTask?.items || [], filters).filter(item=>!focusedStaffId || item.staffId === focusedStaffId), [selectedTask, filters, focusedStaffId]);
+  useDeferredHashNavigation(state.status);
 
   return (
     <AdminWorkspaceLayout
@@ -313,14 +315,14 @@ function AdminStatusContent({ displayName }) {
         <a href="#legal-training-exceptions" className="rounded-lg border border-[#DDEAE7] px-3 py-3">법정의무연수 예외</a>
         {state.status === "success" && selectedTask && <a href="#completion-status" className="rounded-lg border border-[#DDEAE7] px-3 py-3">검진·연수 완료 현황</a>}
       </nav>
-      {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <section id="annual-screening-type" className="scroll-mt-4"><LinkedScreeningPanel /></section>}
-      <section id="training-source-check" className="scroll-mt-4"><ResearchTrainingDryRunPanel onApplied={loadOverview} /></section>
-      <section id="legal-training-exceptions" className="scroll-mt-4"><ResearchTrainingExceptionsPanel /></section>
+      {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <section id="annual-screening-type" tabIndex={-1} className="admin-section-target scroll-mt-6"><LinkedScreeningPanel /></section>}
+      <section id="training-source-check" tabIndex={-1} className="admin-section-target scroll-mt-6"><ResearchTrainingDryRunPanel onApplied={loadOverview} /></section>
+      <section id="legal-training-exceptions" tabIndex={-1} className="admin-section-target scroll-mt-6"><ResearchTrainingExceptionsPanel /></section>
 
       {state.status === "success" && !selectedTask && <p role="alert">요청한 학년도·업무 원장을 찾을 수 없습니다. 다른 학년도 현황으로 대체하지 않습니다. <Link to="/firebase-admin/staff-submission-status" className="underline">현재 학년도 현황으로</Link></p>}
       {state.status === "success" && selectedTask && (
         <>
-          <section id="completion-status" aria-label="검진·연수 완료 현황" className="grid scroll-mt-4 gap-2 lg:grid-cols-3">
+          <section id="completion-status" tabIndex={-1} aria-label="검진·연수 완료 현황" className="admin-section-target grid scroll-mt-6 gap-2 lg:grid-cols-3">
             {overview.tasks.map((task) => (
               <TaskSummary
                 key={task.taskId}

@@ -63,7 +63,7 @@ function AbsenceReasonEditor({ row, eventId, onSaved, correctAttendance }) {
   </div>;
 }
 
-export function TrainingAttendanceAdminContent({ displayName, eventId, finalSheet = false, canReconcile = false, loadSummary = getTrainingAttendanceSummary, loadFinal = getTrainingFinalSheet, correctAttendance = correctTrainingAttendance, downloadSheet = downloadTrainingFinalSheet, downloadXlsx = downloadTrainingFinalSheetXlsx }) {
+export function TrainingAttendanceAdminContent({ displayName, eventId, finalSheet = false, canReconcile = false, hasTopLevelAdminAccess = false, loadSummary = getTrainingAttendanceSummary, loadFinal = getTrainingFinalSheet, correctAttendance = correctTrainingAttendance, downloadSheet = downloadTrainingFinalSheet, downloadXlsx = downloadTrainingFinalSheetXlsx }) {
   const [model, setModel] = useState(null);
   const [state, setState] = useState("loading");
   const [message, setMessage] = useState("");
@@ -85,7 +85,7 @@ export function TrainingAttendanceAdminContent({ displayName, eventId, finalShee
     catch (error) { setMessage(error.message); }
     finally { setWorking(false); }
   }
-  return <TrainingAdminLayout displayName={displayName} eventId={eventId} active={finalSheet ? "final-sheet" : "attendance"} title={finalSheet ? "연수등록부 미리보기" : "교육 출석 현황"} description={finalSheet ? "현재 유효한 대상과 전자서명을 확인하고 공식 연수등록부 PDF를 생성합니다." : "대상별 출석을 확인하고 사유를 남겨 정정합니다."}>
+  return <TrainingAdminLayout displayName={displayName} eventId={eventId} hasTopLevelAdminAccess={hasTopLevelAdminAccess} active={finalSheet ? "final-sheet" : "attendance"} title={finalSheet ? "연수등록부 미리보기" : "교육 출석 현황"} description={finalSheet ? "현재 유효한 대상과 전자서명을 확인하고 공식 연수등록부 PDF를 생성합니다." : "대상별 출석을 확인하고 사유를 남겨 정정합니다."}>
     {state === "loading" && <p className="text-sm text-[#627083]">서명 기록을 불러오는 중입니다.</p>}
     {state === "error" && <p role="alert" className="text-sm text-[#B42318]">{message}</p>}
     {state === "ready" && model && <section className="space-y-3">
@@ -100,5 +100,5 @@ export function TrainingAttendanceAdminContent({ displayName, eventId, finalShee
 
 export default function FirebaseTrainingAttendanceAdminPage({ finalSheet = false }) {
   const { eventId } = useParams();
-  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 출석 관리 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess }) => <TrainingAttendanceAdminContent canReconcile={hasTopLevelAdminAccess} displayName={displayName} eventId={eventId} finalSheet={finalSheet} />}</FirebaseAdminRoleAccessGate>;
+  return <FirebaseAdminRoleAccessGate allowTrainingAdmin deniedTitle="교육 출석 관리 권한이 없습니다.">{({ displayName, hasTopLevelAdminAccess }) => <TrainingAttendanceAdminContent canReconcile={hasTopLevelAdminAccess} hasTopLevelAdminAccess={hasTopLevelAdminAccess} displayName={displayName} eventId={eventId} finalSheet={finalSheet} />}</FirebaseAdminRoleAccessGate>;
 }
