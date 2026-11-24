@@ -65,7 +65,7 @@ test("dashboard task cards preserve the six operational definitions and routes",
 
   assert.deepEqual(cards.map((item) => item.count), [4, 2, 3, 5, 6, 7]);
   assert.equal(cards.length, 6);
-  assert.equal(cards[3].href, "/firebase-admin/staff-submission-status#annual-screening-type");
+  assert.equal(cards[3].href, "/firebase-admin/staff-submission-status?view=screening-types");
 });
 
 test("dashboard task cards do not turn unavailable data into a false zero", () => {

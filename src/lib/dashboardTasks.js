@@ -18,8 +18,8 @@ export function buildDashboardTaskCards({ counts = {}, pendingAccessCount = null
     { id: "pending-submissions", label: "제출 확인 필요", count: Number(counts.pendingStaffCount || 0), href: "/firebase-admin/submissions?tab=staff&status=submitted" },
     { id: "pending-infections", label: "감염병 확인 필요", count: Number(counts.pendingInfectionCount || 0), href: "/firebase-admin/infections" },
     { id: "pending-access", label: "권한 신청", count: Number.isFinite(pendingAccessCount) ? pendingAccessCount : null, href: "/firebase-admin/access-requests" },
-    { id: "tb-route-unconfirmed", label: "결핵검진 경로 미확인", count: tbCounts ? Number(tbCounts.routeUnconfirmed || 0) : null, href: "/firebase-admin/staff-submission-status#annual-screening-type" },
-    { id: "tb-evidence-pending", label: "결핵검진 증빙 확인 필요", count: tbCounts ? Number(tbCounts.evidencePending || 0) : null, href: "/firebase-admin/staff-submission-status#annual-screening-type" },
+    { id: "tb-route-unconfirmed", label: "결핵검진 경로 미확인", count: tbCounts ? Number(tbCounts.routeUnconfirmed || 0) : null, href: "/firebase-admin/staff-submission-status?view=screening-types" },
+    { id: "tb-evidence-pending", label: "결핵검진 증빙 확인 필요", count: tbCounts ? Number(tbCounts.evidencePending || 0) : null, href: "/firebase-admin/staff-submission-status?view=screening-types" },
     { id: "tb-incomplete", label: "결핵검진 미완료", count: tbCounts ? Number(tbCounts.incomplete || 0) : null, href: "/firebase-admin/staff-submission-status" },
   ];
 }

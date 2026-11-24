@@ -13,7 +13,7 @@ export const ADMIN_NAV_GROUPS = [
       item("submission-status", "대상자별 제출 현황", "/firebase-admin/submission-status", {
         description: "제출 대상자별 제출 여부를 확인합니다.",
       }),
-      item("completion-status", "업무별 완료 현황", "/firebase-admin/staff-submission-status#completion-status", {
+      item("completion-status", "업무별 완료 현황", "/firebase-admin/staff-submission-status?view=completion", {
         description: "업무 기준 최종 완료 상태를 확인합니다.",
         matchTo: "/firebase-admin/staff-submission-status",
       }),
@@ -23,9 +23,12 @@ export const ADMIN_NAV_GROUPS = [
     id: "screening",
     label: "검진·검사",
     items: [
-      item("screening-types", "건강검진 유형·경로 확인", "/firebase-admin/staff-submission-status#annual-screening-type"),
-      item("tb-completion", "결핵검진 완료 현황", "/firebase-admin/staff-submission-status?task=tb-screening-2026#completion-status", {
-        matchTo: "/firebase-admin/staff-submission-status?task=tb-screening-2026",
+      item("screening-types", "건강검진 유형·경로 확인", "/firebase-admin/staff-submission-status?view=screening-types", {
+        aliases: ["/firebase-admin/staff-submission-status#annual-screening-type"],
+      }),
+      item("tb-completion", "결핵검진 완료 현황", "/firebase-admin/staff-submission-status?view=tb-completion&task=tb-screening-2026", {
+        matchTo: "/firebase-admin/staff-submission-status?view=tb-completion&task=tb-screening-2026",
+        aliases: ["/firebase-admin/staff-submission-status?task=tb-screening-2026"],
       }),
       item("screening-evidence", "검진 확인자료 접수", "/firebase-admin/submissions?tab=staff"),
       item("checkup-helper", "별도검사 운영 도우미", null, { planned: true, statusLabel: "연동 예정" }),
@@ -40,12 +43,22 @@ export const ADMIN_NAV_GROUPS = [
       item("cpr-batch", "CPR 학교 단체교육 등록", "/firebase-admin/trainings?mode=manual-cpr-2026#manual-cpr-batch", {
         matchTo: "/firebase-admin/trainings?mode=manual-cpr-2026",
       }),
-      item("cpr-completion", "CPR 통합 완료 현황", "/firebase-admin/staff-submission-status?task=cpr-training-2026#completion-status", {
-        matchTo: "/firebase-admin/staff-submission-status?task=cpr-training-2026",
+      item("cpr-completion", "CPR 통합 완료 현황", "/firebase-admin/staff-submission-status?view=cpr-completion&task=cpr-training-2026", {
+        matchTo: "/firebase-admin/staff-submission-status?view=cpr-completion&task=cpr-training-2026",
+        aliases: [
+          "/firebase-admin/staff-submission-status?task=cpr-training-2026",
+          "/firebase-admin/staff-submission-status?task=cpr-training-2026#completion-status",
+        ],
       }),
-      item("research-check", "연구부 연수 원본 점검", "/firebase-admin/staff-submission-status#training-source-check"),
-      item("research-refresh", "연수 현황 새로고침", "/firebase-admin/staff-submission-status#training-source-refresh"),
-      item("training-exceptions", "법정의무연수 예외 관리", "/firebase-admin/staff-submission-status#legal-training-exceptions"),
+      item("research-check", "연구부 연수 원본 점검", "/firebase-admin/staff-submission-status?view=research-check#training-source-check", {
+        aliases: ["/firebase-admin/staff-submission-status#training-source-check"],
+      }),
+      item("research-refresh", "연수 현황 새로고침", "/firebase-admin/staff-submission-status?view=research-check#training-source-refresh", {
+        aliases: ["/firebase-admin/staff-submission-status#training-source-refresh"],
+      }),
+      item("training-exceptions", "법정의무연수 예외 관리", "/firebase-admin/staff-submission-status?view=training-exceptions", {
+        aliases: ["/firebase-admin/staff-submission-status#legal-training-exceptions"],
+      }),
       item("training-reports", "법정의무연수 보고서", "/firebase-admin/training-reports"),
     ],
   },
@@ -72,9 +85,8 @@ function parseDestination(to) {
   return { pathname: url.pathname, searchParams: url.searchParams, hash: url.hash };
 }
 
-function matchScore(navItem, location) {
-  if (!navItem.to) return -1;
-  const destination = parseDestination(navItem.matchTo || navItem.to);
+function destinationScore(destinationValue, location) {
+  const destination = parseDestination(destinationValue);
   if (destination.pathname !== location.pathname) return -1;
 
   const currentParams = new URLSearchParams(location.search || "");
@@ -84,6 +96,12 @@ function matchScore(navItem, location) {
   if (destination.hash && destination.hash !== location.hash) return -1;
 
   return destination.searchParams.size * 10 + (destination.hash ? 5 : 0);
+}
+
+function matchScore(navItem, location) {
+  if (!navItem.to) return -1;
+  return [navItem.matchTo || navItem.to, ...(navItem.aliases || [])]
+    .reduce((best, destination) => Math.max(best, destinationScore(destination, location)), -1);
 }
 
 export function getActiveAdminNavigation(location) {

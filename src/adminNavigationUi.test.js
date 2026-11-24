@@ -31,7 +31,7 @@ test("training navigation preserves training_admin scope and adds admin context 
   assert.match(gate, /hasTopLevelAdminAccess/);
 });
 
-test("deferred section links identify all requested hidden work areas", () => {
+test("focused administrator views render only their requested work area", () => {
   const statusPage = readSource("./pages/FirebaseStaffSubmissionStatusAdminPage.jsx");
   const trainingPage = readSource("./pages/FirebaseTrainingAdminPage.jsx");
   const researchPanel = readSource("./components/ResearchTrainingDryRunPanel.jsx");
@@ -40,6 +40,10 @@ test("deferred section links identify all requested hidden work areas", () => {
   for (const id of ["annual-screening-type", "training-source-check", "legal-training-exceptions", "completion-status"]) {
     assert.match(statusPage, new RegExp(`id="${id}"`));
   }
+  assert.match(statusPage, /activeView\.mode === "screening"/);
+  assert.match(statusPage, /activeView\.mode === "research"/);
+  assert.match(statusPage, /activeView\.mode === "exceptions"/);
+  assert.match(statusPage, /activeView\.mode === "completion"/);
   assert.match(trainingPage, /id="manual-cpr-batch"/);
   assert.match(researchPanel, /id="training-source-refresh"/);
   assert.match(hook, /document\.getElementById\(targetId\)/);

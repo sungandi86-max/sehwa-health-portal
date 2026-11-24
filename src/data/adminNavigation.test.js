@@ -20,10 +20,10 @@ test("planned checkup integration is visible as a non-interactive status", () =>
 test("specific query and hash destinations win over their parent screen", () => {
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/submissions", "?tab=infection")).itemId, "infection-reports");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/submission-status", "?item=cpr")).itemId, "cpr-receipts");
-  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?task=cpr-training-2026", "#completion-status")).itemId, "cpr-completion");
-  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?task=tb-screening-2026")).itemId, "tb-completion");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?view=cpr-completion&task=cpr-training-2026")).itemId, "cpr-completion");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?view=tb-completion&task=tb-screening-2026")).itemId, "tb-completion");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/trainings", "?mode=manual-cpr-2026")).itemId, "cpr-batch");
-  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "", "#training-source-refresh")).itemId, "research-refresh");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?view=research-check", "#training-source-refresh")).itemId, "research-refresh");
 });
 
 test("existing direct URLs keep a useful active destination", () => {
@@ -31,6 +31,11 @@ test("existing direct URLs keep a useful active destination", () => {
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/submission-status")).itemId, "submission-status");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status")).itemId, "completion-status");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/trainings")).itemId, "trainings");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?task=cpr-training-2026")).itemId, "cpr-completion");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?task=cpr-training-2026", "#completion-status")).itemId, "cpr-completion");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "", "#annual-screening-type")).itemId, "screening-types");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "", "#training-source-check")).itemId, "research-check");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "", "#legal-training-exceptions")).itemId, "training-exceptions");
 });
 
 test("breadcrumbs describe the workflow without changing the destination", () => {

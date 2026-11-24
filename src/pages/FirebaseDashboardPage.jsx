@@ -25,8 +25,8 @@ import { ensureTeamStaffAssignment } from "../lib/teamStaffAccess.js";
 const QUICK_ACTIONS = [
   { label: "접수자료 검토", href: "/firebase-admin/submissions" },
   { label: "대상자별 제출 현황", href: "/firebase-admin/submission-status" },
-  { label: "건강검진 확인", href: "/firebase-admin/staff-submission-status#annual-screening-type" },
-  { label: "연구부 연수 원본 점검", href: "/firebase-admin/staff-submission-status#training-source-check" },
+  { label: "건강검진 확인", href: "/firebase-admin/staff-submission-status?view=screening-types" },
+  { label: "연구부 연수 원본 점검", href: "/firebase-admin/staff-submission-status?view=research-check" },
   { label: "CPR 교육 관리", href: "/firebase-admin/trainings?mode=manual-cpr-2026#manual-cpr-batch" },
   { label: "법정의무연수 보고서", href: "/firebase-admin/training-reports" },
 ];

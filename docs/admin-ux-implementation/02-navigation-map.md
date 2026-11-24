@@ -18,8 +18,8 @@
 
 | 메뉴 | 목적지 | 비고 |
 |---|---|---|
-| 건강검진 유형·경로 확인 | `/firebase-admin/staff-submission-status#annual-screening-type` | 기존 섹션 재사용 |
-| 결핵검진 완료 현황 | `/firebase-admin/staff-submission-status?task=tb-screening-2026#completion-status` | 기존 task projection 재사용 |
+| 건강검진 유형·경로 확인 | `/firebase-admin/staff-submission-status?view=screening-types` | 건강검진 유형 view에서 기존 패널 재사용 |
+| 결핵검진 완료 현황 | `/firebase-admin/staff-submission-status?view=tb-completion&task=tb-screening-2026` | 기존 task projection 재사용 |
 | 검진 확인자료 접수 | `/firebase-admin/submissions?tab=staff` | 기존 교직원 접수 탭 재사용 |
 | 별도검사 운영 도우미 | 링크 없음 | `연동 예정` 비활성 상태 |
 
@@ -32,10 +32,10 @@
 | 교육 운영 관리 | `/firebase-admin/trainings` |
 | CPR 개별 이수증 검토 | `/firebase-admin/submission-status?item=cpr` |
 | CPR 학교 단체교육 등록 | `/firebase-admin/trainings?mode=manual-cpr-2026#manual-cpr-batch` |
-| CPR 통합 완료 현황 | `/firebase-admin/staff-submission-status?task=cpr-training-2026#completion-status` |
-| 연구부 연수 원본 점검 | `/firebase-admin/staff-submission-status#training-source-check` |
-| 연수 현황 새로고침 | `/firebase-admin/staff-submission-status#training-source-refresh` |
-| 법정의무연수 예외 관리 | `/firebase-admin/staff-submission-status#legal-training-exceptions` |
+| CPR 통합 완료 현황 | `/firebase-admin/staff-submission-status?view=cpr-completion&task=cpr-training-2026` |
+| 연구부 연수 원본 점검 | `/firebase-admin/staff-submission-status?view=research-check#training-source-check` |
+| 연수 현황 새로고침 | `/firebase-admin/staff-submission-status?view=research-check#training-source-refresh` |
+| 법정의무연수 예외 관리 | `/firebase-admin/staff-submission-status?view=training-exceptions` |
 | 법정의무연수 보고서 | `/firebase-admin/training-reports` |
 
 ## 계정·권한

@@ -13,6 +13,7 @@ import { CPR_TRAINING_TASK_ID, isHealthMandatoryTrainingTask, TB_SCREENING_TASK_
 import { CPR_METHOD_LABELS } from "../lib/cprTrainingStatusModel.js";
 import { TB_LATENT_STATUS_LABELS, TB_SCREENING_TYPE_LABELS, TB_TARGET_STATUS_LABELS } from "../lib/tbScreeningStatusModel.js";
 import { useDeferredHashNavigation } from "../lib/useDeferredHashNavigation.js";
+import { resolveAdminStatusView } from "../lib/adminStatusView.js";
 
 const STATUS_FILTERS = [
   { value: "incomplete", label: "미완료" },
@@ -233,10 +234,12 @@ function getDefaultStatusFilter(task) {
 
 function AdminStatusContent({ displayName }) {
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const activeView = resolveAdminStatusView(location);
   const focusedStaffId = params.get("staffId") || "";
   const returnTo = adminReturnHref(params.get("returnTo"));
   const [overview, setOverview] = useState(null);
-  const selectedTaskId = params.has("task") ? params.get("task") : (overview?.tasks.some(task=>task.taskId === TB_SCREENING_TASK_ID) ? TB_SCREENING_TASK_ID : overview?.tasks[0]?.taskId || TB_SCREENING_TASK_ID);
+  const selectedTaskId = activeView.taskId || (params.has("task") ? params.get("task") : (overview?.tasks.some(task=>task.taskId === TB_SCREENING_TASK_ID) ? TB_SCREENING_TASK_ID : overview?.tasks[0]?.taskId || TB_SCREENING_TASK_ID));
   const filters = adminStaffFilters(params);
   function changeFilters(next) {
     setParams(current=>{const values=new URLSearchParams(current);for(const [key,param] of Object.entries({status:"filterStatus",department:"department",position:"position",screeningType:"screeningTypeFilter",cprMethod:"cprMethod",search:"search"})){
@@ -296,33 +299,27 @@ function AdminStatusContent({ displayName }) {
   return (
     <AdminWorkspaceLayout
       label="관리자"
-      title="교직원 제출·이수 현황"
-      description="대상 교직원의 업무별 완료 상태입니다. 접수 건수·대상 계정 수와 완료 인원 수는 서로 다릅니다. 개인 이수증과 학교 단체교육 근거를 구분합니다."
+      title={activeView.title}
+      description={activeView.description}
       displayName={displayName}
       guide="healthAdminStatus"
     >
-      <p className="text-sm text-[#627083]">상단 집계는 해당 업무의 전체 조회 대상 기준이며 접수 건수가 아닙니다. 아래 명단은 선택 교직원·검색·상태 필터 기준입니다.</p>
-      <nav aria-label="업무현황 연결" className="flex flex-wrap gap-3 text-sm text-[#0D4EA6]">
+      {activeView.mode === "completion" && <p className="text-sm text-[#627083]">상단 집계는 해당 업무의 전체 조회 대상 기준이며 접수 건수가 아닙니다. 아래 명단은 선택 교직원·검색·상태 필터 기준입니다.</p>}
+      {activeView.mode === "completion" && <nav aria-label="업무현황 연결" className="flex flex-wrap gap-3 text-sm text-[#0D4EA6]">
         {returnTo && <Link className="min-h-11 py-3" to={returnTo}>접수자료로 돌아가기</Link>}
         {focusedStaffId && <Link className="min-h-11 py-3" to={`/firebase-admin/staff-submission-status?task=${encodeURIComponent(selectedTaskId)}`}>전체 교직원 현황</Link>}
         {focusedStaffId && <p className="py-3">선택 교직원 {focusedStaffId} · {params.get("schoolYear") || "현재"}학년도 요청 (표시 학년도는 업무 제목 확인)</p>}
         <Link className="min-h-11 py-3" to="/firebase-admin/trainings?mode=manual-cpr-2026">2026 CPR 학교 단체교육 일괄 등록</Link>
         <Link className="min-h-11 py-3" to="/firebase-admin/submission-status?item=cpr">개별 CPR 이수증 접수 현황</Link>
-      </nav>
-      <nav aria-label="제출·이수 현황 섹션 이동" className="flex flex-wrap gap-2 text-sm text-[#3154A3]">
-        {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <a href="#annual-screening-type" className="rounded-lg border border-[#DDEAE7] px-3 py-3">건강검진 유형</a>}
-        <a href="#training-source-check" className="rounded-lg border border-[#DDEAE7] px-3 py-3">연수 원본 점검</a>
-        <a href="#legal-training-exceptions" className="rounded-lg border border-[#DDEAE7] px-3 py-3">법정의무연수 예외</a>
-        {state.status === "success" && selectedTask && <a href="#completion-status" className="rounded-lg border border-[#DDEAE7] px-3 py-3">검진·연수 완료 현황</a>}
-      </nav>
-      {isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <section id="annual-screening-type" tabIndex={-1} className="admin-section-target scroll-mt-6"><LinkedScreeningPanel /></section>}
-      <section id="training-source-check" tabIndex={-1} className="admin-section-target scroll-mt-6"><ResearchTrainingDryRunPanel onApplied={loadOverview} /></section>
-      <section id="legal-training-exceptions" tabIndex={-1} className="admin-section-target scroll-mt-6"><ResearchTrainingExceptionsPanel /></section>
+      </nav>}
+      {activeView.mode === "screening" && isHealthScreeningTypeEnabledHost(globalThis.location?.hostname) && <section id="annual-screening-type"><LinkedScreeningPanel /></section>}
+      {activeView.mode === "research" && <section id="training-source-check"><ResearchTrainingDryRunPanel onApplied={loadOverview} /></section>}
+      {activeView.mode === "exceptions" && <section id="legal-training-exceptions"><ResearchTrainingExceptionsPanel /></section>}
 
-      {state.status === "success" && !selectedTask && <p role="alert">요청한 학년도·업무 원장을 찾을 수 없습니다. 다른 학년도 현황으로 대체하지 않습니다. <Link to="/firebase-admin/staff-submission-status" className="underline">현재 학년도 현황으로</Link></p>}
-      {state.status === "success" && selectedTask && (
+      {activeView.mode === "completion" && state.status === "success" && !selectedTask && <p role="alert">요청한 학년도·업무 원장을 찾을 수 없습니다. 다른 학년도 현황으로 대체하지 않습니다. <Link to="/firebase-admin/staff-submission-status?view=completion" className="underline">현재 학년도 현황으로</Link></p>}
+      {activeView.mode === "completion" && state.status === "success" && selectedTask && (
         <>
-          <section id="completion-status" tabIndex={-1} aria-label="검진·연수 완료 현황" className="admin-section-target grid scroll-mt-6 gap-2 lg:grid-cols-3">
+          {activeView.id === "completion" && <section id="completion-status" aria-label="검진·연수 완료 현황" className="grid gap-2 lg:grid-cols-3">
             {overview.tasks.map((task) => (
               <TaskSummary
                 key={task.taskId}
@@ -333,7 +330,7 @@ function AdminStatusContent({ displayName }) {
                 }}
               />
             ))}
-          </section>
+          </section>}
 
           {selectedTask.taskId === TB_SCREENING_TASK_ID && (
             <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -415,7 +412,7 @@ function AdminStatusContent({ displayName }) {
         </>
       )}
 
-      {state.status !== "success" && (
+      {activeView.mode === "completion" && state.status !== "success" && (
         <FirebaseContentState
           status={state.status}
           message={state.message}
