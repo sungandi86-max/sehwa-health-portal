@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { startTransition, useEffect, useReducer, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, useLocation, useNavigate } from "react-router-dom";
 import { CalendarDays, ClipboardCheck, GraduationCap, HeartPulse, SlidersHorizontal } from "lucide-react";
@@ -9,6 +9,7 @@ import {
   LIVE, CHECKUPS, SUBMIT, StaffHome, Checkups, Submission, AdminHome,
   AdminSubmissions, CompletionSummary, Training, EducationManager, LiveSchedule,
 } from "./screens.jsx";
+import { matchesDemoDestination } from "./navigation.js";
 import "../src/index.css";
 import "./style.css";
 
@@ -38,17 +39,16 @@ const reportTo = adminItems.find(({ id }) => id === "training-reports").to;
 const educationItem = { id: "education", label: "교직원 교육 관리", to: ROLES.training_admin.home, component: EducationManager };
 const adminHome = { ...ADMIN_HOME, component: AdminHome };
 const scenarios = [
-  { label: "A · 교직원 제출", icon: ClipboardCheck, role: "staff", to: "/" },
-  { label: "B · 관리자 제출 현황", icon: ClipboardCheck, role: "health_teacher", to: ADMIN_HOME.to },
+  { label: "A · 교직원 제출", icon: ClipboardCheck, role: "staff", to: SUBMIT },
+  { label: "B · 관리자 제출 현황", icon: ClipboardCheck, role: "health_teacher", to: adminItems.find(({ id }) => id === "submission-status").to },
   { label: "C · 교육·연수", icon: GraduationCap, role: "health_teacher", to: adminItems.find(({ id }) => id === "cpr-completion").to },
   { label: "D · 별도검사 진행", icon: CalendarDays, role: "homeroom", to: LIVE },
 ];
 
 function selectScreen(roleKey, location) {
-  const path = location.pathname + location.search;
-  if (roleKey === "health_teacher") return [adminHome, ...adminItems].find(({ to }) => to.split("#")[0] === path);
-  if (roleKey === "training_admin") return educationItem.to === path ? educationItem : null;
-  return portalItems.find(({ to }) => to === path);
+  const items = roleKey === "health_teacher" ? [adminHome, ...adminItems]
+    : roleKey === "training_admin" ? [educationItem] : portalItems;
+  return items.find(({ to }) => matchesDemoDestination(to, location));
 }
 
 function PresenterControls({ roleKey, state, dispatch, switchRole, reset }) {
@@ -126,13 +126,17 @@ function App() {
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [location.pathname, location.search]);
   function switchRole(key, to = ROLES[key].home) {
-    setRole(key);
-    navigate(to);
+    startTransition(() => {
+      setRole(key);
+      navigate(to);
+    });
   }
   function reset() {
-    dispatch({ type: "reset" });
-    setRole("staff");
-    navigate("/", { replace: true });
+    startTransition(() => {
+      dispatch({ type: "reset" });
+      setRole("staff");
+      navigate(ROLES.staff.home, { replace: true });
+    });
   }
 
   const breadcrumbs = [
@@ -147,7 +151,10 @@ function App() {
         <Link to={role.home} className="demo-brand"><HeartPulse aria-hidden="true" size={22} />
           <span><strong>온라인 보건실</strong><small>School Health Hub</small></span>
         </Link>
-        <p>공모전 시연용 · 모든 정보는 가상 데이터입니다.</p>
+        <div className="demo-top-meta">
+          <strong aria-live="polite">{role.label}</strong>
+          <p>공모전 시연용 · 모든 정보는 가상 데이터입니다.</p>
+        </div>
         <PresenterControls roleKey={roleKey} state={state} dispatch={dispatch} switchRole={switchRole} reset={reset} />
       </div>
     </header>
@@ -159,7 +166,10 @@ function App() {
         active={activeId} activeGroup={active?.group?.id} currentGroupLabel={active?.group?.label} currentLabel={title}
         breadcrumbs={breadcrumbs} backTo={role.home} backLabel={isAdmin ? "관리자 홈으로" : isTrainingManager ? "교직원 교육 관리로" : "온라인 보건실 홈으로"} showDashboardLink={false}>
         {Screen ? <Screen state={state} role={role} dispatch={dispatch} screenId={activeId} groups={adminGroups} reportTo={reportTo} />
-          : <p>시연 제어에서 해당 역할을 선택하거나 현재 역할의 메뉴를 이용하세요.</p>}
+          : <div>
+            <p>현재 역할에서는 이 주소의 업무를 볼 수 없습니다.</p>
+            <Link className="demo-button" to={role.home} replace>내 홈으로 이동</Link>
+          </div>}
       </WorkspaceShell>
     </main>
   </>;
