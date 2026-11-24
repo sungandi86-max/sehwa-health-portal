@@ -72,6 +72,16 @@ export default function FirebaseCheckupsPage() {
               </>
             )}
           />
+          <section className="grid gap-3 md:grid-cols-2">
+            <PortalTaskCard
+              badges={<PortalBadge tone="status">조회 전용</PortalBadge>}
+              title="별도검사 일정·진행 현황"
+              description="소변검사·결핵검진의 학급별 예정 시간과 현재 진행 순서를 확인합니다."
+              action={<PortalAction href="/firebase-checkups/live">일정·진행 현황 보기</PortalAction>}
+            >
+              <PortalInfoBox>학생 개인별 검사 정보는 표시하지 않습니다.</PortalInfoBox>
+            </PortalTaskCard>
+          </section>
           {loadState.status !== "success" && (
             <FirebaseContentState
               status={loadState.status}

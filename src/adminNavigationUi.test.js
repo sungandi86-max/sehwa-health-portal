@@ -52,7 +52,8 @@ test("focused administrator views render only their requested work area", () => 
 
 test("all existing application routes remain registered", () => {
   const app = readSource("./App.jsx");
-  assert.equal((app.match(/<Route path=/g) || []).length, 45);
+  assert.equal((app.match(/<Route path=/g) || []).length, 46);
+  assert.match(app, /path="\/firebase-checkups\/live"/);
   assert.match(app, /path="\/admin\/infections" element=\{<Navigate to="\/firebase-admin\/infections" replace/);
   assert.match(app, /path="\/admin\/infection-reports" element=\{<Navigate to="\/firebase-admin\/infections" replace/);
 });

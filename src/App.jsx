@@ -26,6 +26,7 @@ const FirebaseAccessRequestsPage = lazy(() => import("./pages/FirebaseAccessRequ
 const FirebaseAdminInfectionsPage = lazy(() => import("./pages/FirebaseAdminInfectionsPage.jsx"));
 const FirebaseAdminSubmissionsPage = lazy(() => import("./pages/FirebaseAdminSubmissionsPage.jsx"));
 const FirebaseCheckupsPage = lazy(() => import("./pages/FirebaseCheckupsPage.jsx"));
+const FirebaseHealthCheckLivePage = lazy(() => import("./pages/FirebaseHealthCheckLivePage.jsx"));
 const FirebaseCprSubmitPage = lazy(() => import("./pages/FirebaseCprSubmitPage.jsx"));
 const FirebaseDashboardPage = lazy(() => import("./pages/FirebaseDashboardPage.jsx"));
 const FirebaseEducationPage = lazy(() => import("./pages/FirebaseEducationPage.jsx"));
@@ -217,6 +218,7 @@ export default function App() {
                 <Route path="/firebase-test" element={<FirebaseTestPage />} />
                 <Route path="/firebase-dashboard" element={<FirebaseDashboardPage />} />
                 <Route path="/firebase-checkups" element={<FirebaseCheckupsPage />} />
+                <Route path="/firebase-checkups/live" element={<FirebaseHealthCheckLivePage />} />
                 <Route path="/firebase-education" element={<FirebaseEducationPage />} />
                 <Route path="/firebase-faq" element={<FirebaseFaqPage />} />
                 <Route path="/firebase-submissions" element={<FirebaseSubmissionsPage />} />

@@ -389,3 +389,11 @@ The administrator workspace uses one stable information architecture without cha
 - Existing deep links use query strings or section hashes. A deferred section-navigation helper scrolls only after the target is rendered, and `:target` styling identifies the destination without changing its behavior.
 - Desktop uses the existing 230px rail. Mobile keeps the drawer pattern, uses 48px minimum touch targets, names the current group and screen in the closed state, and closes after navigation.
 - Sidebar visibility never grants authority. `training_admin` keeps the existing training-only navigation and does not receive administrator-home links or broader menu exposure.
+
+## 23. Live Health Check Schedule
+
+- Keep the live schedule inside the existing `검진·검사 안내` journey and behind the portal's staff access gate.
+- Use one compact session selector, a paired current/next status summary, and a dense ordered class list. Do not render student-level information.
+- Active, waiting, completed, and follow-up states reuse the shared blue, neutral, mint, and warning status tones.
+- On mobile, each class is a compact row with order and time grouped below the class label. The page itself must not scroll horizontally.
+- Show the source update time and a restrained delay warning so stale information is never presented as current.
