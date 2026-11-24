@@ -24,7 +24,10 @@
     "map:staff-ids": "node scripts/mapStaffIdsToUsers.mjs",
     "seed:firebase-content": "node scripts/seedFirebaseContent.mjs",
     "preview": "vite preview",
-    "test:rules": "node tools/firestore-rules/run.mjs"
+    "test:rules": "node tools/firestore-rules/run.mjs",
+    "demo:dev": "vite --config contest-demo/vite.config.js --host 0.0.0.0 --strictPort",
+    "demo:build": "vite build --config contest-demo/vite.config.js",
+    "demo:preview": "vite preview --config contest-demo/vite.config.js --host 0.0.0.0 --strictPort"
   },
   "dependencies": {
     "@expo-google-fonts/noto-sans-kr": "0.4.4",
