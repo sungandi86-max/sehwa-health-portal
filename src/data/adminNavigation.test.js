@@ -33,6 +33,7 @@ test("existing direct URLs keep a useful active destination", () => {
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/trainings")).itemId, "trainings");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?task=cpr-training-2026")).itemId, "cpr-completion");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?task=cpr-training-2026", "#completion-status")).itemId, "cpr-completion");
+  assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "?view=research-check")).itemId, "research-check");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "", "#annual-screening-type")).itemId, "screening-types");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "", "#training-source-check")).itemId, "research-check");
   assert.equal(getActiveAdminNavigation(location("/firebase-admin/staff-submission-status", "", "#legal-training-exceptions")).itemId, "training-exceptions");

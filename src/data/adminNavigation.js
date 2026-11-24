@@ -51,6 +51,7 @@ export const ADMIN_NAV_GROUPS = [
         ],
       }),
       item("research-check", "연구부 연수 원본 점검", "/firebase-admin/staff-submission-status?view=research-check#training-source-check", {
+        matchTo: "/firebase-admin/staff-submission-status?view=research-check",
         aliases: ["/firebase-admin/staff-submission-status#training-source-check"],
       }),
       item("research-refresh", "연수 현황 새로고침", "/firebase-admin/staff-submission-status?view=research-check#training-source-refresh", {
