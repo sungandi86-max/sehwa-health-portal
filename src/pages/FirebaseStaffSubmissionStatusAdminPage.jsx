@@ -1,6 +1,6 @@
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { screeningPanelContext, adminStaffFilters, submissionReviewHref, withAdminReturn, adminReturnHref } from "../lib/submissionNavigation.js";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FirebaseAdminRoleAccessGate from "../components/FirebaseAdminRoleAccessGate.jsx";
 import { FirebaseContentState } from "../components/FirebaseV2PageShell.jsx";
 import { AdminWorkspaceLayout } from "../components/AdminWorkspaceLayout.jsx";
@@ -90,10 +90,43 @@ function TaskSummary({ task, selected, onSelect }) {
   );
 }
 
+function CprNameSearch({ search, onSearch, ...props }) {
+  const composing = useRef(false);
+  const [draft, setDraft] = useState(search);
+
+  useEffect(() => {
+    if (!composing.current) setDraft(search);
+  }, [search]);
+
+  function update(value, commit) {
+    setDraft(value);
+    if (commit && value !== search) onSearch(value);
+  }
+
+  return (
+    <input
+      {...props}
+      value={draft}
+      onCompositionStart={() => { composing.current = true; }}
+      onCompositionEnd={(event) => {
+        composing.current = false;
+        update(event.currentTarget.value, true);
+      }}
+      onChange={(event) => update(event.currentTarget.value, !composing.current && !event.nativeEvent.isComposing)}
+    />
+  );
+}
+
 function FilterBar({ filters, options, selectedTask, onChange }) {
   const statusFilters = isHealthMandatoryTrainingTask(selectedTask?.taskId) ? RESEARCH_STATUS_FILTERS : STATUS_FILTERS;
   const isTbTask = selectedTask?.taskId === TB_SCREENING_TASK_ID;
   const isCprTask = selectedTask?.taskId === CPR_TRAINING_TASK_ID;
+  const searchProps = {
+    className: "min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]",
+    placeholder: "이름 검색",
+    "aria-label": "이름 검색",
+  };
+  const changeSearch = (search) => onChange({ ...filters, search });
 
   return (
     <section className="rounded-[12px] border border-[#DDEAE7] bg-white p-3 shadow-[var(--shh-soft-shadow)]">
@@ -140,13 +173,11 @@ function FilterBar({ filters, options, selectedTask, onChange }) {
           <option value="all">직책 전체</option>
           {options.positions.map((position) => <option key={position} value={position}>{position}</option>)}
         </select>
-        <input
-          value={filters.search}
-          onChange={(event) => onChange({ ...filters, search: event.target.value })}
-          className="min-h-10 rounded-[9px] border border-[#DDEAE7] bg-white px-3 text-[13px] font-semibold text-[#102047]"
-          placeholder="이름 검색"
-          aria-label="이름 검색"
-        />
+        {isCprTask ? (
+          <CprNameSearch {...searchProps} search={filters.search} onSearch={changeSearch} />
+        ) : (
+          <input {...searchProps} value={filters.search} onChange={(event) => changeSearch(event.currentTarget.value)} />
+        )}
       </div>
     </section>
   );
